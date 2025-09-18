@@ -172,7 +172,7 @@ class PerfectRAG:
         #         self.txt_files.extend(list(cat_folder.glob('*.txt')))
 
         # 특별 폴더
-        special_folders = ['recent', 'archive', 'assets']
+        special_folders = ['recent', 'archive', 'assets', 'asset_technical', 'asset_complete']
         for folder in special_folders:
             special_folder = self.docs_dir / folder
             if special_folder.exists():

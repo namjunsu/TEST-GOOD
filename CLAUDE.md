@@ -2,17 +2,25 @@
 
 ## 📁 프로젝트 구조 및 파일 사용 현황
 
-### ✅ 핵심 파일 (Core Files) - 현재 사용 중
+### ✅ 핵심 파일 (Core Files) - 현재 사용 중 (2025-01-18 기준)
 
-#### 🎯 메인 시스템
-- **`web_interface.py`** - Streamlit 웹 인터페이스 (메인 엔트리포인트)
-- **`perfect_rag.py`** - RAG 시스템 핵심 로직
+#### 🎯 메인 시스템 (7개)
+- **`web_interface.py`** - Streamlit 웹 인터페이스 (메인 엔트리포인트) ⭐
+- **`perfect_rag.py`** - RAG 시스템 핵심 로직 (480개 문서 처리) ⭐
 - **`auto_indexer.py`** - 자동 문서 인덱싱 시스템 (60초마다 docs 폴더 모니터링)
-- **`config.py`** - 시스템 설정 파일
-
-#### 🔧 유틸리티
+- **`config.py`** - 시스템 설정 파일 (GPU 최적화 설정 포함)
 - **`log_system.py`** - 로깅 시스템
-- **`query_logger.py`** - 쿼리 로깅
+- **`response_formatter.py`** - 응답 포매팅
+- **`smart_search_enhancer.py`** - 스마트 검색 개선
+
+#### 🔧 성능 최적화 유틸리티 (7개)
+- **`enable_auto_ocr.py`** - OCR 자동 활성화 (32% 스캔 PDF 처리) 🆕
+- **`memory_optimizer.py`** - 메모리 최적화 도구
+- **`lazy_loader.py`** - 지연 로딩 시스템
+- **`preload_cache.py`** - 캐시 사전 구축
+- **`performance_optimizer.py`** - 성능 최적화
+- **`parallel_search_optimizer.py`** - 병렬 검색 최적화
+- **`quick_test.py`** - 빠른 테스트 스크립트
 
 #### 📦 RAG 시스템 모듈 (`rag_system/`)
 - **`qwen_llm.py`** - Qwen2.5-7B 모델 인터페이스
@@ -29,37 +37,45 @@
 - **`llm_singleton.py`** - LLM 싱글톤 패턴
 - **`enhanced_ocr_processor.py`** - OCR 처리기
 
-### 🔨 개발/테스트 파일
-- **`quick_test.py`** - 빠른 테스트 스크립트
-- **`test_equipment_search.py`** - 장비 검색 테스트
+### 🔨 테스트 파일 (archive/test_files/로 이동됨)
+- **`archive/test_files/`** - 모든 테스트 파일
+  - test_*.py (12개 파일)
+  - comprehensive_test.py
+  - real_test.py
+  - quick_real_test.py
+  - performance_validation_test.py
 
 ### 📚 문서화 파일
-- **`CLAUDE.md`** - 프로젝트 구조 및 현황 (현재 문서)
-- **`SYSTEM_SPECS.md`** - 시스템 사양
+- **`CLAUDE.md`** - 프로젝트 구조 및 현황 (현재 문서) ✅
+- **`SYSTEM_SPECS.md`** - 시스템 사양 (Intel Ultra 9, RTX 4000 16GB)
 - **`SYSTEM_STATUS.md`** - 시스템 상태
 - **`CODE_IMPROVEMENTS.md`** - 코드 개선 사항
+- **`file_usage_analysis.md`** - 파일 사용 현황 분석 🆕
 
 ### 🗂️ 보관 파일 (Archived)
-- **`archive/test_files/`** - 과거 테스트 파일들
-  - test_codeblock.py, test_llm_search.py, test_location_format.py
-  - test_rag_answers.py, test_technical_team.py, detailed_test.py
+- **`archive/test_files/`** - 모든 테스트 파일 (2025-01-18 이동)
+  - 12개 test_*.py 파일
+  - comprehensive_test.py, real_test.py, quick_real_test.py
+  - performance_validation_test.py, check_ocr_needed.py
 - **`archive/old_docs/`** - 과거 문서들
   - README_MIGRATION.md, MIGRATION_GUIDE.md, GPU_UPGRADE_GUIDE.md
+- **`archive/old_logs/`** - 과거 로그 파일
 
-### 🚫 사용하지 않는 파일 (Unused/Legacy)
-- **`asset_cache.py`** - 장비 자산 데이터 캐싱 (레거시, perfect_rag.py의 OrderedDict 캐시로 대체)
-- **`query_logger.py`** - 쿼리 로깅 (레거시, log_system.py에 통합됨) - 2025-09-12
-- **`improve_answer_quality.py`** - 답변 품질 개선 (레거시, perfect_rag.py에 통합됨)
-- **`download_models.py`** - 모델 다운로드 (초기 설정용, 더 이상 필요 없음)
-- **`validate_migration.py`** - 마이그레이션 검증 (일회성 스크립트)
-- **`setup.bat`** - Windows 설정 (초기 설정용)
-- **`setup.sh`** - Linux 설정 (초기 설정용)
-- **`setup_wsl2_network.bat`** - WSL2 네트워크 설정 (초기 설정용)
+### 🚫 삭제된 파일 (2025-01-18 정리 완료)
+
+다음 파일들은 레거시/미사용으로 삭제되거나 백업됨:
+- 자산 관련: asset_cache.py, asset_llm_enhancer.py, analyze_equipment.py
+- 캐시/최적화 중복: advanced_cache_system.py, cache_improvements.py
+- 문서 관리 중복: document_speed_optimizer.py, enhanced_indexing_system.py
+- 일회성 수정: fix_*.py 파일들
+- 초기 설정: install_llm_model.py, setup.bat, setup.sh
+- 기타 레거시: improve_answer_quality.py, simple_improvements.py
 
 ### 📂 디렉토리
-- **`docs/`** - 문서 저장소 (PDF, TXT 파일)
-  - 구입기안서, 구매업무매뉴얼 등 PDF 문서
-  - equipment_data_*.xlsx - 장비 자산 데이터
+- **`docs/`** - 문서 저장소 (889개 PDF 파일)
+  - year_2014 ~ year_2025: 연도별 폴더 (480개 고유 문서)
+  - category_*: 카테고리별 폴더 (중복 복사본)
+  - archive, recent: 특별 폴더
 - **`models/`** - AI 모델 저장소
 - **`logs/`** - 로그 파일
 - **`config/`** - 설정 파일
@@ -112,7 +128,35 @@ python test_equipment_search.py
    - 새 파일/수정/삭제 자동 감지
    - 자동 재인덱싱
 
+## 📊 현재 시스템 상태 (2025-01-18)
+
+### 파일 구조
+- **Python 파일**: 52개 → 14개로 정리 완료
+  - 핵심 파일: 7개
+  - 유틸리티: 7개
+  - 테스트 파일: archive로 이동
+- **문서**: 889개 PDF (480개 고유 문서)
+  - 32%가 스캔 PDF (OCR 필요)
+- **성능**:
+  - GPU: RTX 4000 16GB (100% 활용)
+  - LLM: Qwen2.5-7B (19.8초 로딩)
+  - 캐시: 응답 0.0초 (히트 시)
+
 ## 🔄 최근 주요 변경사항
+
+### 2025-01-18 프로젝트 대정리 및 OCR 지원 추가 🧹
+
+#### 1. **파일 구조 대폭 정리**
+- 52개 Python 파일 → 14개 핵심 파일로 정리
+- 테스트 파일 모두 archive/test_files/로 이동
+- 레거시/중복 파일 30개+ 삭제
+- CLAUDE.md 문서 전면 최신화
+
+#### 2. **OCR 시스템 구현**
+- 32% 스캔 PDF 문제 확인 및 해결
+- enable_auto_ocr.py 스크립트 작성
+- Tesseract OCR (한국어/영어) 통합
+- 병렬 OCR 처리 지원
 
 ### 2025-01-16 성능 최적화 대폭 개선 🚀
 

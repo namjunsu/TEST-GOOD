@@ -1249,141 +1249,141 @@ def main():
     # 메인 영역 - 2개 탭만 (깔끔하게)
     # 기안서 중심 RAG 시스템 - 장비 자산 검색 탭 제거
     st.markdown("### 💬 기안서 문서 검색")
-        # 문서 전용 모드가 활성화되어 있으면 안내만 표시
-        if 'selected_doc' in st.session_state and st.session_state.get('show_doc_preview', False):
-            st.info(f"📌 **문서 전용 모드 활성화 중**  \n위에서 [{st.session_state.selected_doc['filename']}] 문서를 분석 중입니다.  \n문서 전용 질문은 위의 탭을 이용해주세요.")
-            submit = False
-            query = None
-        else:
-            # 일반 모드일 때
-            st.caption("💡 **문서 검색**: 모든 기안서 PDF 문서를 검색합니다. 사이드바에서 특정 문서를 선택하면 해당 문서만 집중 분석합니다.")
-            
-            # 질문 입력 폼 정렬을 위한 CSS
-            st.markdown("""
-            <style>
-            /* 폼 전체 컨테이너 - 보더 제거 */
-            .stForm {
-                border: none !important;
-                padding: 0 !important;
-                background: transparent !important;
-            }
+    # 문서 전용 모드가 활성화되어 있으면 안내만 표시
+    if 'selected_doc' in st.session_state and st.session_state.get('show_doc_preview', False):
+        st.info(f"📌 **문서 전용 모드 활성화 중**  \n위에서 [{st.session_state.selected_doc['filename']}] 문서를 분석 중입니다.  \n문서 전용 질문은 위의 탭을 이용해주세요.")
+        submit = False
+        query = None
+    else:
+        # 일반 모드일 때
+        st.caption("💡 **문서 검색**: 모든 기안서 PDF 문서를 검색합니다. 사이드바에서 특정 문서를 선택하면 해당 문서만 집중 분석합니다.")
 
-            /* 핵심: 폼 내부 컬럼들을 수평 중앙 정렬 */
+        # 질문 입력 폼 정렬을 위한 CSS
+        st.markdown("""
+        <style>
+        /* 폼 전체 컨테이너 - 보더 제거 */
+        .stForm {
+            border: none !important;
+            padding: 0 !important;
+            background: transparent !important;
+        }
+
+        /* 핵심: 폼 내부 컬럼들을 수평 중앙 정렬 */
+        .stForm [data-testid="stHorizontalBlock"] {
+            display: flex !important;
+            align-items: center !important;  /* 수직 중앙 정렬 */
+            gap: 8px !important;  /* 요소 간 8px 간격 */
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        /* 각 컬럼 - 라벨과 입력 요소를 분리 */
+        .stForm [data-testid="column"] {
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: center !important;  /* 수직 중앙 정렬 */
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+
+        /* 첫 번째 컬럼(입력창) - 라벨 제거 또는 숨김 처리 */
+        .stForm [data-testid="column"]:first-child label {
+            display: none !important;  /* 라벨 숨김 */
+        }
+
+        /* 두 번째 컬럼(버튼) - 상단 여백 제거 */
+        .stForm [data-testid="column"]:last-child {
+            margin-top: 0 !important;
+            padding-top: 0 !important;
+        }
+
+        /* 입력창과 버튼 동일 높이(45px) 설정 */
+        .stForm input[type="text"],
+        .stForm input[type="text"]:focus {
+            height: 45px !important;
+            min-height: 45px !important;
+            max-height: 45px !important;
+            padding: 0 14px !important;
+            font-size: 14px !important;
+            line-height: 45px !important;
+            border: 1px solid rgba(49, 51, 63, 0.2) !important;
+            border-radius: 4px !important;
+            margin: 0 !important;
+            box-sizing: border-box !important;
+        }
+
+        /* 검색 버튼 - 입력창과 동일 높이 */
+        .stForm button[type="submit"],
+        .stForm button[kind="primary"] {
+            height: 45px !important;
+            min-height: 45px !important;
+            max-height: 45px !important;
+            padding: 0 24px !important;
+            font-size: 14px !important;
+            font-weight: 600 !important;
+            line-height: 45px !important;
+            border-radius: 4px !important;
+            margin: 0 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            white-space: nowrap !important;
+            box-sizing: border-box !important;
+        }
+
+        /* 입력창 wrapper div 정렬 */
+        .stForm .stTextInput > div {
+            display: flex !important;
+            align-items: center !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        /* 버튼 wrapper div 정렬 */
+        .stForm .stFormSubmitButton > div {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: flex-start !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            height: 45px !important;
+        }
+
+        /* 입력창 포커스 효과 */
+        .stForm input[type="text"]:focus {
+            border-color: #0068C9 !important;
+            outline: none !important;
+            box-shadow: 0 0 0 1px #0068C9 !important;
+        }
+
+        /* 반응형 - 모바일 */
+        @media (max-width: 768px) {
             .stForm [data-testid="stHorizontalBlock"] {
-                display: flex !important;
-                align-items: center !important;  /* 수직 중앙 정렬 */
-                gap: 8px !important;  /* 요소 간 8px 간격 */
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-
-            /* 각 컬럼 - 라벨과 입력 요소를 분리 */
-            .stForm [data-testid="column"] {
-                display: flex !important;
                 flex-direction: column !important;
-                justify-content: center !important;  /* 수직 중앙 정렬 */
-                padding: 0 !important;
-                margin: 0 !important;
+                align-items: stretch !important;
+                gap: 8px !important;
             }
 
-            /* 첫 번째 컬럼(입력창) - 라벨 제거 또는 숨김 처리 */
-            .stForm [data-testid="column"]:first-child label {
-                display: none !important;  /* 라벨 숨김 */
-            }
-
-            /* 두 번째 컬럼(버튼) - 상단 여백 제거 */
-            .stForm [data-testid="column"]:last-child {
-                margin-top: 0 !important;
-                padding-top: 0 !important;
-            }
-
-            /* 입력창과 버튼 동일 높이(45px) 설정 */
-            .stForm input[type="text"],
-            .stForm input[type="text"]:focus {
-                height: 45px !important;
-                min-height: 45px !important;
-                max-height: 45px !important;
-                padding: 0 14px !important;
-                font-size: 14px !important;
-                line-height: 45px !important;
-                border: 1px solid rgba(49, 51, 63, 0.2) !important;
-                border-radius: 4px !important;
-                margin: 0 !important;
-                box-sizing: border-box !important;
-            }
-
-            /* 검색 버튼 - 입력창과 동일 높이 */
             .stForm button[type="submit"],
             .stForm button[kind="primary"] {
-                height: 45px !important;
-                min-height: 45px !important;
-                max-height: 45px !important;
-                padding: 0 24px !important;
-                font-size: 14px !important;
-                font-weight: 600 !important;
-                line-height: 45px !important;
-                border-radius: 4px !important;
-                margin: 0 !important;
-                display: inline-flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-                white-space: nowrap !important;
-                box-sizing: border-box !important;
+                width: 100% !important;
             }
+        }
+        </style>
+        """, unsafe_allow_html=True)
 
-            /* 입력창 wrapper div 정렬 */
-            .stForm .stTextInput > div {
-                display: flex !important;
-                align-items: center !important;
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-
-            /* 버튼 wrapper div 정렬 */
-            .stForm .stFormSubmitButton > div {
-                display: flex !important;
-                align-items: center !important;
-                justify-content: flex-start !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                height: 45px !important;
-            }
-
-            /* 입력창 포커스 효과 */
-            .stForm input[type="text"]:focus {
-                border-color: #0068C9 !important;
-                outline: none !important;
-                box-shadow: 0 0 0 1px #0068C9 !important;
-            }
-
-            /* 반응형 - 모바일 */
-            @media (max-width: 768px) {
-                .stForm [data-testid="stHorizontalBlock"] {
-                    flex-direction: column !important;
-                    align-items: stretch !important;
-                    gap: 8px !important;
-                }
-
-                .stForm button[type="submit"],
-                .stForm button[kind="primary"] {
-                    width: 100% !important;
-                }
-            }
-            </style>
-            """, unsafe_allow_html=True)
-
-            # 질문 입력 - Enter 키로도 제출 가능하도록 form 사용
-            with st.form(key="query_form", clear_on_submit=False):
-                col1, col2 = st.columns([5, 1])
-                with col1:
-                    query = st.text_input(
-                        "질문을 입력하세요",
-                        placeholder="예: 2024년 중계차 보수건 기안자 누구? / CCU 장비 몇 대? / 광화문 무선마이크 구매 내용",
-                        key="query_input_form",
-                        label_visibility="collapsed"  # 라벨 숨기기
-                    )
-                with col2:
-                    submit = st.form_submit_button("🔍 검색", type="primary", use_container_width=True)
+        # 질문 입력 - Enter 키로도 제출 가능하도록 form 사용
+        with st.form(key="query_form", clear_on_submit=False):
+            col1, col2 = st.columns([5, 1])
+            with col1:
+                query = st.text_input(
+                    "질문을 입력하세요",
+                    placeholder="예: 2024년 중계차 보수건 기안자 누구? / CCU 장비 몇 대? / 광화문 무선마이크 구매 내용",
+                    key="query_input_form",
+                    label_visibility="collapsed"  # 라벨 숨기기
+                )
+            with col2:
+                submit = st.form_submit_button("🔍 검색", type="primary", use_container_width=True)
         
         # 답변 영역
         # Form 제출 시 처리

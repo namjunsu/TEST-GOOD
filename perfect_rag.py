@@ -142,9 +142,9 @@ class PerfectRAG:
         # Asset LLM 개선 모듈 초기화
         self.asset_enhancer = None  # 필요시 로드
 
-        # 자산 데이터 캐시 초기화
+        # 자산 데이터 제거 (기안서 중심 시스템으로 전환)
         self.asset_data_cache = None
-        self._load_asset_data()
+        self.asset_data = []
         
         # 모든 PDF와 TXT 파일 목록 (새로운 폴더 구조 포함)
         self.pdf_files = []
@@ -171,8 +171,8 @@ class PerfectRAG:
         #         self.pdf_files.extend(list(cat_folder.glob('*.pdf')))
         #         self.txt_files.extend(list(cat_folder.glob('*.txt')))
 
-        # 특별 폴더
-        special_folders = ['recent', 'archive', 'assets', 'asset_technical', 'asset_complete']
+        # 특별 폴더 (자산 관련 폴더 제거)
+        special_folders = ['recent', 'archive']
         for folder in special_folders:
             special_folder = self.docs_dir / folder
             if special_folder.exists():

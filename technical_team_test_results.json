@@ -1,0 +1,98 @@
+[
+  {
+    "question": "HD 카메라 중 Sony 제품만 보여줘. 구입연도와 위치도 같이 알려줘",
+    "category": "📊 장비 현황 파악",
+    "response_length": 594,
+    "response_time": 0.053920745849609375,
+    "quality_score": 6,
+    "success": true
+  },
+  {
+    "question": "2023년에 구매한 장비 중 1억원 이상인 고가 장비 목록",
+    "category": "💰 예산 관리",
+    "response_length": 6596,
+    "response_time": 0.11075353622436523,
+    "quality_score": 9,
+    "success": true
+  },
+  {
+    "question": "광화문 스튜디오에 있는 모든 조명 장비 목록과 구입일",
+    "category": "📍 위치별 자산",
+    "response_length": 5834,
+    "response_time": 0.14466023445129395,
+    "quality_score": 9,
+    "success": true
+  },
+  {
+    "question": "신승만 차장이 관리하는 장비 전체 목록과 총 금액",
+    "category": "👤 담당자별 관리",
+    "response_length": 124,
+    "response_time": 0.047455787658691406,
+    "quality_score": 5,
+    "success": false
+  },
+  {
+    "question": "2020년 이전에 구입한 카메라 장비 중 아직 사용 중인 것들",
+    "category": "🔄 교체 주기 파악",
+    "response_length": 22,
+    "response_time": 0.021030426025390625,
+    "quality_score": 1,
+    "success": false
+  },
+  {
+    "question": "뉴스제작팀에서 사용하는 모든 편집 장비 현황",
+    "category": "🏢 부서별 자산",
+    "response_length": 5680,
+    "response_time": 0.09140706062316895,
+    "quality_score": 9,
+    "success": true
+  },
+  {
+    "question": "중계차에 설치된 장비 중 5년 이상 된 장비들",
+    "category": "🔧 유지보수 계획",
+    "response_length": 16117,
+    "response_time": 0.04748678207397461,
+    "quality_score": 8,
+    "success": true
+  },
+  {
+    "question": "최근 3년간 가장 많이 구매한 장비 종류는?",
+    "category": "📈 구매 분석",
+    "response_length": 6591,
+    "response_time": 0.11285185813903809,
+    "quality_score": 9,
+    "success": true
+  },
+  {
+    "question": "1천만원 이상 장비 구매시 필요한 결재 절차와 서류는?",
+    "category": "📋 구매 절차",
+    "response_length": 1468,
+    "response_time": 119.87173247337341,
+    "quality_score": 10,
+    "success": true
+  },
+  {
+    "question": "장비 구매전 기술검토는 누가하고 어떤 내용을 검토하나요?",
+    "category": "🔍 기술 검토",
+    "response_length": 1759,
+    "response_time": 3.9592528343200684,
+    "quality_score": 10,
+    "success": true
+  },
+  {
+    "question": "장비 수리 기안서에 꼭 포함되어야 하는 내용은?",
+    "category": "📝 기안서 작성",
+    "response_length": 69,
+    "response_time": 0.03169560432434082,
+    "quality_score": 0,
+    "success": false
+  },
+  {
+    "question": "장비 구매 업체 선정 기준과 견적 비교 방법은?",
+    "category": "💼 업체 선정",
+    "response_length": 333,
+    "response_time": 29.040748596191406,
+    "quality_score": 9,
+    "success": true
+  }
+]

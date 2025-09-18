@@ -1,0 +1,32 @@
+# performance_config.yaml
+# RAG 시스템 성능 최적화 설정
+
+llm:
+  max_tokens: 800      # 기존 1200에서 축소
+  temperature: 0.3     # 기존 0.7에서 축소 (더 결정적)
+  top_p: 0.85         # 기존 0.9에서 축소
+  repeat_penalty: 1.15 # 반복 방지 강화
+  batch_size: 256     # 기존 512에서 축소
+
+cache:
+  response_ttl: 7200   # 2시간 (기존 1시간)
+  max_size: 500       # 기존 200에서 증가
+  similarity_threshold: 0.85  # 유사 쿼리 캐시 히트
+
+search:
+  max_documents: 30    # 기존 50에서 축소
+  timeout: 20         # 기존 30초에서 축소
+  min_relevance: 0.6  # 관련성 임계값
+
+parallel:
+  pdf_workers: 4      # PDF 병렬 처리 워커
+  chunk_size: 5       # 청크 크기
+  
+memory:
+  max_document_length: 8000  # 문서당 최대 길이
+  cache_documents: true      # 문서 캐싱 활성화
+  
+optimization:
+  use_singleton: true        # LLM 싱글톤 사용
+  use_streaming: false       # 스트리밍 응답 (추후 구현)
+  use_dynamic_context: true  # 동적 컨텍스트

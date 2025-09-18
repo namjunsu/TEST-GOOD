@@ -57,9 +57,9 @@ except ImportError:
 from rag_system.qwen_llm import QwenLLM
 from rag_system.llm_singleton import LLMSingleton
 
-# 새로운 모듈 import
-from pdf_parallel_processor import PDFParallelProcessor
-from error_handler import RAGErrorHandler, ErrorRecovery, DetailedError, safe_execute
+# 새로운 모듈 import (제거됨 - 백업 폴더로 이동)
+# from pdf_parallel_processor import PDFParallelProcessor
+# from error_handler import RAGErrorHandler, ErrorRecovery, DetailedError, safe_execute
 
 
 class PerfectRAG:
@@ -129,12 +129,13 @@ class PerfectRAG:
         self.answer_cache = OrderedDict()  # 답변 캐시 (LRU)
         self.pdf_text_cache = OrderedDict()  # PDF 텍스트 추출 캐시 (성능 최적화)
 
-        # PDF 병렬 처리기 초기화
-        self.pdf_processor = PDFParallelProcessor(config_manager=cfg if USE_YAML_CONFIG else None)
-
-        # 에러 핸들러 초기화
-        self.error_handler = RAGErrorHandler()
-        self.error_recovery = ErrorRecovery()
+        # PDF 병렬 처리기 초기화 (제거됨 - 백업 폴더로 이동)
+        # self.pdf_processor = PDFParallelProcessor(config_manager=cfg if USE_YAML_CONFIG else None)
+        # self.error_handler = RAGErrorHandler()
+        # self.error_recovery = ErrorRecovery()
+        self.pdf_processor = None
+        self.error_handler = None
+        self.error_recovery = None
         
         # 응답 포맷터 초기화
         self.formatter = ResponseFormatter() if ResponseFormatter else None
@@ -430,13 +431,19 @@ class PerfectRAG:
             else:
                 print(f"⚠️ TXT 읽기 오류 ({txt_path.name}): {e}")
             # 에러 핸들러로 안전하게 파일 읽기 시도
-            content = self.error_handler.safe_file_read(txt_path)
-            if content:
-                return {'text': content[:3000]}
+            # error_handler 제거 - 직접 파일 읽기
+            try:
+                with open(txt_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                if content:
+                    return {'text': content[:3000]}
+            except Exception:
+                pass
             return {}
-    
-    @RAGErrorHandler.retry_with_backoff(max_retries=3, backoff_factor=1.5)
-    @RAGErrorHandler.handle_pdf_extraction_error
+
+    # 데코레이터 제거 (error_handler 백업 폴더로 이동)
+    # @RAGErrorHandler.retry_with_backoff(max_retries=3, backoff_factor=1.5)
+    # @RAGErrorHandler.handle_pdf_extraction_error
 
     def _optimize_context(self, text: str, query: str, max_length: int = 3000) -> str:
         """컨텍스트 최적화 - 가장 관련성 높은 부분만 추출"""
@@ -539,11 +546,11 @@ class PerfectRAG:
                 # 문서 전체 또는 설정된 최대 페이지 읽기
                 pages_to_read = min(len(pdf.pages), self.max_pdf_pages)
                 for page in pdf.pages[:pages_to_read]:
-                    page_text = safe_execute(
-                        page.extract_text,
-                        default_return="",
-                        log_errors=False
-                    )
+                    # safe_execute 제거 (error_handler 백업 폴더로 이동)
+                    try:
+                        page_text = page.extract_text() or ""
+                    except Exception:
+                        page_text = ""
                     if page_text:
                         text += page_text + "\n"
                         # 충분한 텍스트가 추출되면 중단 (메모리 절약)

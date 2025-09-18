@@ -304,7 +304,7 @@ class PerfectRAG:
         cached_metadata = cache_manager.load_cache()
 
         if cached_metadata and len(cached_metadata) > 0:
-            print(f"💾 캐시에서 {len(cached_metadata)}개 문서 메타데이터 로드")
+            print(f"💾 캐시에서 {len(cached_metadata)}개 문서 메타데이터 로드 (빠른 시작)")
             # 캐시된 데이터 사용
             for filename, metadata in cached_metadata.items():
                 if 'path' in metadata:

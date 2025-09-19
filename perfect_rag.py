@@ -251,15 +251,30 @@ class PerfectRAG:
             cache_dict[key] = (value, time.time())  # 값과 타임스탬프 저장
     
     def _get_from_cache(self, cache_dict, key):
-        """캐시에서 가져오기 (TTL 체크 포함)"""
+        """캐시에서 가져오기 (TTL 체크 및 타임스탬프 갱신)"""
         if key in cache_dict:
-            value, timestamp = cache_dict[key]
-            if time.time() - timestamp < self.cache_ttl:
-                cache_dict.move_to_end(key)  # 최근 사용으로 업데이트
-                return value
+            cache_value = cache_dict[key]
+            current_time = time.time()
+
+            # 튀플 형식 (value, timestamp) 체크
+            if isinstance(cache_value, tuple) and len(cache_value) == 2:
+                value, timestamp = cache_value
+
+                if current_time - timestamp < self.cache_ttl:
+                    # LRU: 사용한 항목을 끝으로 이동
+                    cache_dict.move_to_end(key)
+                    # 타임스탬프 갱신 (사용 시간 연장)
+                    cache_dict[key] = (value, current_time)
+                    return value
+                else:
+                    # TTL 만료 - 삭제
+                    del cache_dict[key]
+                    return None
             else:
-                # TTL 만료 - 삭제
-                del cache_dict[key]
+                # 이전 형식 호환 (튀플 아닌 경우)
+                cache_dict.move_to_end(key)
+                return cache_value
+
         return None
     
     def _parse_pdf_result(self, result: Dict) -> Dict:
@@ -272,22 +287,49 @@ class PerfectRAG:
         }
 
     def process_pdfs_in_batch(self, pdf_paths: List[Path], batch_size: int = 5) -> Dict:
-        """여러 PDF를 배치로 병렬 처리"""
+        """여러 PDF를 배치로 병렬 처리 (안전하게 개선)"""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import gc
+
         all_results = {}
 
-        for i in range(0, len(pdf_paths), batch_size):
-            batch = pdf_paths[i:i + batch_size]
-            if logger:
-                print(f"배치 {i//batch_size + 1} 처리 중 ({len(batch)}개 파일)")
-            else:
+        # pdf_processor가 없으면 순차 처리로 폴백
+        if self.pdf_processor is None:
+            print("⚠️ 병렬 처리기 미활성화 - 순차 처리 모드")
+
+            # ThreadPoolExecutor로 간단한 병렬 처리
+            with ThreadPoolExecutor(max_workers=min(4, batch_size)) as executor:
+                for i in range(0, len(pdf_paths), batch_size):
+                    batch = pdf_paths[i:i + batch_size]
+                    print(f"📋 배치 {i//batch_size + 1}/{(len(pdf_paths)-1)//batch_size + 1} 처리 중 ({len(batch)}개 파일)")
+
+                    # 각 PDF를 병렬로 처리
+                    futures = {executor.submit(self._extract_pdf_info, pdf): pdf for pdf in batch}
+
+                    for future in as_completed(futures):
+                        pdf_path = futures[future]
+                        try:
+                            result = future.result(timeout=30)  # 30초 타임아웃
+                            all_results[str(pdf_path)] = result
+                        except Exception as e:
+                            print(f"  ❌ {pdf_path.name} 처리 실패: {str(e)[:50]}")
+                            all_results[str(pdf_path)] = {'error': str(e)}
+
+                    # 메모리 최적화
+                    if i % (batch_size * 5) == 0:
+                        gc.collect()
+        else:
+            # 기존 pdf_processor 사용
+            for i in range(0, len(pdf_paths), batch_size):
+                batch = pdf_paths[i:i + batch_size]
                 print(f"배치 {i//batch_size + 1} 처리 중 ({len(batch)}개 파일)")
 
-            batch_results = self.pdf_processor.process_multiple_pdfs(batch)
-            all_results.update(batch_results)
+                batch_results = self.pdf_processor.process_multiple_pdfs(batch)
+                all_results.update(batch_results)
 
-            # 메모리 관리
-            if len(self.pdf_processor.extraction_cache) > 50:
-                self.pdf_processor.clear_cache()
+                # 메모리 관리
+                if len(self.pdf_processor.extraction_cache) > 50:
+                    self.pdf_processor.clear_cache()
 
         return all_results
 
@@ -312,9 +354,10 @@ class PerfectRAG:
         # 병렬 처리 설정 확인
         use_parallel = USE_YAML_CONFIG and cfg.get('parallel_processing.enabled', True)
 
-        if use_parallel and self.pdf_files:
-            print(f"🚀 {len(self.pdf_files)}개 PDF 병렬 처리 시작...")
-            pdf_results = self.process_pdfs_in_batch(self.pdf_files)
+        # 병렬 처리 활성화 여부와 관계없이 process_pdfs_in_batch 사용 (내부에서 처리)
+        if self.pdf_files and len(self.pdf_files) > 10:  # 10개 이상일 때만 병렬 처리
+            print(f"🚀 {len(self.pdf_files)}개 PDF 처리 시작 (병렬 모드)...")
+            pdf_results = self.process_pdfs_in_batch(self.pdf_files, batch_size=10)
 
             # 병렬 처리 결과를 메타데이터 캐시에 저장
             for pdf_path, result in pdf_results.items():
@@ -496,27 +539,60 @@ class PerfectRAG:
         return result_text if result_text else text[:max_length]
 
     def _extract_pdf_info_with_retry(self, pdf_path: Path) -> Dict:
-        """PDF 정보 추출 (병렬 처리 및 에러 핸들링 포함)"""
-        # 병렬 처리기 사용 여부 확인
-        use_parallel = USE_YAML_CONFIG and cfg.get('parallel_processing.enabled', True)
+        """PDF 정보 추출 (병렬 처리 및 에러 핸들링 개선)"""
+        max_retries = 2
+        retry_count = 0
 
-        if use_parallel:
-            # 병렬 처리로 PDF 추출
-            results = self.pdf_processor.process_multiple_pdfs([pdf_path])
-            result = results.get(str(pdf_path), {})
+        while retry_count < max_retries:
+            try:
+                # 병렬 처리기 사용 여부 확인
+                use_parallel = USE_YAML_CONFIG and cfg.get('parallel_processing.enabled', True)
 
-            if 'error' not in result:
-                return self._parse_pdf_result(result)
-            else:
-                # 에러 발생 시 기존 방식으로 폴백
-                if logger:
-                    print(f"⚠️ 병렬 처리 실패, 순차 처리로 폴백: {pdf_path.name}")
+                if use_parallel and self.pdf_processor is not None:
+                    # 병렬 처리로 PDF 추출
+                    results = self.pdf_processor.process_multiple_pdfs([pdf_path])
+                    result = results.get(str(pdf_path), {})
+
+                    if 'error' not in result:
+                        return self._parse_pdf_result(result)
+                    else:
+                        # 에러 발생 시 폴백
+                        print(f"⚠️ 병렬 처리 실패, 순차 처리로 폴백: {pdf_path.name}")
+                        result = self._extract_pdf_info(pdf_path)
                 else:
-                    print(f"⚠️ 병렬 처리 실패, 순차 처리로 폴백: {pdf_path.name}")
-                return self._extract_pdf_info(pdf_path)
-        else:
-            # 기존 순차 처리
-            return self._extract_pdf_info(pdf_path)
+                    # 순차 처리 (병렬 처리기 없거나 비활성화)
+                    result = self._extract_pdf_info(pdf_path)
+
+                # 결과 확인
+                if result:
+                    return result
+
+                # 빈 결과일 때 OCR 시도
+                if hasattr(self, '_try_ocr_extraction'):
+                    ocr_text = self._try_ocr_extraction(pdf_path)
+                    if ocr_text:
+                        return {'text': ocr_text, 'is_ocr': True}
+
+                retry_count += 1
+                if retry_count < max_retries:
+                    time.sleep(0.5)  # 재시도 전 대기
+
+            except MemoryError:
+                print(f"  💾 메모리 부족: {pdf_path.name} (재시도 {retry_count + 1}/{max_retries})")
+                import gc
+                gc.collect()  # 메모리 정리
+                retry_count += 1
+
+            except FileNotFoundError:
+                print(f"  📁 파일 없음: {pdf_path}")
+                break  # 파일 없으면 재시도 불필요
+
+            except Exception as e:
+                print(f"  ❌ PDF 처리 오류 ({retry_count + 1}/{max_retries}): {pdf_path.name}")
+                print(f"     오류: {type(e).__name__}: {str(e)[:50]}")
+                retry_count += 1
+
+        return {}
     
     def _extract_pdf_info(self, pdf_path: Path) -> Dict:
         """기존 PDF 추출 방식 (폴백용) - 캐싱 적용"""
@@ -1521,37 +1597,60 @@ class PerfectRAG:
 """
     
     def _get_enhanced_cache_key(self, query: str, mode: str) -> str:
-        """향상된 캐시 키 생성 - 유사 질문도 캐시 히트"""
+        """향상된 캐시 키 생성 - 유사 질문도 캐시 히트
 
-        # 1. 쿼리 정규화
+        예시:
+        - "2020년 구매 문서" → "2020 구매 문서"
+        - "2020년의 구매한 문서를" → "2020 구매 문서"
+        - "구매 2020년 문서" → "2020 구매 문서" (정렬)
+        """
+
+        # 1. 쿼리 정규화 및 소문자 변환
         normalized = query.strip().lower()
 
-        # 2. 조사 제거 (한국어 특화) - 개선된 버전
-        # 긴 조사부터 먼저 제거 (으로, 에서 등이 로, 에 보다 먼저)
-        particles = ['에서', '으로', '이나', '이든', '이면', '에게', '한테', '께서',
-                     '은', '는', '이', '가', '을', '를', '의', '와', '과', '로', '에', '도', '만', '까지', '부터']
-        for particle in particles:
-            # 조사 뒤에 공백이 있는 경우
-            normalized = normalized.replace(particle + ' ', ' ')
-            # 문장 끝에 조사가 있는 경우
-            if normalized.endswith(particle):
-                normalized = normalized[:-len(particle)]
+        # 2. 한글 조사 제거 - 개선된 알고리즘
+        # 복합 조사부터 제거 (에서는, 으로는 등)
+        compound_particles = ['에서는', '으로는', '에게는', '한테는', '에서도', '으로도',
+                            '이라도', '이나마', '이든지', '이라는', '까지도', '부터도']
+        simple_particles = ['에서', '으로', '이나', '이든', '이면', '에게', '한테', '께서',
+                          '은', '는', '이', '가', '을', '를', '의', '와', '과', '로', '에',
+                          '도', '만', '까지', '부터', '마다', '마저', '조차']
 
-        # 3. 공백 정규화
-        normalized = ' '.join(normalized.split())
+        # 단어 단위로 분리 후 조사 제거
+        words = normalized.split()
+        cleaned_words = []
 
-        # 4. 핵심 키워드만 추출
-        keywords = []
-        for word in normalized.split():
-            if len(word) >= 2:  # 2글자 이상만
-                keywords.append(word)
+        for word in words:
+            cleaned_word = word
 
-        # 5. 정렬하여 순서 무관하게
-        keywords.sort()
+            # 복합 조사 먼저 제거
+            for particle in compound_particles:
+                if cleaned_word.endswith(particle):
+                    cleaned_word = cleaned_word[:-len(particle)]
+                    break
 
-        # 6. 해시 생성
-        cache_str = f"{mode}:{'_'.join(keywords)}"
-        return hashlib.md5(cache_str.encode()).hexdigest()
+            # 단순 조사 제거
+            if cleaned_word:  # 빈 문자열이 아니면
+                for particle in simple_particles:
+                    if cleaned_word.endswith(particle):
+                        cleaned_word = cleaned_word[:-len(particle)]
+                        break
+
+            # 2글자 이상만 포함
+            if cleaned_word and len(cleaned_word) >= 2:
+                cleaned_words.append(cleaned_word)
+
+        # 3. 키워드 정렬 (순서 무관 캐시 히트)
+        cleaned_words.sort()
+
+        # 4. 캐시 키 생성
+        cache_str = f"{mode}:{'_'.join(cleaned_words)}"
+        hash_key = hashlib.md5(cache_str.encode('utf-8')).hexdigest()
+
+        # 디버깅 (필요시 활성화)
+        # print(f"Cache: '{query}' → '{' '.join(cleaned_words)}' → {hash_key[:8]}...")
+
+        return hash_key
 
     def answer_with_logging(self, query: str, mode: str = 'auto') -> str:
         """로깅이 통합된 answer 메서드 (캐싱 포함)"""

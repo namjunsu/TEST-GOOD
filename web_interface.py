@@ -1500,66 +1500,93 @@ def main():
                                 st.markdown(f"**총 {doc_count}개 문서 발견**")
                                 st.markdown("---")
 
-                        # 문서별로 카드 UI 생성
-                        lines = formatted_answer.split('\n')
-                        current_doc = None
-                        doc_info = {}
-                        skip_header = False
+                        # 먼저 전체 텍스트에서 PDF_PREVIEW 마커를 정리
+                        cleaned_text = formatted_answer
 
-                        for line in lines:
-                            # 헤더 스킵
-                            if '검색 결과' in line or '개 문서 발견' in line:
-                                skip_header = True
-                                continue
-                            if skip_header and line.strip() == '':
-                                skip_header = False
-                                continue
+                        # PDF_PREVIEW 마커가 있는 경우 파싱하여 카드 생성
+                        if '@@PDF_PREVIEW@@' in formatted_answer:
+                            lines = cleaned_text.split('\n')
+                            current_year = None
+                            processed_files = set()  # 중복 방지
 
-                            # 연도 헤더
-                            if line.startswith('### 📅'):
-                                st.markdown(line)
-                            # 문서 제목
-                            elif line.startswith('####'):
-                                # 이전 문서 카드 출력
-                                if current_doc and doc_info and 'filename' in doc_info:
-                                    render_document_card(current_doc, doc_info)
+                            for line in lines:
+                                # 헤더는 그대로 출력
+                                if '검색 결과' in line and '개 문서 발견' in line:
+                                    continue  # 이미 위에서 처리
 
-                                # 새 문서 시작
-                                current_doc = line
-                                doc_info = {'title': line}
-                            # 카테고리 및 날짜
-                            elif line.startswith('**[') and ']**' in line:
-                                if doc_info is not None:
-                                    doc_info['category'] = line
-                            # 상세 정보
-                            elif line.startswith('- **'):
-                                if '기안자' in line:
-                                    doc_info['drafter'] = line
-                                elif '금액' in line:
-                                    doc_info['amount'] = line
-                                elif '개요' in line:
-                                    doc_info['summary'] = line
-                                elif '파일' in line:
-                                    # PDF 미리보기 마커 처리
-                                    preview_match = re.search(r'@@PDF_PREVIEW@@(.+?)@@', line)
-                                    if preview_match:
-                                        file_path = preview_match.group(1)
-                                        doc_info['filename'] = Path(file_path).name
-                                        doc_info['path'] = str(Path(config.DOCS_DIR) / file_path)
-                                    else:
-                                        # 기존 방식 (파일명만 추출)
-                                        match = re.search(r'\[([^\]]+)\]', line)
-                                        if match:
-                                            file_path = match.group(1)
-                                            doc_info['filename'] = Path(file_path).name
-                                            doc_info['path'] = str(Path(config.DOCS_DIR) / file_path)
-                            # 구분선 또는 빈 줄 (문서 구분)
-                            elif (line.strip() == '' or line == '---') and current_doc and doc_info:
-                                # 파일 정보가 있는 경우에만 카드 출력
-                                if 'filename' in doc_info:
-                                    render_document_card(current_doc, doc_info)
-                                    current_doc = None
+                                # 연도 헤더
+                                if line.startswith('### 📅') or '📅' in line:
+                                    st.markdown(line)
+                                    current_year = line
+
+                                # 문서 정보 파싱 (이모지로 시작하는 라인)
+                                elif any(emoji in line for emoji in ['📋', '🔧', '🛒', '🗑️', '📄']):
+                                    # 다음 몇 줄을 함께 읽어서 하나의 문서 정보 구성
+                                    doc_block = [line]
+                                    line_idx = lines.index(line)
+
+                                    # 다음 5줄 정도를 확인하여 관련 정보 수집
+                                    for i in range(1, 6):
+                                        if line_idx + i < len(lines):
+                                            next_line = lines[line_idx + i]
+                                            if next_line.strip() and not next_line.startswith('###'):
+                                                doc_block.append(next_line)
+                                                if '@@PDF_PREVIEW@@' in next_line:
+                                                    break
+
+                                    # 문서 정보 추출
                                     doc_info = {}
+                                    doc_title = line
+
+                                    for doc_line in doc_block:
+                                        if '기안자:' in doc_line or '- **기안자' in doc_line:
+                                            doc_info['drafter'] = doc_line
+                                        elif '금액:' in doc_line or '- **금액' in doc_line:
+                                            doc_info['amount'] = doc_line
+                                        elif '개요:' in doc_line or '- **개요' in doc_line:
+                                            doc_info['summary'] = doc_line
+                                        elif '[' in doc_line and ']' in doc_line and '|' in doc_line:
+                                            doc_info['category'] = doc_line
+                                        elif '@@PDF_PREVIEW@@' in doc_line:
+                                            preview_match = re.search(r'@@PDF_PREVIEW@@(.+?)@@', doc_line)
+                                            if preview_match:
+                                                file_path = preview_match.group(1)
+                                                doc_info['filename'] = Path(file_path).name
+                                                doc_info['path'] = str(Path(config.DOCS_DIR) / file_path)
+
+                                    # 중복 체크 후 카드 렌더링
+                                    if 'filename' in doc_info and doc_info['filename'] not in processed_files:
+                                        processed_files.add(doc_info['filename'])
+                                        render_document_card(doc_title, doc_info)
+                        else:
+                            # PDF_PREVIEW 마커가 없으면 기존 방식
+                            lines = formatted_answer.split('\n')
+                            current_doc = None
+                            doc_info = {}
+
+                            for line in lines:
+                                if line.startswith('### 📅'):
+                                    st.markdown(line)
+                                elif line.startswith('####'):
+                                    if current_doc and doc_info and 'filename' in doc_info:
+                                        render_document_card(current_doc, doc_info)
+                                    current_doc = line
+                                    doc_info = {'title': line}
+                                elif line.startswith('**[') and ']**' in line:
+                                    if doc_info is not None:
+                                        doc_info['category'] = line
+                                elif line.startswith('- **'):
+                                    if '기안자' in line:
+                                        doc_info['drafter'] = line
+                                    elif '금액' in line:
+                                        doc_info['amount'] = line
+                                    elif '개요' in line:
+                                        doc_info['summary'] = line
+                                elif (line.strip() == '' or line == '---') and current_doc and doc_info:
+                                    if 'filename' in doc_info:
+                                        render_document_card(current_doc, doc_info)
+                                        current_doc = None
+                                        doc_info = {}
 
                         # 마지막 문서 처리
                         if current_doc and doc_info and 'filename' in doc_info:

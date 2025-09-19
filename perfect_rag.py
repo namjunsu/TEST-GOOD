@@ -5920,17 +5920,10 @@ class PerfectRAG:
             report.append(f"**총 {len(matched_docs)}개 문서 발견**\n")
             report.append("---\n")
             
-            # 연도별로 그룹화 (중복 제거 후)
+            # 연도별로 그룹화 (중복 제거는 이미 위에서 완료)
             docs_by_year = {}
-            seen_filenames = set()  # 이미 처리한 파일명 추적
 
             for doc in matched_docs:
-                filename = doc['filename']
-                # 이미 처리한 파일이면 건너뛰기
-                if filename in seen_filenames:
-                    continue
-                seen_filenames.add(filename)
-
                 year = doc['year']
                 if year not in docs_by_year:
                     docs_by_year[year] = []

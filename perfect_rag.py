@@ -5793,15 +5793,20 @@ class PerfectRAG:
                 stopwords = ['의', '및', '건', '검토서', '관련', '문서', '찾아', '줘', '있어', '어떤', '기안서']
 
                 # 장비명 특별 가중치 (DVR, CCU 등)
-                equipment_names = ['dvr', 'ccu', '카메라', '렌즈', '모니터', '스위처', '마이크', '믹서']
+                equipment_names = ['dvr', 'ccu', '카메라', '렌즈', '모니터', '스위처', '마이크', '믹서', '삼각대', '중계차']
                 for equipment in equipment_names:
                     if equipment in query_lower:
                         # 쿼리에 장비명이 있고 파일명에도 있으면 높은 점수
                         if equipment in filename_lower:
                             score += 15  # 장비명 완전 매칭시 높은 점수
-                        # 파일명에 없더라도 메타데이터 텍스트에 있으면 점수 부여
-                        elif metadata.get('text') and equipment in metadata.get('text', '').lower()[:1000]:
-                            score += 5  # 내용에 장비명이 있으면 중간 점수
+                        # 파일명에 없더라도 메타데이터 키워드에 있으면 점수 부여
+                        elif any(equipment in kw.lower() for kw in metadata.get('keywords', [])):
+                            score += 8  # 키워드에 있으면 중간 점수
+                        # 텍스트 검색은 필요시에만 (성능 최적화)
+                        elif score < 3 and metadata.get('text'):
+                            # 점수가 낮을 때만 텍스트 검색
+                            if equipment in metadata.get('text', '').lower()[:500]:
+                                score += 3
                 
                 for word in query_words:
                     if len(word) >= 2 and word not in stopwords:
@@ -5846,14 +5851,22 @@ class PerfectRAG:
                         continue  # 연도가 다르면 무조건 제외
                 
                 # 최소 점수 기준 설정 (너무 많은 문서 방지)
-                MIN_SCORE = 3  # 기본 최소 3점 이상만 포함
+                # 기안자나 특정 년도 검색이 아니면 기본 기준
+                if '기안자' in query_lower or re.search(r'20\d{2}년', query):
+                    MIN_SCORE = 2  # 기안자/년도 검색은 낮은 기준
+                else:
+                    MIN_SCORE = 3  # 기본 최소 3점 이상만 포함
 
-                # DVR 같은 특정 장비 검색시 점수 조정
-                # 장비명이 직접 매칭되면 이미 10점을 받으므로 너무 높은 기준 불필요
+                # 장비명 검색시 적절한 기준 적용
+                has_equipment = False
                 for equipment in equipment_names:
                     if equipment in query_lower:
-                        # 장비명이 있어도 적절한 기준 유지
-                        MIN_SCORE = 4  # 장비 검색시에도 합리적인 기준
+                        has_equipment = True
+                        # 장비명이 파일명에 있으면 무조건 포함
+                        if equipment in filename_lower:
+                            MIN_SCORE = 0  # 파일명에 있으면 무조건 포함
+                        else:
+                            MIN_SCORE = max(3, MIN_SCORE)  # 장비 검색시 최소 3점
                         break
                 
                 if score >= MIN_SCORE:
@@ -5873,15 +5886,18 @@ class PerfectRAG:
                         'cache_key': cache_key  # 파일 경로 정보 추가
                     })
             
-            # 중복 제거 (같은 파일명이 다른 폴더에 있는 경우)
+            # 중복 제거 및 최적화
             unique_docs = {}
             for doc in matched_docs:
                 filename = doc['filename']
                 if filename not in unique_docs:
                     unique_docs[filename] = doc
                 else:
-                    # year_ 폴더를 우선시 (recent, archive보다)
-                    if 'year_' in doc.get('cache_key', ''):
+                    # 더 높은 점수를 가진 문서를 유지
+                    if doc['score'] > unique_docs[filename]['score']:
+                        unique_docs[filename] = doc
+                    # 같은 점수면 year_ 폴더 우선
+                    elif doc['score'] == unique_docs[filename]['score'] and 'year_' in doc.get('cache_key', ''):
                         unique_docs[filename] = doc
 
             matched_docs = list(unique_docs.values())
@@ -5889,9 +5905,11 @@ class PerfectRAG:
             # 점수 순으로 정렬
             matched_docs.sort(key=lambda x: x['score'], reverse=True)
 
-            # 상위 10개만 표시 (너무 많은 결과 방지)
-            if len(matched_docs) > 10:
-                matched_docs = matched_docs[:10]
+            # 결과 제한 (성능 최적화)
+            # 장비 검색은 20개까지, 일반 검색은 15개까지
+            max_results = 20 if has_equipment else 15
+            if len(matched_docs) > max_results:
+                matched_docs = matched_docs[:max_results]
             
             if not matched_docs:
                 return "❌ 관련 문서를 찾을 수 없습니다."

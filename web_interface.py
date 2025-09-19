@@ -1465,11 +1465,12 @@ def main():
                     # 표 형식 처리
                     formatted_answer = format_answer_with_table(answer)
                     
-                    # 파일명 패턴 찾기 (통합 UI를 위해)
-                    file_pattern = r'\[([\w\-가-힣\s]+\.pdf)\]'
+                    # 파일명 패턴 찾기 (통합 UI를 위해) - 경로 포함
+                    file_pattern = r'\[([^\]]+\.pdf)\]'
                     file_matches = re.findall(file_pattern, answer)
                     
                     # 답변을 파싱하여 각 문서별로 카드 생성
+                    print(f"[DEBUG] Found {len(file_matches)} file matches")  # 디버깅
                     if file_matches:
                         # 문서별로 카드 UI 생성
                         lines = formatted_answer.split('\n')
@@ -1528,7 +1529,9 @@ def main():
                             render_document_card(current_doc, doc_info)
                     else:
                         # 일반 답변 (문서 리스트가 아닌 경우)
-                        st.markdown(formatted_answer)
+                        # PDF_PREVIEW 마커 제거
+                        cleaned_answer = re.sub(r'@@PDF_PREVIEW@@.+?@@', '📥', formatted_answer)
+                        st.markdown(cleaned_answer)
                     
                     # 통합 UI로 인해 하단 다운로드 영역 제거
                     

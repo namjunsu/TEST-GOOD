@@ -1577,58 +1577,60 @@ def main():
             # 표 형식 처리
             formatted_answer = format_answer_with_table(st.session_state['last_answer'])
             
-            # 파일명 패턴 찾기 (통합 UI를 위해)
-            file_pattern = r'\[([\w\-가-힣\s]+\.pdf)\]'
-            file_matches = re.findall(file_pattern, st.session_state['last_answer'])
-            
+            # PDF_PREVIEW 마커 확인
+            has_preview_markers = '@@PDF_PREVIEW@@' in st.session_state['last_answer']
+
             # 답변을 파싱하여 각 문서별로 카드 생성
-            if file_matches:
-                # 문서별로 카드 UI 생성
+            if has_preview_markers:
+                # 검색 헤더 표시
+                if '검색 결과' in st.session_state['last_answer']:
+                    header_match = re.search(r"'(.+?)'.*검색 결과.*총 (\d+)개 문서", st.session_state['last_answer'])
+                    if header_match:
+                        query_text = header_match.group(1)
+                        doc_count = header_match.group(2)
+                        st.markdown(f"## 🔍 '{query_text}' 검색 결과")
+                        st.markdown(f"**총 {doc_count}개 문서 발견**")
+                        st.markdown("---")
+                # 문서별로 파싱하여 카드 렌더링
                 lines = formatted_answer.split('\n')
-                current_doc = None
-                doc_info = {}
-                
+                current_doc = {}
+                in_doc = False
+
                 for line in lines:
                     # 연도 헤더
-                    if line.startswith('### 📅'):
+                    if '📅' in line and '년' in line:
                         st.markdown(line)
-                    # 문서 제목
-                    elif line.startswith('####'):
-                        # 이전 문서 카드 출력
-                        if current_doc and doc_info:
-                            render_document_card(current_doc, doc_info)
-                        
+
+                    # 문서 시작 (이모지로 시작)
+                    elif any(emoji in line for emoji in ['📋', '🔧', '🛒', '🗑️', '📄']):
+                        # 이전 문서 렌더링
+                        if current_doc and 'filename' in current_doc:
+                            render_document_card(current_doc.get('title', ''), current_doc)
+
                         # 새 문서 시작
-                        current_doc = line
-                        doc_info = {'title': line}
-                    # 카테고리 및 날짜
-                    elif line.startswith('**['):
-                        if doc_info:
-                            doc_info['category'] = line
-                    # 상세 정보
-                    elif line.startswith('- **'):
-                        if '기안자' in line:
-                            doc_info['drafter'] = line
-                        elif '금액' in line:
-                            doc_info['amount'] = line
-                        elif '개요' in line:
-                            doc_info['summary'] = line
-                        elif '파일' in line:
-                            # 파일명 추출
-                            match = re.search(r'\[([^\]]+\.pdf)\]', line)
-                            if match:
-                                doc_info['filename'] = match.group(1)
-                    # 구분선
-                    elif line == '---':
-                        # 마지막 문서 카드 출력
-                        if current_doc and doc_info:
-                            render_document_card(current_doc, doc_info)
-                            current_doc = None
-                            doc_info = {}
-                
-                # 마지막 문서 처리
-                if current_doc and doc_info:
-                    render_document_card(current_doc, doc_info)
+                        current_doc = {'title': line}
+                        in_doc = True
+
+                    # 문서 정보 수집
+                    elif in_doc:
+                        if '[' in line and ']' in line and '|' in line:
+                            current_doc['category'] = line
+                        elif '기안자:' in line:
+                            current_doc['drafter'] = line
+                        elif '개요:' in line:
+                            current_doc['summary'] = line
+                        elif '@@PDF_PREVIEW@@' in line:
+                            # 파일 경로 추출
+                            preview_match = re.search(r'@@PDF_PREVIEW@@(.+?)@@', line)
+                            if preview_match:
+                                file_path = preview_match.group(1)
+                                current_doc['filename'] = Path(file_path).name
+                                current_doc['path'] = str(Path(config.DOCS_DIR) / file_path)
+                                in_doc = False  # 문서 정보 수집 완료
+
+                # 마짉 문서 렌더링
+                if current_doc and 'filename' in current_doc:
+                    render_document_card(current_doc.get('title', ''), current_doc)
             else:
                 # 일반 답변 (문서 리스트가 아닌 경우)
                 st.markdown(formatted_answer)

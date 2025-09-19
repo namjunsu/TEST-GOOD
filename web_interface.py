@@ -1489,19 +1489,61 @@ def main():
                                        re.search(r'\[([^\]]+\.pdf)\]', answer)
 
                     # 답변을 파싱하여 각 문서별로 카드 생성
-                    if has_search_results:
-                        # PDF_PREVIEW 마커를 제거하고 텍스트로만 표시 (임시)
-                        cleaned_answer = re.sub(r'@@PDF_PREVIEW@@.+?@@', '', formatted_answer)
+                    if has_search_results and '@@PDF_PREVIEW@@' in answer:
+                        # 검색 헤더 표시
+                        if '검색 결과' in answer:
+                            header_match = re.search(r"'(.+?)'.*검색 결과.*총 (\d+)개 문서", answer)
+                            if header_match:
+                                query_text = header_match.group(1)
+                                doc_count = header_match.group(2)
+                                st.markdown(f"## 🔍 '{query_text}' 검색 결과")
+                                st.markdown(f"**총 {doc_count}개 문서 발견**")
+                                st.markdown("---")
 
-                        # 헤더와 본문을 분리
-                        lines = cleaned_answer.split('\n')
+                        # 문서별로 파싱하여 카드 렌더링
+                        lines = formatted_answer.split('\n')
+                        current_doc = {}
+                        in_doc = False
 
                         for line in lines:
-                            # 헤더, 연도, 일반 텍스트 그대로 출력
-                            if line.strip():
-                                # 파일: 라인 제거 (마커가 제거된 후 비어있음)
-                                if not line.startswith('파일:'):
-                                    st.write(line)
+                            # 연도 헤더
+                            if '📅' in line and '년' in line:
+                                st.markdown(line)
+
+                            # 문서 시작 (이모지로 시작)
+                            elif any(emoji in line for emoji in ['📋', '🔧', '🛒', '🗑️', '📄']):
+                                # 이전 문서 렌더링
+                                if current_doc and 'filename' in current_doc:
+                                    render_document_card(current_doc.get('title', ''), current_doc)
+
+                                # 새 문서 시작
+                                current_doc = {'title': line}
+                                in_doc = True
+
+                            # 문서 정보 수집
+                            elif in_doc:
+                                if '[' in line and ']' in line and '|' in line:
+                                    current_doc['category'] = line
+                                elif '기안자:' in line:
+                                    current_doc['drafter'] = line
+                                elif '개요:' in line:
+                                    current_doc['summary'] = line
+                                elif '@@PDF_PREVIEW@@' in line:
+                                    # 파일 경로 추출
+                                    preview_match = re.search(r'@@PDF_PREVIEW@@(.+?)@@', line)
+                                    if preview_match:
+                                        file_path = preview_match.group(1)
+                                        current_doc['filename'] = Path(file_path).name
+                                        current_doc['path'] = str(Path(config.DOCS_DIR) / file_path)
+                                        in_doc = False  # 문서 정보 수집 완료
+
+                        # 마지막 문서 렌더링
+                        if current_doc and 'filename' in current_doc:
+                            render_document_card(current_doc.get('title', ''), current_doc)
+
+                    elif has_search_results:
+                        # PDF_PREVIEW 마커가 없는 경우 텍스트만 출력
+                        st.markdown(formatted_answer)
                     else:
                         # 일반 답변 (문서 리스트가 아닌 경우)
                         # PDF_PREVIEW 마커 제거

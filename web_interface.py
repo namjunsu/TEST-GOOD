@@ -1465,13 +1465,13 @@ def main():
                     # 표 형식 처리
                     formatted_answer = format_answer_with_table(answer)
                     
-                    # 파일명 패턴 찾기 (통합 UI를 위해) - 경로 포함
-                    file_pattern = r'\[([^\]]+\.pdf)\]'
-                    file_matches = re.findall(file_pattern, answer)
-                    
+                    # 검색 결과가 있는지 확인 (파일 목록이 있으면 카드 UI 사용)
+                    has_search_results = ('검색 결과' in answer and '개 문서 발견' in answer) or \
+                                       '@@PDF_PREVIEW@@' in answer or \
+                                       re.search(r'\[([^\]]+\.pdf)\]', answer)
+
                     # 답변을 파싱하여 각 문서별로 카드 생성
-                    print(f"[DEBUG] Found {len(file_matches)} file matches")  # 디버깅
-                    if file_matches:
+                    if has_search_results:
                         # 문서별로 카드 UI 생성
                         lines = formatted_answer.split('\n')
                         current_doc = None

@@ -5924,38 +5924,48 @@ class PerfectRAG:
                     date = info.get('날짜', '')
                     amount = info.get('금액', '')
                     
-                    # 개요 생성 (동적 추출)
+                    # 개요 생성 - metadata_cache에서 실제 텍스트 활용
                     summary = ""
-                    if '구매' in filename:
-                        # 구매 문서 개요
-                        items = []
-                        if '소모품' in filename:
-                            items.append("방송 소모품")
-                        if '케이블' in filename:
-                            items.append("케이블")
-                        if '마이크' in filename:
-                            items.append("마이크")
-                        if '모니터' in filename:
-                            items.append("모니터")
-                        if '카메라' in filename:
-                            items.append("카메라")
-                        if '드론' in filename:
-                            items.append("드론 장비")
-                        
-                        if items:
-                            summary = f"{', '.join(items)} 구매"
-                        else:
+
+                    # metadata에서 실제 텍스트 가져오기
+                    cached_metadata = None
+                    for ck, md in self.metadata_cache.items():
+                        if md.get('filename') == filename:
+                            cached_metadata = md
+                            break
+
+                    if cached_metadata and cached_metadata.get('text'):
+                        # 캐시된 텍스트에서 주요 내용 추출
+                        text = cached_metadata['text'][:500]  # 처음 500자
+
+                        # 주요 정보 추출
+                        if '목적' in text:
+                            purpose_match = re.search(r'목적[:\s]+([^\n]+)', text)
+                            if purpose_match:
+                                summary = purpose_match.group(1).strip()
+                        elif '내용' in text:
+                            content_match = re.search(r'내용[:\s]+([^\n]+)', text)
+                            if content_match:
+                                summary = content_match.group(1).strip()
+                        elif '사유' in text:
+                            reason_match = re.search(r'사유[:\s]+([^\n]+)', text)
+                            if reason_match:
+                                summary = reason_match.group(1).strip()
+
+                    # 텍스트가 없거나 추출 실패시 기본값
+                    if not summary:
+                        if '구매' in filename:
                             summary = "장비 구매 요청"
-                    elif '수리' in filename:
-                        summary = "장비 수리/보수 건"
-                    elif '폐기' in filename:
-                        summary = "노후 장비 폐기 처리"
-                    elif '교체' in filename:
-                        summary = "노후 장비 교체 검토"
-                    elif '검토' in filename:
-                        summary = "기술 검토 보고서"
-                    else:
-                        summary = "기술관리팀 업무 문서"
+                        elif '수리' in filename or '보수' in filename:
+                            summary = "장비 수리/보수 건"
+                        elif '폐기' in filename:
+                            summary = "노후 장비 폐기 처리"
+                        elif '교체' in filename:
+                            summary = "노후 장비 교체 검토"
+                        elif '검토' in filename:
+                            summary = "기술 검토 보고서"
+                        else:
+                            summary = "기술관리팀 업무 문서"
                     
                     # 카드 UI 형태로 출력
                     report.append(f"#### {emoji} **{title}**")

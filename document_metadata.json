@@ -1,0 +1,410 @@
+{
+  "2025-03-20_채널에이_중계차_카메라_노후화_장애_긴급_보수건.pdf": {
+    "drafter": "최새름",
+    "department": "기술관리팀-보도기술관리파트",
+    "type": "긴급보수",
+    "amount": "2,446,000",
+    "priority": "high",
+    "last_updated": "2025-09-19T17:31:39.735988"
+  },
+  "2025-01-14_채널A_불용_방송_장비_폐기_요청의_건.pdf": {
+    "drafter": "남준수",
+    "department": "기술관리팀",
+    "type": "폐기요청",
+    "date": "2025-01-14",
+    "last_updated": "2025-09-19T17:31:39.736566"
+  },
+  "2023-12-06_오픈스튜디오_무선마이크_수신_장애_조치_기안서.pdf": {
+    "drafter": "최새름",
+    "department": "기술관리팀",
+    "type": "장애조치",
+    "date": "2023-12-06",
+    "last_updated": "2025-09-19T17:31:39.737312"
+  },
+  "2023-11-02_영상취재팀_트라이포드_수리_건.pdf": {
+    "drafter": "유인혁",
+    "department": "영상취재팀",
+    "type": "수리/보수",
+    "date": "2023-11-02",
+    "last_updated": "2025-09-19T17:31:39.738030"
+  },
+  "2024-11-14_뉴스_스튜디오_지미집_Control_Box_수리_건.pdf": {
+    "drafter": "남준수",
+    "department": "기술관리팀",
+    "type": "수리/보수",
+    "date": "2024-11-14",
+    "last_updated": "2025-09-19T17:31:39.738334"
+  },
+  "2019-05-31_Audio_Patch_Cable_구매.pdf": {
+    "drafter": "유인혁",
+    "department": "기술관리팀",
+    "type": "구매기안",
+    "date": "2019-05-31",
+    "last_updated": "2025-09-19T17:31:39.739051"
+  },
+  "2014-08-11_방송기술_중계팀_물품청구서.pdf": {
+    "path": "docs/archive/2014-08-11_방송기술_중계팀_물품청구서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:22.639331"
+  },
+  "2016-02-22_광화문_스튜디오_조명_소모품_신청서.pdf": {
+    "path": "docs/archive/2016-02-22_광화문_스튜디오_조명_소모품_신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:23.250745"
+  },
+  "2015-12-09_방송기술팀_중계_관련_소모품_신청서.pdf": {
+    "path": "docs/archive/2015-12-09_방송기술팀_중계_관련_소모품_신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:23.488187"
+  },
+  "2015-10-08_상암DDMC_스튜디오_조명_소모품_신청서.pdf": {
+    "path": "docs/archive/2015-10-08_상암DDMC_스튜디오_조명_소모품_신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:24.220699"
+  },
+  "2016-10-19_영상제작탐_아카이브파트_인제스트_외장하드_구매건.pdf": {
+    "path": "docs/archive/2016-10-19_영상제작탐_아카이브파트_인제스트_외장하드_구매건.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:24.618370"
+  },
+  "2016-10-05_방송기술팀_오픈스튜디오_기계실_보수,_BNC케이블_구매건.pdf": {
+    "path": "docs/archive/2016-10-05_방송기술팀_오픈스튜디오_기계실_보수,_BNC케이블_구매건.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:25.317615"
+  },
+  "2016-12-26_채널에이_주조정실_방송장비_수리_요청의_건.pdf": {
+    "path": "docs/archive/2016-12-26_채널에이_주조정실_방송장비_수리_요청의_건.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:25.360605"
+  },
+  "2015-04-27_상암DDMC_대형,_중형,_소형_스튜디오_조명_소모품_신청서.pdf": {
+    "path": "docs/archive/2015-04-27_상암DDMC_대형,_중형,_소형_스튜디오_조명_소모품_신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:25.914484"
+  },
+  "2016-10-06_상암_스튜디오_조명_소모품_신청서.pdf": {
+    "path": "docs/archive/2016-10-06_상암_스튜디오_조명_소모품_신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:26.695264"
+  },
+  "2015-04-09_상암DDMC_스튜디오에서_사용되는_예비_램프_및_필터_필요물품_구매요청.pdf": {
+    "path": "docs/archive/2015-04-09_상암DDMC_스튜디오에서_사용되는_예비_램프_및_필터_필요물품_구매요청.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:27.184768"
+  },
+  "2015-03-19_영상취재팀_장비_구매_목록.pdf": {
+    "path": "docs/archive/2015-03-19_영상취재팀_장비_구매_목록.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:27.523644"
+  },
+  "2016-08-23_영상제작팀_아카이브파트_장비_구매_기안서.pdf": {
+    "path": "docs/archive/2016-08-23_영상제작팀_아카이브파트_장비_구매_기안서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:27.800604"
+  },
+  "2016-07-21_상암DDMC_스튜디오_조명_소모품_신청서.pdf": {
+    "path": "docs/archive/2016-07-21_상암DDMC_스튜디오_조명_소모품_신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:28.389832"
+  },
+  "2014-12-30_상암동_DDMC_조명_소모품_신청서.pdf": {
+    "path": "docs/archive/2014-12-30_상암동_DDMC_조명_소모품_신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:29.021633"
+  },
+  "2015-11-17_상암DDMC_스튜디오_조명_소모품_신청서.pdf": {
+    "path": "docs/archive/2015-11-17_상암DDMC_스튜디오_조명_소모품_신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:29.557942"
+  },
+  "2015-04-27_웹하드_대용량_서비스_신청건.pdf": {
+    "path": "docs/archive/2015-04-27_웹하드_대용량_서비스_신청건.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:29.756387"
+  },
+  "2016-08-10_무선_IFB_인터컴_인이어_구매의_건.pdf": {
+    "path": "docs/archive/2016-08-10_무선_IFB_인터컴_인이어_구매의_건.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:29.870254"
+  },
+  "2015-05-06_티원시스템즈_Digital_Multi_Display_System_견전서.pdf": {
+    "path": "docs/archive/2015-05-06_티원시스템즈_Digital_Multi_Display_System_견전서.pdf",
+    "status": "text",
+    "last_updated": "2025-09-19T17:33:30.036591"
+  },
+  "2014-11-20_인터럼용_밧데리_2개_구매_요첨.pdf": {
+    "path": "docs/archive/2014-11-20_인터럼용_밧데리_2개_구매_요첨.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:30.722970"
+  },
+  "2015-11-18_방송기술팀_조명관련_소모품_신청서.pdf": {
+    "path": "docs/archive/2015-11-18_방송기술팀_조명관련_소모품_신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:31.210155"
+  },
+  "2016-01-19_멀티부조_예비_콘솔_및_랙_장비_보호_커버_설치의_건.pdf": {
+    "path": "docs/archive/2016-01-19_멀티부조_예비_콘솔_및_랙_장비_보호_커버_설치의_건.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:31.431133"
+  },
+  "2016-02-28_채널에이플러스_주조정실_방송장비_수리_요청의건.pdf": {
+    "path": "docs/archive/2016-02-28_채널에이플러스_주조정실_방송장비_수리_요청의건.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:32.122219"
+  },
+  "2016-01-05_상암DDMC_스튜디오_조명_소모품_신청서.pdf": {
+    "path": "docs/archive/2016-01-05_상암DDMC_스튜디오_조명_소모품_신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:32.921980"
+  },
+  "2014-09-11_그래펙디자민파트_보도문자-_무선마우스_지급_요청.pdf": {
+    "path": "docs/archive/2014-09-11_그래펙디자민파트_보도문자-_무선마우스_지급_요청.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:32.968720"
+  },
+  "2015-03-25_인터컴_백트팩용_헤드셋_구매_요청의뢰서.pdf": {
+    "path": "docs/archive/2015-03-25_인터컴_백트팩용_헤드셋_구매_요청의뢰서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:33.533030"
+  },
+  "2016-07-15_광화문_조명(멀티부조)관련_우드Braket_Layout_구매신청.pdf": {
+    "path": "docs/archive/2016-07-15_광화문_조명(멀티부조)관련_우드Braket_Layout_구매신청.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:33.934841"
+  },
+  "2016-09-09_스튜디오_조명_소모품_신청서.pdf": {
+    "path": "docs/archive/2016-09-09_스튜디오_조명_소모품_신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:34.553600"
+  },
+  "2016-11-22_광화문_및_상암동_스튜디오_조명_소모품_신청서.pdf": {
+    "path": "docs/archive/2016-11-22_광화문_및_상암동_스튜디오_조명_소모품_신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:35.082406"
+  },
+  "2016-06-07_상암DDMC_스튜디오_조명_소모품_신청서.pdf": {
+    "path": "docs/archive/2016-06-07_상암DDMC_스튜디오_조명_소모품_신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:35.176489"
+  },
+  "2015-03-10_지미집_운영_필수_장비_구매_신청.pdf": {
+    "path": "docs/archive/2015-03-10_지미집_운영_필수_장비_구매_신청.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:36.057309"
+  },
+  "2016-05-19_영상제작팀_아카이브파트_인테스트(NQC)_셋톱박스_연결_어뎁터_구매건.pdf": {
+    "path": "docs/archive/2016-05-19_영상제작팀_아카이브파트_인테스트(NQC)_셋톱박스_연결_어뎁터_구매건.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:36.541289"
+  },
+  "2015-11-24_장비구매기안서_상암제작CG파트.pdf": {
+    "path": "docs/archive/2015-11-24_장비구매기안서_상암제작CG파트.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:36.887629"
+  },
+  "2016-01-08_방송기술팀_조명_관련_소모품_신청서.pdf": {
+    "path": "docs/archive/2016-01-08_방송기술팀_조명_관련_소모품_신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:37.251079"
+  },
+  "2016-07-27_중계차_소모장비_구매건.pdf": {
+    "path": "docs/archive/2016-07-27_중계차_소모장비_구매건.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:38.074283"
+  },
+  "2015-12-09_방송기술팀_조명관련_소모품_신청서.pdf": {
+    "path": "docs/archive/2015-12-09_방송기술팀_조명관련_소모품_신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:38.416882"
+  },
+  "2016-02-22_뉴스&멀티부조_인터컴_배터리_구매_기안서.pdf": {
+    "path": "docs/archive/2016-02-22_뉴스&멀티부조_인터컴_배터리_구매_기안서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:38.571685"
+  },
+  "2016-11-17_상암_D9000_무선마이크_송신기_악세사리_구매의_건.pdf": {
+    "path": "docs/archive/2016-11-17_상암_D9000_무선마이크_송신기_악세사리_구매의_건.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:40.706253"
+  },
+  "2014-12-19_12월_장비구매기안서_명상제작팀.pdf": {
+    "path": "docs/archive/2014-12-19_12월_장비구매기안서_명상제작팀.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:41.429715"
+  },
+  "2016-12-22_채널에이_주조정실_방송장비_수리_요청의_건.pdf": {
+    "path": "docs/archive/2016-12-22_채널에이_주조정실_방송장비_수리_요청의_건.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:41.765472"
+  },
+  "2016-05-18_리튬플리머_배터리_구매의_건(영상취재팀).pdf": {
+    "path": "docs/archive/2016-05-18_리튬플리머_배터리_구매의_건(영상취재팀).pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:41.971266"
+  },
+  "2015-06-30_MPDP_패널_구매_요청.pdf": {
+    "path": "docs/archive/2015-06-30_MPDP_패널_구매_요청.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:42.522826"
+  },
+  "2015-04-09_광화문_뉴스,_멀티,_오픈_스튜디오_조명_소모품_신청서.pdf": {
+    "path": "docs/archive/2015-04-09_광화문_뉴스,_멀티,_오픈_스튜디오_조명_소모품_신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:43.426989"
+  },
+  "2014-12-31_지미질_훈멸_필수_잡비_구매_신첩.pdf": {
+    "path": "docs/archive/2014-12-31_지미질_훈멸_필수_잡비_구매_신첩.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:43.558866"
+  },
+  "2014-07-02_헬리캠_구매_기안서.pdf": {
+    "path": "docs/archive/2014-07-02_헬리캠_구매_기안서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:44.033629"
+  },
+  "2016-06-22_방송기술팀_뉴스,_멀티_음향장비_구매_기안서.pdf": {
+    "path": "docs/archive/2016-06-22_방송기술팀_뉴스,_멀티_음향장비_구매_기안서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:44.741444"
+  },
+  "2016-05-16_삼성_기어VR_패키지_구매기안.pdf": {
+    "path": "docs/archive/2016-05-16_삼성_기어VR_패키지_구매기안.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:45.421741"
+  },
+  "2016-05-09_방송기술팀_중걔_관련_소모품_신청서.pdf": {
+    "path": "docs/archive/2016-05-09_방송기술팀_중걔_관련_소모품_신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:45.440090"
+  },
+  "2015-09-01_방송기술팀_조명관련_소모품_신청서.pdf": {
+    "path": "docs/archive/2015-09-01_방송기술팀_조명관련_소모품_신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:46.098915"
+  },
+  "2015-10-28_방송기술팀_조명_관련_소모품_신청서.pdf": {
+    "path": "docs/archive/2015-10-28_방송기술팀_조명_관련_소모품_신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:46.708742"
+  },
+  "2015-12-17_취재용_사다리_구매의_건(영상취재팀).pdf": {
+    "path": "docs/archive/2015-12-17_취재용_사다리_구매의_건(영상취재팀).pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:47.064000"
+  },
+  "2016-01-12_영상편집파트_장비구매_기안서.pdf": {
+    "path": "docs/archive/2016-01-12_영상편집파트_장비구매_기안서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:47.617834"
+  },
+  "2015-11-02_상암DDMC_스튜디오_조명_소모품_신청서.pdf": {
+    "path": "docs/archive/2015-11-02_상암DDMC_스튜디오_조명_소모품_신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:48.097354"
+  },
+  "2014-09-08_그래픽디자인파트_보도문자_-_무선마우스_지급_요철.pdf": {
+    "path": "docs/archive/2014-09-08_그래픽디자인파트_보도문자_-_무선마우스_지급_요철.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:48.920436"
+  },
+  "2016-11-29_상암_제작CG_종편_소모품_신청서.pdf": {
+    "path": "docs/archive/2016-11-29_상암_제작CG_종편_소모품_신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:48.985192"
+  },
+  "2015-10-29_방송기술팀_박혜훈_음향장비_구매_기안서.pdf": {
+    "path": "docs/archive/2015-10-29_방송기술팀_박혜훈_음향장비_구매_기안서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:49.725426"
+  },
+  "2015-02-12_광커넥터클리너_소포품신청서.pdf": {
+    "path": "docs/archive/2015-02-12_광커넥터클리너_소포품신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:50.475782"
+  },
+  "2015-03-23_영상취재팀_필요_장비_목록.pdf": {
+    "path": "docs/archive/2015-03-23_영상취재팀_필요_장비_목록.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:50.506134"
+  },
+  "2016-07-27_방송기술팀_뉴스,_멀티_부조_무선마이크_구매_건.pdf": {
+    "path": "docs/archive/2016-07-27_방송기술팀_뉴스,_멀티_부조_무선마이크_구매_건.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:50.639486"
+  },
+  "2015-01-22_광화문_뉴스,_멀티_오픈_스튜디오_조명_소모품_신청서.pdf": {
+    "path": "docs/archive/2015-01-22_광화문_뉴스,_멀티_오픈_스튜디오_조명_소모품_신청서.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:51.467690"
+  },
+  "2014-07-02_TV-UPACK용_BNC케이블_구매.pdf": {
+    "path": "docs/archive/2014-07-02_TV-UPACK용_BNC케이블_구매.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:52.119005"
+  },
+  "2015-11-13_방송기술팀_상암_음향_장비_구매건.pdf": {
+    "path": "docs/archive/2015-11-13_방송기술팀_상암_음향_장비_구매건.pdf",
+    "status": "scanned",
+    "needs_ocr": true,
+    "last_updated": "2025-09-19T17:33:52.516927"
+  }
+}

@@ -56,6 +56,7 @@ except ImportError:
 
 from rag_system.qwen_llm import QwenLLM
 from rag_system.llm_singleton import LLMSingleton
+from metadata_manager import MetadataManager
 
 # 새로운 모듈 import (제거됨 - 백업 폴더로 이동)
 # from pdf_parallel_processor import PDFParallelProcessor
@@ -210,6 +211,15 @@ class PerfectRAG:
         except Exception as e:
             print(f"❌ 자산 데이터 로드 실패: {e}")
             self.asset_data_cache = ""
+
+        # 메타데이터 DB 초기화
+        try:
+            self.metadata_db = MetadataManager()
+            if self.metadata_db.metadata:
+                print(f"📚 메타데이터 DB 로드: {len(self.metadata_db.metadata)}개 문서")
+        except Exception as e:
+            print(f"⚠️ 메타데이터 DB 로드 실패: {e}")
+            self.metadata_db = None
     
     def _preload_llm(self):
         """LLM을 미리 로드 (싱글톤 사용)"""
@@ -5793,15 +5803,25 @@ class PerfectRAG:
                 # 불용어 제외
                 stopwords = ['의', '및', '건', '검토서', '관련', '문서', '찾아', '줘', '있어', '어떤', '기안서']
 
-                # 기안자 검색 처리
+                # 기안자 검색 처리 (메타데이터 DB 활용)
                 if '기안자' in query_lower:
                     # "최새름 기안자" 또는 "기안자 최새름" 형태 추출
                     drafter_match = re.search(r'([가-힣]{2,4})\s*기안자|기안자\s*([가-힣]{2,4})', query)
                     if drafter_match:
                         search_drafter = drafter_match.group(1) or drafter_match.group(2)
                         if search_drafter and metadata.get('is_pdf'):
-                            # 기안자 정보가 없으면 PDF에서 추출 시도
-                            if metadata.get('drafter') is None:
+                            found_drafter = False
+
+                            # 1. 메타데이터 DB에서 먼저 확인
+                            if self.metadata_db:
+                                db_info = self.metadata_db.get_document(filename)
+                                if db_info and db_info.get('drafter'):
+                                    if search_drafter in db_info['drafter']:
+                                        score += 50
+                                        found_drafter = True
+
+                            # 2. DB에 없으면 PDF에서 직접 추출 시도
+                            if not found_drafter and metadata.get('drafter') is None:
                                 try:
                                     # 간단한 텍스트 추출만 시도 (빠른 처리)
                                     import pdfplumber
@@ -5818,18 +5838,18 @@ class PerfectRAG:
                                                 for pattern in patterns:
                                                     match = re.search(pattern, text)
                                                     if match:
-                                                        metadata['drafter'] = match.group(1).strip()
+                                                        drafter = match.group(1).strip()
+                                                        # DB에 저장
+                                                        if self.metadata_db:
+                                                            self.metadata_db.add_document(filename, drafter=drafter)
+                                                        if search_drafter in drafter:
+                                                            score += 50
+                                                            found_drafter = True
                                                         break
-                                            if not metadata.get('drafter'):
-                                                metadata['drafter'] = ''  # 빈 문자열로 표시
                                 except:
-                                    metadata['drafter'] = ''  # 오류시 빈 문자열
+                                    pass
 
-                            # 기안자 비교
-                            doc_drafter = metadata.get('drafter', '')
-                            if doc_drafter and search_drafter in doc_drafter:
-                                score += 50  # 기안자 일치시 높은 점수
-                        # 기안자 검색인데 PDF가 아니거나 매칭 안되면 건너뜀
+                        # 기안자 검색인데 매칭 안되면 건너뜀
                         if score < 50:
                             continue
 

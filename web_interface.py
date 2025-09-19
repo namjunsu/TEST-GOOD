@@ -870,8 +870,12 @@ def render_document_card(title, info):
         with col2:
             # 미리보기 버튼
             if 'filename' in info:
-                # Use the full path from metadata, not just filename
-                file_path = Path(info.get('path', Path(config.DOCS_DIR) / info['filename']))
+                # Use the full path from metadata
+                if 'path' in info:
+                    file_path = Path(info['path'])
+                else:
+                    file_path = Path(config.DOCS_DIR) / info['filename']
+
                 if file_path.exists():
                     # 미리보기 버튼 (토글 방식)
                     preview_key = f"preview_{hashlib.md5(info['filename'].encode()).hexdigest()}"
@@ -889,7 +893,12 @@ def render_document_card(title, info):
         with col3:
             # 다운로드 버튼
             if 'filename' in info:
-                file_path = Path(config.DOCS_DIR) / info['filename']
+                # Use the full path from metadata
+                if 'path' in info:
+                    file_path = Path(info['path'])
+                else:
+                    file_path = Path(config.DOCS_DIR) / info['filename']
+
                 if file_path.exists():
                     with open(file_path, 'rb') as f:
                         pdf_bytes = f.read()
@@ -914,8 +923,12 @@ def render_document_card(title, info):
                             st.session_state[f'show_preview_{preview_key}'] = False
                             st.rerun()
                     
-                    # Use the full path from metadata, not just filename
-                    file_path = Path(info.get('path', Path(config.DOCS_DIR) / info['filename']))
+                    # Use the full path from metadata
+                    if 'path' in info:
+                        file_path = Path(info['path'])
+                    else:
+                        file_path = Path(config.DOCS_DIR) / info['filename']
+
                     if file_path.exists():
                         # PDF 미리보기 표시 (높이 500px로 고정)
                         show_pdf_preview(file_path, height=500)
@@ -1489,10 +1502,19 @@ def main():
                                 elif '개요' in line:
                                     doc_info['summary'] = line
                                 elif '파일' in line:
-                                    # 파일명 추출
-                                    match = re.search(r'\[([^\]]+\.pdf)\]', line)
-                                    if match:
-                                        doc_info['filename'] = match.group(1)
+                                    # PDF 미리보기 마커 처리
+                                    preview_match = re.search(r'@@PDF_PREVIEW@@(.+?)@@', line)
+                                    if preview_match:
+                                        file_path = preview_match.group(1)
+                                        doc_info['filename'] = Path(file_path).name
+                                        doc_info['path'] = str(Path(config.DOCS_DIR) / file_path)
+                                    else:
+                                        # 기존 방식 (파일명만 추출)
+                                        match = re.search(r'\[([^\]]+)\]', line)
+                                        if match:
+                                            file_path = match.group(1)
+                                            doc_info['filename'] = Path(file_path).name
+                                            doc_info['path'] = str(Path(config.DOCS_DIR) / file_path)
                             # 구분선
                             elif line == '---':
                                 # 마지막 문서 카드 출력

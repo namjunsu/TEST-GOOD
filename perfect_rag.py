@@ -5772,11 +5772,12 @@ class PerfectRAG:
             # 매칭된 문서들 수집
             matched_docs = []
             
-            for filename, metadata in self.metadata_cache.items():
+            for cache_key, metadata in self.metadata_cache.items():
                 # TXT 파일은 제외 (PDF만 처리)
                 if metadata.get('is_txt', False):
                     continue
-                    
+
+                filename = metadata.get('filename', cache_key)
                 score = 0
                 filename_lower = filename.lower()
                 
@@ -5848,13 +5849,20 @@ class PerfectRAG:
                         break
                 
                 if score >= MIN_SCORE:
-                    pdf_path = self.docs_dir / filename
+                    # metadata의 path 사용
+                    pdf_path = metadata.get('path')
+                    if isinstance(pdf_path, str):
+                        pdf_path = Path(pdf_path)
+                    if not pdf_path:
+                        pdf_path = self.docs_dir / filename
+
                     info = self._extract_pdf_info(pdf_path)
                     matched_docs.append({
                         'filename': filename,
                         'score': score,
                         'info': info,
-                        'year': metadata['year']
+                        'year': metadata['year'],
+                        'cache_key': cache_key  # 파일 경로 정보 추가
                     })
             
             # 점수 순으로 정렬
@@ -5888,6 +5896,7 @@ class PerfectRAG:
                 for doc in docs_by_year[year]:
                     info = doc['info']
                     filename = doc['filename']
+                    relative_path = doc.get('cache_key', filename)  # 캐시 키가 상대 경로
                     
                     # 카테고리 판단 및 이모지
                     if '구매' in filename:
@@ -5960,8 +5969,10 @@ class PerfectRAG:
                     if summary:
                         report.append(f"- **개요**: {summary}")
                     
-                    # 다운로드 링크 (즉시 다운로드 가능한 형태로)
-                    report.append(f"- **파일**: [{filename}] 📥")
+                    # 파일 경로 정보 포함 (web_interface에서 처리할 수 있도록)
+                    # 특별한 마커 사용: @@PDF_PREVIEW@@
+                    file_path_str = str(relative_path) if relative_path else filename
+                    report.append(f"- **파일**: [{file_path_str}] @@PDF_PREVIEW@@{file_path_str}@@")
                     report.append("")  # 간격
                 
                 report.append("---\n")

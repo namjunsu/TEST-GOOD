@@ -5800,18 +5800,38 @@ class PerfectRAG:
                     if drafter_match:
                         search_drafter = drafter_match.group(1) or drafter_match.group(2)
                         if search_drafter and metadata.get('is_pdf'):
-                            # 기안자 정보가 없으면 PDF에서 추출
+                            # 기안자 정보가 없으면 PDF에서 추출 시도
                             if metadata.get('drafter') is None:
                                 try:
-                                    pdf_info = self._extract_pdf_info(metadata['path'])
-                                    metadata['drafter'] = pdf_info.get('기안자', '')
+                                    # 간단한 텍스트 추출만 시도 (빠른 처리)
+                                    import pdfplumber
+                                    with pdfplumber.open(metadata['path']) as pdf:
+                                        if pdf.pages:
+                                            # 첫 페이지만 빠르게 확인
+                                            text = pdf.pages[0].extract_text() or ""
+                                            if len(text) > 50:  # 텍스트 PDF인 경우
+                                                # 기안자 패턴 검색
+                                                patterns = [
+                                                    r'기안자[\s:：]*([가-힣]{2,4})',
+                                                    r'작성자[\s:：]*([가-힣]{2,4})',
+                                                ]
+                                                for pattern in patterns:
+                                                    match = re.search(pattern, text)
+                                                    if match:
+                                                        metadata['drafter'] = match.group(1).strip()
+                                                        break
+                                            if not metadata.get('drafter'):
+                                                metadata['drafter'] = ''  # 빈 문자열로 표시
                                 except:
-                                    metadata['drafter'] = ''
+                                    metadata['drafter'] = ''  # 오류시 빈 문자열
 
                             # 기안자 비교
                             doc_drafter = metadata.get('drafter', '')
                             if doc_drafter and search_drafter in doc_drafter:
                                 score += 50  # 기안자 일치시 높은 점수
+                        # 기안자 검색인데 PDF가 아니거나 매칭 안되면 건너뜀
+                        if score < 50:
+                            continue
 
                 # 장비명 특별 가중치 (DVR, CCU 등) - 정확한 매칭만
                 equipment_names = ['dvr', 'ccu', '카메라', '렌즈', '모니터', '스위처', '마이크', '믹서', '삼각대', '중계차']

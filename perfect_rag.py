@@ -1767,7 +1767,9 @@ class PerfectRAG:
 
                 # 여러 문서 검색 요청 (찾아줘, 관련 문서, 있어? 등)
                 # "문서 찾아줘", "문서 내용 찾아줘" 모두 문서 목록 표시
-                if any(keyword in query for keyword in ["찾아", "관련 문서", "관련된", "어떤", "있어", "있나", "리스트", "모두", "전부", "문서들", "보여줘"]) \
+                # DVR, CCU 등 장비명과 함께 문서/찾아 키워드가 있으면 문서 리스트 표시
+                if (any(keyword in query for keyword in ["찾아", "관련 문서", "관련된", "어떤", "있어", "있나", "리스트", "모두", "전부", "문서들", "보여줘"]) \
+                   or any(equipment in query.lower() for equipment in ['dvr', 'ccu', '카메라', '렌즈', '모니터'])) \
                    and not any(keyword in query for keyword in ["요약", "알려", "설명", "정리"]):
                     return self._search_multiple_documents(query)
                 
@@ -5793,8 +5795,13 @@ class PerfectRAG:
                 # 장비명 특별 가중치 (DVR, CCU 등)
                 equipment_names = ['dvr', 'ccu', '카메라', '렌즈', '모니터', '스위처', '마이크', '믹서']
                 for equipment in equipment_names:
-                    if equipment in query_lower and equipment in filename_lower:
-                        score += 10  # 장비명 완전 매칭시 높은 점수
+                    if equipment in query_lower:
+                        # 쿼리에 장비명이 있고 파일명에도 있으면 높은 점수
+                        if equipment in filename_lower:
+                            score += 15  # 장비명 완전 매칭시 높은 점수
+                        # 파일명에 없더라도 메타데이터 텍스트에 있으면 점수 부여
+                        elif metadata.get('text') and equipment in metadata.get('text', '').lower()[:1000]:
+                            score += 5  # 내용에 장비명이 있으면 중간 점수
                 
                 for word in query_words:
                     if len(word) >= 2 and word not in stopwords:
@@ -5839,12 +5846,14 @@ class PerfectRAG:
                         continue  # 연도가 다르면 무조건 제외
                 
                 # 최소 점수 기준 설정 (너무 많은 문서 방지)
-                MIN_SCORE = 4  # 최소 4점 이상만 포함
+                MIN_SCORE = 3  # 기본 최소 3점 이상만 포함
 
-                # DVR 같은 특정 장비 검색시 더 엄격한 기준 적용
+                # DVR 같은 특정 장비 검색시 점수 조정
+                # 장비명이 직접 매칭되면 이미 10점을 받으므로 너무 높은 기준 불필요
                 for equipment in equipment_names:
                     if equipment in query_lower:
-                        MIN_SCORE = 8  # 장비 검색시 더 높은 기준
+                        # 장비명이 있어도 적절한 기준 유지
+                        MIN_SCORE = 4  # 장비 검색시에도 합리적인 기준
                         break
                 
                 if score >= MIN_SCORE:

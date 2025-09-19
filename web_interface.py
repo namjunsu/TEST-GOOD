@@ -849,23 +849,29 @@ def format_answer_with_table(answer):
 def render_document_card(title, info):
     """각 문서를 카드 형태로 렌더링"""
     with st.container():
-        col1, col2, col3 = st.columns([3, 1, 1])
-        
-        with col1:
-            # 제목
-            st.markdown(title)
-            
-            # 카테고리와 날짜
-            if 'category' in info:
-                st.caption(info['category'])
-            
-            # 상세 정보
-            if 'drafter' in info:
-                st.text(info['drafter'])
-            if 'amount' in info:
-                st.text(info['amount'])
-            if 'summary' in info:
-                st.info(info['summary'].replace('- **개요**: ', ''))
+        # 카드 스타일 적용
+        with st.container(border=True):
+            col1, col2, col3 = st.columns([3, 1, 1])
+
+            with col1:
+                # 제목 (이모지와 볼드 제거)
+                clean_title = title.replace('#### ', '').strip()
+                st.markdown(f"### {clean_title}")
+
+                # 카테고리와 날짜
+                if 'category' in info:
+                    st.caption(info['category'])
+
+                # 상세 정보 (- ** 형식 제거)
+                if 'drafter' in info:
+                    drafter_text = info['drafter'].replace('- **기안자**: ', '').replace('- **기안자**:', '')
+                    st.write(f"👤 기안자: {drafter_text}")
+                if 'amount' in info:
+                    amount_text = info['amount'].replace('- **금액**: ', '').replace('- **금액**:', '')
+                    st.write(f"💰 금액: {amount_text}")
+                if 'summary' in info:
+                    summary_text = info['summary'].replace('- **개요**: ', '').replace('- **개요**:', '')
+                    st.info(f"📝 {summary_text}")
         
         with col2:
             # 미리보기 버튼
@@ -1484,27 +1490,46 @@ def main():
 
                     # 답변을 파싱하여 각 문서별로 카드 생성
                     if has_search_results:
+                        # 헤더 표시
+                        if '검색 결과' in answer:
+                            header_match = re.search(r"##.*'(.+?)'.*검색 결과.*총 (\d+)개 문서", answer)
+                            if header_match:
+                                query_text = header_match.group(1)
+                                doc_count = header_match.group(2)
+                                st.markdown(f"## 🔍 '{query_text}' 검색 결과")
+                                st.markdown(f"**총 {doc_count}개 문서 발견**")
+                                st.markdown("---")
+
                         # 문서별로 카드 UI 생성
                         lines = formatted_answer.split('\n')
                         current_doc = None
                         doc_info = {}
-                        
+                        skip_header = False
+
                         for line in lines:
+                            # 헤더 스킵
+                            if '검색 결과' in line or '개 문서 발견' in line:
+                                skip_header = True
+                                continue
+                            if skip_header and line.strip() == '':
+                                skip_header = False
+                                continue
+
                             # 연도 헤더
                             if line.startswith('### 📅'):
                                 st.markdown(line)
                             # 문서 제목
                             elif line.startswith('####'):
                                 # 이전 문서 카드 출력
-                                if current_doc and doc_info:
+                                if current_doc and doc_info and 'filename' in doc_info:
                                     render_document_card(current_doc, doc_info)
-                                
+
                                 # 새 문서 시작
                                 current_doc = line
                                 doc_info = {'title': line}
                             # 카테고리 및 날짜
-                            elif line.startswith('**['):
-                                if doc_info:
+                            elif line.startswith('**[') and ']**' in line:
+                                if doc_info is not None:
                                     doc_info['category'] = line
                             # 상세 정보
                             elif line.startswith('- **'):
@@ -1528,16 +1553,16 @@ def main():
                                             file_path = match.group(1)
                                             doc_info['filename'] = Path(file_path).name
                                             doc_info['path'] = str(Path(config.DOCS_DIR) / file_path)
-                            # 구분선
-                            elif line == '---':
-                                # 마지막 문서 카드 출력
-                                if current_doc and doc_info:
+                            # 구분선 또는 빈 줄 (문서 구분)
+                            elif (line.strip() == '' or line == '---') and current_doc and doc_info:
+                                # 파일 정보가 있는 경우에만 카드 출력
+                                if 'filename' in doc_info:
                                     render_document_card(current_doc, doc_info)
                                     current_doc = None
                                     doc_info = {}
-                        
+
                         # 마지막 문서 처리
-                        if current_doc and doc_info:
+                        if current_doc and doc_info and 'filename' in doc_info:
                             render_document_card(current_doc, doc_info)
                     else:
                         # 일반 답변 (문서 리스트가 아닌 경우)

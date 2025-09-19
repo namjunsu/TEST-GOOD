@@ -73,11 +73,11 @@ class PerfectRAG:
             try:
                 with open(perf_config_path, 'r', encoding='utf-8') as f:
                     self.perf_config = yaml.safe_load(f)
-                    if logger and hasattr(logger, 'info'):
-                        logger.info(f"Performance config loaded from {perf_config_path}")
+                    if logger:
+                        logger.system_logger.info(f"Performance config loaded from {perf_config_path}")
             except Exception as e:
-                if logger and hasattr(logger, 'warning'):
-                    logger.warning(f"Failed to load performance config: {e}")
+                if logger:
+                    logger.system_logger.warning(f"Failed to load performance config: {e}")
                 self.perf_config = {}
         else:
             self.perf_config = {}
@@ -125,7 +125,7 @@ class PerfectRAG:
         from collections import OrderedDict
         self.documents_cache = OrderedDict()  # LRU 캐시처럼 동작
         self.metadata_cache = OrderedDict()  # 메타데이터 캐시
-        self.search_mode = None  # 검색 모드: 'document', 'asset', 'auto'
+        self.search_mode = 'document'  # 검색 모드: 'document', 'asset', 'auto' (기본값: document)
         self.answer_cache = OrderedDict()  # 답변 캐시 (LRU)
         self.pdf_text_cache = OrderedDict()  # PDF 텍스트 추출 캐시 (성능 최적화)
 
@@ -297,49 +297,34 @@ class PerfectRAG:
     def _build_metadata_cache(self):
         """모든 문서의 메타데이터를 미리 추출 (캐싱 지원)"""
 
-        # 캐시 매니저 초기화
-        from metadata_cache_manager import MetadataCacheManager
-        cache_manager = MetadataCacheManager()
+        print("📊 문서 메타데이터 구축 중...")
 
-        # 기존 캐시 로드
-        cached_metadata = cache_manager.load_cache()
+        # 병렬 처리 설정 확인
+        use_parallel = USE_YAML_CONFIG and cfg.get('parallel_processing.enabled', True)
 
-        if cached_metadata and len(cached_metadata) > 0:
-            print(f"💾 캐시에서 {len(cached_metadata)}개 문서 메타데이터 로드 (빠른 시작)")
-            # 캐시된 데이터 사용
-            for filename, metadata in cached_metadata.items():
-                if 'path' in metadata:
-                    metadata['path'] = Path(metadata['path'])
-                self.metadata_cache[filename] = metadata
-        else:
-            print("📊 문서 메타데이터 구축 중...")
+        if use_parallel and self.pdf_files:
+            print(f"🚀 {len(self.pdf_files)}개 PDF 병렬 처리 시작...")
+            pdf_results = self.process_pdfs_in_batch(self.pdf_files)
 
-            # 병렬 처리 설정 확인
-            use_parallel = USE_YAML_CONFIG and cfg.get('parallel_processing.enabled', True)
+            # 병렬 처리 결과를 메타데이터 캐시에 저장
+            for pdf_path, result in pdf_results.items():
+                pdf_path_obj = Path(pdf_path)
+                filename = pdf_path_obj.name
+                # 상대 경로를 키로 사용 (중복 파일명 처리)
+                try:
+                    relative_path = pdf_path_obj.relative_to(self.docs_dir)
+                    cache_key = str(relative_path)
+                except ValueError:
+                    cache_key = filename
 
-            if use_parallel and self.pdf_files:
-                print(f"🚀 {len(self.pdf_files)}개 PDF 병렬 처리 시작...")
-                pdf_results = self.process_pdfs_in_batch(self.pdf_files)
-
-                # 병렬 처리 결과를 메타데이터 캐시에 저장
-                for pdf_path, result in pdf_results.items():
-                    pdf_path_obj = Path(pdf_path)
-                    filename = pdf_path_obj.name
-                    # 상대 경로를 키로 사용 (중복 파일명 처리)
-                    try:
-                        relative_path = pdf_path_obj.relative_to(self.docs_dir)
-                        cache_key = str(relative_path)
-                    except ValueError:
-                        cache_key = filename
-
-                    if 'error' not in result:
-                        self.metadata_cache[cache_key] = {
-                            'path': pdf_path_obj,
-                            'filename': filename,
-                            'text': result.get('text', '')[:1000],  # 요약만 저장
-                            'page_count': result.get('page_count', 0),
-                            'metadata': result.get('metadata', {})
-                        }
+                if 'error' not in result:
+                    self.metadata_cache[cache_key] = {
+                        'path': pdf_path_obj,
+                        'filename': filename,
+                        'text': result.get('text', '')[:1000],  # 요약만 저장
+                        'page_count': result.get('page_count', 0),
+                        'metadata': result.get('metadata', {})
+                    }
         
         # PDF와 TXT 파일 모두 처리
         for file_path in self.all_files:
@@ -389,10 +374,7 @@ class PerfectRAG:
                 'is_pdf': filename.endswith('.pdf')  # PDF 파일 여부 추가
             }
 
-        # 캐시 저장 (처음 빌드할 때만)
-        if 'cache_manager' in locals() and (not cached_metadata or len(cached_metadata) == 0):
-            cache_manager.save_cache(self.metadata_cache)
-            print(f"💾 {len(self.metadata_cache)}개 문서 메타데이터 캐시 저장 완료")
+        print(f"✅ {len(self.metadata_cache)}개 문서 메타데이터 구축 완료")
     
     def _extract_txt_info(self, txt_path: Path) -> Dict:
         """TXT 파일에서 정보 동적 추출"""
@@ -559,12 +541,10 @@ class PerfectRAG:
             return text
 
         # 여러 방법으로 시도
-        text = self.error_recovery.progressive_degradation(
-            [
-                extract_with_pdfplumber,
-                lambda: self._try_ocr_extraction(pdf_path) if hasattr(self, '_try_ocr_extraction') else ""
-            ]
-        )
+        # error_recovery가 없으므로 직접 시도
+        text = extract_with_pdfplumber()
+        if not text and hasattr(self, '_try_ocr_extraction'):
+            text = self._try_ocr_extraction(pdf_path)
 
         # pdfplumber 실패시 OCR 시도
         if not text:
@@ -1181,9 +1161,7 @@ class PerfectRAG:
         asset_keywords = [
             '몇 대', '수량', '보유', '자산', '시리얼', 's/n',
             '현황', '통계', '목록', '전체 장비', '설치 위치',
-            '도입 시기', '제조사별', '모델별', '위치별',
-            'dvr', 'ccu', '카메라', '렌즈', '모니터', '스위처',
-            '마이크', '믹서', '스피커', '앰프', '프로젝터'
+            '도입 시기', '제조사별', '모델별', '위치별'
         ]
         
         # 패턴 가져오기
@@ -1213,10 +1191,12 @@ class PerfectRAG:
             asset_score += 2
 
         # 장비명이 있으면 자산 가중치 증가 (DVR, CCU 등)
-        equipment_names = ['dvr', 'ccu', '카메라', '렌즈', '모니터', '스위처', '마이크', '믹서']
-        for equipment in equipment_names:
-            if equipment in query_lower:
-                asset_score += 3  # 높은 가중치
+        # 하지만 '관련 문서', '찾아줘' 같은 문서 검색 표현이 있으면 제외
+        if not any(w in query_lower for w in ['문서', '찾아줘', '검색', '기안', '검토']):
+            equipment_names = ['dvr', 'ccu', '카메라', '렌즈', '모니터', '스위처', '마이크', '믹서']
+            for equipment in equipment_names:
+                if equipment in query_lower:
+                    asset_score += 3  # 높은 가중치
         
         # 수량 관련 표현이 있으면 자산
         if re.search(r'\d+대|\d+개|몇\s*대|몇\s*개', query):
@@ -1771,8 +1751,8 @@ class PerfectRAG:
                 else:
                     response = "❌ 자산 데이터 파일을 찾을 수 없습니다."
             
-            # document 모드인 경우에만 문서 검색 진행
-            elif self.search_mode == 'document':
+            # document 모드 또는 기본 모드인 경우 문서 검색 진행
+            elif self.search_mode == 'document' or self.search_mode not in ['asset']:
                 # 문서 읽고 정리 요청 (다 읽고, 정리해줘)
                 if any(keyword in query for keyword in ["다 읽고", "전부 읽고", "모두 읽고", "정리해", "종합해", "분석해"]) \
                    and any(keyword in query for keyword in ["관련", "문서"]):
@@ -2136,17 +2116,21 @@ class PerfectRAG:
             text, metadata = ocr_processor.extract_text_with_ocr(str(pdf_path))
             
             if metadata.get('ocr_performed'):
-                logger.info(f"OCR 성공: {pdf_path.name} - {metadata.get('ocr_text_length', 0)}자 추출")
+                if logger:
+                    logger.system_logger.info(f"OCR 성공: {pdf_path.name} - {metadata.get('ocr_text_length', 0)}자 추출")
                 return text
             else:
-                logger.warning(f"OCR 실패: {pdf_path.name}")
+                if logger:
+                    logger.system_logger.warning(f"OCR 실패: {pdf_path.name}")
                 return ""
                 
         except ImportError:
-            logger.warning("OCR 모듈 사용 불가 - pytesseract 또는 Tesseract 미설치")
+            if logger:
+                logger.system_logger.warning("OCR 모듈 사용 불가 - pytesseract 또는 Tesseract 미설치")
             return ""
         except Exception as e:
-            logger.error(f"OCR 처리 중 오류: {pdf_path.name} - {e}")
+            if logger:
+                logger.system_logger.error(f"OCR 처리 중 오류: {pdf_path.name} - {e}")
             return ""
     
     def _extract_full_pdf_content(self, pdf_path: Path) -> dict:

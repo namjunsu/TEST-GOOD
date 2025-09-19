@@ -612,134 +612,180 @@ def display_document_list(filtered_df, df):
             else:
                 st.caption("표시할 문서가 없습니다.")
 
-@st.cache_data(ttl=3600)
-def load_documents():
-    """문서 메타데이터 로드 (캐시 사용으로 빠른 로딩)"""
+def load_documents(rag_instance):
+    """문서 메타데이터 로드 (RAG 인스턴스의 메타데이터 캐시 활용)"""
     import html
     import re
     from datetime import datetime
-    from perfect_rag import PerfectRAG
+    from pathlib import Path
+    import pandas as pd
 
+    print("Loading documents from metadata cache...")
     documents = []
 
-    # PerfectRAG 인스턴스에서 문서 정보 가져오기
+    # RAG 인스턴스의 메타데이터 캐시 활용
     try:
-        rag = PerfectRAG()
-        pdf_files = rag.pdf_files  # 이미 로드된 PDF 파일 목록 사용
+        # 메타데이터 캐시에서 직접 가져오기
+        if hasattr(rag_instance, 'metadata_cache') and rag_instance.metadata_cache:
+            print(f"Using cached metadata for {len(rag_instance.metadata_cache)} documents")
 
-        # 중복 제거를 위한 딕셔너리 (파일명을 키로 사용)
-        unique_docs = {}
+            for cache_key, metadata in rag_instance.metadata_cache.items():
+                if not metadata.get('is_pdf', True):
+                    continue  # PDF 파일만 처리
 
-        # 각 PDF 파일에 대한 메타데이터 생성
-        for pdf_file in pdf_files:
-            # archive 폴더의 파일은 낮은 우선순위
-            is_archive = 'archive' in str(pdf_file).lower()
+                file_path = metadata.get('path')
+                if isinstance(file_path, str):
+                    file_path = Path(file_path)
 
-            # 이미 등록된 파일인지 확인
-            if pdf_file.name in unique_docs:
-                # archive가 아닌 파일을 우선
-                if is_archive:
-                    continue  # 이미 있고 현재가 archive면 스킵
-                # 현재 파일이 archive가 아니면 교체
+                filename = metadata.get('filename', cache_key)
 
-            # 파일명에서 메타데이터 추출 (개선된 날짜 처리)
-            name_parts = pdf_file.stem.split('_', 1)
-            doc_date = name_parts[0] if len(name_parts) > 0 else ""
-            doc_title = name_parts[1] if len(name_parts) > 1 else pdf_file.stem
-            doc_title = html.unescape(doc_title)
+                # 날짜와 제목 추출
+                date_str = metadata.get('date', '')
+                year = metadata.get('year', '연도없음')
+                title = metadata.get('title', filename)
 
-            # 날짜 추출 개선 - 다양한 형식 지원
-            extracted_date = None
-            year = "연도없음"
-            month = ""
+                # 카테고리 분류
+                category = "기타"
+                if "구매" in filename or "구입" in filename:
+                    category = "구매"
+                elif "폐기" in filename:
+                    category = "폐기"
+                elif "수리" in filename or "보수" in filename:
+                    category = "수리"
+                elif "소모품" in filename:
+                    category = "소모품"
 
-            # 1. 파일명에서 날짜 패턴 찾기
-            date_patterns = [
-                r'(20\d{2})[-_.](\d{1,2})[-_.](\d{1,2})',  # YYYY-MM-DD
-                r'(20\d{2})(\d{2})(\d{2})',               # YYYYMMDD
-                r'(20\d{2})[-_.](\d{1,2})',               # YYYY-MM
-                r'(20\d{2})'                              # YYYY
-            ]
+                # 문서 메타데이터 생성
+                doc_metadata = {
+                    'title': title,
+                    'filename': filename,
+                    'path': str(file_path),
+                    'category': category,
+                    'date': date_str if date_str else "날짜 미상",
+                    'year': year,
+                    'drafter': "미상",
+                    'month': "",
+                    'modified': datetime.now()  # 기본값
+                }
 
-            filename = pdf_file.name
-            for pattern in date_patterns:
-                match = re.search(pattern, filename)
-                if match:
-                    groups = match.groups()
-                    if len(groups) == 3:  # YYYY-MM-DD
-                        try:
-                            year_val, month_val, day_val = groups
-                            extracted_date = f"{year_val}-{int(month_val):02d}-{int(day_val):02d}"
+                # 파일 수정 시간 가져오기
+                if file_path and file_path.exists():
+                    try:
+                        doc_metadata['modified'] = datetime.fromtimestamp(file_path.stat().st_mtime)
+                    except:
+                        pass
+
+                documents.append(doc_metadata)
+
+        else:
+            # 메타데이터 캐시가 없으면 pdf_files에서 직접 로드
+            print("Metadata cache not available, loading from pdf_files...")
+            pdf_files = rag_instance.pdf_files if hasattr(rag_instance, 'pdf_files') else []
+
+            # 중복 제거를 위한 딕셔너리
+            unique_docs = {}
+
+            for pdf_file in pdf_files:
+                # archive 폴더의 파일은 낮은 우선순위
+                is_archive = 'archive' in str(pdf_file).lower()
+
+                # 이미 등록된 파일인지 확인
+                if pdf_file.name in unique_docs:
+                    # archive가 아닌 파일을 우선
+                    if is_archive:
+                        continue  # 이미 있고 현재가 archive면 스킵
+                    # 현재 파일이 archive가 아니면 교체
+
+                # 파일명에서 메타데이터 추출 (개선된 날짜 처리)
+                name_parts = pdf_file.stem.split('_', 1)
+                doc_date = name_parts[0] if len(name_parts) > 0 else ""
+                doc_title = name_parts[1] if len(name_parts) > 1 else pdf_file.stem
+                doc_title = html.unescape(doc_title)
+
+                # 날짜 추출 개선 - 다양한 형식 지원
+                extracted_date = None
+                year = "연도없음"
+                month = ""
+
+                # 1. 파일명에서 날짜 패턴 찾기
+                date_patterns = [
+                    r'(20\d{2})[-_.](\d{1,2})[-_.](\d{1,2})',  # YYYY-MM-DD
+                    r'(20\d{2})(\d{2})(\d{2})',               # YYYYMMDD
+                    r'(20\d{2})[-_.](\d{1,2})',               # YYYY-MM
+                    r'(20\d{2})'                              # YYYY
+                ]
+
+                filename = pdf_file.name
+                for pattern in date_patterns:
+                    match = re.search(pattern, filename)
+                    if match:
+                        groups = match.groups()
+                        if len(groups) == 3:  # YYYY-MM-DD
+                            try:
+                                year_val, month_val, day_val = groups
+                                extracted_date = f"{year_val}-{int(month_val):02d}-{int(day_val):02d}"
+                                year = year_val
+                                month = f"{int(month_val):02d}"
+                                break
+                            except ValueError:
+                                continue
+                        elif len(groups) == 2:  # YYYY-MM
+                            try:
+                                year_val, month_val = groups
+                                extracted_date = f"{year_val}-{int(month_val):02d}-01"
+                                year = year_val
+                                month = f"{int(month_val):02d}"
+                                break
+                            except ValueError:
+                                continue
+                        elif len(groups) == 1:  # YYYY
+                            year_val = groups[0]
+                            extracted_date = f"{year_val}-01-01"
                             year = year_val
-                            month = f"{int(month_val):02d}"
                             break
-                        except ValueError:
-                            continue
-                    elif len(groups) == 2:  # YYYY-MM
-                        try:
-                            year_val, month_val = groups
-                            extracted_date = f"{year_val}-{int(month_val):02d}-01"
-                            year = year_val
-                            month = f"{int(month_val):02d}"
-                            break
-                        except ValueError:
-                            continue
-                    elif len(groups) == 1:  # YYYY
-                        year_val = groups[0]
-                        extracted_date = f"{year_val}-01-01"
-                        year = year_val
-                        break
 
-            # 2. 추출된 날짜가 없으면 기존 방식 사용
-            if not extracted_date:
-                if len(doc_date) >= 4:
-                    year = doc_date[:4]
-                    if len(doc_date) >= 7:
-                        month = doc_date[5:7]
-                    extracted_date = doc_date
+                # 2. 추출된 날짜가 없으면 기존 방식 사용
+                if not extracted_date:
+                    if len(doc_date) >= 4:
+                        year = doc_date[:4]
+                        if len(doc_date) >= 7:
+                            month = doc_date[5:7]
+                        extracted_date = doc_date
 
-            # 최종 날짜 설정
-            doc_date = extracted_date if extracted_date else "날짜 미상"
+                # 최종 날짜 설정
+                doc_date = extracted_date if extracted_date else "날짜 미상"
 
-            # 카테고리 분류
-            category = "기타"
-            if "구매" in pdf_file.name or "구입" in pdf_file.name:
-                category = "구매"
-            elif "폐기" in pdf_file.name:
-                category = "폐기"
-            elif "수리" in pdf_file.name or "보수" in pdf_file.name:
-                category = "수리"
-            elif "소모품" in pdf_file.name:
-                category = "소모품"
+                # 카테고리 분류
+                category = "기타"
+                if "구매" in pdf_file.name or "구입" in pdf_file.name:
+                    category = "구매"
+                elif "폐기" in pdf_file.name:
+                    category = "폐기"
+                elif "수리" in pdf_file.name or "보수" in pdf_file.name:
+                    category = "수리"
+                elif "소모품" in pdf_file.name:
+                    category = "소모품"
 
-            # 기안자 정보 추출 시도
-            drafter = "미상"
-            try:
-                # PerfectRAG에서 기안자 정보 가져오기
-                if hasattr(rag, 'get_document_info'):
-                    doc_info = rag._extract_pdf_info(pdf_file)
-                    if doc_info and '기안자' in doc_info:
-                        drafter = doc_info['기안자']
-            except Exception:
-                pass  # 기안자 추출 실패시 기본값 사용
+                # 기안자 정보는 기본값 사용 (빠른 로딩을 위해 생략)
+                drafter = "미상"
 
-            # 메타데이터 생성
-            metadata = {
-                'title': doc_title,
-                'filename': pdf_file.name,
-                'path': str(pdf_file),
-                'category': category,
-                'date': doc_date,
-                'year': year,
-                'drafter': drafter,
-                'month': month,
-                'modified': datetime.fromtimestamp(pdf_file.stat().st_mtime)
-            }
+                # 메타데이터 생성
+                metadata = {
+                    'title': doc_title,
+                    'filename': pdf_file.name,
+                    'path': str(pdf_file),
+                    'category': category,
+                    'date': doc_date,
+                    'year': year,
+                    'drafter': drafter,
+                    'month': month,
+                    'modified': datetime.fromtimestamp(pdf_file.stat().st_mtime)
+                }
 
-            unique_docs[pdf_file.name] = metadata
+                unique_docs[pdf_file.name] = metadata
 
-        # 딕셔너리 값들을 리스트로 변환
-        documents = list(unique_docs.values())
+            # 딕셔너리 값들을 리스트로 변환
+            documents = list(unique_docs.values())
 
     except Exception as e:
         print(f"문서 로드 중 오류: {e}")
@@ -1054,7 +1100,8 @@ def main():
         # 문서 로딩 중 표시
         if 'documents_loaded' not in st.session_state:
             with st.spinner("📚 문서 목록 로드 중..."):
-                df = load_documents()
+                # RAG 인스턴스 전달하여 재사용
+                df = load_documents(st.session_state.rag)
                 st.session_state.documents_loaded = True
                 st.session_state.documents_df = df
         else:

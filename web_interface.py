@@ -877,8 +877,9 @@ def render_document_card(title, info):
                     file_path = Path(config.DOCS_DIR) / info['filename']
 
                 if file_path.exists():
-                    # 미리보기 버튼 (토글 방식)
-                    preview_key = f"preview_{hashlib.md5(info['filename'].encode()).hexdigest()}"
+                    # 미리보기 버튼 (토글 방식) - 경로 포함하여 유니크 키 생성
+                    unique_id = str(file_path) if 'path' in info else info['filename']
+                    preview_key = f"preview_{hashlib.md5(unique_id.encode()).hexdigest()}"
                     current_state = st.session_state.get(f'show_preview_{preview_key}', False)
                     
                     if st.button(
@@ -902,19 +903,30 @@ def render_document_card(title, info):
                 if file_path.exists():
                     with open(file_path, 'rb') as f:
                         pdf_bytes = f.read()
-                    
+
+                    # 유니크 ID 생성 (경로 포함)
+                    unique_id = str(file_path) if 'path' in info else info['filename']
+
                     st.download_button(
                         label="📥 다운로드",
                         data=pdf_bytes,
                         file_name=info['filename'],
                         mime="application/pdf",
-                        key=f"dl_{hashlib.md5(info['filename'].encode()).hexdigest()}",
+                        key=f"dl_{hashlib.md5(unique_id.encode()).hexdigest()}",
                         use_container_width=True
                     )
         
         # 미리보기 표시 (버튼 클릭시)
         if 'filename' in info:
-            preview_key = f"preview_{hashlib.md5(info['filename'].encode()).hexdigest()}"
+            # 유니크 ID 생성 (경로 포함)
+            if 'path' in info:
+                file_path = Path(info['path'])
+            else:
+                file_path = Path(config.DOCS_DIR) / info['filename']
+
+            unique_id = str(file_path) if 'path' in info else info['filename']
+            preview_key = f"preview_{hashlib.md5(unique_id.encode()).hexdigest()}"
+
             if st.session_state.get(f'show_preview_{preview_key}', False):
                 with st.expander(f"📖 PDF 미리보기: {info['filename']}", expanded=True):
                     col1, col2 = st.columns([10, 1])

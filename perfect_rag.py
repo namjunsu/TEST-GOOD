@@ -5864,9 +5864,22 @@ class PerfectRAG:
                         'cache_key': cache_key  # 파일 경로 정보 추가
                     })
             
+            # 중복 제거 (같은 파일명이 다른 폴더에 있는 경우)
+            unique_docs = {}
+            for doc in matched_docs:
+                filename = doc['filename']
+                if filename not in unique_docs:
+                    unique_docs[filename] = doc
+                else:
+                    # year_ 폴더를 우선시 (recent, archive보다)
+                    if 'year_' in doc.get('cache_key', ''):
+                        unique_docs[filename] = doc
+
+            matched_docs = list(unique_docs.values())
+
             # 점수 순으로 정렬
             matched_docs.sort(key=lambda x: x['score'], reverse=True)
-            
+
             # 상위 10개만 표시 (너무 많은 결과 방지)
             if len(matched_docs) > 10:
                 matched_docs = matched_docs[:10]
@@ -5880,9 +5893,17 @@ class PerfectRAG:
             report.append(f"**총 {len(matched_docs)}개 문서 발견**\n")
             report.append("---\n")
             
-            # 연도별로 그룹화
+            # 연도별로 그룹화 (중복 제거 후)
             docs_by_year = {}
+            seen_filenames = set()  # 이미 처리한 파일명 추적
+
             for doc in matched_docs:
+                filename = doc['filename']
+                # 이미 처리한 파일이면 건너뛰기
+                if filename in seen_filenames:
+                    continue
+                seen_filenames.add(filename)
+
                 year = doc['year']
                 if year not in docs_by_year:
                     docs_by_year[year] = []

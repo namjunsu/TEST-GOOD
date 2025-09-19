@@ -283,19 +283,32 @@ st.markdown("""
 
 
 def show_pdf_preview(file_path, height=700):
-    """PDF 미리보기 표시 - 모든 크기 지원
-    
+    """PDF 미리보기 표시 - 성능 최적화 및 오류 처리 개선
+
     Args:
         file_path: PDF 파일 경로
         height: 미리보기 높이 (픽셀)
     """
     import base64
     from pathlib import Path
-    
+
     try:
+        file_path = Path(file_path)
+        if not file_path.exists():
+            st.error(f"⚠️ 파일을 찾을 수 없습니다: {file_path.name}")
+            return False
+
         # 파일 크기 확인
-        file_size = Path(file_path).stat().st_size
+        file_size = file_path.stat().st_size
         file_size_mb = file_size / (1024*1024)
+
+        # PyMuPDF 설치 여부 체크
+        PYMUPDF_AVAILABLE = False
+        try:
+            import fitz
+            PYMUPDF_AVAILABLE = True
+        except ImportError:
+            pass
         
         # 상단 정보 바 (모든 PDF 동일)
         col1, col2, col3 = st.columns([2, 1, 1])
@@ -315,10 +328,24 @@ def show_pdf_preview(file_path, height=700):
         
         st.markdown("---")
         
-        # 보기 옵션 선택
+        # 보기 옵션 선택 (PyMuPDF 설치 여부에 따라 다르게)
+        if PYMUPDF_AVAILABLE:
+            if file_size_mb > 10:
+                # 대용량 파일은 페이지별 이미지 모드 권장
+                default_mode = "🖼️ 페이지별 이미지"
+                st.info(f"💡 대용량 파일({file_size_mb:.1f}MB)은 페이지별 이미지 모드를 권장합니다")
+            else:
+                default_mode = "📖 원본 PDF"
+            view_modes = ["📖 원본 PDF", "🖼️ 페이지별 이미지", "📄 텍스트 추출"]
+        else:
+            default_mode = "📄 텍스트 추출"
+            view_modes = ["📄 텍스트 추출"]
+            st.warning("⚠️ PyMuPDF 미설치로 텍스트 추출만 가능합니다. 전체 기능을 위해 'pip install pymupdf' 실행을 권장합니다")
+
         view_mode = st.radio(
             "보기 모드 선택",
-            ["📖 원본 PDF", "🖼️ 페이지별 이미지", "📄 텍스트 추출"],
+            view_modes,
+            index=view_modes.index(default_mode),
             key=f"view_mode_{file_path}",
             horizontal=True
         )
@@ -351,12 +378,20 @@ def show_pdf_preview(file_path, height=700):
                 st.info("🖼️ 위에서 '페이지별 이미지' 모드를 선택하시면 PDF를 볼 수 있습니다")
         
         elif view_mode == "🖼️ 페이지별 이미지":
+            if not PYMUPDF_AVAILABLE:
+                st.error("PyMuPDF가 필요합니다. 'pip install pymupdf'로 설치해주세요")
+                return False
+
             try:
                 import fitz  # PyMuPDF
                 from PIL import Image
-                
+                import io
+
+                # 캐싱 키 생성 (파일 경로와 수정 시간 기반)
+                cache_key = f"pdf_render_{file_path}_{file_size}"
+
                 # 총 페이지 수 확인
-                pdf_document = fitz.open(file_path)
+                pdf_document = fitz.open(str(file_path))
                 total_pages = pdf_document.page_count
                 
                 # 세션 상태로 페이지 번호 관리
@@ -383,10 +418,23 @@ def show_pdf_preview(file_path, height=700):
                 # 현재 페이지를 고품질 이미지로 렌더링
                 page = pdf_document[current_page - 1]
                 
-                # 고해상도 렌더링 (DPI 150 정도)
-                zoom = 2.0  # 2배 확대
+                # 성능 최적화: 파일 크기에 따라 렌더링 품질 동적 조정
+                if file_size_mb > 50:
+                    zoom = 1.0  # 대용량: 낮은 해상도
+                    st.caption("📊 대용량 파일 - 최적화된 품질로 렌더링")
+                elif file_size_mb > 20:
+                    zoom = 1.5  # 중간: 중간 해상도
+                else:
+                    zoom = 2.0  # 소형: 고해상도
+
                 mat = fitz.Matrix(zoom, zoom)
-                pix = page.get_pixmap(matrix=mat, alpha=False)
+
+                # 프로그레스 표시 (대용량 파일)
+                if file_size_mb > 10:
+                    with st.spinner(f"페이지 {current_page}/{total_pages} 렌더링 중..."):
+                        pix = page.get_pixmap(matrix=mat, alpha=False)
+                else:
+                    pix = page.get_pixmap(matrix=mat, alpha=False)
                 
                 # PIL 이미지로 변환
                 img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
@@ -416,10 +464,13 @@ def show_pdf_preview(file_path, height=700):
                         st.session_state[f'page_{file_path}'] = min(total_pages, current_page + 1)
                         st.rerun()
                 
+                # 메모리 해제
                 pdf_document.close()
-                
-            except ImportError:
-                st.error("PyMuPDF 라이브러리가 설치되어 있지 않습니다")
+
+            except Exception as e:
+                st.error(f"🔴 PDF 이미지 렌더링 실패: {str(e)}")
+                st.info("💡 대체 방법: 텍스트 추출 모드를 시도해보세요")
+                return False
         
         elif view_mode == "📄 텍스트 추출":
             import pdfplumber
@@ -443,24 +494,39 @@ def show_pdf_preview(file_path, height=700):
                     st.text_area("페이지 내용", text, height=500, key=f"text_content_{file_path}")
                 else:
                     # OCR 시도
-                    st.info("스캔된 문서로 보입니다. OCR 처리를 시도합니다...")
+                    st.info("🔍 스캔된 문서로 보입니다. OCR 처리를 시도합니다...")
                     try:
                         from rag_system.enhanced_ocr_processor import EnhancedOCRProcessor
-                        ocr = EnhancedOCRProcessor()
-                        ocr_text = ocr.process_pdf_with_ocr(file_path, page_num)
+
+                        # OCR 프로세서 초기화 (캐싱)
+                        if 'ocr_processor' not in st.session_state:
+                            st.session_state.ocr_processor = EnhancedOCRProcessor()
+                        ocr = st.session_state.ocr_processor
+
+                        with st.spinner("OCR 처리 중... 시간이 걸릴 수 있습니다"):
+                            ocr_text = ocr.process_pdf_with_ocr(str(file_path), page_num)
+
                         if ocr_text and ocr_text.strip():
                             st.success("✅ OCR 처리 성공!")
                             st.text_area("OCR 추출 내용", ocr_text, height=500, key=f"ocr_content_{file_path}")
                         else:
                             st.warning("⚠️ OCR 처리 후에도 텍스트를 추출할 수 없습니다")
+                    except ImportError:
+                        st.warning("⚠️ OCR 기능을 사용하려면 'pip install pytesseract pdf2image' 설치가 필요합니다")
                     except Exception as ocr_error:
-                        st.error(f"OCR 처리 실패: {ocr_error}")
-                        st.info("💡 스캔 문서는 검색 기능이 제한될 수 있습니다")
+                        st.error(f"❌ OCR 처리 실패: {str(ocr_error)}")
+                        st.info("💡 Tesseract OCR이 설치되어 있는지 확인해주세요")
             
         return True
             
     except Exception as e:
-        st.error(f"PDF 미리보기 오류: {e}")
+        st.error(f"❌ PDF 미리보기 오류: {str(e)}")
+
+        # 상세 오류 정보 (디버깅용)
+        with st.expander("🔍 상세 오류 정보"):
+            import traceback
+            st.text(traceback.format_exc())
+
         # 오류 시에도 다운로드는 제공
         try:
             with open(file_path, "rb") as f:
@@ -468,10 +534,12 @@ def show_pdf_preview(file_path, height=700):
                     label="📥 PDF 다운로드 (미리보기 실패)",
                     data=f,
                     file_name=Path(file_path).name,
-                    mime="application/pdf"
+                    mime="application/pdf",
+                    help="미리보기는 실패했지만 파일을 다운로드할 수 있습니다"
                 )
-        except:
-            pass
+                st.info("💡 미리보기가 실패해도 다운로드하여 로컬에서 확인 가능합니다")
+        except Exception as dl_error:
+            st.error(f"다운로드도 실패: {str(dl_error)}")
         return False
 
 def apply_sidebar_styles():
@@ -613,15 +681,27 @@ def display_document_list(filtered_df, df):
                 st.caption("표시할 문서가 없습니다.")
 
 def load_documents(rag_instance):
-    """문서 메타데이터 로드 (RAG 인스턴스의 메타데이터 캐시 활용)"""
+    """문서 메타데이터 로드 - 기안자 정보 자동 추출 강화"""
     import html
     import re
     from datetime import datetime
     from pathlib import Path
     import pandas as pd
+    import pdfplumber
 
     print("Loading documents from metadata cache...")
     documents = []
+
+    # 기안자 추출을 위한 패턴
+    drafter_patterns = [
+        r'기\s*안\s*자\s*[:：]?\s*([^담\s]{2,5})',  # 기안자: XXX
+        r'작\s*성\s*자\s*[:：]?\s*([^담\s]{2,5})',  # 작성자: XXX
+        r'작\s*성\s*[:：]?\s*([^담\s]{2,5})',  # 작성: XXX
+        r'담\s*당\s*자\s*[:：]?\s*([^담\s]{2,5})',  # 담당자: XXX
+        r'담\s*당\s*[:：]?\s*([^담\s]{2,5})',  # 담당: XXX
+        r'신\s*청\s*자\s*[:：]?\s*([^담\s]{2,5})',  # 신청자: XXX
+        r'상\s*신\s*[:：]?\s*([^담\s]{2,5})',  # 상신: XXX
+    ]
 
     # RAG 인스턴스의 메타데이터 캐시 활용
     try:
@@ -655,6 +735,40 @@ def load_documents(rag_instance):
                 elif "소모품" in filename:
                     category = "소모품"
 
+                # 기안자 추출 시도 (메타데이터 DB 우선, 없으면 PDF에서 직접)
+                drafter = "미상"
+
+                # 1. 메타데이터 DB에서 확인
+                if hasattr(rag_instance, 'metadata_db') and rag_instance.metadata_db:
+                    db_info = rag_instance.metadata_db.get_document(filename)
+                    if db_info and db_info.get('drafter'):
+                        drafter = db_info['drafter']
+
+                # 2. 메타데이터 DB에 없으면 PDF에서 직접 추출
+                if drafter == "미상" and file_path and file_path.exists():
+                    try:
+                        # 빠른 추출을 위해 철 페이지만 검사
+                        with pdfplumber.open(file_path) as pdf:
+                            if pdf.pages:
+                                # 첨 두 페이지에서 기안자 찾기
+                                for page_num in range(min(2, len(pdf.pages))):
+                                    text = pdf.pages[page_num].extract_text() or ""
+                                    if text:
+                                        for pattern in drafter_patterns:
+                                            match = re.search(pattern, text)
+                                            if match:
+                                                candidate = match.group(1).strip()
+                                                # 유효한 이름인지 체크 (한글 2-4자)
+                                                if re.match(r'^[가-힣]{2,4}$', candidate):
+                                                    drafter = candidate
+                                                    print(f"  ✅ 기안자 추출: {filename} -> {drafter}")
+                                                    break
+                                    if drafter != "미상":
+                                        break
+                    except Exception as e:
+                        # 기안자 추출 실패 시 무시 (미상으로 유지)
+                        pass
+
                 # 문서 메타데이터 생성
                 doc_metadata = {
                     'title': title,
@@ -663,7 +777,7 @@ def load_documents(rag_instance):
                     'category': category,
                     'date': date_str if date_str else "날짜 미상",
                     'year': year,
-                    'drafter': "미상",
+                    'drafter': drafter,
                     'month': "",
                     'modified': datetime.now()  # 기본값
                 }
@@ -766,8 +880,32 @@ def load_documents(rag_instance):
                 elif "소모품" in pdf_file.name:
                     category = "소모품"
 
-                # 기안자 정보는 기본값 사용 (빠른 로딩을 위해 생략)
+                # 기안자 정보 추출 (파일이 존재하는 경우)
                 drafter = "미상"
+
+                # 메타데이터 DB 활용 (있는 경우)
+                if hasattr(rag_instance, 'metadata_db') and rag_instance.metadata_db:
+                    db_info = rag_instance.metadata_db.get_document(pdf_file.name)
+                    if db_info and db_info.get('drafter'):
+                        drafter = db_info['drafter']
+
+                # DB에 없고 파일 크기가 작으면 직접 추출 시도
+                if drafter == "미상" and pdf_file.stat().st_size < 10 * 1024 * 1024:  # 10MB 미만
+                    try:
+                        with pdfplumber.open(pdf_file) as pdf:
+                            if pdf.pages:
+                                # 첫 페이지만 확인 (성능)
+                                text = pdf.pages[0].extract_text() or ""
+                                if text:
+                                    for pattern in drafter_patterns:
+                                        match = re.search(pattern, text)
+                                        if match:
+                                            candidate = match.group(1).strip()
+                                            if re.match(r'^[가-힣]{2,4}$', candidate):
+                                                drafter = candidate
+                                                break
+                    except:
+                        pass
 
                 # 메타데이터 생성
                 metadata = {
@@ -787,17 +925,28 @@ def load_documents(rag_instance):
             # 딕셔너리 값들을 리스트로 변환
             documents = list(unique_docs.values())
 
+    except FileNotFoundError as e:
+        print(f"📁 문서 디렉토리를 찾을 수 없습니다: {e}")
+        st.error(f"문서 폴더를 찾을 수 없습니다. docs 폴더가 존재하는지 확인해주세요")
+    except PermissionError as e:
+        print(f"🔒 파일 접근 권한 오류: {e}")
+        st.error("파일 접근 권한이 없습니다. 관리자 권한으로 실행해주세요")
     except Exception as e:
-        print(f"문서 로드 중 오류: {e}")
+        print(f"🔴 문서 로드 중 오류: {e}")
         import traceback
         traceback.print_exc()
+        st.warning(f"문서 로드 중 일부 오류가 발생했지만 계속 진행합니다")
 
     # DataFrame 생성 및 정렬
     df = pd.DataFrame(documents)
     if not df.empty:
         df = df.sort_values('date', ascending=False)
 
+    # 기안자 통계
+    drafter_count = sum(1 for doc in documents if doc.get('drafter') and doc['drafter'] != '미상')
     print(f"📊 총 {len(documents)}개 문서 로드 완료")
+    print(f"  - 기안자 확인: {drafter_count}개 ({drafter_count*100//max(len(documents), 1)}%)")
+    print(f"  - 기안자 미확인: {len(documents) - drafter_count}개")
 
     return df
 @st.cache_resource
@@ -907,20 +1056,36 @@ def render_document_card(title, info):
                     file_path = Path(config.DOCS_DIR) / info['filename']
 
                 if file_path.exists():
-                    with open(file_path, 'rb') as f:
-                        pdf_bytes = f.read()
+                    try:
+                        with open(file_path, 'rb') as f:
+                            pdf_bytes = f.read()
 
-                    # 유니크 ID 생성 (경로 포함)
-                    unique_id = str(file_path) if 'path' in info else info['filename']
+                        # 파일 크기 확인
+                        file_size_mb = len(pdf_bytes) / (1024 * 1024)
+                        if file_size_mb > 100:
+                            st.warning(f"⚠️ 대용량 파일 ({file_size_mb:.1f}MB)")
 
-                    st.download_button(
-                        label="📥 다운로드",
-                        data=pdf_bytes,
-                        file_name=info['filename'],
-                        mime="application/pdf",
-                        key=f"dl_{hashlib.md5(unique_id.encode()).hexdigest()}",
-                        use_container_width=True
-                    )
+                        # 유니크 ID 생성 (경로 포함)
+                        unique_id = str(file_path) if 'path' in info else info['filename']
+
+                        st.download_button(
+                            label=f"📥 다운로드 ({file_size_mb:.1f}MB)",
+                            data=pdf_bytes,
+                            file_name=info['filename'],
+                            mime="application/pdf",
+                            key=f"dl_{hashlib.md5(unique_id.encode()).hexdigest()}",
+                            use_container_width=True,
+                            help=f"클릭하여 {info['filename']} 파일을 다운로드합니다"
+                        )
+                    except MemoryError:
+                        st.error("💾 파일이 너무 커서 메모리가 부족합니다")
+                        st.info("💡 파일을 직접 폴더에서 열어주세요")
+                    except Exception as e:
+                        st.error(f"📥 다운로드 버튼 생성 실패")
+                        with st.expander("오류 상세"):
+                            st.text(str(e))
+                else:
+                    st.warning("📁 파일 없음")
         
         # 미리보기 표시 (버튼 클릭시)
         if 'filename' in info:
@@ -948,10 +1113,17 @@ def render_document_card(title, info):
                         file_path = Path(config.DOCS_DIR) / info['filename']
 
                     if file_path.exists():
-                        # PDF 미리보기 표시 (높이 500px로 고정)
-                        show_pdf_preview(file_path, height=500)
+                        try:
+                            # PDF 미리보기 표시 (높이 500px로 고정)
+                            show_pdf_preview(file_path, height=500)
+                        except Exception as e:
+                            st.error(f"📄 PDF 미리보기 실패")
+                            st.info(f"💡 다운로드 버튼을 사용하여 파일을 열어보세요")
+                            with st.expander("오류 상세"):
+                                st.text(str(e))
                     else:
-                        st.error("PDF 파일을 찾을 수 없습니다")
+                        st.error(f"📁 PDF 파일을 찾을 수 없습니다: {info['filename']}")
+                        st.info("💡 파일이 이동되었거나 삭제되었을 수 있습니다")
         
         st.markdown("---")
 
@@ -1283,8 +1455,23 @@ def main():
                         answer = st.session_state.rag.answer_from_specific_document(doc_query, doc['filename'])
                         st.markdown("---")
                         st.markdown(answer)
+                    except FileNotFoundError as e:
+                        st.error(f"📁 파일을 찾을 수 없습니다: {doc['filename']}")
+                        st.info("💡 파일이 이동되었거나 삭제되었을 수 있습니다. 재인덱싱을 시도해주세요")
+                    except PermissionError as e:
+                        st.error(f"🔒 파일 접근 권한이 없습니다: {doc['filename']}")
+                        st.info("💡 파일이 다른 프로그램에서 사용 중이거나 권한이 제한되어 있습니다")
+                    except MemoryError as e:
+                        st.error(f"💾 메모리 부족: 너무 큰 문서를 처리하려고 합니다")
+                        st.info("💡 문서를 개별로 검색하거나 시스템을 재시작해주세요")
                     except Exception as e:
-                        st.error(f"❌ 오류 발생: {e}")
+                        st.error(f"❌ 예상치 못한 오류가 발생했습니다")
+                        with st.expander("🔍 상세 오류 정보"):
+                            st.text(f"오류 타입: {type(e).__name__}")
+                            st.text(f"오류 메시지: {str(e)}")
+                            import traceback
+                            st.text("\n스택 트레이스:")
+                            st.text(traceback.format_exc())
         
         with doc_tab2:
             st.info("📖 PDF 문서를 브라우저에서 직접 확인할 수 있습니다")
@@ -1552,8 +1739,58 @@ def main():
                     
                     # 통합 UI로 인해 하단 다운로드 영역 제거
                     
+                except ConnectionError as e:
+                    st.error("🌐 네트워크 연결 오류")
+                    st.info("💡 인터넷 연결을 확인하고 다시 시도해주세요")
+                except TimeoutError as e:
+                    st.error("⏱️ 시간 초과")
+                    st.info("💡 요청이 너무 오래 걸립니다. 검색 범위를 좀덤거하거나 간단한 질문을 시도해주세요")
+                except ImportError as e:
+                    missing_module = str(e).split("'")[1] if "'" in str(e) else "unknown"
+                    st.error(f"📦 필수 모듈 누락: {missing_module}")
+                    st.info(f"💡 다음 명령을 실행해주세요: pip install {missing_module}")
+                except ValueError as e:
+                    st.error(f"🔢 입력값 오류: {str(e)}")
+                    st.info("💡 올바른 형식으로 질문해주세요")
+                except KeyError as e:
+                    st.error(f"🔑 필수 필드 누락: {str(e)}")
+                    st.info("💡 데이터 형식이 올바른지 확인해주세요")
                 except Exception as e:
-                    st.error(f"❌ 오류 발생: {e}")
+                    # 기타 모든 예외 처리
+                    error_type = type(e).__name__
+                    st.error(f"❌ 오류 발생 ({error_type})")
+
+                    # 사용자 친화적인 오류 메시지
+                    if 'cuda' in str(e).lower() or 'gpu' in str(e).lower():
+                        st.info("🎮 GPU 관련 오류입니다. CPU 모드로 전환하거나 GPU 드라이버를 확인해주세요")
+                    elif 'encoding' in str(e).lower() or 'decode' in str(e).lower():
+                        st.info("📄 문자 인코딩 오류입니다. 파일이 UTF-8 형식인지 확인해주세요")
+                    elif 'model' in str(e).lower():
+                        st.info("🤖 AI 모델 로듩 오류입니다. 모델 파일이 올바른 위치에 있는지 확인해주세요")
+                    else:
+                        # 자세한 오류 정보 제공
+                        with st.expander("🔍 오류 상세 정보 보기"):
+                            st.text(f"오류 타입: {error_type}")
+                            st.text(f"오류 메시지: {str(e)}")
+
+                            # 스택 트레이스
+                            import traceback
+                            st.text("\n스택 트레이스:")
+                            trace = traceback.format_exc()
+                            # 긴 스택 트레이스는 생략하고 핵심만
+                            lines = trace.split('\n')
+                            if len(lines) > 20:
+                                st.text('\n'.join(lines[:10]) + '\n...\n' + '\n'.join(lines[-10:]))
+                            else:
+                                st.text(trace)
+
+                            # 해결 방법 제안
+                            st.markdown("### 💡 해결 방법")
+                            st.markdown("""
+                            1. 페이지를 새로고침하거나 (F5) 세션을 초기화해보세요
+                            2. 검색 범위를 좀더거하거나 다른 키워드로 시도해보세요
+                            3. 문제가 계속되면 시스템 관리자에게 문의하세요
+                            """)
         
         # 이전 검색 결과가 있으면 표시 (미리보기 등으로 인한 리렌더링 시)
         elif 'last_answer' in st.session_state and 'last_query' in st.session_state:

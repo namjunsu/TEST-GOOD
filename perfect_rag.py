@@ -1766,10 +1766,9 @@ class PerfectRAG:
                     return self._search_and_analyze_by_content(query)
 
                 # 여러 문서 검색 요청 (찾아줘, 관련 문서, 있어? 등)
-                # 날짜 범위 검색도 포함 (XX년 XX월 문서들)
-                # 단, 요약/내용 요청이 포함된 경우는 제외 (단일 문서 상세 보기)
+                # "문서 찾아줘", "문서 내용 찾아줘" 모두 문서 목록 표시
                 if any(keyword in query for keyword in ["찾아", "관련 문서", "관련된", "어떤", "있어", "있나", "리스트", "모두", "전부", "문서들", "보여줘"]) \
-                   and not any(keyword in query for keyword in ["요약", "내용", "알려", "설명"]):
+                   and not any(keyword in query for keyword in ["요약", "알려", "설명", "정리"]):
                     return self._search_multiple_documents(query)
                 
                 # 월 단위 검색도 여러 문서 반환 (요약 요청 제외)

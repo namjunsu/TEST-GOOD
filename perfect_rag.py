@@ -340,28 +340,28 @@ class PerfectRAG:
             # 파일명에서 기본 정보 추출
             date_match = re.match(r'(\d{4}-\d{2}-\d{2})', filename)
             date = date_match.group(1) if date_match else ""
-            
+
             # 제목 추출 (날짜 뒤 부분, 확장자 제거)
             if filename.endswith('.pdf'):
                 title = filename.replace(date + '_', '').replace('.pdf', '') if date else filename.replace('.pdf', '')
             else:
                 title = filename.replace(date + '_', '').replace('.txt', '') if date else filename.replace('.txt', '')
-            
+
             # 연도 추출
             year = date[:4] if date else ""
-            
+
             # 파일명에서 주요 키워드 자동 추출
             keywords = []
-            
+
             # 파일명을 단어로 분리하여 키워드 추출
             # 한글, 영문, 숫자로 단어 추출
             words = re.findall(r'[가-힣]+|[A-Za-z]+|\d+', filename)
-            
+
             # 의미있는 길이의 단어들을 키워드로 추가 (2글자 이상)
             for word in words:
                 if len(word) >= 2 and word not in ['pdf', 'PDF', 'txt', 'TXT', '의', '및', '건', '검토서']:
                     keywords.append(word)
-            
+
             self.metadata_cache[cache_key] = {
                 'path': file_path,
                 'filename': filename,  # 실제 파일명 저장
@@ -369,6 +369,7 @@ class PerfectRAG:
                 'year': year,
                 'title': title,
                 'keywords': keywords,
+                'drafter': None,  # 기안자 정보는 필요시에만 추출
                 'full_text': None,  # 나중에 필요시 로드
                 'is_txt': filename.endswith('.txt'),  # TXT 파일 여부
                 'is_pdf': filename.endswith('.pdf')  # PDF 파일 여부 추가
@@ -5792,6 +5793,26 @@ class PerfectRAG:
                 # 불용어 제외
                 stopwords = ['의', '및', '건', '검토서', '관련', '문서', '찾아', '줘', '있어', '어떤', '기안서']
 
+                # 기안자 검색 처리
+                if '기안자' in query_lower:
+                    # "최새름 기안자" 또는 "기안자 최새름" 형태 추출
+                    drafter_match = re.search(r'([가-힣]{2,4})\s*기안자|기안자\s*([가-힣]{2,4})', query)
+                    if drafter_match:
+                        search_drafter = drafter_match.group(1) or drafter_match.group(2)
+                        if search_drafter and metadata.get('is_pdf'):
+                            # 기안자 정보가 없으면 PDF에서 추출
+                            if metadata.get('drafter') is None:
+                                try:
+                                    pdf_info = self._extract_pdf_info(metadata['path'])
+                                    metadata['drafter'] = pdf_info.get('기안자', '')
+                                except:
+                                    metadata['drafter'] = ''
+
+                            # 기안자 비교
+                            doc_drafter = metadata.get('drafter', '')
+                            if doc_drafter and search_drafter in doc_drafter:
+                                score += 50  # 기안자 일치시 높은 점수
+
                 # 장비명 특별 가중치 (DVR, CCU 등) - 정확한 매칭만
                 equipment_names = ['dvr', 'ccu', '카메라', '렌즈', '모니터', '스위처', '마이크', '믹서', '삼각대', '중계차']
                 for equipment in equipment_names:
@@ -5856,9 +5877,11 @@ class PerfectRAG:
                         continue  # 연도가 다르면 무조건 제외
                 
                 # 최소 점수 기준 설정 (너무 많은 문서 방지)
-                # 기안자나 특정 년도 검색이 아니면 기본 기준
-                if '기안자' in query_lower or re.search(r'20\d{2}년', query):
-                    MIN_SCORE = 2  # 기안자/년도 검색은 낮은 기준
+                # 기안자 검색시 점수가 있으면 포함
+                if '기안자' in query_lower:
+                    MIN_SCORE = 1 if score > 0 else 999  # 기안자 검색은 점수 있으면 포함
+                elif re.search(r'20\d{2}년', query):
+                    MIN_SCORE = 2  # 년도 검색은 낮은 기준
                 else:
                     MIN_SCORE = 3  # 기본 최소 3점 이상만 포함
 

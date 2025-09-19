@@ -5792,21 +5792,25 @@ class PerfectRAG:
                 # 불용어 제외
                 stopwords = ['의', '및', '건', '검토서', '관련', '문서', '찾아', '줘', '있어', '어떤', '기안서']
 
-                # 장비명 특별 가중치 (DVR, CCU 등)
+                # 장비명 특별 가중치 (DVR, CCU 등) - 정확한 매칭만
                 equipment_names = ['dvr', 'ccu', '카메라', '렌즈', '모니터', '스위처', '마이크', '믹서', '삼각대', '중계차']
                 for equipment in equipment_names:
                     if equipment in query_lower:
-                        # 쿼리에 장비명이 있고 파일명에도 있으면 높은 점수
-                        if equipment in filename_lower:
-                            score += 15  # 장비명 완전 매칭시 높은 점수
-                        # 파일명에 없더라도 메타데이터 키워드에 있으면 점수 부여
-                        elif any(equipment in kw.lower() for kw in metadata.get('keywords', [])):
-                            score += 8  # 키워드에 있으면 중간 점수
-                        # 텍스트 검색은 필요시에만 (성능 최적화)
-                        elif score < 3 and metadata.get('text'):
-                            # 점수가 낮을 때만 텍스트 검색
-                            if equipment in metadata.get('text', '').lower()[:500]:
-                                score += 3
+                        # DVR 검색시 DVR만 찾기 (단어 경계 체크)
+                        if equipment == 'dvr':
+                            # DVR이 정확히 있는지 확인 (D-tap, VR 등 제외)
+                            if re.search(r'\bDVR\b', filename, re.IGNORECASE):
+                                score += 20  # DVR 완전 매칭
+                            elif 'dvr' in filename_lower and 'd-tap' not in filename_lower and 'vr' not in filename_lower:
+                                score += 15
+                        else:
+                            # 다른 장비명은 기존 방식
+                            if equipment in filename_lower:
+                                score += 15
+
+                        # 키워드 체크
+                        if any(equipment == kw.lower() for kw in metadata.get('keywords', [])):
+                            score += 8
                 
                 for word in query_words:
                     if len(word) >= 2 and word not in stopwords:
@@ -5815,11 +5819,12 @@ class PerfectRAG:
                         if word in file_words:
                             # 단어 길이에 비례한 점수
                             score += len(word) * 2
-                        # 부분 매칭 (3글자 이상)
-                        elif len(word) >= 3:
+                        # 부분 매칭 - DVR 같은 짧은 단어는 제외
+                        elif len(word) >= 4:  # 4글자 이상만 부분 매칭
                             for f_word in file_words:
-                                if word in f_word or f_word in word:
-                                    score += len(word)
+                                # 전체 포함이 아닌 부분 일치만
+                                if len(f_word) >= 4 and (word in f_word or f_word in word):
+                                    score += len(word) // 2  # 부분 매칭은 점수 절반
                 
                 # 메타데이터 키워드 매칭
                 for keyword in metadata['keywords']:
@@ -5862,11 +5867,18 @@ class PerfectRAG:
                 for equipment in equipment_names:
                     if equipment in query_lower:
                         has_equipment = True
-                        # 장비명이 파일명에 있으면 무조건 포함
-                        if equipment in filename_lower:
-                            MIN_SCORE = 0  # 파일명에 있으면 무조건 포함
+                        # DVR의 경우 특별 처리
+                        if equipment == 'dvr':
+                            if 'DVR' in filename or ('dvr' in filename_lower and 'd-tap' not in filename_lower and 'vr' not in filename_lower):
+                                MIN_SCORE = 0  # DVR이 정확히 있으면 포함
+                            else:
+                                MIN_SCORE = 10  # DVR 검색인데 DVR이 없으면 높은 기준
                         else:
-                            MIN_SCORE = max(3, MIN_SCORE)  # 장비 검색시 최소 3점
+                            # 다른 장비명
+                            if equipment in filename_lower:
+                                MIN_SCORE = 0
+                            else:
+                                MIN_SCORE = max(3, MIN_SCORE)
                         break
                 
                 if score >= MIN_SCORE:

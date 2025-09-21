@@ -5,7 +5,9 @@ Advanced RAG 기법 중 하나로, 사용자 쿼리를 다양한 방법으로 �
 
 import logging
 import time
-from typing import List, Dict, Any, Set
+import hashlib
+from functools import lru_cache
+from typing import List, Dict, Any, Set, Tuple
 import re
 from collections import defaultdict
 
@@ -21,7 +23,14 @@ class QueryExpansion:
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        
+
+        # 성능 통계
+        self.expansion_count = 0
+        self.total_expansion_time = 0.0
+        self.method_usage = defaultdict(int)
+        self.cache_hits = 0
+        self.cache_misses = 0
+
         # 한국어 방송기술 도메인 동의어 사전
         self.synonyms = {
             # 장비 관련
@@ -74,12 +83,13 @@ class QueryExpansion:
         
         # 형태소 패턴 초기화
         self._init_morphology_patterns()
-        
+        self._compile_patterns()
+
     def _init_morphology_patterns(self):
         """형태소 변형 패턴 초기화"""
         self.morphology_patterns = [
             (r'(\w+)을', r'\1를'),
-            (r'(\w+)를', r'\1을'),  
+            (r'(\w+)를', r'\1을'),
             (r'(\w+)이', r'\1가'),
             (r'(\w+)가', r'\1이'),
             (r'(\w+)은', r'\1는'),
@@ -87,13 +97,39 @@ class QueryExpansion:
             (r'(\w+)에서', r'\1의'),
             (r'(\w+)의', r'\1에서')
         ]
+
+    def _compile_patterns(self):
+        """정규식 패턴 컴파일"""
+        # 단어 추출 패턴 컴파일
+        self.compiled_word_pattern = re.compile(self.WORD_PATTERN)
+
+        # 형태소 패턴 컴파일
+        self.compiled_morphology = [(re.compile(p), r) for p, r in self.morphology_patterns]
+
+        # 동의어 역 인덱스 구축 (빠른 검색용)
+        self.synonym_index = {}
+        for key, synonyms in self.synonyms.items():
+            for synonym in synonyms:
+                if synonym not in self.synonym_index:
+                    self.synonym_index[synonym] = []
+                self.synonym_index[synonym].append(key)
+
+        self.logger.info(f"패턴 컴파일 완료: {len(self.compiled_morphology)}개 형태소 패턴, {len(self.synonym_index)}개 동의어 인덱스")
         
     def expand_query(self, query: str, methods: List[str] = None) -> Dict[str, Any]:
-        """쿼리를 다양한 방법으로 확장"""
+        """쿼리를 다양한 방법으로 확장 (캐싱됨)"""
         if methods is None:
             methods = self.DEFAULT_METHODS
-        
+
+        # 캐시 키 생성
+        cache_key = hashlib.md5(f"{query}:{':'.join(sorted(methods))}".encode()).hexdigest()
+        return self._expand_query_cached(cache_key, query, tuple(methods))
+
+    @lru_cache(maxsize=512)
+    def _expand_query_cached(self, cache_key: str, query: str, methods: Tuple[str]) -> Dict[str, Any]:
+        """실제 쿼리 확장 (캐싱됨)"""
         start_time = time.time()
+        methods = list(methods)  # 튜플을 리스트로 변환
         
         expansion_result = {
             'original_query': query,
@@ -130,12 +166,18 @@ class QueryExpansion:
             expansion_result['expanded_queries'] = unique_queries[1:]  # 원본 제외
             expansion_result['total_queries'] = len(unique_queries)
             expansion_result['processing_time'] = time.time() - start_time
-            
+
+            # 통계 업데이트
+            self.expansion_count += 1
+            self.total_expansion_time += expansion_result['processing_time']
+            for method in methods:
+                self.method_usage[method] += 1
+
             self.logger.info(
                 f"쿼리 확장 완료: '{query}' → {len(unique_queries)}개 쿼리 "
                 f"(시간: {expansion_result['processing_time']:.3f}초)"
             )
-            
+
             return expansion_result
             
         except Exception as e:
@@ -144,18 +186,21 @@ class QueryExpansion:
             return expansion_result
     
     def _expand_with_synonyms(self, query: str) -> List[str]:
-        """동의어 기반 쿼리 확장"""
+        """동의어 기반 쿼리 확장 (최적화)"""
         expanded = []
-        words = re.findall(self.WORD_PATTERN, query)
-        
+        words = self.compiled_word_pattern.findall(query)
+
+        # 동의어 인덱스 활용
         for word in words:
-            if word in self.synonyms:
-                for synonym in self.synonyms[word]:
-                    if synonym != word:  # 원본과 다른 경우만
-                        new_query = query.replace(word, synonym)
-                        if new_query != query:
-                            expanded.append(new_query)
-        
+            if word in self.synonym_index:
+                # 해당 단어가 속한 동의어 그룹들을 찾음
+                for synonym_key in self.synonym_index[word]:
+                    for synonym in self.synonyms[synonym_key]:
+                        if synonym != word:  # 원본과 다른 경우만
+                            new_query = query.replace(word, synonym)
+                            if new_query != query and new_query not in expanded:
+                                expanded.append(new_query)
+
         return self._limit_expansions(expanded, self.MAX_SYNONYMS_EXPANSIONS)
     
     def _expand_abbreviations(self, query: str) -> List[str]:
@@ -186,15 +231,15 @@ class QueryExpansion:
         return self._limit_expansions(expanded, self.MAX_PATTERN_EXPANSIONS)
     
     def _expand_morphology(self, query: str) -> List[str]:
-        """형태소 기반 확장 (한국어 특화)"""
+        """형태소 기반 확장 (한국어 특화, 컴파일된 패턴 사용)"""
         expanded = []
-        
-        for pattern, replacement in self.morphology_patterns:
-            new_query = re.sub(pattern, replacement, query)
-            if new_query != query:
+
+        for pattern, replacement in self.compiled_morphology:
+            new_query = pattern.sub(replacement, query)
+            if new_query != query and new_query not in expanded:
                 expanded.append(new_query)
-        
-        return self._limit_expansions(expanded, self.MAX_PATTERN_EXPANSIONS)
+
+        return self._limit_expansions(expanded, self.MAX_MORPHOLOGY_EXPANSIONS)
     
     def get_expansion_statistics(self, expansion_result: Dict[str, Any]) -> Dict[str, Any]:
         """확장 통계 정보"""
@@ -221,6 +266,22 @@ class QueryExpansion:
     def _limit_expansions(self, expansions: List[str], max_count: int) -> List[str]:
         """확장 결과를 최대 개수로 제한"""
         return expansions[:max_count]
+
+    def get_stats(self) -> Dict[str, Any]:
+        """성능 통계 반환"""
+        stats = {
+            'expansion_count': self.expansion_count,
+            'total_expansion_time': self.total_expansion_time,
+            'avg_expansion_time': self.total_expansion_time / self.expansion_count if self.expansion_count > 0 else 0.0,
+            'method_usage': dict(self.method_usage),
+            'cache_hits': self.cache_hits,
+            'cache_misses': self.cache_misses,
+            'cache_hit_rate': self.cache_hits / (self.cache_hits + self.cache_misses) * 100 if (self.cache_hits + self.cache_misses) > 0 else 0.0,
+            'cache_info': self._expand_query_cached.cache_info() if hasattr(self._expand_query_cached, 'cache_info') else None,
+            'synonym_index_size': len(self.synonym_index),
+            'compiled_patterns': len(self.compiled_morphology)
+        }
+        return stats
 
 # 테스트 함수
 def test_query_expansion():

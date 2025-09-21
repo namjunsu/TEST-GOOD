@@ -7,8 +7,10 @@ import torch
 import logging
 import time
 import re
+import hashlib
 from collections import Counter
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
+from functools import lru_cache
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import numpy as np
 
@@ -18,25 +20,38 @@ try:
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
 
+# Reranker 설정 상수
+DEFAULT_MODEL_NAME = "Dongjin-kr/ko-reranker"
+MAX_TOKEN_LENGTH = 512  # 토큰 최대 길이
+JACCARD_WEIGHT = 0.7  # Jaccard 유사도 가중치
+TF_WEIGHT = 0.3  # Term Frequency 가중치
+CACHE_SIZE = 1024  # 캐시 크기
+BATCH_SIZE = 32  # 배치 처리 크기
+
 class KoreanReranker:
     """한국어 문서 재정렬 모델"""
     
-    # 상수 정의
-    MAX_TOKEN_LENGTH = 512  # 토큰 최대 길이
-    JACCARD_WEIGHT = 0.7  # Jaccard 가중치
-    TF_WEIGHT = 0.3  # TF 가중치
-    
-    def __init__(self, model_name: str = "Dongjin-kr/ko-reranker", fallback_mode: bool = True):
+    def __init__(self, model_name: str = DEFAULT_MODEL_NAME,
+                 fallback_mode: bool = True,
+                 device: Optional[str] = None,
+                 batch_size: int = BATCH_SIZE):
         self.model_name = model_name
         self.model = None
         self.tokenizer = None
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.batch_size = batch_size
         self.logger = logging.getLogger(__name__)
         self.fallback_mode = fallback_mode
         
         # 오프라인 환경이므로 바로 키워드 기반 스코어링 사용
         self.use_keyword_scoring = True
         self.logger.info("오프라인 모드: 키워드 기반 스코어링 사용")
+
+        # 성능 통계
+        self.rerank_count = 0
+        self.total_rerank_time = 0.0
+        self.cache_hits = 0
+        self.cache_misses = 0
     
     def load_model(self):
         """Reranker 모델 로드"""
@@ -86,8 +101,30 @@ class KoreanReranker:
             self.use_keyword_scoring = True
             self.logger.info("키워드 기반 스코어링으로 폴백")
     
+    def _get_cache_key(self, query: str, document: str) -> str:
+        """캐시 키 생성"""
+        combined = f"{query}::{document[:200]}"  # 문서는 처음 200자만
+        return hashlib.md5(combined.encode()).hexdigest()
+
+    @lru_cache(maxsize=CACHE_SIZE)
+    def _cached_score(self, cache_key: str, query: str, document: str) -> float:
+        """캐시된 점수 계산"""
+        return self._compute_score_internal(query, document)
+
     def compute_score(self, query: str, document: str) -> float:
-        """쿼리와 문서 간 관련도 점수 계산"""
+        """쿼리와 문서 간 관련도 점수 계산 (캐시 적용)"""
+        cache_key = self._get_cache_key(query, document)
+
+        # 캐시 통계 업데이트
+        if cache_key in self._cached_score.__wrapped__.__dict__.get('cache', {}):
+            self.cache_hits += 1
+        else:
+            self.cache_misses += 1
+
+        return self._cached_score(cache_key, query, document)
+
+    def _compute_score_internal(self, query: str, document: str) -> float:
+        """실제 점수 계산 로직"""
         try:
             # 원본 cross-encoder 모델 사용
             if hasattr(self, 'model') and self.model is not None:
@@ -118,7 +155,7 @@ class KoreanReranker:
             pair,
             padding=True,
             truncation=True,
-            max_length=self.MAX_TOKEN_LENGTH,
+            max_length=MAX_TOKEN_LENGTH,
             return_tensors="pt"
         ).to(self.device)
         
@@ -172,7 +209,7 @@ class KoreanReranker:
             tf_score = 0.0
         
         # 최종 점수 (Jaccard + TF)
-        final_score = self.JACCARD_WEIGHT * jaccard_score + self.TF_WEIGHT * tf_score
+        final_score = JACCARD_WEIGHT * jaccard_score + TF_WEIGHT * tf_score
         
         return min(max(final_score, 0.0), 1.0)
     
@@ -240,10 +277,14 @@ class KoreanReranker:
                 reranked_results = reranked_results[:top_k]
             
             rerank_time = time.time() - start_time
-            
+
+            # 통계 업데이트
+            self.rerank_count += 1
+            self.total_rerank_time += rerank_time
+
             self.logger.info(
                 f"문서 재정렬 완료: {len(search_results)}개 → {len(reranked_results)}개 "
-                f"(시간: {rerank_time:.3f}초)"
+                f"(시간: {rerank_time:.3f}초, 캐시 히트율: {self.cache_hits/(self.cache_hits+self.cache_misses)*100:.1f}%)"
             )
             
             return reranked_results
@@ -251,7 +292,20 @@ class KoreanReranker:
         except Exception as e:
             self.logger.error(f"문서 재정렬 실패: {e}")
             return search_results
-    
+
+    def get_stats(self) -> Dict[str, Any]:
+        """성능 통계 반환"""
+        stats = {
+            'rerank_count': self.rerank_count,
+            'total_rerank_time': self.total_rerank_time,
+            'avg_rerank_time': self.total_rerank_time / self.rerank_count if self.rerank_count > 0 else 0.0,
+            'cache_hits': self.cache_hits,
+            'cache_misses': self.cache_misses,
+            'cache_hit_rate': self.cache_hits / (self.cache_hits + self.cache_misses) * 100 if (self.cache_hits + self.cache_misses) > 0 else 0.0,
+            'cached_score_info': self._cached_score.cache_info() if hasattr(self._cached_score, 'cache_info') else None
+        }
+        return stats
+
     def get_reranking_analysis(self, reranked_results: List[Dict[str, Any]]) -> Dict[str, Any]:
         """재정렬 분석 정보 제공"""
         if not reranked_results:

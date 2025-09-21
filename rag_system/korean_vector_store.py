@@ -7,10 +7,11 @@ import os
 import json
 import logging
 import numpy as np
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from pathlib import Path
 import pickle
 import hashlib
+from functools import lru_cache
 
 import faiss
 from sentence_transformers import SentenceTransformer
@@ -20,23 +21,37 @@ try:
 except ImportError:
     TfidfVectorizer = None
 
+# 설정 상수
+DEFAULT_MODEL_NAME = "jhgan/ko-sroberta-multitask"
+DEFAULT_EMBEDDING_DIM = 768  # ko-sroberta-multitask 기본 차원
+DEFAULT_INDEX_PATH = "rag_system/db/korean_vector_index.faiss"
+DEFAULT_DEVICE = "cpu"  # GPU 사용 시 "cuda"
+MAX_BATCH_SIZE = 512  # 배치 임베딩 최대 크기
+
+# 환경변수 설정 (한 번만)
+if "TRANSFORMERS_OFFLINE" not in os.environ:
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+    os.environ["HF_HUB_OFFLINE"] = "1"
+
 class KoreanVectorStore:
     """한국어 특화 FAISS 기반 벡터 스토어"""
     
-    # 상수 정의
-    DEFAULT_EMBEDDING_DIM = 768  # ko-sroberta-multitask 기본 차원
-    
-    def __init__(self, model_name: str = "jhgan/ko-sroberta-multitask", 
-                 index_path: str = None):
+    def __init__(self, model_name: str = DEFAULT_MODEL_NAME,
+                 index_path: str = None,
+                 device: str = DEFAULT_DEVICE,
+                 batch_size: int = MAX_BATCH_SIZE):
         self.model_name = model_name
-        self.index_path = Path(index_path) if index_path else Path("rag_system/db/korean_vector_index.faiss")
+        self.index_path = Path(index_path) if index_path else Path(DEFAULT_INDEX_PATH)
+        self.device = device
+        self.batch_size = batch_size
         self.metadata_path = self.index_path.with_suffix('.metadata.pkl')
         
         self.logger = logging.getLogger(__name__)
         
         # 임베딩 모델 로드
         self.embedding_model = None
-        self.embedding_dim = self.DEFAULT_EMBEDDING_DIM
+        self.embedding_dim = DEFAULT_EMBEDDING_DIM
+        self._cache_folder = None  # 캐시 폴더 저장
         
         # FAISS 인덱스
         self.index = None
@@ -44,42 +59,44 @@ class KoreanVectorStore:
         
         self._initialize()
     
+    @lru_cache(maxsize=1)
+    def _get_cache_folder(self) -> str:
+        """캐시 폴더 경로 가져오기 (캐시됨)"""
+        try:
+            from config import SENTENCE_TRANSFORMERS_CACHE
+            cache_folder = SENTENCE_TRANSFORMERS_CACHE
+        except ImportError:
+            cache_folder = "./models/sentence_transformers"
+
+        os.environ["TRANSFORMERS_CACHE"] = cache_folder
+        return cache_folder
+
     def _initialize(self):
         """임베딩 모델 및 인덱스 초기화 (완전 오프라인 모드)"""
         try:
             self.logger.info(f"한국어 임베딩 모델 로딩 중: {self.model_name}")
-            
-            # 완전 오프라인 모드 강제 설정
-            os.environ["TRANSFORMERS_OFFLINE"] = "1"
-            os.environ["HF_HUB_OFFLINE"] = "1"
-            
-            # config에서 경로 가져오기 (한 번만)
-            try:
-                from config import SENTENCE_TRANSFORMERS_CACHE
-                cache_folder = SENTENCE_TRANSFORMERS_CACHE
-            except ImportError:
-                cache_folder = "./models/sentence_transformers"
-            
-            os.environ["TRANSFORMERS_CACHE"] = cache_folder
+
+            # 캐시 폴더 설정 (한 번만)
+            self._cache_folder = self._get_cache_folder()
             
             try:
                 # 로컬 경로에서 직접 로드 시도
-                local_model_path = f"{cache_folder}/{self.model_name.replace('/', '--')}"
+                local_model_path = f"{self._cache_folder}/{self.model_name.replace('/', '--')}"
                 
                 if Path(local_model_path).exists():
                     self.logger.info(f"로컬 모델 경로 사용: {local_model_path}")
                     self.embedding_model = SentenceTransformer(
                         local_model_path,
-                        device='cpu'
+                        device=self.device
                     )
                 else:
                     # 로컬 캐시 폴더에서 로드 시도
-                    self.logger.info(f"캐시 폴더에서 로드 시도: {cache_folder}")
+                    self.logger.info(f"캐시 폴더에서 로드 시도: {self._cache_folder}")
                     
                     self.embedding_model = SentenceTransformer(
                         self.model_name,
-                        device='cpu',
-                        cache_folder=cache_folder
+                        device=self.device,
+                        cache_folder=self._cache_folder
                     )
                 
                 # 실제 임베딩 차원 확인
@@ -109,7 +126,7 @@ class KoreanVectorStore:
         """폴백 임베딩 함수 생성 (TF-IDF 기반)"""
         
         class FallbackEmbedder:
-            def __init__(self, dim=KoreanVectorStore.DEFAULT_EMBEDDING_DIM):
+            def __init__(self, dim=DEFAULT_EMBEDDING_DIM):
                 self.dim = dim
                 if TfidfVectorizer:
                     self.vectorizer = TfidfVectorizer(max_features=self.dim, stop_words=None)
@@ -138,7 +155,7 @@ class KoreanVectorStore:
                 return self.dim
         
         self.embedding_model = FallbackEmbedder()
-        self.embedding_dim = self.DEFAULT_EMBEDDING_DIM
+        self.embedding_dim = DEFAULT_EMBEDDING_DIM
     
     def create_new_index(self):
         """새 FAISS 인덱스 생성"""
@@ -184,14 +201,30 @@ class KoreanVectorStore:
             self.create_new_index()
     
     def encode_texts(self, texts: List[str]) -> np.ndarray:
-        """텍스트들을 벡터로 변환 (L2 정규화 포함)"""
+        """텍스트들을 벡터로 변환 (L2 정규화 포함, 배치 처리)"""
         try:
-            embeddings = self.embedding_model.encode(
-                texts,
-                convert_to_numpy=True,
-                show_progress_bar=True,
-                normalize_embeddings=True  # 코사인 유사도를 위한 정규화
-            )
+            # 대용량 텍스트를 배치로 처리
+            if len(texts) > self.batch_size:
+                all_embeddings = []
+                for i in range(0, len(texts), self.batch_size):
+                    batch = texts[i:i + self.batch_size]
+                    batch_embeddings = self.embedding_model.encode(
+                        batch,
+                        convert_to_numpy=True,
+                        show_progress_bar=False,  # 배치별로는 표시 안함
+                        normalize_embeddings=True,
+                        batch_size=self.batch_size
+                    )
+                    all_embeddings.append(batch_embeddings)
+                embeddings = np.vstack(all_embeddings)
+            else:
+                embeddings = self.embedding_model.encode(
+                    texts,
+                    convert_to_numpy=True,
+                    show_progress_bar=True,
+                    normalize_embeddings=True,  # 코사인 유사도를 위한 정규화
+                    batch_size=self.batch_size
+                )
             return embeddings.astype('float32')
         except Exception as e:
             self.logger.error(f"한국어 텍스트 인코딩 실패: {e}")

@@ -8,9 +8,11 @@ import json
 import logging
 import pickle
 import re
-from typing import List, Dict, Any, Optional
+import time
+from typing import List, Dict, Any, Optional, Tuple
 from pathlib import Path
 from collections import defaultdict
+from functools import lru_cache
 import math
 
 # kiwipiepy 토크나이저 (한국어 특화)
@@ -43,8 +45,9 @@ class KoreanTokenizer:
         else:
             self.use_kiwi = False
     
+    @lru_cache(maxsize=1024)
     def tokenize(self, text: str) -> List[str]:
-        """텍스트를 토큰으로 분할"""
+        """텍스트를 토큰으로 분할 (캐시됨)"""
         if not text or not text.strip():
             return []
         
@@ -85,7 +88,7 @@ class BM25Store:
         
         self.logger = logging.getLogger(__name__)
         self.tokenizer = KoreanTokenizer()
-        
+
         # BM25 인덱스
         self.documents = []  # 원본 문서들
         self.metadata = []   # 문서 메타데이터
@@ -94,6 +97,11 @@ class BM25Store:
         self.doc_lens = []   # 각 문서의 길이
         self.avg_doc_len = 0.0  # 평균 문서 길이
         self.vocab = set()   # 전체 어휘
+
+        # 성능 통계
+        self.search_count = 0
+        self.total_search_time = 0.0
+        self.index_time = 0.0
         
         self._load_or_create_index()
     
@@ -167,10 +175,11 @@ class BM25Store:
             raise
     
     def add_documents(self, texts: List[str], metadatas: List[Dict[str, Any]]):
-        """문서들을 인덱스에 추가"""
+        """문서들을 인덱스에 추가 (배치 처리)"""
         if len(texts) != len(metadatas):
             raise ValueError("텍스트와 메타데이터 개수가 일치하지 않습니다")
-        
+
+        start_time = time.time()
         try:
             for text, metadata in zip(texts, metadatas):
                 # 토큰화
@@ -196,12 +205,26 @@ class BM25Store:
             # 평균 문서 길이 재계산
             if self.doc_lens:
                 self.avg_doc_len = sum(self.doc_lens) / len(self.doc_lens)
-            
-            self.logger.info(f"{len(texts)}개 문서 BM25 인덱싱 완료 (총 {len(self.documents)}개)")
+
+            # 인덱싱 시간 기록
+            self.index_time += time.time() - start_time
+
+            self.logger.info(f"{len(texts)}개 문서 BM25 인덱싱 완료 (총 {len(self.documents)}개, {time.time() - start_time:.2f}초)")
             
         except Exception as e:
             self.logger.error(f"BM25 문서 추가 실패: {e}")
             raise
+
+    def get_stats(self) -> Dict[str, Any]:
+        """BM25 인덱스 통계 반환"""
+        return {
+            "total_documents": len(self.documents),
+            "vocab_size": len(self.vocab),
+            "avg_doc_length": self.avg_doc_len,
+            "total_index_time": self.index_time,
+            "search_count": self.search_count,
+            "avg_search_time": self.total_search_time / self.search_count if self.search_count > 0 else 0
+        }
     
     def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
         """BM25 스코어로 문서 검색"""

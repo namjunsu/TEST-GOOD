@@ -11,64 +11,102 @@ import logging
 import json
 import time
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, Dict, Any, List
-from collections import Counter
+from typing import Optional, Dict, Any, List, Tuple
+from collections import Counter, deque
 import traceback
-from logging.handlers import RotatingFileHandler
+from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
+import asyncio
+import threading
+import gzip
+import shutil
+from functools import lru_cache
+import os
 
 class ChatLogger:
-    """통합 로깅 시스템"""
-    
-    def __init__(self, log_dir: str = None):
+    """통합 로깅 시스템 - 성능 최적화 버전"""
+
+    def __init__(self, log_dir: str = None, buffer_size: int = 100, auto_archive: bool = True):
         """로거 초기화"""
         if log_dir is None:
             log_dir = Path(__file__).parent / 'logs'
-        
+
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(exist_ok=True)
-        
+        self.archive_dir = self.log_dir / 'archive'
+        self.archive_dir.mkdir(exist_ok=True)
+
         # 로그 파일 경로
         self.query_log = self.log_dir / 'queries.log'
         self.error_log = self.log_dir / 'errors.log'
         self.performance_log = self.log_dir / 'performance.log'
         self.system_log = self.log_dir / 'system.log'
-        
+
+        # 성능 최적화 설정
+        self.buffer_size = buffer_size
+        self.auto_archive = auto_archive
+        self.log_buffer = deque(maxlen=buffer_size)  # 메모리 버퍼
+        self.perf_cache = {}  # 성능 데이터 캐시
+        self.write_lock = threading.Lock()
+
+        # 비동기 쓰기를 위한 스레드
+        self.async_writer = None
+        self.write_queue = deque()
+        self.stop_writer = threading.Event()
+
         # 로거 설정
         self._setup_loggers()
-        
+
         # 세션 정보
         self.session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.query_count = 0
+
+        # 통계 캐시 (LRU)
+        self._stats_cache = {}
+        self._cache_timestamp = None
+        self._cache_ttl = 60  # 60초 캐시
+
+        # 자동 아카이빙 시작
+        if self.auto_archive:
+            self._start_auto_archiving()
         
     def _setup_loggers(self):
-        """각 용도별 로거 설정"""
-        
+        """각 용도별 로거 설정 - 최적화 버전"""
+
         # 포맷터 설정
         detailed_formatter = logging.Formatter(
             '%(asctime)s | %(levelname)s | %(name)s | %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
         )
-        
+
         json_formatter = logging.Formatter('%(message)s')
+
+        # 핸들러 중복 방지
+        for logger_name in ['query', 'error', 'performance', 'system']:
+            logger = logging.getLogger(logger_name)
+            logger.handlers = []  # 기존 핸들러 제거
         
-        # 1. 쿼리 로거 (사용자 질문/답변)
+        # 1. 쿼리 로거 (사용자 질문/답변) - 일별 로테이션
         self.query_logger = logging.getLogger('query')
         self.query_logger.setLevel(logging.INFO)
-        query_handler = RotatingFileHandler(
-            self.query_log, maxBytes=10*1024*1024, backupCount=5
+        query_handler = TimedRotatingFileHandler(
+            self.query_log, when='midnight', interval=1, backupCount=7,
+            encoding='utf-8'
         )
         query_handler.setFormatter(json_formatter)
+        query_handler.rotator = self._compress_log  # 압축 로테이터
         self.query_logger.addHandler(query_handler)
         
-        # 2. 에러 로거
+        # 2. 에러 로거 - 크기 기반 로테이션
         self.error_logger = logging.getLogger('error')
         self.error_logger.setLevel(logging.ERROR)
         error_handler = RotatingFileHandler(
-            self.error_log, maxBytes=5*1024*1024, backupCount=3
+            self.error_log, maxBytes=5*1024*1024, backupCount=3,
+            encoding='utf-8'
         )
         error_handler.setFormatter(detailed_formatter)
+        error_handler.rotator = self._compress_log
         self.error_logger.addHandler(error_handler)
         
         # 3. 성능 로거
@@ -89,17 +127,47 @@ class ChatLogger:
         system_handler.setFormatter(detailed_formatter)
         self.system_logger.addHandler(system_handler)
         
-    def log_query(self, 
-                  query: str, 
-                  response: str, 
+    def _compress_log(self, source, dest):
+        """로그 파일 압축"""
+        with open(source, 'rb') as f_in:
+            with gzip.open(f"{dest}.gz", 'wb') as f_out:
+                shutil.copyfileobj(f_in, f_out)
+        os.remove(source)
+
+    def _start_auto_archiving(self):
+        """자동 아카이빙 시작"""
+        def archive_old_logs():
+            while not self.stop_writer.is_set():
+                try:
+                    # 7일 이상 된 로그 압축
+                    cutoff = datetime.now() - timedelta(days=7)
+                    for log_file in self.log_dir.glob('*.log.*'):
+                        if not log_file.name.endswith('.gz'):
+                            file_time = datetime.fromtimestamp(log_file.stat().st_mtime)
+                            if file_time < cutoff:
+                                archive_path = self.archive_dir / log_file.name
+                                shutil.move(str(log_file), str(archive_path))
+                                self._compress_log(archive_path, archive_path)
+                except Exception as e:
+                    self.system_logger.error(f"Archive error: {e}")
+
+                time.sleep(3600)  # 1시간마다 체크
+
+        archive_thread = threading.Thread(target=archive_old_logs, daemon=True)
+        archive_thread.start()
+
+    def log_query(self,
+                  query: str,
+                  response: str,
                   search_mode: str = None,
                   processing_time: float = None,
-                  metadata: Dict[str, Any] = None) -> str:
-        """질문/답변 로깅"""
-        
+                  metadata: Dict[str, Any] = None,
+                  async_write: bool = True) -> str:
+        """질문/답변 로깅 - 비동기 옵션"""
+
         self.query_count += 1
         query_id = f"{self.session_id}_{self.query_count:04d}"
-        
+
         log_entry = {
             'query_id': query_id,
             'timestamp': datetime.now().isoformat(),
@@ -111,14 +179,56 @@ class ChatLogger:
             'processing_time': processing_time,
             'metadata': metadata or {}
         }
-        
-        # JSON 형태로 저장 (나중에 분석하기 쉽게)
-        self.query_logger.info(json.dumps(log_entry, ensure_ascii=False))
-        
+
+        # 버퍼에 추가
+        self.log_buffer.append(log_entry)
+
+        # 캐시 무효화
+        self._invalidate_cache()
+
+        if async_write:
+            # 비동기 쓰기 큐에 추가
+            self.write_queue.append(('query', log_entry))
+            self._ensure_async_writer()
+        else:
+            # 동기 쓰기
+            with self.write_lock:
+                self.query_logger.info(json.dumps(log_entry, ensure_ascii=False))
+
         # 시스템 로그에도 간단히 기록
-        self.system_logger.info(f"Query processed: {query_id} | Mode: {search_mode} | Time: {processing_time:.2f}s")
-        
+        if processing_time:
+            self.system_logger.info(f"Query processed: {query_id} | Mode: {search_mode} | Time: {processing_time:.2f}s")
+
         return query_id
+
+    def _ensure_async_writer(self):
+        """비동기 쓰기 스레드 확인 및 시작"""
+        if self.async_writer is None or not self.async_writer.is_alive():
+            self.async_writer = threading.Thread(target=self._async_write_worker, daemon=True)
+            self.async_writer.start()
+
+    def _async_write_worker(self):
+        """비동기 쓰기 워커"""
+        while not self.stop_writer.is_set() or self.write_queue:
+            if self.write_queue:
+                with self.write_lock:
+                    batch = []
+                    # 배치 처리 (최대 10개)
+                    for _ in range(min(10, len(self.write_queue))):
+                        batch.append(self.write_queue.popleft())
+
+                    for log_type, entry in batch:
+                        try:
+                            if log_type == 'query':
+                                self.query_logger.info(json.dumps(entry, ensure_ascii=False))
+                            elif log_type == 'error':
+                                self.error_logger.error(json.dumps(entry, ensure_ascii=False))
+                            elif log_type == 'perf':
+                                self.perf_logger.info(json.dumps(entry, ensure_ascii=False))
+                        except Exception as e:
+                            print(f"Async write error: {e}")
+            else:
+                time.sleep(0.1)  # 큐가 비어있으면 잠시 대기
     
     def log_error(self, 
                   error_type: str, 
@@ -143,8 +253,8 @@ class ChatLogger:
                        operation: str,
                        duration: float,
                        details: Dict[str, Any] = None):
-        """성능 로깅"""
-        
+        """성능 로깅 - 캐싱 추가"""
+
         perf_entry = {
             'timestamp': datetime.now().isoformat(),
             'session_id': self.session_id,
@@ -152,9 +262,16 @@ class ChatLogger:
             'duration_ms': duration * 1000,  # 밀리초로 변환
             'details': details or {}
         }
-        
-        self.perf_logger.info(json.dumps(perf_entry, ensure_ascii=False))
-        
+
+        # 성능 캐시 업데이트 (최근 100개만 유지)
+        if operation not in self.perf_cache:
+            self.perf_cache[operation] = deque(maxlen=100)
+        self.perf_cache[operation].append(duration)
+
+        # 비동기 로깅
+        self.write_queue.append(('perf', perf_entry))
+        self._ensure_async_writer()
+
         # 느린 작업 경고
         if duration > 5.0:
             self.system_logger.warning(f"Slow operation: {operation} took {duration:.2f}s")
@@ -176,26 +293,52 @@ class ChatLogger:
         
         self.system_logger.info(f"Search: {search_type} | Query: {query} | Results: {results_count}")
         
-    def get_statistics(self) -> Dict[str, Any]:
-        """세션 통계 및 패턴 분석"""
-        
+    def _invalidate_cache(self):
+        """캐시 무효화"""
+        self._stats_cache = {}
+        self._cache_timestamp = None
+
+    @lru_cache(maxsize=32)
+    def _get_cached_patterns(self, query_hash: str) -> Dict:
+        """패턴 분석 캐싱"""
+        return self._analyze_query_patterns_internal()
+
+    def get_statistics(self, use_cache: bool = True) -> Dict[str, Any]:
+        """세션 통계 및 패턴 분석 - 캐싱 지원"""
+
+        # 캐시 확인
+        if use_cache and self._cache_timestamp:
+            if (datetime.now() - self._cache_timestamp).seconds < self._cache_ttl:
+                return self._stats_cache
+
         # 기본 통계
         stats = {
             'session_id': self.session_id,
             'total_queries': self.query_count,
             'session_start': self.session_id,
+            'buffer_size': len(self.log_buffer),
+            'queue_size': len(self.write_queue),
             'log_files': {
                 'queries': str(self.query_log),
                 'errors': str(self.error_log),
                 'performance': str(self.performance_log),
                 'system': str(self.system_log)
+            },
+            'archive': {
+                'enabled': self.auto_archive,
+                'dir': str(self.archive_dir),
+                'archived_count': len(list(self.archive_dir.glob('*.gz')))
             }
         }
-        
+
         # 패턴 분석 추가
         pattern_stats = self.analyze_query_patterns()
         stats.update(pattern_stats)
-        
+
+        # 캐시 업데이트
+        self._stats_cache = stats
+        self._cache_timestamp = datetime.now()
+
         return stats
     
     def analyze_query_patterns(self, top_n: int = 20) -> Dict[str, Any]:
@@ -261,28 +404,94 @@ class ChatLogger:
         }
     
     def analyze_recent_queries(self, count: int = 10) -> list:
-        """최근 쿼리 분석"""
-        
+        """최근 쿼리 분석 - 버퍼 우선 사용"""
+
         recent_queries = []
-        
-        try:
-            with open(self.query_log, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-                for line in lines[-count:]:
-                    try:
-                        entry = json.loads(line)
-                        recent_queries.append({
-                            'query': entry['query'],
-                            'time': entry.get('processing_time', 0),
-                            'mode': entry.get('search_mode', 'unknown'),
-                            'timestamp': entry['timestamp']
-                        })
-                    except:
-                        continue
-        except FileNotFoundError:
-            pass
-        
-        return recent_queries
+
+        # 먼저 메모리 버퍼에서 가져오기
+        buffer_queries = list(self.log_buffer)[-count:]
+        for entry in buffer_queries:
+            recent_queries.append({
+                'query': entry.get('query', ''),
+                'time': entry.get('processing_time', 0),
+                'mode': entry.get('search_mode', 'unknown'),
+                'timestamp': entry.get('timestamp', '')
+            })
+
+        # 부족하면 파일에서 추가
+        if len(recent_queries) < count:
+            try:
+                with open(self.query_log, 'r', encoding='utf-8') as f:
+                    # 파일 끝에서부터 효율적으로 읽기
+                    f.seek(0, 2)  # 파일 끝으로
+                    file_size = f.tell()
+
+                    # 대략적인 라인 크기로 읽을 위치 계산 (각 라인 ~500bytes 가정)
+                    read_size = min(file_size, count * 500)
+                    f.seek(max(0, file_size - read_size))
+
+                    lines = f.read().splitlines()
+                    for line in lines[-(count - len(recent_queries)):]:
+                        try:
+                            entry = json.loads(line)
+                            recent_queries.insert(0, {
+                                'query': entry['query'],
+                                'time': entry.get('processing_time', 0),
+                                'mode': entry.get('search_mode', 'unknown'),
+                                'timestamp': entry['timestamp']
+                            })
+                        except:
+                            continue
+            except (FileNotFoundError, IOError):
+                pass
+
+        return recent_queries[-count:]  # 최근 count개만 반환
+
+    def get_performance_summary(self) -> Dict[str, Any]:
+        """성능 요약 통계"""
+        if not self.perf_cache:
+            return {'message': 'No performance data available'}
+
+        summary = {
+            'operations': {},
+            'slow_operations': [],
+            'average_times': {}
+        }
+
+        for op, times in self.perf_cache.items():
+            if times:
+                avg_time = sum(times) / len(times)
+                summary['average_times'][op] = round(avg_time * 1000, 2)  # ms
+
+                # 느린 작업 식별
+                if avg_time > 1.0:
+                    summary['slow_operations'].append({
+                        'operation': op,
+                        'avg_time_ms': round(avg_time * 1000, 2),
+                        'count': len(times)
+                    })
+
+        return summary
+
+    def cleanup(self):
+        """리소스 정리"""
+        self.stop_writer.set()
+
+        # 남은 큐 처리
+        if self.write_queue:
+            print(f"Flushing {len(self.write_queue)} pending log entries...")
+            while self.write_queue:
+                with self.write_lock:
+                    log_type, entry = self.write_queue.popleft()
+                    if log_type == 'query':
+                        self.query_logger.info(json.dumps(entry, ensure_ascii=False))
+
+        # 핸들러 정리
+        for logger_name in ['query', 'error', 'performance', 'system']:
+            logger = logging.getLogger(logger_name)
+            for handler in logger.handlers:
+                handler.close()
+            logger.handlers = []
 
 
 class TimerContext:

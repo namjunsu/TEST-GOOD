@@ -3,7 +3,10 @@
 """
 
 import re
-from typing import List, Tuple
+import logging
+import time
+from functools import lru_cache
+from typing import List, Tuple, Dict, Any
 
 class QueryOptimizer:
     """쿼리 최적화 및 가중치 자동 조정"""
@@ -29,21 +32,37 @@ class QueryOptimizer:
     
     def __init__(self):
         self.tokenizer = None  # 나중에 한국어 토크나이저 연결
+        self.logger = logging.getLogger(__name__)
         self._init_cleaning_patterns()
+        self._compile_patterns()
+
+        # 성능 통계
+        self.analyze_count = 0
+        self.total_analyze_time = 0.0
+        self.clean_count = 0
+        self.total_clean_time = 0.0
+        self.weight_count = 0
+        self.total_weight_time = 0.0
     
-    def analyze_query(self, query: str) -> dict:
+    def analyze_query(self, query: str) -> Dict[str, Any]:
         """쿼리 분석 및 특성 추출"""
+        start_time = time.time()
+
         # 간단한 토큰화 (공백 기준)
         tokens = query.strip().split()
-        
-        # 숫자/모델명 패턴 감지
-        has_numbers = bool(re.search(r'\d+', query))
-        has_model_codes = bool(re.search(r'[A-Z]+-[0-9A-Z]+', query))
-        has_amounts = bool(re.search(r'[\d,]+원|금액|비용|가격', query))
-        
+
+        # 컴파일된 패턴으로 감지
+        has_numbers = bool(self.number_pattern.search(query))
+        has_model_codes = bool(self.model_code_pattern.search(query))
+        has_amounts = bool(self.amount_pattern.search(query))
+
         # 질문 유형 추정
         question_type = self._classify_question_type(query)
-        
+
+        # 통계 업데이트
+        self.analyze_count += 1
+        self.total_analyze_time += time.time() - start_time
+
         return {
             'token_count': len(tokens),
             'has_numbers': has_numbers,
@@ -115,46 +134,88 @@ class QueryOptimizer:
             (r'하나요', ''),
             (r'나오나요', ' 포함'),
         ]
-    
+
+    def _compile_patterns(self):
+        """정규식 패턴 컴파일"""
+        # 패턴 컴파일
+        self.compiled_complex = [(re.compile(p), r) for p, r in self.complex_patterns]
+        self.compiled_basic = [(re.compile(p), r) for p, r in self.basic_patterns]
+        self.compiled_particles = [(re.compile(p), r) for p, r in self.particle_patterns]
+
+        # 분석용 컴파일 패턴
+        self.number_pattern = re.compile(r'\d+')
+        self.model_code_pattern = re.compile(r'[A-Z]+-[0-9A-Z]+')
+        self.amount_pattern = re.compile(r'[\d,]+원|금액|비용|가격')
+
+        self.logger.info(f"패턴 컴파일 완료: {len(self.compiled_complex) + len(self.compiled_basic) + len(self.compiled_particles)}개")
+
+    @lru_cache(maxsize=512)
     def clean_query_for_search(self, query: str) -> str:
         """한국어 조사 제거 및 키워드 추출"""
+        start_time = time.time()
         cleaned = query
-        
-        # 패턴 적용
-        for pattern, replacement in self.complex_patterns + self.basic_patterns + self.particle_patterns:
-            cleaned = re.sub(pattern, replacement, cleaned)
-        
+
+        # 컴파일된 패턴 적용
+        for pattern, replacement in self.compiled_complex + self.compiled_basic + self.compiled_particles:
+            cleaned = pattern.sub(replacement, cleaned)
+
         # 다중 공백 정리
         cleaned = re.sub(r'\s+', ' ', cleaned).strip()
-        
+
+        # 통계 업데이트
+        self.clean_count += 1
+        self.total_clean_time += time.time() - start_time
+
         return cleaned
     
     def get_optimal_weights(self, query: str) -> Tuple[float, float]:
         """쿼리 특성에 따른 최적 가중치 반환"""
+        start_time = time.time()
         analysis = self.analyze_query(query)
-        
+
         # 기본 가중치
         vector_weight = self.DEFAULT_VECTOR_WEIGHT
         bm25_weight = self.DEFAULT_BM25_WEIGHT
-        
+
         # 토큰 수가 적으면 BM25 가중치 상향 (정확한 키워드 매칭 중요)
         if analysis['token_count'] <= self.SHORT_QUERY_TOKEN_THRESHOLD:
             vector_weight = self.SHORT_QUERY_VECTOR_WEIGHT
             bm25_weight = self.SHORT_QUERY_BM25_WEIGHT
-        
+
         # 모델명/코드가 있으면 BM25 가중치 상향
         if analysis['has_model_codes']:
             vector_weight = self.MODEL_CODE_VECTOR_WEIGHT
             bm25_weight = self.MODEL_CODE_BM25_WEIGHT
-        
+
         # 금액 질문이면 BM25 가중치 상향 (정확한 숫자 매칭)
         if analysis['question_type'] == 'amount':
             vector_weight = self.AMOUNT_QUERY_VECTOR_WEIGHT
             bm25_weight = self.AMOUNT_QUERY_BM25_WEIGHT
-        
+
         # 일반적인 의미 질문이면 벡터 가중치 상향
         if analysis['question_type'] == 'general' and analysis['token_count'] > self.LONG_QUERY_TOKEN_THRESHOLD:
             vector_weight = self.GENERAL_LONG_VECTOR_WEIGHT
             bm25_weight = self.GENERAL_LONG_BM25_WEIGHT
-        
+
+        # 통계 업데이트
+        self.weight_count += 1
+        self.total_weight_time += time.time() - start_time
+
+        self.logger.debug(f"Query: {query[:50]}... | Vector: {vector_weight:.2f}, BM25: {bm25_weight:.2f}")
         return vector_weight, bm25_weight
+
+    def get_stats(self) -> Dict[str, Any]:
+        """성능 통계 반환"""
+        stats = {
+            'analyze_count': self.analyze_count,
+            'total_analyze_time': self.total_analyze_time,
+            'avg_analyze_time': self.total_analyze_time / self.analyze_count if self.analyze_count > 0 else 0.0,
+            'clean_count': self.clean_count,
+            'total_clean_time': self.total_clean_time,
+            'avg_clean_time': self.total_clean_time / self.clean_count if self.clean_count > 0 else 0.0,
+            'weight_count': self.weight_count,
+            'total_weight_time': self.total_weight_time,
+            'avg_weight_time': self.total_weight_time / self.weight_count if self.weight_count > 0 else 0.0,
+            'cache_info': self.clean_query_for_search.cache_info() if hasattr(self.clean_query_for_search, 'cache_info') else None
+        }
+        return stats

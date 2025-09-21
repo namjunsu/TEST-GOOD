@@ -12,9 +12,9 @@ import threading
 from typing import Dict, Set
 
 class AutoIndexer:
-    """자동 인덱싱 클래스"""
-    
-    def __init__(self, docs_dir: str = "docs", check_interval: int = 30):
+    """자동 인덱싱 클래스 - 성능 최적화 버전"""
+
+    def __init__(self, docs_dir: str = "docs", check_interval: int = 30, max_retries: int = 3):
         """
         Args:
             docs_dir: 문서 디렉토리 경로
@@ -24,11 +24,26 @@ class AutoIndexer:
         self.check_interval = check_interval
         self.index_file = Path("rag_system/file_index.json")
         self.index_file.parent.mkdir(exist_ok=True)
-        
+
         # 파일 인덱스 로드
         self.file_index = self._load_index()
         self.is_running = False
         self.thread = None
+
+        # 성능 최적화를 위한 해시 캐시
+        self.hash_cache = {}  # 파일 경로 -> (hash, mtime) 매핑
+        self.last_check_time = 0
+
+        # 에러 처리 및 재시도 관련
+        self.max_retries = max_retries
+        self.failed_files = {}  # 파일 경로 -> (실패 횟수, 마지막 에러)
+        self.error_history = []  # 최근 에러 기록 (최대 100개)
+
+        # 폴더 목록 상수화 (중복 제거)
+        self.YEAR_FOLDERS = [f"year_{year}" for year in range(2014, 2026)]
+        self.CATEGORY_FOLDERS = ['category_purchase', 'category_repair', 'category_review',
+                                'category_disposal', 'category_consumables']
+        self.SPECIAL_FOLDERS = ['recent', 'archive', 'assets']
         
     def _load_index(self) -> Dict:
         """기존 인덱스 로드"""
@@ -50,12 +65,47 @@ class AutoIndexer:
             json.dump(self.file_index, f, indent=2, ensure_ascii=False)
     
     def _get_file_hash(self, file_path: Path) -> str:
-        """파일 해시 계산"""
+        """파일 해시 계산 (캐싱 및 최적화)"""
+        # 수정 시간 기반 빠른 체크
+        current_mtime = file_path.stat().st_mtime
+        cache_key = str(file_path)
+
+        # 캐시에 있고 수정 시간이 같으면 캐시 사용
+        if cache_key in self.hash_cache:
+            cached_hash, cached_mtime = self.hash_cache[cache_key]
+            if cached_mtime == current_mtime:
+                return cached_hash
+
+        # 실제 해시 계산 (큰 파일은 처음 1MB만 샘플링)
+        file_size = file_path.stat().st_size
         hasher = hashlib.md5()
+
         with open(file_path, 'rb') as f:
-            for chunk in iter(lambda: f.read(4096), b""):
-                hasher.update(chunk)
-        return hasher.hexdigest()
+            if file_size > 10 * 1024 * 1024:  # 10MB 이상
+                # 처음, 중간, 끝 부분만 샘플링
+                f.seek(0)
+                hasher.update(f.read(1024 * 1024))  # 처음 1MB
+
+                f.seek(file_size // 2)
+                hasher.update(f.read(1024 * 1024))  # 중간 1MB
+
+                f.seek(max(0, file_size - 1024 * 1024))
+                hasher.update(f.read())  # 마지막 1MB
+
+                # 파일 크기와 수정 시간도 포함
+                hasher.update(str(file_size).encode())
+                hasher.update(str(current_mtime).encode())
+            else:
+                # 작은 파일은 전체 읽기
+                for chunk in iter(lambda: f.read(4096), b""):
+                    hasher.update(chunk)
+
+        file_hash = hasher.hexdigest()
+
+        # 캐시 업데이트
+        self.hash_cache[cache_key] = (file_hash, current_mtime)
+
+        return file_hash
     
     def _rename_file_with_underscore(self, file_path: Path) -> Path:
         """파일명의 공백을 언더스코어로 변경"""
@@ -82,36 +132,33 @@ class AutoIndexer:
                 return file_path
         return file_path
 
+    def _get_search_paths(self) -> list:
+        """검색 경로 목록 반환 (중복 제거)"""
+        search_paths = [self.docs_dir]
+
+        # 모든 폴더 타입 순회
+        all_folders = self.YEAR_FOLDERS + self.CATEGORY_FOLDERS + self.SPECIAL_FOLDERS
+
+        for folder_name in all_folders:
+            folder_path = self.docs_dir / folder_name
+            if folder_path.exists():
+                search_paths.append(folder_path)
+
+        return search_paths
+
     def check_new_files(self) -> Dict:
-        """새 파일 체크"""
+        """새 파일 체크 (성능 최적화)"""
+        start_time = time.time()
         new_files = []
         modified_files = []
         deleted_files = []
 
-        # 현재 파일 목록 (새로운 폴더 구조 포함)
+        # 현재 파일 목록
         current_files = {}
-        search_paths = [self.docs_dir]
+        search_paths = self._get_search_paths()
 
-        # 연도별 폴더 추가
-        for year in range(2014, 2026):
-            year_folder = self.docs_dir / f"year_{year}"
-            if year_folder.exists():
-                search_paths.append(year_folder)
-
-        # 카테고리별 폴더 추가
-        for folder in ['category_purchase', 'category_repair', 'category_review',
-                      'category_disposal', 'category_consumables']:
-            cat_folder = self.docs_dir / folder
-            if cat_folder.exists():
-                search_paths.append(cat_folder)
-
-        # 특별 폴더 추가
-        for folder in ['recent', 'archive', 'assets']:
-            special_folder = self.docs_dir / folder
-            if special_folder.exists():
-                search_paths.append(special_folder)
-
-        # 모든 경로에서 파일 검색
+        # 모든 경로에서 파일 검색 (병렬 처리 가능)
+        file_count = 0
         for path in search_paths:
             for ext in ['*.pdf', '*.txt']:
                 for file_path in path.glob(ext):
@@ -119,14 +166,41 @@ class AutoIndexer:
                     file_path = self._rename_file_with_underscore(file_path)
 
                     abs_path = file_path.resolve()
-                    if str(abs_path) not in current_files:
-                        file_hash = self._get_file_hash(file_path)
-                        current_files[str(abs_path)] = {
-                            'hash': file_hash,
-                            'size': file_path.stat().st_size,
-                            'modified': file_path.stat().st_mtime,
-                            'added': datetime.now().isoformat()
-                        }
+                    abs_path_str = str(abs_path)
+
+                    # 중복 체크 (심볼릭 링크 방지)
+                    if abs_path_str not in current_files:
+                        try:
+                            stat = file_path.stat()
+                            # 빠른 체크: 크기와 수정 시간만으로 먼저 판단
+                            quick_check = f"{stat.st_size}_{stat.st_mtime}"
+
+                            # 기존 파일과 비교
+                            old_info = self.file_index['files'].get(abs_path_str, {})
+                            old_quick_check = f"{old_info.get('size', 0)}_{old_info.get('modified', 0)}"
+
+                            # 빠른 체크가 다른 경우만 해시 계산
+                            if quick_check != old_quick_check or abs_path_str not in self.file_index['files']:
+                                file_hash = self._get_file_hash(file_path)
+                            else:
+                                file_hash = old_info.get('hash', '')
+
+                            current_files[abs_path_str] = {
+                                'hash': file_hash,
+                                'size': stat.st_size,
+                                'modified': stat.st_mtime,
+                                'added': old_info.get('added', datetime.now().isoformat())
+                            }
+                            file_count += 1
+
+                        except (OSError, IOError) as e:
+                            print(f"  ⚠️ 파일 접근 오류: {file_path.name} - {e}")
+                            self._handle_file_error(abs_path_str, e)
+
+        # 성능 로깅
+        if file_count > 100:
+            elapsed = time.time() - start_time
+            print(f"  ⏱️ {file_count}개 파일 스캔: {elapsed:.1f}초")
         
         # 새 파일 감지
         for file_path, info in current_files.items():
@@ -160,76 +234,35 @@ class AutoIndexer:
         }
     
     def _trigger_indexing(self, files: list):
-        """인덱싱 트리거"""
+        """인덱싱 트리거 - 효율적인 RAG 인스턴스 재사용"""
         print(f"\n🔄 인덱싱 시작: {len(files)}개 파일")
-        
-        # 여기에 실제 인덱싱 로직 호출
-        # perfect_rag의 인덱싱 메서드 호출
+
         try:
-            # Streamlit 세션에서 기존 RAG 인스턴스 가져오기
-            try:
-                import streamlit as st
-                if 'rag' in st.session_state:
-                    # 기존 인스턴스의 캐시만 업데이트
-                    print("♻️ 기존 RAG 인스턴스 캐시 업데이트")
-                    rag = st.session_state.rag
-                    # 파일 목록 갱신 (새로운 폴더 구조 포함)
-                    rag.pdf_files = []
-                    rag.txt_files = []
+            # 기존 RAG 인스턴스 재사용 시도
+            rag = self._get_or_create_rag_instance()
 
-                    # 루트 폴더
-                    rag.pdf_files.extend(list(rag.docs_dir.glob('*.pdf')))
-                    rag.txt_files.extend(list(rag.docs_dir.glob('*.txt')))
+            # 파일 변경사항만 선택적 업데이트
+            if rag:
+                print("📝 변경된 파일만 업데이트...")
+                updated_count = self._update_rag_files(rag, files)
 
-                    # 연도별 폴더
-                    for year in range(2014, 2026):
-                        year_folder = rag.docs_dir / f"year_{year}"
-                        if year_folder.exists():
-                            rag.pdf_files.extend(list(year_folder.glob('*.pdf')))
-                            rag.txt_files.extend(list(year_folder.glob('*.txt')))
-
-                    # 카테고리별 폴더
-                    for folder in ['category_purchase', 'category_repair', 'category_review',
-                                 'category_disposal', 'category_consumables']:
-                        cat_folder = rag.docs_dir / folder
-                        if cat_folder.exists():
-                            rag.pdf_files.extend(list(cat_folder.glob('*.pdf')))
-                            rag.txt_files.extend(list(cat_folder.glob('*.txt')))
-
-                    # 특별 폴더
-                    for folder in ['recent', 'archive', 'assets']:
-                        special_folder = rag.docs_dir / folder
-                        if special_folder.exists():
-                            rag.pdf_files.extend(list(special_folder.glob('*.pdf')))
-                            rag.txt_files.extend(list(special_folder.glob('*.txt')))
-
-                    # 중복 제거
-                    rag.pdf_files = list(set(rag.pdf_files))
-                    rag.txt_files = list(set(rag.txt_files))
-                    rag.all_files = rag.pdf_files + rag.txt_files
-
-                    # 메타데이터 캐시만 재구축
+                # 메타데이터 캐시 부분 업데이트
+                if updated_count > 0:
+                    print(f"♻️ 메타데이터 캐시 재구축 ({updated_count}개 파일 변경)")
+                    # 메타데이터 캐시 재구축 (효율적인 방식)
                     rag._build_metadata_cache()
                 else:
-                    # 세션에 없으면 새로 생성
-                    from perfect_rag import PerfectRAG
-                    print("🆕 새 RAG 인스턴스 생성")
-                    rag = PerfectRAG()
-                    st.session_state.rag = rag
-            except ImportError:
-                # Streamlit 환경이 아닌 경우 (CLI 실행)
-                from perfect_rag import PerfectRAG
-                print("🆕 새 RAG 인스턴스 생성 (CLI 모드)")
-                rag = PerfectRAG()
-            
+                    print("✅ 변경사항 없음 - 캐시 유지")
+
             print(f"✅ 인덱싱 완료!")
-            
+
             # 통계 출력
             stats = self.get_statistics()
             print(f"📊 전체 파일: PDF {stats['pdf_count']}개, TXT {stats['txt_count']}개")
-            
+
         except Exception as e:
             print(f"❌ 인덱싱 실패: {e}")
+            self._handle_indexing_error(files, e)
     
     def get_statistics(self) -> Dict:
         """통계 정보"""
@@ -255,11 +288,21 @@ class AutoIndexer:
         def run():
             while self.is_running:
                 try:
+                    # 실패한 파일 재시도 (매 5번째 주기마다)
+                    if hasattr(self, '_check_count'):
+                        self._check_count += 1
+                    else:
+                        self._check_count = 1
+
+                    if self._check_count % 5 == 0 and self.failed_files:
+                        self._retry_failed_files()
+
                     result = self.check_new_files()
                     if result['new'] or result['modified']:
                         print(f"📁 변경 감지: 새 파일 {len(result['new'])}개, 수정 {len(result['modified'])}개")
                 except Exception as e:
                     print(f"❌ 체크 중 오류: {e}")
+                    self._handle_indexing_error([], e)
                 
                 time.sleep(self.check_interval)
         
@@ -273,10 +316,176 @@ class AutoIndexer:
             self.thread.join(timeout=5)
         print("⏹️ 자동 인덱싱 중지")
     
+    def _get_or_create_rag_instance(self):
+        """RAG 인스턴스 획득 또는 생성 - 싱글톤 패턴"""
+        try:
+            # Streamlit 세션에서 기존 인스턴스 확인
+            import streamlit as st
+            if hasattr(st, 'session_state') and 'rag' in st.session_state:
+                print("♻️ 기존 RAG 인스턴스 재사용")
+                return st.session_state.rag
+            else:
+                # 세션에 없으면 새로 생성하고 저장
+                from perfect_rag import PerfectRAG
+                print("🆕 새 RAG 인스턴스 생성 (Streamlit)")
+                rag = PerfectRAG()
+                st.session_state.rag = rag
+                return rag
+        except ImportError:
+            # CLI 모드에서는 클래스 변수 사용
+            if not hasattr(self, '_rag_instance'):
+                from perfect_rag import PerfectRAG
+                print("🆕 새 RAG 인스턴스 생성 (CLI)")
+                self._rag_instance = PerfectRAG()
+            else:
+                print("♻️ 기존 RAG 인스턴스 재사용 (CLI)")
+            return self._rag_instance
+
+    def _update_rag_files(self, rag, changed_files: list) -> int:
+        """RAG 파일 목록 효율적 업데이트"""
+        updated_count = 0
+
+        # 변경된 파일들의 경로 집합
+        changed_paths = set(changed_files)
+
+        # 기존 파일 집합
+        existing_pdfs = set(str(p) for p in rag.pdf_files)
+        existing_txts = set(str(p) for p in rag.txt_files)
+
+        # 새로운 파일만 추가
+        for file_path in changed_paths:
+            path_obj = Path(file_path)
+            if path_obj.suffix.lower() == '.pdf' and file_path not in existing_pdfs:
+                rag.pdf_files.append(path_obj)
+                updated_count += 1
+            elif path_obj.suffix.lower() == '.txt' and file_path not in existing_txts:
+                rag.txt_files.append(path_obj)
+                updated_count += 1
+
+        # 중복 제거 및 전체 파일 목록 업데이트
+        if updated_count > 0:
+            rag.pdf_files = list(set(rag.pdf_files))
+            rag.txt_files = list(set(rag.txt_files))
+            rag.all_files = rag.pdf_files + rag.txt_files
+
+        return updated_count
+
+    def _handle_file_error(self, file_path: str, error: Exception):
+        """파일 에러 처리 및 기록"""
+        # 실패 횟수 증가
+        if file_path not in self.failed_files:
+            self.failed_files[file_path] = [1, str(error)]
+        else:
+            self.failed_files[file_path][0] += 1
+            self.failed_files[file_path][1] = str(error)
+
+        # 에러 이력 추가
+        self.error_history.append({
+            'timestamp': datetime.now().isoformat(),
+            'file': file_path,
+            'error': str(error),
+            'retry_count': self.failed_files[file_path][0]
+        })
+
+        # 이력 크기 제한
+        if len(self.error_history) > 100:
+            self.error_history = self.error_history[-100:]
+
+        # 재시도 한계 도달 시 경고
+        if self.failed_files[file_path][0] >= self.max_retries:
+            print(f"  🚫 파일 처리 포기: {Path(file_path).name} (재시도 {self.max_retries}회 실패)")
+
+    def _handle_indexing_error(self, files: list, error: Exception):
+        """인덱싱 에러 처리 및 복구"""
+        print(f"\n🔧 인덱싱 오류 복구 시도...")
+
+        # 에러 로깅
+        self.error_history.append({
+            'timestamp': datetime.now().isoformat(),
+            'type': 'indexing_error',
+            'files_count': len(files),
+            'error': str(error)
+        })
+
+        # 복구 전략
+        try:
+            # 1. RAG 인스턴스 재생성 시도
+            print("  1️⃣ RAG 인스턴스 재생성 시도...")
+            if hasattr(self, '_rag_instance'):
+                del self._rag_instance
+
+            # 2. 파일별 개별 처리 시도
+            print(f"  2️⃣ {len(files)}개 파일 개별 처리 시도...")
+            success_count = 0
+
+            for file_path in files[:5]:  # 처음 5개만 재시도
+                try:
+                    # 개별 파일 처리
+                    self._process_single_file(file_path)
+                    success_count += 1
+                except Exception as file_error:
+                    self._handle_file_error(file_path, file_error)
+
+            if success_count > 0:
+                print(f"  ✅ 부분 복구 성공: {success_count}/{min(5, len(files))}개 파일")
+            else:
+                print(f"  ⚠️ 복구 실패 - 다음 주기에 재시도")
+
+        except Exception as recovery_error:
+            print(f"  ❌ 복구 실패: {recovery_error}")
+
+    def _process_single_file(self, file_path: str):
+        """단일 파일 처리 (에러 복구용)"""
+        # 간단한 메타데이터만 업데이트
+        path_obj = Path(file_path)
+        if path_obj.exists():
+            stat = path_obj.stat()
+            file_hash = self._get_file_hash(path_obj)
+
+            self.file_index['files'][file_path] = {
+                'hash': file_hash,
+                'size': stat.st_size,
+                'modified': stat.st_mtime,
+                'added': datetime.now().isoformat()
+            }
+
+    def _retry_failed_files(self):
+        """실패한 파일들 재시도"""
+        if not self.failed_files:
+            return
+
+        # 재시도 대상 선정 (재시도 횟수가 한계 미만)
+        retry_candidates = [
+            path for path, (count, _) in self.failed_files.items()
+            if count < self.max_retries
+        ]
+
+        if retry_candidates:
+            print(f"\n🔄 실패한 파일 재시도: {len(retry_candidates)}개")
+
+            for file_path in retry_candidates:
+                try:
+                    self._process_single_file(file_path)
+                    # 성공 시 실패 목록에서 제거
+                    del self.failed_files[file_path]
+                    print(f"  ✅ 재시도 성공: {Path(file_path).name}")
+                except Exception as e:
+                    self._handle_file_error(file_path, e)
+
+    def get_error_statistics(self) -> Dict:
+        """에러 통계 반환"""
+        return {
+            'failed_files_count': len(self.failed_files),
+            'failed_files': list(self.failed_files.keys())[:10],  # 처음 10개만
+            'recent_errors': self.error_history[-5:] if self.error_history else [],
+            'total_errors': len(self.error_history)
+        }
+
     def force_reindex(self):
         """강제 재인덱싱"""
         print("🔄 강제 재인덱싱 시작...")
         self.file_index = {'files': {}, 'last_update': None}
+        self.failed_files = {}  # 실패 목록 초기화
         result = self.check_new_files()
         print(f"✅ 재인덱싱 완료: {result['total']}개 파일")
         return result

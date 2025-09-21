@@ -8,58 +8,188 @@
 
 import json
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Set, Tuple
 import re
 from datetime import datetime
+import threading
+import hashlib
+from collections import defaultdict
+import time
+import os
+import fcntl  # For file locking on Unix systems
 
 class MetadataManager:
-    def __init__(self, db_path: str = "document_metadata.json"):
+    def __init__(self, db_path: str = "document_metadata.json", cache_ttl: int = 300):
         self.db_path = Path(db_path)
+        self.cache_ttl = cache_ttl  # Cache time-to-live in seconds
+
+        # Performance optimization
         self.metadata = self.load_metadata()
+        self._last_load_time = time.time()
+        self._cache = {}  # Query result cache
+        self._index = self._build_indexes()  # Build indexes for fast search
+
+        # Thread safety
+        self._lock = threading.RLock()
+        self._write_lock = threading.Lock()
+
+        # Change tracking
+        self._dirty = False  # Track if data needs saving
+        self._last_save_time = time.time()
 
     def load_metadata(self) -> Dict:
-        """메타데이터 DB 로드"""
-        if self.db_path.exists():
-            with open(self.db_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        return {}
+        """메타데이터 DB 로드 - 에러 처리 및 백업 지원"""
+        if not self.db_path.exists():
+            return {}
 
-    def save_metadata(self):
-        """메타데이터 DB 저장"""
-        with open(self.db_path, 'w', encoding='utf-8') as f:
-            json.dump(self.metadata, f, ensure_ascii=False, indent=2)
+        try:
+            # 파일 잠금으로 동시 접근 방지
+            with open(self.db_path, 'r', encoding='utf-8') as f:
+                try:
+                    # Unix 시스템에서 파일 잠금
+                    fcntl.flock(f.fileno(), fcntl.LOCK_SH)
+                    data = json.load(f)
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                    return data
+                except (ImportError, AttributeError):
+                    # Windows 또는 fcntl 없는 환경
+                    return json.load(f)
+        except json.JSONDecodeError as e:
+            # 손상된 JSON 처리
+            print(f"⚠️ 메타데이터 파일 손상 감지: {e}")
+            backup_path = self.db_path.with_suffix('.backup')
+            if backup_path.exists():
+                print("📂 백업 파일에서 복구 시도...")
+                with open(backup_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            return {}
+        except Exception as e:
+            print(f"❌ 메타데이터 로드 실패: {e}")
+            return {}
+
+    def save_metadata(self, force: bool = False):
+        """메타데이터 DB 저장 - 백업 및 원자적 쓰기"""
+        if not self._dirty and not force:
+            return  # 변경사항이 없으면 저장 스킵
+
+        with self._write_lock:
+            try:
+                # 기존 파일 백업
+                if self.db_path.exists():
+                    backup_path = self.db_path.with_suffix('.backup')
+                    self.db_path.rename(backup_path)
+
+                # 임시 파일에 먼저 쓰기 (원자적 쓰기)
+                temp_path = self.db_path.with_suffix('.tmp')
+                with open(temp_path, 'w', encoding='utf-8') as f:
+                    json.dump(self.metadata, f, ensure_ascii=False, indent=2)
+
+                # 원자적 이동
+                temp_path.rename(self.db_path)
+
+                self._dirty = False
+                self._last_save_time = time.time()
+
+            except Exception as e:
+                print(f"❌ 메타데이터 저장 실패: {e}")
+                # 백업에서 복구
+                backup_path = self.db_path.with_suffix('.backup')
+                if backup_path.exists():
+                    backup_path.rename(self.db_path)
+                raise
 
     def add_document(self, filename: str, **kwargs):
-        """문서 메타데이터 추가/업데이트"""
-        if filename not in self.metadata:
-            self.metadata[filename] = {}
+        """문서 메타데이터 추가/업데이트 - 검증 및 인덱싱"""
+        with self._lock:
+            # 입력 검증
+            kwargs = self._validate_metadata(kwargs)
 
-        # 기본 정보 추가
-        self.metadata[filename].update(kwargs)
-        self.metadata[filename]['last_updated'] = datetime.now().isoformat()
+            if filename not in self.metadata:
+                self.metadata[filename] = {}
 
-        # 자동 저장
-        self.save_metadata()
+            # 변경 사항 추적
+            old_data = self.metadata[filename].copy()
+
+            # 기본 정보 추가
+            self.metadata[filename].update(kwargs)
+            self.metadata[filename]['last_updated'] = datetime.now().isoformat()
+
+            # 인덱스 업데이트
+            self._update_indexes(filename, old_data, self.metadata[filename])
+
+            # 변경 플래그 설정
+            self._dirty = True
+
+            # 캐시 무효화
+            self._invalidate_cache()
+
+            # 자동 저장 (배치 처리를 위해 지연)
+            if time.time() - self._last_save_time > 10:  # 10초마다 저장
+                self.save_metadata()
 
     def get_document(self, filename: str) -> Optional[Dict]:
         """문서 메타데이터 조회"""
         return self.metadata.get(filename)
 
-    def search_by_drafter(self, drafter_name: str) -> List[str]:
-        """기안자로 검색"""
-        results = []
-        for filename, data in self.metadata.items():
-            if data.get('drafter') and drafter_name in data['drafter']:
-                results.append(filename)
-        return results
+    def search_by_drafter(self, drafter_name: str, fuzzy: bool = True) -> List[str]:
+        """기안자로 검색 - 인덱스 기반 빠른 검색"""
+        # 캐시 확인
+        cache_key = f"drafter:{drafter_name}:{fuzzy}"
+        if cache_key in self._cache:
+            cache_time, results = self._cache[cache_key]
+            if time.time() - cache_time < self.cache_ttl:
+                return results
 
-    def search_by_field(self, field: str, value: str) -> List[str]:
-        """특정 필드로 검색"""
-        results = []
-        for filename, data in self.metadata.items():
-            if field in data and value in str(data[field]):
-                results.append(filename)
-        return results
+        with self._lock:
+            results = set()
+
+            # 인덱스 사용
+            if 'drafter' in self._index:
+                # 정확한 매칭
+                if drafter_name in self._index['drafter']:
+                    results.update(self._index['drafter'][drafter_name])
+
+                # 퍼지 매칭
+                if fuzzy:
+                    for indexed_name, files in self._index['drafter'].items():
+                        if drafter_name.lower() in indexed_name.lower() or \
+                           indexed_name.lower() in drafter_name.lower():
+                            results.update(files)
+
+            results = list(results)
+            # 캐시 저장
+            self._cache[cache_key] = (time.time(), results)
+            return results
+
+    def search_by_field(self, field: str, value: str, fuzzy: bool = True) -> List[str]:
+        """특정 필드로 검색 - 인덱스 기반"""
+        # 캐시 확인
+        cache_key = f"field:{field}:{value}:{fuzzy}"
+        if cache_key in self._cache:
+            cache_time, results = self._cache[cache_key]
+            if time.time() - cache_time < self.cache_ttl:
+                return results
+
+        with self._lock:
+            results = set()
+
+            # 인덱스 사용
+            if field in self._index:
+                # 정확한 매칭
+                if value in self._index[field]:
+                    results.update(self._index[field][value])
+
+                # 퍼지 매칭
+                if fuzzy:
+                    value_lower = value.lower()
+                    for indexed_value, files in self._index[field].items():
+                        if value_lower in str(indexed_value).lower():
+                            results.update(files)
+
+            results = list(results)
+            # 캐시 저장
+            self._cache[cache_key] = (time.time(), results)
+            return results
 
     def extract_from_text(self, text: str) -> Dict[str, Any]:
         """텍스트에서 메타데이터 자동 추출"""
@@ -107,6 +237,116 @@ class MetadataManager:
             metadata['type'] = '수리/보수'
 
         return metadata
+
+    def _build_indexes(self) -> Dict[str, Dict[str, Set[str]]]:
+        """빠른 검색을 위한 인덱스 구축"""
+        indexes = defaultdict(lambda: defaultdict(set))
+
+        for filename, data in self.metadata.items():
+            for field, value in data.items():
+                if field not in ['last_updated']:  # 인덱싱 제외 필드
+                    indexes[field][str(value)].add(filename)
+
+        return indexes
+
+    def _update_indexes(self, filename: str, old_data: Dict, new_data: Dict):
+        """인덱스 업데이트"""
+        # 기존 인덱스에서 제거
+        for field, value in old_data.items():
+            if field in self._index and str(value) in self._index[field]:
+                self._index[field][str(value)].discard(filename)
+
+        # 새 인덱스 추가
+        for field, value in new_data.items():
+            if field not in ['last_updated']:
+                if field not in self._index:
+                    self._index[field] = defaultdict(set)
+                self._index[field][str(value)].add(filename)
+
+    def _validate_metadata(self, metadata: Dict) -> Dict:
+        """메타데이터 검증 및 정규화"""
+        validated = {}
+
+        for key, value in metadata.items():
+            # 기본 검증
+            if value is None or (isinstance(value, str) and not value.strip()):
+                continue
+
+            # 타입별 검증
+            if key == 'drafter':
+                # 이름 검증 (2-4자 한글)
+                if isinstance(value, str) and re.match(r'^[가-힣]{2,4}$', value):
+                    validated[key] = value.strip()
+            elif key == 'amount':
+                # 금액 정규화
+                if isinstance(value, (str, int)):
+                    amount_str = str(value).replace(',', '')
+                    if amount_str.isdigit():
+                        validated[key] = int(amount_str)
+            elif key == 'date':
+                # 날짜 형식 검증
+                if isinstance(value, str):
+                    date_match = re.match(r'\d{4}[-./]\d{1,2}[-./]\d{1,2}', value)
+                    if date_match:
+                        validated[key] = date_match.group()
+            else:
+                validated[key] = value
+
+        return validated
+
+    def _invalidate_cache(self, pattern: Optional[str] = None):
+        """캐시 무효화"""
+        if pattern:
+            # 특정 패턴만 무효화
+            keys_to_remove = [k for k in self._cache.keys() if pattern in k]
+            for key in keys_to_remove:
+                del self._cache[key]
+        else:
+            # 전체 캐시 무효화
+            self._cache.clear()
+
+    def multi_field_search(self, criteria: Dict[str, str], operator: str = 'AND') -> List[str]:
+        """다중 필드 검색"""
+        results_sets = []
+
+        for field, value in criteria.items():
+            field_results = set(self.search_by_field(field, value))
+            results_sets.append(field_results)
+
+        if not results_sets:
+            return []
+
+        if operator.upper() == 'AND':
+            # 교집합
+            result_set = results_sets[0]
+            for s in results_sets[1:]:
+                result_set = result_set.intersection(s)
+        else:  # OR
+            # 합집합
+            result_set = results_sets[0]
+            for s in results_sets[1:]:
+                result_set = result_set.union(s)
+
+        return list(result_set)
+
+    def bulk_update(self, updates: Dict[str, Dict]):
+        """대량 업데이트 - 성능 최적화"""
+        with self._lock:
+            for filename, metadata in updates.items():
+                if filename not in self.metadata:
+                    self.metadata[filename] = {}
+
+                old_data = self.metadata[filename].copy()
+                validated = self._validate_metadata(metadata)
+
+                self.metadata[filename].update(validated)
+                self.metadata[filename]['last_updated'] = datetime.now().isoformat()
+
+                self._update_indexes(filename, old_data, self.metadata[filename])
+
+            self._dirty = True
+            self._invalidate_cache()
+            self.save_metadata(force=True)  # 대량 업데이트는 즉시 저장
 
     def get_statistics(self) -> Dict:
         """전체 통계"""

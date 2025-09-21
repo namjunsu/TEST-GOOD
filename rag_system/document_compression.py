@@ -6,6 +6,8 @@ Advanced RAG 기법 중 하나로, 검색된 문서에서 중요한 정보만 �
 import logging
 import time
 import re
+import hashlib
+from functools import lru_cache
 from typing import List, Dict, Any, Tuple
 from collections import Counter, defaultdict
 import numpy as np
@@ -33,7 +35,13 @@ class DocumentCompression:
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        
+
+        # 성능 통계
+        self.compression_count = 0
+        self.total_compression_time = 0.0
+        self.total_original_chars = 0
+        self.total_compressed_chars = 0
+
         # 중요 키워드 패턴 (방송기술 도메인)
         self.important_patterns = [
             # 금액/수량 패턴
@@ -85,7 +93,33 @@ class DocumentCompression:
             r'^\s*=+\s*$',
             r'^\s*\d+\s*$'
         ]
-    
+
+        # 패턴 컴파일
+        self._compile_patterns()
+
+    def _compile_patterns(self):
+        """정규식 패턴 컴파일"""
+        # 중요 패턴 컴파일
+        self.compiled_important = [re.compile(p, re.IGNORECASE) for p in self.important_patterns]
+
+        # 노이즈 패턴 컴파일
+        self.compiled_noise = [re.compile(p, re.IGNORECASE | re.MULTILINE) for p in self.noise_patterns]
+
+        # 단어 추출 패턴 컴파일
+        self.compiled_word_pattern = re.compile(self.WORD_PATTERN)
+
+        # 문장 분할 패턴 컴파일
+        self.sentence_split_patterns = [
+            re.compile(r'[.!?。]+\s+'),
+            re.compile(r'다\.\s+'),
+            re.compile(r'습니다\.\s+'),
+            re.compile(r'입니다\.\s+'),
+            re.compile(r'요\.\s+'),
+            re.compile(r'니다\.\s+')
+        ]
+
+        self.logger.info(f"패턴 컴파일 완료: {len(self.compiled_important)}개 중요 패턴, {len(self.compiled_noise)}개 노이즈 패턴")
+
     def compress_documents(
         self, 
         documents: List[Dict[str, Any]], 
@@ -126,14 +160,20 @@ class DocumentCompression:
             )
             
             compression_result['processing_time'] = time.time() - start_time
-            
+
+            # 통계 업데이트
+            self.compression_count += len(documents)
+            self.total_compression_time += compression_result['processing_time']
+            self.total_original_chars += compression_result['compression_stats']['original_total_chars']
+            self.total_compressed_chars += compression_result['compression_stats']['compressed_total_chars']
+
             self.logger.info(
                 f"문서 압축 완료: {len(documents)}개 문서 "
                 f"(원본: {compression_result['compression_stats']['original_total_chars']}자 "
                 f"→ 압축: {compression_result['compression_stats']['compressed_total_chars']}자, "
                 f"비율: {compression_result['compression_stats']['compression_ratio']:.2f})"
             )
-            
+
             return compression_result
             
         except Exception as e:
@@ -179,35 +219,25 @@ class DocumentCompression:
         return compressed_doc
     
     def _remove_noise(self, content: str) -> str:
-        """노이즈 패턴 제거"""
+        """노이즈 패턴 제거 (컴파일된 패턴 사용)"""
         cleaned = content
-        
-        for pattern in self.noise_patterns:
-            cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE | re.MULTILINE)
-        
+
+        for pattern in self.compiled_noise:
+            cleaned = pattern.sub('', cleaned)
+
         # 연속된 공백 정리
         cleaned = re.sub(r'\s+', ' ', cleaned).strip()
-        
+
         return cleaned
     
     def _split_into_sentences(self, content: str) -> List[str]:
-        """문장 분할"""
-        # 한국어 문장 분할 패턴
-        sentence_patterns = [
-            r'[.!?。]+\s+',
-            r'다\.\s+',
-            r'습니다\.\s+',
-            r'입니다\.\s+',
-            r'요\.\s+',
-            r'니다\.\s+'
-        ]
-        
+        """문장 분할 (컴파일된 패턴 사용)"""
         sentences = [content]
-        
-        for pattern in sentence_patterns:
+
+        for pattern in self.sentence_split_patterns:
             new_sentences = []
             for sentence in sentences:
-                parts = re.split(pattern, sentence)
+                parts = pattern.split(sentence)
                 new_sentences.extend([p.strip() for p in parts if p.strip()])
             sentences = new_sentences
         
@@ -217,35 +247,34 @@ class DocumentCompression:
         return sentences
     
     def _calculate_sentence_importance(self, sentences: List[str], query: str) -> List[float]:
-        """문장별 중요도 계산"""
+        """문장별 중요도 계산 (최적화)"""
         scores = []
-        query_words = set(re.findall(self.WORD_PATTERN, query.lower()))
-        
-        for sentence in sentences:
+        query_words = set(self.compiled_word_pattern.findall(query.lower()))
+
+        for idx, sentence in enumerate(sentences):
             score = 0.0
             sentence_lower = sentence.lower()
-            
+
             # 1. 쿼리 단어 매칭 점수
-            sentence_words = set(re.findall(self.WORD_PATTERN, sentence_lower))
+            sentence_words = set(self.compiled_word_pattern.findall(sentence_lower))
             query_match_score = len(query_words.intersection(sentence_words)) / len(query_words) if query_words else 0
             score += query_match_score * self.QUERY_MATCH_WEIGHT
-            
-            # 2. 중요 패턴 점수
-            for pattern in self.important_patterns:
-                matches = re.findall(pattern, sentence, re.IGNORECASE)
+
+            # 2. 중요 패턴 점수 (컴파일된 패턴 사용)
+            for pattern in self.compiled_important:
+                matches = pattern.findall(sentence)
                 score += len(matches) * self.PATTERN_MATCH_WEIGHT
-            
+
             # 3. 고가치 키워드 점수
             for keyword, weight in self.high_value_keywords.items():
                 if keyword.lower() in sentence_lower:
                     score += weight
-            
-            # 4. 문장 위치 점수 (첫 문장과 마지막 문장에 가중치)
+
+            # 4. 문장 위치 점수 (인덱스 직접 사용)
             position_score = 0.0
-            sentence_idx = sentences.index(sentence)  # 한 번만 계산
-            if sentence_idx == 0:  # 첫 문장
+            if idx == 0:  # 첫 문장
                 position_score = self.FIRST_SENTENCE_BONUS
-            elif sentence_idx == len(sentences) - 1:  # 마지막 문장
+            elif idx == len(sentences) - 1:  # 마지막 문장
                 position_score = self.LAST_SENTENCE_BONUS
             score += position_score
             
@@ -326,6 +355,26 @@ class DocumentCompression:
                 stats['sentences_stats']['kept_total'] / stats['sentences_stats']['original_total']
             )
         
+        return stats
+
+    def get_stats(self) -> Dict[str, Any]:
+        """성능 통계 반환"""
+        avg_compression_ratio = (self.total_compressed_chars / self.total_original_chars * 100
+                                if self.total_original_chars > 0 else 0.0)
+
+        stats = {
+            'compression_count': self.compression_count,
+            'total_compression_time': self.total_compression_time,
+            'avg_compression_time': self.total_compression_time / self.compression_count if self.compression_count > 0 else 0.0,
+            'total_original_chars': self.total_original_chars,
+            'total_compressed_chars': self.total_compressed_chars,
+            'overall_compression_ratio': avg_compression_ratio,
+            'compiled_patterns': {
+                'important': len(self.compiled_important),
+                'noise': len(self.compiled_noise),
+                'sentence_split': len(self.sentence_split_patterns)
+            }
+        }
         return stats
 
 # 테스트 함수

@@ -5,6 +5,9 @@
 
 import re
 import logging
+import time
+import hashlib
+from functools import lru_cache
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -67,6 +70,13 @@ class MetadataExtractor:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self._setup_patterns()
+        self._compile_patterns()
+
+        # 성능 통계
+        self.extraction_count = 0
+        self.total_extraction_time = 0.0
+        self.pattern_hits = {}
+        self.pattern_misses = {}
     
     def _setup_patterns(self):
         """정규식 패턴들 설정"""
@@ -128,14 +138,50 @@ class MetadataExtractor:
             '검토서': ['검토서', '검토의견', '기술검토', '검토'],
             '견적서': ['견적서', 'quotation', '견적', '견적금액', '가격'],
         }
-    
+
+    def _compile_patterns(self):
+        """정규식 패턴 컴파일 (성능 최적화)"""
+        # 날짜 패턴 컴파일
+        self.compiled_date_patterns = [(re.compile(p), m) for p, m in self.date_patterns]
+
+        # 기안자 패턴 컴파일
+        self.compiled_author_patterns = [(re.compile(p), m) for p, m in self.author_patterns]
+
+        # 부서 패턴 컴파일
+        self.compiled_dept_patterns = [(re.compile(p), m) for p, m in self.department_patterns]
+
+        # 금액 패턴 컴파일
+        self.compiled_amount_patterns = [(re.compile(p), m) for p, m in self.amount_patterns]
+
+        # 업체 패턴 컴파일
+        self.compiled_vendor_patterns = [(re.compile(p), m) for p, m in self.vendor_patterns]
+
+        # 장비 패턴 컴파일
+        self.compiled_equipment_patterns = [(re.compile(p, re.IGNORECASE), m) for p, m in self.equipment_patterns]
+
+        # 유효성 검사 패턴 컴파일
+        self.compiled_numeric_only = re.compile(self.NUMERIC_ONLY_PATTERN)
+
+        total_patterns = (len(self.compiled_date_patterns) + len(self.compiled_author_patterns) +
+                         len(self.compiled_dept_patterns) + len(self.compiled_amount_patterns) +
+                         len(self.compiled_vendor_patterns) + len(self.compiled_equipment_patterns))
+        self.logger.info(f"패턴 컴파일 완료: 총 {total_patterns}개")
+
     def extract_metadata(self, text: str, file_path: str) -> DocumentMetadata:
-        """텍스트에서 메타데이터 추출"""
+        """텍스트에서 메타데이터 추출 (캐싱됨)"""
+        # 캐시 키 생성
+        cache_key = hashlib.md5(f"{text[:1000]}{file_path}".encode()).hexdigest()
+        return self._extract_metadata_cached(cache_key, text, file_path)
+
+    @lru_cache(maxsize=256)
+    def _extract_metadata_cached(self, cache_key: str, text: str, file_path: str) -> DocumentMetadata:
+        """실제 메타데이터 추출 (캐싱됨)"""
+        start_time = time.time()
         filename = Path(file_path).name
-        
+
         # 임시 문서 유형 추출
         temp_doc_type = self._extract_doc_type(text, filename)
-        
+
         metadata = DocumentMetadata(
             file_path=file_path,
             filename=filename,
@@ -192,7 +238,11 @@ class MetadataExtractor:
         metadata.equipment = equipment_result[0]
         metadata.extraction_method['equipment'] = equipment_result[1]
         metadata.confidence['equipment'] = equipment_result[2]
-        
+
+        # 성능 통계 업데이트
+        self.extraction_count += 1
+        self.total_extraction_time += time.time() - start_time
+
         self.logger.info(f"메타데이터 추출 완료: {filename}")
         return metadata
     
@@ -217,8 +267,8 @@ class MetadataExtractor:
     def _extract_date(self, text: str, filename: str) -> Tuple[Optional[str], str, float]:
         """날짜 추출 (본문 우선, 파일명 fallback)"""
         # 1. 본문에서 날짜 추출 시도
-        for pattern, method in self.date_patterns:
-            matches = re.findall(pattern, text)
+        for pattern, method in self.compiled_date_patterns:
+            matches = pattern.findall(text)
             if matches:
                 if isinstance(matches[0], tuple):
                     # 그룹이 여러 개인 경우
@@ -255,8 +305,8 @@ class MetadataExtractor:
     
     def _extract_author(self, text: str) -> Tuple[Optional[str], str, float]:
         """기안자/작성자 추출"""
-        for pattern, method in self.author_patterns:
-            matches = re.findall(pattern, text)
+        for pattern, method in self.compiled_author_patterns:
+            matches = pattern.findall(text)
             if matches:
                 author = matches[0].strip()
                 # 유효성 검사
@@ -268,8 +318,8 @@ class MetadataExtractor:
     
     def _extract_department(self, text: str) -> Tuple[Optional[str], str, float]:
         """부서명 추출"""
-        for pattern, method in self.department_patterns:
-            matches = re.findall(pattern, text)
+        for pattern, method in self.compiled_dept_patterns:
+            matches = pattern.findall(text)
             if matches:
                 dept = matches[0].strip()
                 if len(dept) >= self.DEPT_MIN_LENGTH:
@@ -302,8 +352,8 @@ class MetadataExtractor:
     
     def _extract_amount(self, text: str) -> Tuple[Optional[int], str, float]:
         """금액 추출 및 정수 변환"""
-        for pattern, method in self.amount_patterns:
-            matches = re.findall(pattern, text)
+        for pattern, method in self.compiled_amount_patterns:
+            matches = pattern.findall(text)
             if matches:
                 amount_str = matches[0].replace(',', '').replace(' ', '')
                 try:
@@ -318,8 +368,8 @@ class MetadataExtractor:
     
     def _extract_vendor(self, text: str) -> Tuple[Optional[str], str, float]:
         """업체명 추출"""
-        for pattern, method in self.vendor_patterns:
-            matches = re.findall(pattern, text)
+        for pattern, method in self.compiled_vendor_patterns:
+            matches = pattern.findall(text)
             if matches:
                 vendor = matches[0].strip()
                 # 업체명 정리
@@ -336,9 +386,9 @@ class MetadataExtractor:
         """장비명/제품명 추출"""
         equipment_list = []
         methods_used = []
-        
-        for pattern, method in self.equipment_patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE)
+
+        for pattern, method in self.compiled_equipment_patterns:
+            matches = pattern.findall(text)
             for match in matches:
                 equipment = match.strip()
                 if equipment and equipment not in equipment_list:
@@ -368,9 +418,21 @@ class MetadataExtractor:
         if not (min_length <= text_length <= max_length):
             return False
         # 숫자, 공백, 대시만으로 구성된 경우 제외
-        if re.match(self.NUMERIC_ONLY_PATTERN, text):
+        if self.compiled_numeric_only.match(text):
             return False
         return True
+
+    def get_stats(self) -> Dict[str, Any]:
+        """성능 통계 반환"""
+        stats = {
+            'extraction_count': self.extraction_count,
+            'total_extraction_time': self.total_extraction_time,
+            'avg_extraction_time': self.total_extraction_time / self.extraction_count if self.extraction_count > 0 else 0.0,
+            'pattern_hits': dict(self.pattern_hits),
+            'pattern_misses': dict(self.pattern_misses),
+            'cache_info': self._extract_metadata_cached.cache_info() if hasattr(self._extract_metadata_cached, 'cache_info') else None
+        }
+        return stats
 
 # 테스트 함수
 def test_metadata_extractor():

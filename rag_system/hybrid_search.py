@@ -5,10 +5,12 @@
 
 import os
 import logging
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Set
 from pathlib import Path
 import time
 import re
+from functools import lru_cache
+import hashlib
 
 try:
     import pdfplumber
@@ -23,6 +25,20 @@ from .query_expansion import QueryExpansion
 from .document_compression import DocumentCompression
 from .multilevel_filter import MultilevelFilter
 
+# 검색 설정 상수
+DEFAULT_VECTOR_WEIGHT = 0.2
+DEFAULT_BM25_WEIGHT = 0.8
+DEFAULT_RRF_K = 20  # Reciprocal Rank Fusion 파라미터
+DEFAULT_FUSION_METHOD = "weighted_sum"  # "rrf" 또는 "weighted_sum"
+
+# 인덱스 경로 상수
+DEFAULT_VECTOR_INDEX_PATH = "rag_system/db/korean_vector_index.faiss"
+DEFAULT_BM25_INDEX_PATH = "rag_system/db/bm25_index.pkl"
+
+# 결과 제한 상수
+MAX_SEARCH_RESULTS = 100
+DEFAULT_TOP_K = 10
+
 class HybridSearch:
     """벡터 + BM25 하이브리드 검색"""
     
@@ -30,15 +46,15 @@ class HybridSearch:
         self,
         vector_index_path: str = None,
         bm25_index_path: str = None,
-        vector_weight: float = 0.2,
-        bm25_weight: float = 0.8,
-        rrf_k: int = 20,
+        vector_weight: float = DEFAULT_VECTOR_WEIGHT,
+        bm25_weight: float = DEFAULT_BM25_WEIGHT,
+        rrf_k: int = DEFAULT_RRF_K,
         use_reranker: bool = True,
         use_query_expansion: bool = True,
         use_document_compression: bool = True,
         use_multilevel_filter: bool = True,
-        single_document_mode: bool = False,  # 단일 문서 응답 모드 추가
-        fusion_method: str = "weighted_sum"  # "rrf" 또는 "weighted_sum"
+        single_document_mode: bool = False,
+        fusion_method: str = DEFAULT_FUSION_METHOD
     ):
         self.vector_weight = vector_weight
         self.bm25_weight = bm25_weight
@@ -52,17 +68,27 @@ class HybridSearch:
         
         self.logger = logging.getLogger(__name__)
         self.query_optimizer = QueryOptimizer()
+
+        # 검색 캐시 (쿼리 해시 -> 결과)
+        self.search_cache = {}
+        self.cache_hits = 0
+        self.cache_misses = 0
         
-        # Advanced RAG 컴포넌트 초기화
-        self._init_optional_component('reranker', use_reranker, KoreanReranker, "한국어 Reranker")
-        self._init_optional_component('query_expander', use_query_expansion, QueryExpansion, "Query Expansion")
-        self._init_optional_component('doc_compressor', use_document_compression, DocumentCompression, "Document Compression")
-        self._init_optional_component('multilevel_filter', use_multilevel_filter, MultilevelFilter, "다단계 필터링 시스템")
+        # Advanced RAG 컴포넌트 초기화 (딥셔너리로 관리)
+        self.optional_components = {
+            'reranker': (use_reranker, KoreanReranker, "한국어 Reranker"),
+            'query_expander': (use_query_expansion, QueryExpansion, "Query Expansion"),
+            'doc_compressor': (use_document_compression, DocumentCompression, "Document Compression"),
+            'multilevel_filter': (use_multilevel_filter, MultilevelFilter, "다단계 필터링 시스템")
+        }
+
+        for attr_name, (use_flag, component_class, component_name) in self.optional_components.items():
+            self._init_optional_component(attr_name, use_flag, component_class, component_name)
         
         # 컴포넌트 초기화
         try:
-            vector_path = vector_index_path or "rag_system/db/korean_vector_index.faiss"
-            bm25_path = bm25_index_path or "rag_system/db/bm25_index.pkl"
+            vector_path = vector_index_path or DEFAULT_VECTOR_INDEX_PATH
+            bm25_path = bm25_index_path or DEFAULT_BM25_INDEX_PATH
             
             self.vector_store = KoreanVectorStore(index_path=vector_path)
             self.bm25_store = BM25Store(index_path=bm25_path)
@@ -104,15 +130,32 @@ class HybridSearch:
             self.logger.error(f"하이브리드 인덱스 저장 실패: {e}")
             raise
     
+    def _get_doc_id(self, result: Dict[str, Any]) -> str:
+        """문서 ID 추출 헬퍼 메서드"""
+        return result.get('chunk_id', result.get('doc_id', result.get('source', '')))
+
+    def _remove_duplicates(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """중복 제거 헬퍼 메서드"""
+        seen_ids: Set[str] = set()
+        unique_results = []
+
+        for result in results:
+            doc_id = self._get_doc_id(result)
+            if doc_id and doc_id not in seen_ids:
+                seen_ids.add(doc_id)
+                unique_results.append(result)
+
+        return unique_results
+
     def _normalize_scores(self, results: List[Dict[str, Any]], score_key: str = 'score') -> List[Dict[str, Any]]:
         """스코어 정규화 (0~1 범위로)"""
         if not results:
             return results
-        
+
         scores = [r[score_key] for r in results]
         min_score = min(scores)
         max_score = max(scores)
-        
+
         # 정규화
         if max_score > min_score:
             for result in results:
@@ -121,7 +164,7 @@ class HybridSearch:
         else:
             for result in results:
                 result[f'normalized_{score_key}'] = 1.0
-        
+
         return results
     
     def _reciprocal_rank_fusion(

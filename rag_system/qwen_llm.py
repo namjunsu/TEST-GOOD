@@ -7,25 +7,40 @@ Qwen GGUF + Llama Safetensors 모델 지원
 import logging
 import re
 import time
+import gc
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 from pathlib import Path
+from functools import lru_cache
+import weakref
 
+
+# Generation 설정 상수
+DEFAULT_TEMPERATURE = 0.7
+DEFAULT_MAX_TOKENS = 1200
+DEFAULT_TOP_P = 0.9
+DEFAULT_TOP_K = 40
+DEFAULT_REPEAT_PENALTY = 1.1
+
+# 적응형 길이 설정 상수
+ADAPTIVE_LENGTH_ENABLED = True
+LENGTH_PREFERENCE_DEFAULT = "balanced"
+LENGTH_PREFERENCES = ["concise", "balanced", "detailed"]
 
 @dataclass
 class GenerationConfig:
     """생성 설정"""
-    temperature: float = 0.7   # config에서 가져오거나 기본값 0.7
-    max_tokens: int = 1200     # 충분한 답변 길이
-    top_p: float = 0.9         # 안정적인 생성
-    top_k: int = 40            # 집중된 선택
-    repeat_penalty: float = 1.1  # 반복 방지
-    
+    temperature: float = DEFAULT_TEMPERATURE
+    max_tokens: int = DEFAULT_MAX_TOKENS
+    top_p: float = DEFAULT_TOP_P
+    top_k: int = DEFAULT_TOP_K
+    repeat_penalty: float = DEFAULT_REPEAT_PENALTY
+
     # 적응형 길이 조정 설정
-    enable_adaptive_length: bool = True    # 적응형 길이 조정 활성화
-    length_preference: str = "balanced"    # "concise", "balanced", "detailed"
-    min_length_override: Optional[int] = None  # 최소 길이 강제 설정
-    max_length_override: Optional[int] = None  # 최대 길이 강제 설정
+    enable_adaptive_length: bool = ADAPTIVE_LENGTH_ENABLED
+    length_preference: str = LENGTH_PREFERENCE_DEFAULT
+    min_length_override: Optional[int] = None
+    max_length_override: Optional[int] = None
 
 @dataclass 
 class RAGResponse:
@@ -45,15 +60,21 @@ class RAGResponse:
 
 class QwenLLM:
 
-    # 개선된 프롬프트 템플릿
-    IMPROVED_SYSTEM_PROMPT = """당신은 한국 방송사의 전문 지식 검색 도우미입니다.
+    # 프롬프트 템플릿 상수
+    SYSTEM_ROLE = "한국 방송사의 전문 지식 검색 도우미"
+    ANSWER_LANGUAGE = "한국어"
+    CITATION_FORMAT = "[파일명.pdf]"
+
+    # 프롬프트 템플릿
+    IMPROVED_SYSTEM_PROMPT = f"""당신은 {SYSTEM_ROLE}입니다.
 주어진 문서 내용을 바탕으로 정확하고 구체적인 답변을 제공해야 합니다.
 
 중요 지침:
 1. 문서에서 직접 찾을 수 있는 정보만 제공하세요
 2. 숫자, 금액, 날짜는 정확하게 인용하세요
 3. 불확실한 정보는 "문서에서 확인할 수 없음"이라고 명시하세요
-4. 답변은 구체적이고 간결하게 작성하세요"""
+4. 답변은 구체적이고 간결하게 작성하세요
+5. 반드시 {ANSWER_LANGUAGE}로 답변하세요"""
 
     IMPROVED_QUERY_TEMPLATE = """문서 내용:
 {context}
@@ -64,8 +85,9 @@ class QwenLLM:
 - 관련 정보가 있다면 구체적인 내용을 포함하세요
 - 금액이 있다면 정확한 숫자를 제시하세요
 - 날짜가 있다면 명시하세요
+- 출처는 {CITATION_FORMAT} 형식으로 표시하세요
 
-답변:"""
+답변:""".replace("{CITATION_FORMAT}", CITATION_FORMAT)
 
     """Qwen 모델 래퍼 클래스"""
     
@@ -82,15 +104,15 @@ class QwenLLM:
         self._load_model()
         
         
-        # 인용 패턴 (근거 문서 인용 형식) - 강화된 패턴
+        # 인용 패턴 컴파일 (성능 향상)
         self.citation_patterns = [
-            r'\[([^\]]+\.pdf[^\]]*)\]',  # [파일명.pdf] 형식
-            r'「([^」]+\.pdf[^」]*)」',    # 「파일명.pdf」 형식  
-            r'출처:\s*([^\n]+\.pdf[^\n]*)', # 출처: 파일명.pdf 형식
-            r'근거:\s*([^\n]+\.pdf[^\n]*)', # 근거: 파일명.pdf 형식
-            r'\[([^\]]*\d{4}-\d{2}-\d{2}[^\]]*\.pdf[^\]]*)\]', # 날짜 포함 파일명
-            r'(\d{4}-\d{2}-\d{2}_[^\s\]]+\.pdf)', # 날짜로 시작하는 파일명
-            r'([A-Za-z0-9가-힣_\-\s]+\.pdf)', # 일반적인 PDF 파일명 패턴
+            re.compile(r'\[([^\]]+\.pdf[^\]]*)\]'),  # [파일명.pdf] 형식
+            re.compile(r'「([^」]+\.pdf[^」]*)」'),    # 「파일명.pdf」 형식
+            re.compile(r'출처:\s*([^\n]+\.pdf[^\n]*)'), # 출처: 파일명.pdf 형식
+            re.compile(r'근거:\s*([^\n]+\.pdf[^\n]*)'), # 근거: 파일명.pdf 형식
+            re.compile(r'\[([^\]]*\d{4}-\d{2}-\d{2}[^\]]*\.pdf[^\]]*)\]'), # 날짜 포함 파일명
+            re.compile(r'(\d{4}-\d{2}-\d{2}_[^\s\]]+\.pdf)'), # 날짜로 시작하는 파일명
+            re.compile(r'([A-Za-z0-9가-힣_\-\s]+\.pdf)'), # 일반적인 PDF 파일명 패턴
         ]
     
     def _load_model(self):
@@ -128,8 +150,9 @@ class QwenLLM:
             self.logger.error(f"모델 로드 실패: {e}")
             raise
     
+    @lru_cache(maxsize=32)
     def create_system_prompt(self) -> str:
-        """간단하고 직접적인 시스템 프롬프트"""
+        """간단하고 직접적인 시스템 프롬프트 (캐시됨)"""
         return """당신은 한국어 방송기술 문서 전문 AI 어시스턴트입니다.
 
 필수 규칙: 
@@ -260,35 +283,9 @@ class QwenLLM:
         # 0단계: 같은 문서의 모든 청크 우선 선택 (중간 단계 접근법)
         context_chunks = self._prioritize_same_document_chunks(context_chunks, max_chunks=10)
         
-        # 1단계: 질문 분석 (deprecated - moved to archive)
+        # 1단계: 질문 분석
         question_analysis = None
         length_recommendation = None
-        
-        # Skip complex question processing since modules are not available
-        # if self.question_analyzer:
-        #     question_analysis = self.question_analyzer.analyze_question(question)
-        #     
-        #     # 2단계: 적응형 길이 추천 (활성화된 경우)
-        #     if self.config.enable_adaptive_length and self.length_analyzer:
-        #         length_recommendation = self.length_analyzer.recommend_length(question_analysis, context_chunks)
-        #         length_recommendation = self._apply_length_preference_adjustments(length_recommendation)
-        #         self.logger.info(f"적응형 길이: {length_recommendation.optimal_length}자 ({length_recommendation.min_length}-{length_recommendation.max_length})")
-        #     
-        #     # 3단계: 복합 질문 처리 판단
-        #     if enable_complex_processing and question_analysis:
-        #         try:
-        #             # 품질 중심: 더 많은 질문을 고품질 처리하도록 임계값 대폭 낮춤
-        #             if (question_analysis.complexity_score > 0.4 or 
-        #                 question_analysis.question_type in [QuestionType.COMPARISON, QuestionType.ANALYSIS, 
-        #                                                    QuestionType.COMPLEX_MULTI, QuestionType.PROCEDURE, 
-        #                                                    QuestionType.REASON, QuestionType.TECHNICAL, QuestionType.LISTING]):
-        #                 
-        #                 self.logger.info(f"복합 질문 처리 모드: {question_analysis.question_type.value}, 복잡도: {question_analysis.complexity_score:.2f}")
-        #                 return self._generate_structured_response_with_adaptive_length(
-        #                     question_analysis, context_chunks, max_retries, length_recommendation)
-        #                 
-        #         except Exception as e:
-        #             self.logger.warning(f"복합 질문 분석 실패, 기본 모드로 진행: {e}")
         
         # 4단계: 기본 처리 모드 (적응형 길이 적용)
         if self.config.enable_adaptive_length and length_recommendation:
@@ -774,9 +771,9 @@ class QwenLLM:
             if filename:
                 available_files.add(filename)
         
-        # 답변에서 인용 추출
+        # 답변에서 인용 추출 (컴파일된 패턴 사용)
         for pattern in self.citation_patterns:
-            matches = re.findall(pattern, answer)
+            matches = pattern.findall(answer)
             for match in matches:
                 # 파일명 정리
                 filename = match.strip()

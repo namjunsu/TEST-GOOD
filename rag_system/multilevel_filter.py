@@ -6,6 +6,8 @@
 import time
 import logging
 import re
+import hashlib
+from functools import lru_cache
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 import numpy as np
@@ -30,31 +32,41 @@ class QueryComplexityAnalyzer:
     QUERY_LENGTH_THRESHOLD = 5
     
     def __init__(self):
+        self._compile_patterns()
+
+    def _compile_patterns(self):
+        """패턴 컴파일"""
         self.simple_patterns = [
+            re.compile(p) for p in [
             r'가격',
             r'얼마',
             r'언제',
             r'어디',
             r'누구',
             r'무엇'
+            ]
         ]
-        
+
         self.complex_patterns = [
+            re.compile(p) for p in [
             r'비교',
             r'차이',
             r'장단점',
             r'분석',
             r'어떻게',
             r'왜'
+            ]
         ]
-        
+
         self.comparison_patterns = [
+            re.compile(p) for p in [
             r'vs',
             r'대비',
             r'보다',
             r'와|과.*비교',
             r'중에서.*좋은',
             r'어느.*나은'
+            ]
         ]
     
     def analyze(self, query: str) -> Dict[str, Any]:
@@ -66,7 +78,7 @@ class QueryComplexityAnalyzer:
         
         # 비교 질문 검사
         for pattern in self.comparison_patterns:
-            if re.search(pattern, query):
+            if pattern.search(query):
                 return {
                     "complexity_level": "complex",
                     "type": "comparison",
@@ -75,16 +87,16 @@ class QueryComplexityAnalyzer:
         
         # 복잡한 질문 검사
         for pattern in self.complex_patterns:
-            if re.search(pattern, query):
+            if pattern.search(query):
                 return {
                     "complexity_level": "complex",
                     "type": "complex",
                     "recommended_k": self.COMPLEX_K
                 }
-        
+
         # 단순한 질문 검사
         for pattern in self.simple_patterns:
-            if re.search(pattern, query):
+            if pattern.search(query):
                 return {
                     "complexity_level": "simple",
                     "type": "simple",
@@ -132,7 +144,12 @@ class MultilevelFilter:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.complexity_analyzer = QueryComplexityAnalyzer()
-        
+
+        # 성능 통계
+        self.filter_count = 0
+        self.total_filter_time = 0.0
+        self.phase_stats = {'phase1': 0, 'phase2': 0, 'phase3': 0, 'phase4': 0}
+
         # 도메인 특화 키워드 가중치
         self._init_domain_keywords()
     
@@ -318,8 +335,10 @@ class MultilevelFilter:
         start_time = time.time()
         
         # 쿼리 복잡도 분석
-        complexity_type, recommended_k = self.complexity_analyzer.analyze(query)
-        
+        complexity_result = self.complexity_analyzer.analyze(query)
+        complexity_type = complexity_result['type']
+        recommended_k = complexity_result['recommended_k']
+
         # 결과 개수 조정
         final_k = min(recommended_k, len(phase3_results))
         selected_results = phase3_results[:final_k]
@@ -345,6 +364,12 @@ class MultilevelFilter:
         
         return found_keywords
     
+    @lru_cache(maxsize=1024)
+    def _calculate_keyword_score_cached(self, content_hash: str, keywords_hash: str) -> float:
+        """캐시된 키워드 점수 계산"""
+        # 실제 계산은 _calculate_keyword_score에서
+        return 0.0  # placeholder, will be overridden
+
     def _calculate_keyword_score(self, content: str, query_keywords: Dict[str, float]) -> float:
         """문서 내용에서 키워드 매칭 점수 계산"""
         if not query_keywords:
@@ -387,9 +412,15 @@ class MultilevelFilter:
         final_results = self.phase4_adaptive_selection(phase3_results, query)
         
         total_time = time.time() - start_time
-        
-        # 성능 통계 (analyze 한번만 호출)
-        complexity_type, recommended_k = self.complexity_analyzer.analyze(query)
+
+        # 성능 통계 업데이트
+        self.filter_count += 1
+        self.total_filter_time += total_time
+
+        # 복잡도 결과 가져오기 (phase4에서 이미 계산됨)
+        complexity_result = self.complexity_analyzer.analyze(query)
+        complexity_type = complexity_result['type']
+        recommended_k = complexity_result['recommended_k']
         
         stats = {
             "total_processing_time": total_time,
@@ -405,5 +436,16 @@ class MultilevelFilter:
         }
         
         self.logger.info(f"다단계 필터링 완료: {len(vector_results)} → {len(final_results)} ({total_time:.3f}초)")
-        
+
         return final_results, stats
+
+    def get_stats(self) -> Dict[str, Any]:
+        """성능 통계 반환"""
+        stats = {
+            'filter_count': self.filter_count,
+            'total_filter_time': self.total_filter_time,
+            'avg_filter_time': self.total_filter_time / self.filter_count if self.filter_count > 0 else 0.0,
+            'phase_stats': dict(self.phase_stats),
+            'cache_info': self._calculate_keyword_score_cached.cache_info() if hasattr(self._calculate_keyword_score_cached, 'cache_info') else None
+        }
+        return stats

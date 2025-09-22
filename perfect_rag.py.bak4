@@ -145,13 +145,11 @@ class PerfectRAG:
         self.asset_enhancer = None  # 필요시 로드
 
         # 자산 데이터 제거 (기안서 중심 시스템으로 전환)
+        self.asset_data_cache = None
+        self.asset_data = []
 
-        # 메타데이터 DB 초기화
-        try:
-            self.metadata_db = MetadataManager()
-        except Exception as e:
-            print(f"⚠️ MetadataManager 초기화 실패: {e}")
-            self.metadata_db = None
+        # 메타데이터 DB 초기화 (중요: 여기서 먼저 None으로 초기화)
+        self.metadata_db = None
         
         # 모든 PDF와 TXT 파일 목록 (새로운 폴더 구조 포함)
         self.pdf_files = []
@@ -194,6 +192,7 @@ class PerfectRAG:
         print(f"✅ {len(self.pdf_files)}개 PDF, {len(self.txt_files)}개 TXT 문서 발견")
 
         # 자산 데이터 로드 (metadata_db 초기화 포함)
+        self._load_asset_data()
 
         # 문서 메타데이터 사전 추출 (빠른 검색용)
         self._build_metadata_cache()
@@ -202,6 +201,32 @@ class PerfectRAG:
         if preload_llm:
             self._preload_llm()
 
+    def _load_asset_data(self):
+        """자산 데이터를 미리 로드하여 캐싱"""
+        try:
+            asset_file = self.docs_dir / "assets" / "채널A_방송장비_자산_전체_7904개_완전판.txt"
+            if asset_file.exists():
+                with open(asset_file, 'r', encoding='utf-8') as f:
+                    self.asset_data_cache = f.read()
+                    # 자산 개수 파악
+                    asset_count = len([line for line in self.asset_data_cache.split('\n') if line.strip().startswith('[')])
+                    print(f"✅ 자산 데이터 로드 완료: {asset_count:,}개 장비")
+            else:
+                print(f"⚠️ 자산 파일을 찾을 수 없음: {asset_file}")
+                self.asset_data_cache = ""
+        except Exception as e:
+            print(f"❌ 자산 데이터 로드 실패: {e}")
+            self.asset_data_cache = ""
+
+        # 메타데이터 DB 초기화
+        try:
+            self.metadata_db = MetadataManager()
+            if self.metadata_db and hasattr(self.metadata_db, 'metadata') and self.metadata_db.metadata:
+                print(f"📚 메타데이터 DB 로드: {len(self.metadata_db.metadata)}개 문서")
+        except Exception as e:
+            print(f"⚠️ 메타데이터 DB 로드 실패: {e}")
+            self.metadata_db = None
+    
     def _preload_llm(self):
         """LLM을 미리 로드 (싱글톤 사용)"""
         if self.llm is None:
@@ -419,7 +444,26 @@ class PerfectRAG:
             
             info = {'text': text[:3000]}  # 처음 3000자만
             
-            # 자산 파일 관련 코드 제거됨
+            # 자산 파일인 경우 통계 정보 동적 추출
+            if '자산' in txt_path.name or '7904' in txt_path.name:
+                # 패턴: "XXX: 숫자개" 또는 "XXX - 총 숫자개" 형식 자동 감지
+                # 동적으로 모든 "카테고리: 수량" 패턴 찾기
+                patterns = [
+                    r'([가-힣A-Za-z]+).*?[:\-]\s*총?\s*(\d+[,\d]*)\s*[개대]',
+                    r'•\s*([가-힣A-Za-z]+):\s*(\d+[,\d]*)\s*[개대]'
+                ]
+                
+                for pattern in patterns:
+                    matches = re.findall(pattern, text[:5000])  # 처음 5000자에서 찾기
+                    for category, count in matches:
+                        # 카테고리명을 키로 사용
+                        key = f"{category}수량"
+                        info[key] = f"{count}개"
+                
+                # 총 보유 장비 찾기
+                total_match = re.search(r'총\s*보유\s*장비:\s*(\d+[,\d]*)개', text)
+                if total_match:
+                    info['총장비수'] = total_match.group(1) + "개"
             
             return info
 
@@ -744,7 +788,7 @@ class PerfectRAG:
             
             if ('몇' in query and '대' in query) or \
                ('수량' in query and '전체' in query) or \
-        # ('자산' in query and '데이터' in query) or \ # 자산 관련 코드 제거
+               ('자산' in query and '데이터' in query) or \
                re.search(r'\d{6,}', query) or \
                any(keyword in query for keyword in asset_specific_keywords):
                 is_asset_query = True
@@ -755,7 +799,7 @@ class PerfectRAG:
                 # TXT 파일이고 파일명에 '자산' 또는 큰 숫자(7904 등)가 있으면
                 if metadata.get('is_txt', False):
                     filename = metadata.get('filename', cache_key)
-        # if '자산' in filename or '7904' in filename or '전체' in filename: # 자산 관련 코드 제거
+                    if '자산' in filename or '7904' in filename or '전체' in filename:
                         print(f"📊 자산 파일 선택: {filename}")
                         return metadata['path']
         
@@ -931,7 +975,7 @@ class PerfectRAG:
         result = ""
         
         # 자산 파일 특별 처리 (동적)
-        # if file_path.suffix == '.txt' and ('자산' in file_path.name or '7904' in file_path.name): # 자산 관련 코드 제거
+        if file_path.suffix == '.txt' and ('자산' in file_path.name or '7904' in file_path.name):
             if info_type == "자산통계":
                 result = f"📊 채널A 방송장비 자산 현황\n"
                 result += f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -1729,7 +1773,7 @@ class PerfectRAG:
                         # Path 객체로 변환
                         path_obj = Path(file_meta['path']) if isinstance(file_meta['path'], str) else file_meta['path']
                         filename_str = path_obj.name
-        # if '자산' in filename_str or '전체' in filename_str or '7904' in filename_str: # 자산 관련 코드 제거
+                        if '자산' in filename_str or '전체' in filename_str or '7904' in filename_str:
                             doc_path = path_obj
                             print(f"📄 자산 파일 발견: {filename_str}")
                             break
@@ -3556,6 +3600,131 @@ class PerfectRAG:
         except Exception as e:
             return f"❌ 월별 수리 내역 생성 실패: {e}"
     
+    def _enhance_asset_response(self, raw_response: str, query: str) -> str:
+        """Asset 응답을 LLM으로 개선하는 헬퍼 메서드"""
+        try:
+            # LLM이 없으면 원본 반환
+            if not self.llm:
+                return raw_response
+            
+            # Asset LLM Enhancer 로드
+            if not self.asset_enhancer:
+                from asset_llm_enhancer import AssetLLMEnhancer
+                self.asset_enhancer = AssetLLMEnhancer(self.llm)
+            
+            # 답변 개선
+            enhanced_response = self.asset_enhancer.enhance_asset_response(
+                raw_data=raw_response,
+                query=query,
+                llm=self.llm
+            )
+            
+            # 개선된 답변이 더 좋으면 반환
+            if enhanced_response and len(enhanced_response) > 50:
+                return enhanced_response
+            
+            return raw_response
+            
+        except Exception as e:
+            print(f"Asset 응답 개선 실패: {e}")
+            return raw_response
+    
+    def _search_asset_detail(self, txt_path: Path, query: str) -> str:
+        """자산 파일에서 특정 시리얼 번호나 세부 정보 검색 - 완전한 정보 표시"""
+        try:
+            # 완전판 파일 우선 사용
+            complete_path = self.docs_dir / "assets" / "채널A_방송장비_자산_전체_7904개_완전판.txt"
+            if complete_path.exists():
+                txt_path = complete_path
+            
+            with open(txt_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # 시리얼 번호 추출 (영문+숫자 조합도 인식)
+            serial_patterns = [
+                r'([A-Z0-9]{6,})',  # 대문자와 숫자 조합 (CZC5134KXL 같은 형식)
+                r'(\d{5,})',  # 5자리 이상 숫자 (10038 같은 형식)
+                r'([A-Za-z]+\d+[A-Za-z0-9]*)'  # 영문으로 시작하는 시리얼
+            ]
+            
+            serial = None
+            for pattern in serial_patterns:
+                serial_match = re.search(pattern, query, re.IGNORECASE)
+                if serial_match:
+                    serial = serial_match.group(1).upper()
+                    break
+            
+            if serial:
+                lines = content.split('\n')
+                results = []
+                
+                # 각 장비 항목을 찾기 ([0001] 형식으로 시작)
+                current_item = []
+                in_matching_item = False
+                
+                for line in lines:
+                    # 새로운 장비 항목 시작
+                    if re.match(r'^\[\d{4}\]', line):
+                        # 이전 항목이 매칭되었으면 저장
+                        if in_matching_item and current_item:
+                            results.append('\n'.join(current_item))
+                        # 새 항목 시작
+                        current_item = [line]
+                        in_matching_item = False
+                    elif current_item:
+                        # 현재 항목에 라인 추가
+                        current_item.append(line)
+                        # 시리얼 번호 확인
+                        if serial in line.upper():
+                            in_matching_item = True
+                
+                # 마지막 항목 처리
+                if in_matching_item and current_item:
+                    results.append('\n'.join(current_item))
+                
+                if results:
+                    response = f"📊 시리얼 번호 {serial} 장비 상세정보:\n"
+                    response += "━" * 50 + "\n\n"
+                    
+                    for i, result in enumerate(results[:5], 1):  # 최대 5개
+                        # 결과를 더 보기 좋게 포맷팅
+                        result_lines = result.split('\n')
+                        formatted = []
+                        
+                        for line in result_lines:
+                            line = line.strip()
+                            if line and not line.startswith('='):
+                                # 중요 정보 하이라이트
+                                if '기본정보:' in line or '구입정보:' in line or \
+                                   '위치정보:' in line or '관리정보:' in line or \
+                                   '유지보수:' in line:
+                                    formatted.append(line)
+                                elif line.startswith('['):
+                                    formatted.append(f"📌 {line}")
+                                else:
+                                    formatted.append(f"  {line}")
+                        
+                        response += '\n'.join(formatted)
+                        if i < len(results):
+                            response += "\n" + "-" * 40 + "\n"
+                    
+                    response += f"\n\n📄 출처: {txt_path.name}"
+                    response += f"\n✅ 총 {len(results)}개 항목에서 시리얼 {serial} 발견"
+                    
+                    # 담당자, 벤더사 정보가 없으면 추가로 찾기
+                    if len(results) == 1 and '담당자' not in results[0]:
+                        response += "\n\n⚠️ 관리정보가 일부 누락되었을 수 있습니다. 전체 문서를 확인해주세요."
+                    
+                    # LLM으로 답변 개선
+                    return self._enhance_asset_response(response, query)
+                else:
+                    return f"❌ 시리얼 번호 {serial}을(를) 찾을 수 없습니다."
+            
+            return "❌ 시리얼 번호를 입력해주세요."
+            
+        except Exception as e:
+            return f"❌ 검색 실패: {e}"
+    
     def _parse_asset_query(self, query: str) -> dict:
         """Asset 쿼리를 파싱하여 검색 의도와 조건을 추출
         
@@ -3690,6 +3859,126 @@ class PerfectRAG:
         
         return result
     
+    def _search_asset_complex(self, txt_path: Path, query_intent: dict) -> str:
+        """복합 조건을 처리하는 Asset 검색
+        
+        Args:
+            txt_path: 자산 파일 경로
+            query_intent: 파싱된 쿼리 정보
+        """
+        try:
+            # 완전판 파일 우선 사용
+            complete_path = self.docs_dir / "assets" / "채널A_방송장비_자산_전체_7904개_완전판.txt"
+            if complete_path.exists():
+                txt_path = complete_path
+            
+            with open(txt_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            lines = content.split('\n')
+            conditions = query_intent['conditions']
+            matched_items = []
+            
+            # 각 라인 검사
+            for i in range(len(lines)):
+                line = lines[i]
+                if not line.strip():
+                    continue
+                
+                # 모든 조건 확인
+                all_conditions_met = True
+                
+                # 위치 조건
+                if 'location' in conditions:
+                    if conditions['location'] not in line:
+                        all_conditions_met = False
+                
+                # 제조사 조건
+                if 'manufacturer' in conditions and all_conditions_met:
+                    if conditions['manufacturer'] not in line.upper():
+                        all_conditions_met = False
+                
+                # 연도 조건
+                if 'year' in conditions and all_conditions_met:
+                    year_in_line = re.search(r'20\d{2}', line)
+                    if year_in_line:
+                        line_year = int(year_in_line.group(0))
+                        target_year = conditions['year']
+                        
+                        if conditions.get('year_range') == 'before':
+                            if line_year > target_year:
+                                all_conditions_met = False
+                        elif conditions.get('year_range') == 'after':
+                            if line_year < target_year:
+                                all_conditions_met = False
+                        elif conditions.get('year_range') == 'between':
+                            if not (conditions.get('year_start', 0) <= line_year <= conditions.get('year_end', 9999)):
+                                all_conditions_met = False
+                        else:
+                            if line_year != target_year:
+                                all_conditions_met = False
+                    else:
+                        all_conditions_met = False
+                
+                # 장비 유형 조건
+                if 'equipment_type' in conditions and all_conditions_met:
+                    if conditions['equipment_type'].upper() not in line.upper():
+                        all_conditions_met = False
+                
+                # 모델 조건
+                if 'model' in conditions and all_conditions_met:
+                    if conditions['model'] not in line.upper():
+                        all_conditions_met = False
+                
+                # 모든 조건을 만족하면 추가
+                if all_conditions_met:
+                    # 전체 항목 정보 수집 (앞뒤 라인 포함)
+                    item_lines = []
+                    start_idx = max(0, i - 1)
+                    end_idx = min(len(lines), i + 5)
+                    
+                    for j in range(start_idx, end_idx):
+                        if lines[j].strip():
+                            item_lines.append(lines[j])
+                    
+                    if item_lines:
+                        matched_items.append('\n'.join(item_lines))
+            
+            # 결과 생성
+            if not matched_items:
+                # 사용자 친화적 에러 메시지
+                error_msg = "😔 조건에 맞는 장비를 찾을 수 없습니다.\n\n"
+                error_msg += "📋 **요청하신 검색 조건:**\n"
+                error_msg += self._format_conditions(conditions) + "\n\n"
+                error_msg += "💡 **검색 팁:**\n"
+                error_msg += "• 조건을 하나씩 줄여서 시도해보세요\n"
+                error_msg += "• 연도는 2000-2024 범위로 입력하세요\n"
+                error_msg += "• 위치명은 정확히 입력하세요 (예: 중계차, 대형스튜디오)\n"
+                error_msg += "• 제조사명은 영문 대문자로 (예: SONY, Harris)\n"
+                return error_msg
+            
+            # 응답 생성
+            response = f"✅ 복합 조건 검색 결과: 총 {len(matched_items)}개 장비\n\n"
+            response += f"📋 검색 조건:\n{self._format_conditions(conditions)}\n\n"
+            response += "=" * 50 + "\n\n"
+            
+            # 최대 20개까지 표시
+            for idx, item in enumerate(matched_items[:20], 1):
+                response += f"[{idx}] {item}\n"
+                response += "-" * 40 + "\n"
+            
+            if len(matched_items) > 20:
+                response += f"\n... 외 {len(matched_items) - 20}개 장비"
+            
+            # LLM으로 요약 추가
+            if self.llm and len(matched_items) > 0:
+                response = self._enhance_asset_response(response, query_intent['original_query'])
+            
+            return response
+            
+        except Exception as e:
+            return f"❌ 복합 검색 실패: {e}"
+    
     def _format_conditions(self, conditions: dict) -> str:
         """검색 조건을 읽기 쉽게 포맷팅"""
         formatted = []
@@ -3725,6 +4014,508 @@ class PerfectRAG:
             formatted.append(f"• 모델: {conditions['model']}")
         
         return '\n'.join(formatted) if formatted else "조건 없음"
+    
+    def _search_asset_by_equipment_type(self, txt_path: Path, query: str) -> str:
+        """장비 유형별 자산 검색"""
+        try:
+            # 완전판 파일 우선 사용
+            complete_path = self.docs_dir / "assets" / "채널A_방송장비_자산_전체_7904개_완전판.txt"
+            if complete_path.exists():
+                txt_path = complete_path
+            
+            with open(txt_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # 장비 유형 키워드 추출
+            query_intent = self._parse_asset_query(query)
+            equipment_type = query_intent['conditions'].get('equipment_type', '')
+            
+            if not equipment_type:
+                # 쿼리에서 직접 추출 시도
+                equipment_types = ['CCU', '카메라', '모니터', '오디오', '비디오', '서버', '스위치', '라우터', '렌즈']
+                for eq_type in equipment_types:
+                    if eq_type.lower() in query.lower():
+                        equipment_type = eq_type
+                        break
+            
+            if not equipment_type:
+                return ("🤔 **장비 유형을 지정해주세요**\n\n"
+                       "📋 **사용 가능한 장비 유형:**\n"
+                       "• 카메라 - 방송용 카메라 장비\n"
+                       "• 모니터 - 디스플레이 장비\n"
+                       "• CCU - Camera Control Unit\n"
+                       "• 오디오 - 음향 관련 장비\n"
+                       "• 비디오 - 영상 처리 장비\n"
+                       "• 서버 - 방송 서버 시스템\n"
+                       "• 스위치 - 네트워크/비디오 스위치\n"
+                       "• 라우터 - 신호 라우팅 장비\n"
+                       "• 렌즈 - 카메라 렌즈\n\n"
+                       "💡 **예시:** '카메라 장비 현황', 'CCU 전체 목록'")
+            
+            lines = content.split('\n')
+            matched_items = []
+            
+            # 장비 유형으로 검색
+            for i in range(len(lines)):
+                line = lines[i]
+                if equipment_type.upper() in line.upper():
+                    # 전체 항목 정보 수집
+                    item_lines = []
+                    start_idx = max(0, i - 1)
+                    end_idx = min(len(lines), i + 5)
+                    
+                    for j in range(start_idx, end_idx):
+                        if lines[j].strip():
+                            item_lines.append(lines[j])
+                    
+                    if item_lines:
+                        matched_items.append('\n'.join(item_lines))
+            
+            if not matched_items:
+                return f"❌ '{equipment_type}' 유형의 장비를 찾을 수 없습니다."
+            
+            # 통계 정보 수집
+            locations = {}
+            manufacturers = {}
+            years = {}
+            
+            for item in matched_items:
+                # 위치 추출
+                for loc in ['중계차', '대형스튜디오', '소형부조정실', 'News VAN', '광화문']:
+                    if loc in item:
+                        locations[loc] = locations.get(loc, 0) + 1
+                        break
+                
+                # 제조사 추출
+                for mfr in ['SONY', 'Harris', 'HP', 'Panasonic', 'Canon']:
+                    if mfr in item.upper():
+                        manufacturers[mfr] = manufacturers.get(mfr, 0) + 1
+                        break
+                
+                # 연도 추출
+                year_match = re.search(r'20\d{2}', item)
+                if year_match:
+                    year = year_match.group(0)
+                    years[year] = years.get(year, 0) + 1
+            
+            # 응답 생성
+            response = f"✅ '{equipment_type}' 장비 검색 결과: 총 {len(matched_items)}개\n\n"
+            
+            # 통계 정보
+            response += "📊 통계 정보:\n"
+            
+            if locations:
+                response += "\n위치별 분포:\n"
+                for loc, count in sorted(locations.items(), key=lambda x: x[1], reverse=True)[:5]:
+                    response += f"  • {loc}: {count}개\n"
+            
+            if manufacturers:
+                response += "\n제조사별 분포:\n"
+                for mfr, count in sorted(manufacturers.items(), key=lambda x: x[1], reverse=True)[:5]:
+                    response += f"  • {mfr}: {count}개\n"
+            
+            if years:
+                response += "\n구입 연도별:\n"
+                for year, count in sorted(years.items(), reverse=True)[:5]:
+                    response += f"  • {year}년: {count}개\n"
+            
+            response += "\n" + "=" * 50 + "\n\n"
+            response += "📋 상세 장비 목록 (최대 15개):\n\n"
+            
+            # 상세 목록
+            for idx, item in enumerate(matched_items[:15], 1):
+                response += f"[{idx}] {item}\n"
+                response += "-" * 40 + "\n"
+            
+            if len(matched_items) > 15:
+                response += f"\n... 외 {len(matched_items) - 15}개 장비"
+            
+            # LLM으로 요약 추가
+            if self.llm:
+                response = self._enhance_asset_response(response, query)
+            
+            return response
+            
+        except Exception as e:
+            return f"❌ 장비 유형 검색 실패: {e}"
+    
+    def _search_asset_by_manager(self, txt_path: Path, query: str) -> str:
+        """담당자별 자산 검색"""
+        try:
+            # 완전판 파일 우선 사용
+            complete_path = self.docs_dir / "assets" / "채널A_방송장비_자산_전체_7904개_완전판.txt"
+            if complete_path.exists():
+                txt_path = complete_path
+            
+            with open(txt_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # 담당자명 추출 - 직급 포함 패턴 (붙어있는 형식 우선)
+            manager_patterns = [
+                r'([가-힣]{2,4})(?:차장|부장|과장|대리|사원)',    # 붙어있는 형식 (신승만차장)
+                r'([가-힣]{2,4})\s*(?:차장|부장|과장|대리|사원)',  # 이름 + 공백 + 직급
+                r'([가-힣]{2,4})(?:이|가|의|님)',  # 이름 + 조사
+                r'([가-힣]{2,4})\s+담당',  # 이름 + 담당
+            ]
+            
+            manager_name = None
+            for pattern in manager_patterns:
+                match = re.search(pattern, query)
+                if match:
+                    manager_name = match.group(1)
+                    break
+            
+            if not manager_name:
+                # 키워드로 추출 시도
+                for word in query.split():
+                    if len(word) >= 2 and len(word) <= 4 and all(ord('가') <= ord(c) <= ord('힣') for c in word):
+                        if word not in ['담당', '관리', '장비', '전체', '목록']:
+                            manager_name = word
+                            break
+            
+            if manager_name:
+                result = self._count_by_field(content, "담당자", manager_name)
+                
+                if result['count'] > 0:
+                    response = f"📊 **{manager_name} 담당자 관리 장비 현황**\n"
+                    response += "=" * 50 + "\n"
+                    response += f"✅ 총 관리 장비: **{result['count']}개**\n\n"
+                    
+                    if result.get('sample_items'):
+                        response += "📋 **대표 장비 목록 (최대 10개)**:\n"
+                        response += "-" * 40 + "\n"
+                        for i, item in enumerate(result['sample_items'][:10], 1):
+                            lines = item.split('\n')
+                            equipment_info = {}
+                            for line in lines:
+                                if '[' in line and ']' in line:
+                                    equipment_info['id'] = line.strip()
+                                elif '부품명:' in line:
+                                    equipment_info['name'] = line.split('부품명:')[1].strip()
+                                elif '모델:' in line:
+                                    equipment_info['model'] = line.split('모델:')[1].strip()
+                                elif '위치:' in line:
+                                    equipment_info['location'] = line.split('위치:')[1].strip()
+                                elif '구입일:' in line:
+                                    equipment_info['date'] = line.split('구입일:')[1].strip()
+                            
+                            if equipment_info:
+                                response += f"\n**{i}. {equipment_info.get('id', '')}**\n"
+                                if 'name' in equipment_info:
+                                    response += f"   • 부품명: {equipment_info['name']}\n"
+                                if 'model' in equipment_info:
+                                    response += f"   • 모델: {equipment_info['model']}\n"
+                                if 'location' in equipment_info:
+                                    response += f"   • 위치: {equipment_info['location']}\n"
+                                if 'date' in equipment_info:
+                                    response += f"   • 구입일: {equipment_info['date']}\n"
+                    
+                    response += f"\n📄 출처: {txt_path.name}"
+                    # LLM으로 답변 개선
+                    return self._enhance_asset_response(response, query)
+                else:
+                    return f"❌ {manager_name} 담당자가 관리하는 장비를 찾을 수 없습니다."
+            else:
+                return "❌ 담당자 이름을 확인할 수 없습니다. 정확한 이름을 입력해주세요."
+            
+        except Exception as e:
+            return f"❌ 검색 실패: {e}"
+    
+    def _search_asset_by_price_range(self, txt_path: Path, query: str) -> str:
+        """금액 범위별 자산 검색"""
+        try:
+            # 완전판 파일 우선 사용
+            complete_path = self.docs_dir / "assets" / "채널A_방송장비_자산_전체_7904개_완전판.txt"
+            if complete_path.exists():
+                txt_path = complete_path
+            
+            with open(txt_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # 금액 추출 및 변환
+            amount_patterns = [
+                (r'(\d+)\s*억\s*(\d*)\s*천?\s*만?\s*원?', lambda m: int(m.group(1)) * 100000000 + (int(m.group(2)) * 10000000 if m.group(2) else 0)),
+                (r'(\d+)\s*천만\s*원?', lambda m: int(m.group(1)) * 10000000),
+                (r'(\d+)\s*백만\s*원?', lambda m: int(m.group(1)) * 1000000),
+                (r'(\d+)\s*만\s*원?', lambda m: int(m.group(1)) * 10000),
+            ]
+            
+            target_amount = None
+            for pattern, converter in amount_patterns:
+                match = re.search(pattern, query)
+                if match:
+                    target_amount = converter(match)
+                    break
+            
+            if not target_amount:
+                return "❌ 금액을 확인할 수 없습니다. (예: 1억원, 5천만원)"
+            
+            # 범위 타입 결정
+            range_type = 'exact'
+            if '이상' in query or '초과' in query:
+                range_type = 'above'
+            elif '이하' in query or '미만' in query:
+                range_type = 'below'
+            elif '부터' in query or '까지' in query:
+                range_type = 'range'
+            
+            # 장비 검색
+            lines = content.split('\n')
+            results = []
+            current_item = []
+            
+            for line in lines:
+                if re.match(r'^\[\d{4}\]', line):
+                    # 이전 항목 처리
+                    if current_item:
+                        item_text = '\n'.join(current_item)
+                        # 금액 추출 (여러 가능한 패턴 시도)
+                        price_match = re.search(r'금액:\s*([\d,]+)원?', item_text)
+                        if not price_match:
+                            price_match = re.search(r'단가:\s*([\d,]+)원?', item_text)
+                        if price_match:
+                            price = int(price_match.group(1).replace(',', ''))
+                            
+                            # 범위 체크
+                            if range_type == 'above' and price >= target_amount:
+                                results.append((price, item_text))
+                            elif range_type == 'below' and price <= target_amount:
+                                results.append((price, item_text))
+                            elif range_type == 'exact' and price == target_amount:
+                                results.append((price, item_text))
+                    
+                    current_item = [line]
+                elif current_item:
+                    current_item.append(line)
+            
+            # 마지막 항목 처리
+            if current_item:
+                item_text = '\n'.join(current_item)
+                price_match = re.search(r'금액:\s*([\d,]+)원?', item_text)
+                if not price_match:
+                    price_match = re.search(r'단가:\s*([\d,]+)원?', item_text)
+                if price_match:
+                    price = int(price_match.group(1).replace(',', ''))
+                    if range_type == 'above' and price >= target_amount:
+                        results.append((price, item_text))
+                    elif range_type == 'below' and price <= target_amount:
+                        results.append((price, item_text))
+                    elif range_type == 'exact' and price == target_amount:
+                        results.append((price, item_text))
+            
+            # 결과 정렬 (가격 내림차순)
+            results.sort(key=lambda x: x[0], reverse=True)
+            
+            if results:
+                range_desc = {
+                    'above': '이상',
+                    'below': '이하',
+                    'exact': '',
+                    'range': '범위'
+                }[range_type]
+                
+                response = f"💰 **{target_amount:,}원 {range_desc} 장비 현황**\n"
+                response += "=" * 50 + "\n"
+                response += f"✅ 총 {len(results)}개 장비\n\n"
+                
+                # 금액별 통계
+                total_amount = sum(r[0] for r in results)
+                avg_amount = total_amount // len(results) if results else 0
+                response += f"📊 **통계**:\n"
+                response += f"   • 총 금액: {total_amount:,}원\n"
+                response += f"   • 평균 금액: {avg_amount:,}원\n"
+                response += f"   • 최고가: {results[0][0]:,}원\n"
+                response += f"   • 최저가: {results[-1][0]:,}원\n\n"
+                
+                response += "📋 **상위 10개 장비**:\n"
+                response += "-" * 40 + "\n"
+                
+                for i, (price, item) in enumerate(results[:10], 1):
+                    lines = item.split('\n')
+                    for line in lines:
+                        if '[' in line and ']' in line:
+                            response += f"\n**{i}. {line.strip()}** - {price:,}원\n"
+                        elif '부품명:' in line:
+                            response += f"   • {line.strip()}\n"
+                        elif '모델:' in line:
+                            response += f"   • {line.strip()}\n"
+                
+                response += f"\n📄 출처: {txt_path.name}"
+                # LLM으로 답변 개선
+                return self._enhance_asset_response(response, query)
+            else:
+                range_desc = {
+                    'above': '이상',
+                    'below': '이하',
+                    'exact': '',
+                    'range': '범위'
+                }.get(range_type, '')
+                return f"❌ {target_amount:,}원 {range_desc} 장비를 찾을 수 없습니다."
+            
+        except Exception as e:
+            return f"❌ 검색 실패: {e}"
+    
+    def _search_asset_by_year_range(self, txt_path: Path, query: str) -> str:
+        """연도 범위별 자산 검색 (이전/이후/범위)"""
+        try:
+            # 완전판 파일 우선 사용
+            complete_path = self.docs_dir / "assets" / "채널A_방송장비_자산_전체_7904개_완전판.txt"
+            if complete_path.exists():
+                txt_path = complete_path
+            
+            with open(txt_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # 연도 추출
+            year_matches = re.findall(r'20\d{2}', query)
+            
+            # 범위 타입 결정
+            range_type = 'exact'
+            if '이전' in query or '전' in query:
+                range_type = 'before'
+            elif '이후' in query or '후' in query:
+                range_type = 'after'
+            elif '부터' in query and '까지' in query:
+                range_type = 'between'
+            elif '최근' in query:
+                range_type = 'recent'
+                # 최근 N년 추출
+                recent_match = re.search(r'최근\s*(\d+)\s*년', query)
+                if recent_match:
+                    recent_years = int(recent_match.group(1))
+                    current_year = 2025
+                    year_matches = [str(current_year - recent_years)]
+                    range_type = 'after'
+            
+            if not year_matches and range_type != 'recent':
+                return "❌ 연도를 확인할 수 없습니다. (예: 2023년, 2020년 이전)"
+            
+            # 연도 범위 설정
+            target_year = None
+            if range_type == 'between' and len(year_matches) >= 2:
+                start_year = int(year_matches[0])
+                end_year = int(year_matches[1])
+            elif year_matches:
+                target_year = int(year_matches[0])
+                if range_type == 'exact':
+                    start_year = target_year
+                    end_year = target_year
+                elif range_type == 'after':
+                    start_year = target_year
+                    end_year = 2025
+                elif range_type == 'before':
+                    start_year = 2000
+                    end_year = target_year
+            else:
+                # 최근 3년 기본값
+                current_year = 2025
+                start_year = current_year - 3
+                end_year = current_year
+            
+            # 장비 검색
+            lines = content.split('\n')
+            results = []
+            year_stats = {}
+            
+            for line in lines:
+                if '구입일:' in line:
+                    date_match = re.search(r'구입일:\s*(\d{4})', line)
+                    if date_match:
+                        year = int(date_match.group(1))
+                        
+                        # 범위 체크
+                        if start_year <= year <= end_year:
+                            results.append(line)
+                            year_stats[year] = year_stats.get(year, 0) + 1
+            
+            if results:
+                # 범위 설명
+                if range_type == 'exact':
+                    range_desc = f"{target_year}년"
+                elif range_type == 'before':
+                    range_desc = f"{end_year}년 이전"
+                elif range_type == 'after':
+                    range_desc = f"{start_year}년 이후"
+                elif range_type == 'between':
+                    range_desc = f"{start_year}년 ~ {end_year}년"
+                else:
+                    range_desc = "지정 기간"
+                
+                response = f"📅 **{range_desc} 구입 장비 현황**\n"
+                response += "=" * 50 + "\n"
+                response += f"✅ 총 {len(results)}개 장비\n\n"
+                
+                # 연도별 통계
+                if year_stats:
+                    response += "📊 **연도별 분포**:\n"
+                    for year in sorted(year_stats.keys(), reverse=True):
+                        response += f"   • {year}년: {year_stats[year]}개\n"
+                    response += "\n"
+                
+                # 샘플 표시
+                response += "📋 **샘플 장비 (최대 15개)**:\n"
+                response += "-" * 40 + "\n"
+                for i, result in enumerate(results[:15], 1):
+                    response += f"{i}. {result}\n"
+                
+                response += f"\n📄 출처: {txt_path.name}"
+                # LLM으로 답변 개선
+                return self._enhance_asset_response(response, query)
+            else:
+                if range_type == 'exact' and target_year:
+                    return f"❌ {target_year}년에 구입한 장비를 찾을 수 없습니다."
+                elif start_year and end_year:
+                    return f"❌ {start_year}년 ~ {end_year}년 기간에 구입한 장비를 찾을 수 없습니다."
+                else:
+                    return f"❌ 해당 기간에 구입한 장비를 찾을 수 없습니다."
+            
+        except Exception as e:
+            return f"❌ 검색 실패: {e}"
+    
+    def _search_asset_by_year(self, txt_path: Path, query: str) -> str:
+        """구입연도별 자산 검색"""
+        try:
+            # 완전판 파일 우선 사용
+            complete_path = self.docs_dir / "assets" / "채널A_방송장비_자산_전체_7904개_완전판.txt"
+            if complete_path.exists():
+                txt_path = complete_path
+            
+            with open(txt_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # 연도 추출
+            year_match = re.search(r'(20\d{2})', query)
+            if year_match:
+                year = year_match.group(1)
+                
+                # 구입일 패턴으로 검색
+                pattern = f"구입일: {year}"
+                lines = content.split('\n')
+                results = []
+                count = 0
+                
+                for line in lines:
+                    if pattern in line:
+                        count += 1
+                        if len(results) < 10:  # 처음 10개만
+                            results.append(line)
+                
+                if results:
+                    response = f"📊 {year}년 구입 장비: 총 {count}개\n"
+                    response += "━" * 40 + "\n"
+                    response += "\n[샘플 (처음 10개)]:\n"
+                    for result in results:
+                        response += f"• {result}\n"
+                    response += f"\n📄 출처: {txt_path.name}"
+                    # LLM으로 답변 개선
+                    return self._enhance_asset_response(response, query)
+                else:
+                    return f"❌ {year}년에 구입한 장비가 없습니다."
+            
+            return "❌ 연도를 입력해주세요."
+            
+        except Exception as e:
+            return f"❌ 검색 실패: {e}"
     
     def _search_location_summary(self, txt_path: Path, location: str) -> str:
         """특정 위치의 장비를 카테고리별로 정리"""
@@ -4130,6 +4921,419 @@ class PerfectRAG:
         except Exception as e:
             return f"❌ 검색 실패: {e}"
     
+    def _search_asset_by_location(self, txt_path: Path, query: str) -> str:
+        """위치별 자산 검색"""
+        try:
+            # 완전판 파일 우선 사용 (assets 폴더에서)
+            complete_path = self.docs_dir / "assets" / "채널A_방송장비_자산_전체_7904개_완전판.txt"
+            if complete_path.exists():
+                txt_path = complete_path
+            
+            with open(txt_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # 위치 키워드 찾기
+            # 쿼리에서 위치 키워드 동적 추출
+            # 한글 2글자 이상 + 일반적인 장소 접미사
+            location_pattern = r'[가-힣]{2,}(?:스튜디오|부조|편집실|더빙실|사옥|센터|실|층|관|동|호)'
+            locations = re.findall(location_pattern, query)
+            found_location = None
+            for loc in locations:
+                if loc in query:
+                    found_location = loc
+                    break
+            
+            if found_location:
+                # 정확한 위치 매칭으로 검색
+                lines = content.split('\n')
+                results = []
+                count = 0
+                
+                for line in lines:
+                    if '위치:' in line:
+                        # 실제 위치 추출하여 정확히 매칭
+                        location_match = re.search(r'위치:\s*([^|\n]+)', line)
+                        if location_match:
+                            actual_location = location_match.group(1).strip()
+                            
+                            # 정확한 매칭 규칙 적용
+                            is_match = False
+                            if found_location == actual_location:
+                                # 완전 일치
+                                is_match = True
+                            elif found_location == '부조정실':
+                                # '부조정실'로 검색시 '*부조정실' 패턴만 매칭
+                                is_match = actual_location.endswith('부조정실')
+                            elif found_location == '스튜디오':
+                                # '스튜디오'로 검색시 '*스튜디오' 패턴만 매칭 
+                                is_match = actual_location.endswith('스튜디오')
+                            elif found_location == '편집실':
+                                # '편집실'로 검색시 '*편집실' 패턴만 매칭
+                                is_match = actual_location.endswith('편집실')
+                            elif found_location in ['중계차', 'van', 'Van', 'VAN']:
+                                # 중계차 검색시 Van 관련 위치 모두 매칭
+                                is_match = 'Van' in actual_location or 'VAN' in actual_location
+                            elif len(found_location) > 3:
+                                # 3글자 이상의 구체적인 위치명은 부분 매칭 허용
+                                is_match = found_location in actual_location
+                            
+                            if is_match:
+                                count += 1
+                                if len(results) < 10:  # 처음 10개만
+                                    results.append(line)
+                
+                if results:
+                    response = f"📊 {found_location} 위치 장비: 총 {count}개\n"
+                    response += "━" * 40 + "\n"
+                    response += "\n[샘플 (처음 10개)]:\n"
+                    for result in results:
+                        response += f"• {result}\n"
+                    response += f"\n📄 출처: {txt_path.name}"
+                    # LLM으로 답변 개선
+                    return self._enhance_asset_response(response, query)
+                else:
+                    return f"❌ {found_location}에 위치한 장비가 없습니다."
+            
+            return "❌ 위치를 입력해주세요."
+            
+        except Exception as e:
+            return f"❌ 검색 실패: {e}"
+    
+    def _search_asset_with_llm(self, txt_path: Path, query: str) -> str:
+        """LLM을 활용한 동적 자산 검색 - 정확한 수량 계산"""
+        try:
+            # 완전판 파일 우선 사용
+            complete_path = self.docs_dir / "assets" / "채널A_방송장비_자산_전체_7904개_완전판.txt"
+            if complete_path.exists():
+                txt_path = complete_path
+            
+            with open(txt_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            query_lower = query.lower()
+            lines = content.split('\n')
+            
+            # 담당자별 검색
+            if '담당' in query_lower or '관리' in query_lower:
+                # 담당자명 추출
+                # 한글 이름 패턴으로 동적 추출 (성+이름 형태)
+                manager_patterns = re.findall(r'[가-힣]{2,4}(?:\s+[가-힣]{2,3})?', query)
+                manager = None
+                for name in manager_patterns:
+                    if name in query:
+                        manager = name
+                        break
+                
+                if manager:
+                    result = self._count_by_field(content, "담당자", manager)
+                    response = f"📊 {manager} 담당자 관리 장비 현황\n"
+                    response += "=" * 50 + "\n"
+                    response += f"✅ 총 관리 장비: {result['count']}개\n\n"
+                    
+                    if result.get('sample_items'):
+                        response += "📋 대표 장비 목록:\n"
+                        for i, item in enumerate(result['sample_items'][:5], 1):
+                            lines = item.split('\n')
+                            for line in lines:
+                                if '[' in line and ']' in line:
+                                    response += f"\n{i}. {line.strip()}\n"
+                                elif '부품명' in line or '모델:' in line:
+                                    response += f"   {line.strip()}\n"
+                    
+                    response += f"\n📄 출처: {txt_path.name}"
+                    # LLM으로 답변 개선
+                    return self._enhance_asset_response(response, query)
+            
+            # 위치별 검색 - 동적 처리
+            # 위치 관련 키워드를 동적으로 찾기
+            location_keywords = re.findall(r'[가-힣]+(?:스튜디오|부조정실|장비실|데이터센터|편집실|더빙실|사옥|층|관|동|호)', query)
+            if location_keywords:
+                for location in location_keywords:
+                    result = self._count_by_field(content, "위치", location)
+                    if result['count'] > 0:
+                        # "목록", "전체" 등이 있으면 상세 목록 표시
+                        if any(keyword in query for keyword in ["목록", "전체", "보여달라", "보여줘", "리스트", "알려줘"]):
+                            return self._generate_detailed_location_list(content, location, result, txt_path)
+                        else:
+                            # 간단한 현황만 표시
+                            response = f"📊 {location} 장비 현황\n"
+                            response += "=" * 50 + "\n"
+                            response += f"✅ 총 보유 장비: {result['count']}개\n\n"
+                            response += f"📄 출처: {txt_path.name}"
+                            return response
+            
+            # 벤더사별 검색 - 동적 처리
+            # 벤더사 키워드를 문서에서 동적으로 찾기
+            vendor_keywords = []
+            if '벤더' in query or '납품' in query or '업체' in query:
+                # 쿼리에서 회사명 패턴 추출 (한글+시스템/코리아/디지탈 등)
+                vendor_patterns = re.findall(r'[가-힣]+(?:시스템|코리아|디지탈|전자|정보|통신|테크|솔루션)|[A-Z]{2,}', query)
+                for vendor in vendor_patterns:
+                    result = self._count_by_field(content, "벤더사", vendor)
+                    if result['count'] > 0:
+                        response = f"📊 {vendor} 납품 장비 현황\n"
+                        response += "=" * 50 + "\n"
+                        response += f"✅ 총 납품 장비: {result['count']}개\n\n"
+                        response += f"📄 출처: {txt_path.name}"
+                        return response
+            
+            # CCU 관련 질문 특별 처리
+            elif 'ccu' in query_lower or 'camera control' in query_lower:
+                ccu_items = []
+                ccu_blocks = []
+                ccu_count = 0
+                
+                # CCU 항목을 블록 단위로 찾기
+                for i, line in enumerate(lines):
+                    if 'Camera Control Unit' in line or 'CCU' in line:
+                        # 이 줄이 제목줄인지 확인 (대괄호로 시작)
+                        if line.strip().startswith('['):
+                            # 전체 블록 수집 (현재 줄 + 다음 4줄)
+                            block_lines = []
+                            for j in range(i, min(i+5, len(lines))):
+                                if lines[j].strip():
+                                    block_lines.append(lines[j].strip())
+                            
+                            if block_lines:
+                                ccu_blocks.append('\n'.join(block_lines))
+                                ccu_count += 1
+                
+                response = f"📊 CCU(Camera Control Unit) 현황\n"
+                response += "=" * 50 + "\n"
+                response += f"### 📈 총 CCU 장비: **{ccu_count}개**\n\n"
+                
+                # 제조사별 분포 분석
+                manufacturers = {}
+                for block in ccu_blocks:
+                    mfr_match = re.search(r'제조사:\s*([^|]+)', block)
+                    if mfr_match:
+                        mfr = mfr_match.group(1).strip()
+                        manufacturers[mfr] = manufacturers.get(mfr, 0) + 1
+                
+                if manufacturers:
+                    response += "### 📊 제조사별 분포\n"
+                    for mfr, cnt in sorted(manufacturers.items(), key=lambda x: x[1], reverse=True):
+                        response += f"• **{mfr}**: {cnt}개\n"
+                    response += "\n"
+                
+                if ccu_blocks:
+                    # CCU는 중요 장비이므로 30개 미만은 전체 표시
+                    display_limit = 30 if ccu_count > 30 else ccu_count
+                    
+                    if ccu_count <= 30:
+                        response += "### 📋 전체 상세 목록\n"
+                    else:
+                        response += f"### 📋 상세 목록 ({display_limit}개/총 {ccu_count}개)\n"
+                    
+                    for i, block in enumerate(ccu_blocks[:display_limit], 1):
+                        response += f"{block}\n\n"
+                    
+                    if ccu_count > display_limit:
+                        response += f"\n⚠️ 표시된 {display_limit}개 외에 {ccu_count - display_limit}개가 더 있습니다.\n"
+                        response += "🔍 전체 목록이 필요하시면 '전체 CCU 목록 보여줘'라고 요청하세요.\n"
+                
+                response += f"\n---\n📄 출처: {txt_path.name}"
+                return response
+            
+            # 범용적인 자산 검색 개선 - 블록 단위로 완전한 정보 제공
+            # 쿼리에서 검색어 추출
+            search_terms = []
+            
+            # "어디" "있는" 같은 키워드가 있으면 위치 검색
+            location_search = False
+            if any(word in query_lower for word in ['어디', '위치', '있는', '보관']):
+                location_search = True
+            
+            # 검색할 키워드 동적 추출
+            # 영어 단어, 한글 단어, 숫자 등
+            potential_keywords = re.findall(r'[A-Za-z]{2,}[\s\-]?[A-Za-z]*|[가-힣]{2,}|[A-Z]+[-\s]?\d+', query)
+            
+            if potential_keywords:
+                # 블록 단위로 장비 정보 수집
+                matching_items = []
+                current_item = []
+                is_matching = False
+                item_count = 0
+                
+                for line in lines:
+                    # 새로운 장비 항목 시작 감지
+                    if re.match(r'^\[\d{4}\]', line):
+                        # 이전 항목이 매칭되었으면 저장
+                        if is_matching and current_item:
+                            matching_items.append('\n'.join(current_item))
+                            item_count += 1
+                        
+                        # 새 항목 시작
+                        current_item = [line]
+                        is_matching = False
+                        
+                        # 첫 줄에서도 매칭 체크
+                        for keyword in potential_keywords:
+                            if keyword.lower() in line.lower():
+                                is_matching = True
+                                break
+                    elif current_item:
+                        current_item.append(line)
+                        # 현재 줄에서 키워드 매칭 확인
+                        for keyword in potential_keywords:
+                            if keyword.lower() in line.lower():
+                                is_matching = True
+                                break
+                
+                # 마지막 항목 처리
+                if is_matching and current_item:
+                    matching_items.append('\n'.join(current_item))
+                    item_count += 1
+                
+                if matching_items:
+                    # 검색어 표시
+                    search_display = ' + '.join(potential_keywords)
+                    response = f"📊 '{search_display}' 검색 결과\n"
+                    response += "=" * 50 + "\n"
+                    response += f"### 📈 총 검색 결과: **{len(matching_items)}개**\n\n"
+                    
+                    # 동적 분류 (장비명 기반)
+                    equipment_categories = {}
+                    for item in matching_items:
+                        first_line = item.split('\n')[0]
+                        # 장비명 추출
+                        equipment_match = re.search(r'\[\d{4}\]\s*(.+?)(?:\s*\||$)', first_line)
+                        if equipment_match:
+                            equipment_name = equipment_match.group(1).strip()
+                            
+                            # 동적 카테고리 분류
+                            category = self._categorize_equipment(equipment_name)
+                            
+                            if category not in equipment_categories:
+                                equipment_categories[category] = []
+                            equipment_categories[category].append(equipment_name)
+                    
+                    # 카테고리별 수량 표시
+                    if equipment_categories and len(equipment_categories) > 1:
+                        response += "### 📋 장비 타입별 분류\n"
+                        for cat_name, equipments in sorted(equipment_categories.items()):
+                            response += f"• **{cat_name}**: {len(equipments)}개\n"
+                        response += "\n"
+                    
+                    # 상세 장비 목록 (블록 단위 전체 정보)
+                    response += "### 📄 상세 장비 정보\n\n"
+                    
+                    # 표시할 항목 수 결정 (많으면 30개, 적으면 전체)
+                    display_count = min(30, len(matching_items))
+                    
+                    for i, item in enumerate(matching_items[:display_count], 1):
+                        lines_of_item = item.split('\n')
+                        
+                        # 전체 정보 블록 표시
+                        response += f"[{i}] " + lines_of_item[0][6:] + "\n"  # 번호 제거하고 표시
+                        
+                        # 주요 정보 추출 및 표시
+                        for line in lines_of_item[1:]:
+                            line = line.strip()
+                            if line and not line.startswith('━'):
+                                # 정보 필드 정리
+                                if any(field in line for field in ['제조사:', '모델명:', '시리얼:', '위치:', '담당자:', '벤더사:', '취득일자:']):
+                                    response += f"  {line}\n"
+                        response += "\n"
+                    
+                    if len(matching_items) > 30:
+                        response += f"\n⚠️ 총 {len(matching_items)}개 중 30개만 표시\n"
+                        response += "🔍 전체 목록이 필요하시면 '전체 목록 보여줘'라고 요청하세요.\n"
+                    
+                    response += f"\n📄 출처: {txt_path.name}"
+                    # LLM으로 답변 개선
+                    return self._enhance_asset_response(response, query)
+            
+            # 기타 키워드 검색
+            results = []
+            search_keywords = re.findall(r'[가-힣]{2,}|[A-Za-z]{3,}|\d{4,}', query)
+            
+            for line in lines:
+                for keyword in search_keywords:
+                    if keyword.lower() in line.lower():
+                        results.append(line.strip())
+                        if len(results) >= 20:  # 최대 20개
+                            break
+                if len(results) >= 20:
+                    break
+            
+            if results:
+                response = f"📊 '{query}' 검색 결과:\n"
+                response += "━" * 40 + "\n"
+                
+                # 결과 요약
+                response += f"총 {len(results)}개 항목 발견\n\n"
+                
+                # 30개까지 표시
+                display_limit = min(30, len(results))
+                
+                for i, result in enumerate(results[:display_limit], 1):
+                    response += f"{i}. {result[:150]}\n"
+                
+                if len(results) > display_limit:
+                    response += f"\n⚠️ 총 {len(results)}개 중 {display_limit}개만 표시\n"
+                    response += "🔍 전체 목록이 필요하시면 다시 요청하세요.\n"
+                    
+                response += f"\n📄 출처: {txt_path.name}"
+                # LLM으로 답변 개선
+                return self._enhance_asset_response(response, query)
+            
+            # 결과가 없거나 더 복잡한 질문인 경우 LLM 사용
+            # LLM으로 더 지능적인 검색 수행
+            print("🤖 LLM을 사용한 고급 검색 시작...")
+            
+            # 전체 내용에서 관련 부분 추출 (최대 10000자)
+            content_sample = content[:10000] if len(content) > 10000 else content
+            
+            # LLM 초기화
+            if self.llm is None:
+                self._preload_llm()
+            
+            if self.llm:
+                prompt = f"""다음은 채널A 방송장비 자산 데이터입니다.
+
+사용자 질문: {query}
+
+데이터 샘플:
+{content_sample}
+
+위 데이터를 분석하여 사용자 질문에 대한 답변을 작성하세요.
+- 정확한 수량과 세부정보를 포함하세요
+- 표나 목록 형식으로 정리하세요
+- 관련 장비의 모델명, 제조사, 위치 등을 포함하세요
+- 데이터에 없는 내용은 추측하지 마세요
+
+답변:"""
+                
+                try:
+                    # QwenLLM의 올바른 메서드 사용
+                    if hasattr(self.llm, 'generate_response'):
+                        # 컨텍스트 준비
+                        context_chunks = [{
+                            'content': content_sample,
+                            'source': str(txt_path.name),
+                            'score': 1.0
+                        }]
+                        response_obj = self.llm.generate_response(prompt, context_chunks)
+                        if response_obj and hasattr(response_obj, 'answer'):
+                            llm_response = response_obj.answer
+                        else:
+                            llm_response = str(response_obj) if response_obj else ""
+                    else:
+                        # 폴백 - 직접 __call__ 사용
+                        llm_response = self.llm(prompt, max_tokens=1024, temperature=0.1)['choices'][0]['text']
+                    
+                    if llm_response and llm_response.strip():
+                        return f"📊 AI 분석 결과:\n\n{llm_response}\n\n📄 출처: {txt_path.name}"
+                except Exception as e:
+                    print(f"⚠️ LLM 처리 오류: {e}")
+            
+            # LLM도 실패한 경우 기본 메시지
+            return f"❌ '{query}'에 대한 정보를 찾을 수 없습니다.\n\n💡 다른 검색어를 시도해보세요:\n- 제조사명 (HP, SONY, Harris 등)\n- 장비명 (CCU, 카메라, 마이크 등)\n- 연도 (2015년, 2020년 등)"
+            
+        except Exception as e:
+            return f"❌ 자산 검색 실패: {e}"
+    
     def _get_asset_summary(self, txt_path: Path) -> str:
         """자산 파일 요약 정보 반환"""
         try:
@@ -4261,6 +5465,140 @@ class PerfectRAG:
             'sample_items': items
         }
     
+    def _search_asset_by_manufacturer(self, txt_path: Path, query: str) -> str:
+        """제조사별 자산 검색 - 정확한 수량 계산"""
+        try:
+            # 완전판 파일 우선 사용
+            complete_path = self.docs_dir / "assets" / "채널A_방송장비_자산_전체_7904개_완전판.txt"
+            if complete_path.exists():
+                txt_path = complete_path
+            
+            with open(txt_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # 제조사명 추출 (더 유연한 접근)
+            # 1. 알려진 제조사 목록
+            known_manufacturers = [
+                'SONY', 'HARRIS', 'HP', 'TOSHIBA', 'PANASONIC', 'CANON',
+                'DELL', 'APPLE', 'SAMSUNG', 'LG', 'AVID', 'BLACKMAGIC',
+                'MICROSOFT', 'ADOBE', 'GRASS VALLEY', 'EVERTZ', 'IMAGINE',
+                'ASHIDAVOX', 'ATOMOS', 'ARRI', 'RED', 'JVC', 'IKEGAMI'
+            ]
+            
+            manufacturer = None
+            query_upper = query.upper()
+            
+            # 알려진 제조사 확인
+            for mfr in known_manufacturers:
+                if mfr in query_upper:
+                    manufacturer = mfr
+                    break
+            
+            # 못 찾았으면 영문 대문자 단어 추출
+            if not manufacturer:
+                words = re.findall(r'\b[A-Z][A-Z0-9]*\b', query_upper)
+                for word in words:
+                    if len(word) >= 2 and word not in ['THE', 'AND', 'OR', 'FOR']:
+                        manufacturer = word
+                        break
+            
+            if manufacturer:
+                # 정확한 수량 계산
+                result = self._count_by_field(content, "제조사", manufacturer)
+                
+                response = f"📊 {manufacturer} 제조사 장비 현황\n"
+                response += "=" * 50 + "\n"
+                response += f"✅ 총 보유 수량: {result['count']}개\n\n"
+                
+                if result.get('sample_items'):
+                    # 모델별 통계
+                    model_counts = {}
+                    for item in result['sample_items']:
+                        lines = item.split('\n')
+                        for line in lines:
+                            if '모델:' in line:
+                                model = line.split('모델:')[1].split('|')[0].strip()
+                                if model:
+                                    model_counts[model] = model_counts.get(model, 0) + 1
+                    
+                    if model_counts:
+                        response += "📦 주요 모델:\n"
+                        for model, count in sorted(model_counts.items(), key=lambda x: x[1], reverse=True)[:10]:
+                            response += f"  • {model}: {count}개\n"
+                        response += "\n"
+                    
+                    # 샘플 장비 목록
+                    response += "📋 대표 장비 (샘플):\n"
+                    for i, item in enumerate(result['sample_items'][:5], 1):
+                        lines = item.split('\n')
+                        for line in lines:
+                            if line.startswith('[') and ']' in line:
+                                response += f"\n{i}. {line.strip()}\n"
+                            elif '기본정보:' in line:
+                                # 모델과 시리얼만 표시
+                                parts = line.split('|')
+                                for part in parts:
+                                    if '모델:' in part or 'S/N:' in part:
+                                        response += f"   {part.strip()}\n"
+                
+                response += f"\n📄 출처: {txt_path.name}"
+                # LLM으로 답변 개선
+                return self._enhance_asset_response(response, query)
+            
+            # 제조사를 찾지 못한 경우
+            else:
+                # 제조사별 검색
+                lines = content.split('\n')
+                results = []
+                count = 0
+                models = {}  # 모델별 집계
+                
+                for line in lines:
+                    if manufacturer in line.upper() or f"제조사: {manufacturer}" in line:
+                        count += 1
+                        if len(results) < 20:  # 처음 20개
+                            results.append(line.strip())
+                        
+                        # 모델명 추출하여 집계
+                        model_match = re.search(r'모델:\s*([^\|]+)', line)
+                        if model_match:
+                            model = model_match.group(1).strip()
+                            models[model] = models.get(model, 0) + 1
+                
+                if results:
+                    response = f"📊 {manufacturer} 제조사 장비 현황\n"
+                    response += "=" * 50 + "\n"
+                    response += f"총 보유 수량: {count}개\n\n"
+                    
+                    # 모델별 현황 (상위 10개)
+                    if models:
+                        response += "📦 모델별 분포:\n"
+                        for model, cnt in sorted(models.items(), key=lambda x: x[1], reverse=True)[:10]:
+                            response += f"  • {model}: {cnt}개\n"
+                        response += "\n"
+                    
+                    response += "📋 상세 목록 (일부):\n"
+                    response += "-" * 40 + "\n"
+                    # 제조사별 검색도 30개까지 표시
+                    display_limit = min(30, count)
+                    for i, result in enumerate(results[:display_limit], 1):
+                        response += f"{i}. {result}\n"
+                    
+                    if count > display_limit:
+                        response += f"\n⚠️ 총 {count}개 중 {display_limit}개만 표시\n"
+                        response += "🔍 전체 목록이 필요하시면 다시 요청하세요.\n"
+                    
+                    response += f"\n📄 출처: {txt_path.name}"
+                    # LLM으로 답변 개선
+                    return self._enhance_asset_response(response, query)
+                else:
+                    return f"❌ {manufacturer} 제조사 장비가 없습니다."
+            
+            return "❌ 제조사명을 확인할 수 없습니다."
+            
+        except Exception as e:
+            return f"❌ 검색 실패: {e}"
+    
     def _format_detailed_asset_response(self, asset_data: list, model: str, query: str) -> str:
         """자산 데이터를 상세하고 정확하게 포맷팅"""
         if not asset_data:
@@ -4351,6 +5689,196 @@ class PerfectRAG:
         lines.append("📎 출처: 채널A 방송장비 자산 데이터베이스")
         
         return '\n'.join(lines)
+    
+    def _search_asset_by_model(self, txt_path: Path, query: str) -> str:
+        """모델별 자산 검색"""
+        try:
+            # 완전판 파일 우선 사용
+            complete_path = self.docs_dir / "assets" / "채널A_방송장비_자산_전체_7904개_완전판.txt"
+            if complete_path.exists():
+                txt_path = complete_path
+            
+            with open(txt_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # 모델명 추출 (HP Z840, XDS-PD1000 등 - 더 유연한 패턴)
+            model_patterns = [
+                r'(Z\d+)',  # Z840, Z620 등
+                r'([A-Z]{2,}[-]?[A-Z]*\d+)',  # XDS-PD1000, DL360 등
+                r'([A-Z]+[-]?\d+)',  # PD1000, DL-360 등
+                r'(\w+[-]?\w+\d+)',  # 일반적인 모델명
+            ]
+            
+            model = None
+            for pattern in model_patterns:
+                model_match = re.search(pattern, query, re.IGNORECASE)
+                if model_match:
+                    model = model_match.group(1).upper()
+                    break
+            
+            if model:
+                
+                # 모델 패턴으로 검색
+                lines = content.split('\n')
+                results = []
+                count = 0
+                
+                for line in lines:
+                    if model in line.upper():
+                        count += 1
+                        if len(results) < 10:  # 처음 10개만
+                            results.append(line)
+                
+                if results:
+                    # 데이터를 딕셔너리 리스트로 변환 (여러 줄 처리)
+                    asset_data = []
+                    
+                    # 각 항목을 찾기 (모델명이 있는 줄을 찾고 전후 줄 포함)
+                    for i, line in enumerate(lines):
+                        if model in line.upper() and '모델:' in line:
+                            # 항목 블록 구성 (이전 줄 + 현재 줄 + 다음 줄들)
+                            block_lines = []
+                            
+                            # 이전 줄 (항목 번호)
+                            if i > 0:
+                                block_lines.append(lines[i-1])
+                            
+                            # 현재 줄부터 시작해서 다음 항목 시작까지 또는 최대 15줄
+                            for j in range(i, min(i+15, len(lines))):
+                                block_lines.append(lines[j])
+                                # 다음 항목이 시작되면 중단
+                                if j > i and lines[j].strip().startswith('[') and lines[j].strip().endswith(']'):
+                                    break
+                            
+                            # 블록을 하나의 문자열로 합침
+                            block = '\n'.join(block_lines)
+                            
+                            # 정보 추출
+                            item_dict = {'모델': model}
+                            
+                            # 기본정보 추출 (블록에서)
+                            # 제조사 추출
+                            mfr_match = re.search(r'제조사:\s*([^|]+)', block)
+                            if mfr_match:
+                                item_dict['제조사'] = mfr_match.group(1).strip()
+                            
+                            # S/N 추출 (여러 개의 S/N 처리)
+                            serial_match = re.search(r'S/N:\s*([^|\n]+)', block)
+                            if serial_match:
+                                sn_text = serial_match.group(1).strip()
+                                # 여러 시리얼 번호가 줄바꿈으로 구분된 경우
+                                if '\n' in block[block.find('S/N:'):]:
+                                    # S/N 이후 다음 항목까지 모든 줄 수집
+                                    sn_lines = []
+                                    in_sn = False
+                                    for line in block.split('\n'):
+                                        if 'S/N:' in line:
+                                            in_sn = True
+                                            sn_lines.append(line.split('S/N:')[1].strip())
+                                        elif in_sn and '구입정보:' not in line and '위치정보:' not in line and '관리정보:' not in line:
+                                            # 다음 섹션이 시작되기 전까지 수집
+                                            if line.strip() and not line.strip().startswith('['):
+                                                sn_lines.append(line.strip())
+                                        elif '구입정보:' in line or '위치정보:' in line or '관리정보:' in line:
+                                            break
+                                    item_dict['S/N'] = ', '.join(sn_lines) if sn_lines else sn_text
+                                else:
+                                    item_dict['S/N'] = sn_text
+                            
+                            # 구입정보 추출
+                            # 구입일 추출
+                            date_match = re.search(r'구입일:\s*([^|]+)', block)
+                            if date_match:
+                                date_str = date_match.group(1).strip()
+                                item_dict['구입일'] = date_str[:10] if len(date_str) >= 10 else date_str
+                            
+                            # 단가 및 금액 추출
+                            price_match = re.search(r'단가:\s*([^|\n]+)', block)
+                            if price_match:
+                                item_dict['단가'] = price_match.group(1).strip()
+                            
+                            amount_match = re.search(r'금액:\s*([^|\n]+)', block)
+                            if amount_match:
+                                item_dict['금액'] = amount_match.group(1).strip()
+                            
+                            # 위치정보 추출  
+                            loc_match = re.search(r'위치:\s*([^|\n]+)', block)
+                            if loc_match:
+                                item_dict['위치'] = loc_match.group(1).strip()
+                                
+                            system_match = re.search(r'시스템:\s*([^|\n]+)', block)
+                            if system_match:
+                                item_dict['시스템'] = system_match.group(1).strip()
+                            
+                            # 관리정보 추출
+                            manager_match = re.search(r'담당자:\s*([^|\n]+)', block)
+                            if manager_match:
+                                item_dict['담당자'] = manager_match.group(1).strip()
+                            
+                            vendor_match = re.search(r'벤더사:\s*([^|\n]+)', block)
+                            if vendor_match:
+                                item_dict['벤더사'] = vendor_match.group(1).strip()
+                            
+                            # 연락처 추출
+                            contact_match = re.search(r'연락처:\s*([^|\n]+)', block)
+                            if contact_match:
+                                item_dict['연락처'] = contact_match.group(1).strip()
+                            
+                            # 계약업체 추출
+                            contract_match = re.search(r'계약업체:\s*([^|\n]+)', block)
+                            if contract_match:
+                                item_dict['계약업체'] = contract_match.group(1).strip()
+                            
+                            # 공백 라인 제외
+                            if item_dict.get('S/N'):
+                                asset_data.append(item_dict)
+                    
+                    # 직접 상세한 포맷으로 출력
+                    return self._format_detailed_asset_response(asset_data, model, query)
+                    
+                    # 위치별 분포 분석
+                    locations = {}
+                    for line in lines:
+                        if model in line.upper():
+                            loc_match = re.search(r'위치:\s*([^|]+)', line)
+                            if loc_match:
+                                loc = loc_match.group(1).strip()
+                                locations[loc] = locations.get(loc, 0) + 1
+                    
+                    if locations:
+                        response += "### 📍 위치별 분포\n"
+                        for loc, cnt in sorted(locations.items(), key=lambda x: x[1], reverse=True)[:5]:
+                            response += f"• **{loc}**: {cnt}개\n"
+                        response += "\n"
+                    
+                    response += "### 📋 상세 목록 (일부)\n"
+                    response += "```\n"
+                    for i, result in enumerate(results, 1):
+                        # 각 항목을 더 읽기 쉽게 포맷
+                        serial_match = re.search(r'S/N:\s*([^|]+)', result)
+                        loc_match = re.search(r'위치:\s*([^|]+)', result)
+                        
+                        formatted_line = f"[{i:02d}]"
+                        if serial_match:
+                            formatted_line += f" S/N: {serial_match.group(1).strip()}"
+                        if loc_match:
+                            formatted_line += f" | 위치: {loc_match.group(1).strip()}"
+                        
+                        response += f"{formatted_line}\n"
+                    response += "```\n"
+                    
+                    if count > 10:
+                        response += f"\n... 외 {count - 10}개 더 있음\n"
+                    
+                    response += f"\n---\n📎 출처: 채널A 방송장비 자산 데이터베이스"
+                    return response
+                else:
+                    return f"❌ {model} 모델 장비가 없습니다."
+            
+            return "❌ 모델명을 입력해주세요."
+            
+        except Exception as e:
+            return f"❌ 검색 실패: {e}"
     
     def _search_multiple_documents(self, query: str) -> str:
         """여러 문서 검색 및 리스트 반환"""

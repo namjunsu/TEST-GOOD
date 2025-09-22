@@ -138,10 +138,10 @@ class PerfectRAG:
                 with open(perf_config_path, 'r', encoding='utf-8') as f:
                     self.perf_config = yaml.safe_load(f)
                     if logger:
-                        logger.system_logger.info(f"Performance config loaded from {perf_config_path}")
+                        logger.info(f"Performance config loaded from {perf_config_path}")
             except Exception as e:
                 if logger:
-                    logger.system_logger.warning(f"Failed to load performance config: {e}")
+                    logger.warning(f"Failed to load performance config: {e}")
                 self.perf_config = {}
         else:
             self.perf_config = {}
@@ -1604,49 +1604,7 @@ class PerfectRAG:
         if hasattr(self, 'executor'):
             self.executor.shutdown(wait=True)
             logger.info("병렬 처리 리소스 정리 완료")
-        return f"""
-[문서 전체 요약 모드]
 
-문서: {filename}
-
- **응답 형식 (반드시 준수)**:
-
- [문서 제목]
-
- **기본 정보**
-• 기안자: [기안자명]
-• 날짜: [문서 날짜]
-• 부서: [담당 부서]
-• 문서 종류: [기안서/검토서/보고서 등]
-
- **주요 내용**
-[핵심 내용을 구조화하여 상세히]
-• [배경/목적]
-• [현황/문제점]
-• [제안/해결방안]
-• [세부 내용들...]
-
- **비용 정보** (해당 시)
-• 총액: [금액]
-• 세부 내역:
-  - [품목/항목]: [금액]
-  - [추가 비용]: [금액]
-
- **검토 의견**
-• [검토사항 1]
-• [검토사항 2]
-• 결론: [최종 의견/승인사항]
-
- 출처: {filename}
-
-문서 내용:
-{context}
-
-질문: {query}
-
-️ 중요: 위 형식을 반드시 따르고, 문서의 모든 정보를 상세하게 포함하세요.
-"""
-    
     def _create_ultra_detailed_prompt(self, query: str, context: str, filename: str) -> str:
         """초상세 답변 전용 프롬프트"""
         return f"""
@@ -1716,7 +1674,6 @@ class PerfectRAG:
 
 이 문서만을 분석하여 아래 형식으로 답변하세요.
 
- **응답 형식 (반드시 준수)**:
 
  [문서 제목]
 
@@ -2061,7 +2018,6 @@ class PerfectRAG:
             return f"""
 [기술관리팀 문서 분석]
 
- **응답 형식 (반드시 준수)**:
 
  {filename.replace('.pdf', '')}
 
@@ -2120,20 +2076,20 @@ class PerfectRAG:
             
             if metadata.get('ocr_performed'):
                 if logger:
-                    logger.system_logger.info(f"OCR 성공: {pdf_path.name} - {metadata.get('ocr_text_length', 0)}자 추출")
+                    logger.info(f"OCR 성공: {pdf_path.name} - {metadata.get('ocr_text_length', 0)}자 추출")
                 return text
             else:
                 if logger:
-                    logger.system_logger.warning(f"OCR 실패: {pdf_path.name}")
+                    logger.warning(f"OCR 실패: {pdf_path.name}")
                 return ""
                 
         except ImportError:
             if logger:
-                logger.system_logger.warning("OCR 모듈 사용 불가 - pytesseract 또는 Tesseract 미설치")
+                logger.warning("OCR 모듈 사용 불가 - pytesseract 또는 Tesseract 미설치")
             return ""
         except Exception as e:
             if logger:
-                logger.system_logger.error(f"OCR 처리 중 오류: {pdf_path.name} - {e}")
+                logger.error(f"OCR 처리 중 오류: {pdf_path.name} - {e}")
             return ""
     
     def _extract_full_pdf_content(self, pdf_path: Path) -> dict:

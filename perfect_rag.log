@@ -1,0 +1,22 @@
+2025-09-23 08:40:12,416 - perfect_rag - INFO - Performance config loaded from /home/wnstn4647/AI-CHAT/performance_config.yaml
+2025-09-23 08:40:12,430 - perfect_rag - INFO - 메타데이터 캐시 구축 시작
+2025-09-23 08:40:14,305 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 08:40:14,307 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-04-05_무선_핀_마이크_수리_건.pdf
+2025-09-23 08:40:14,951 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 08:40:14,956 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-04-07_상암DDMC_스튜디오_조명_소모품_신청서.pdf
+2025-09-23 08:40:15,670 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 08:40:15,672 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 08:40:15,677 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-06-13_무선_마이크_클립_구매_건.pdf
+2025-09-23 08:40:15,678 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-02-28_채널에이플러스_주조정실_방송장비_수리_요청의건.pdf
+2025-09-23 08:40:16,243 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 08:40:16,243 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-10-16_조명_소모품_구매.pdf
+2025-09-23 08:44:15,272 - perfect_rag - INFO - Performance config loaded from /home/wnstn4647/AI-CHAT/performance_config.yaml
+2025-09-23 08:44:15,292 - perfect_rag - INFO - 메타데이터 캐시 구축 시작
+2025-09-23 08:44:17,877 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 08:44:17,880 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2019-03-11_카메라_트라이포트_유압조절_이상_외_2건_수리요청서.pdf
+2025-09-23 08:44:18,296 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 08:44:18,296 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-10-25_트라이포드_수리_건.pdf
+2025-09-23 08:44:18,992 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 08:44:18,999 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-01-12_영상편집파트_장비구매_기안서.pdf
+2025-09-23 08:44:19,270 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 08:44:19,270 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2019-03-10_카메라_트라이포트_길이조정_부분_수리_건.pdf

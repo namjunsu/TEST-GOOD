@@ -680,8 +680,9 @@ def display_document_list(filtered_df, df):
             else:
                 st.caption("표시할 문서가 없습니다.")
 
-def load_documents(rag_instance):
-    """문서 메타데이터 로드 - 기안자 정보 자동 추출 강화"""
+@st.cache_data(ttl=300, show_spinner=False)  # 5분 캐시
+def load_documents(_rag_instance):
+    """문서 메타데이터 로드 - 기안자 정보 자동 추출 강화 (캐시됨)"""
     import html
     import re
     from datetime import datetime
@@ -689,7 +690,10 @@ def load_documents(rag_instance):
     import pandas as pd
     import pdfplumber
 
-    print("Loading documents from metadata cache...")
+    # 콘솔 출력 대신 로깅 사용
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("Loading documents from metadata cache...")
     documents = []
 
     # 기안자 추출을 위한 패턴
@@ -706,10 +710,10 @@ def load_documents(rag_instance):
     # RAG 인스턴스의 메타데이터 캐시 활용
     try:
         # 메타데이터 캐시에서 직접 가져오기
-        if hasattr(rag_instance, 'metadata_cache') and rag_instance.metadata_cache:
-            print(f"Using cached metadata for {len(rag_instance.metadata_cache)} documents")
+        if hasattr(_rag_instance, 'metadata_cache') and _rag_instance.metadata_cache:
+            logger.debug(f"Using cached metadata for {len(_rag_instance.metadata_cache)} documents")
 
-            for cache_key, metadata in rag_instance.metadata_cache.items():
+            for cache_key, metadata in _rag_instance.metadata_cache.items():
                 if not metadata.get('is_pdf', True):
                     continue  # PDF 파일만 처리
 
@@ -1298,11 +1302,17 @@ def main():
                         st.rerun()
         
         st.markdown("---")
-        st.markdown("### 문서 라이브러리")
+        st.markdown("### 📂 문서 라이브러리")
 
-        # 문서 로딩 중 표시
+        # 문서 로딩 최적화 - 지연 로딩 적용
         if 'documents_loaded' not in st.session_state:
-            with st.spinner("📚 문서 목록 로드 중..."):
+            # 먼저 빠른 카운트만 표시
+            if hasattr(st.session_state.rag, 'metadata_cache'):
+                doc_count = len(st.session_state.rag.metadata_cache)
+                st.caption(f"📚 {doc_count}개 문서 준비 중...")
+
+            # 백그라운드에서 문서 로드
+            with st.spinner("문서 메타데이터 로드 중... (첫 실행 시에만 필요)"):
                 # RAG 인스턴스 전달하여 재사용
                 df = load_documents(st.session_state.rag)
                 st.session_state.documents_loaded = True

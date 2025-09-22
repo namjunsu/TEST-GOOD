@@ -680,8 +680,7 @@ def display_document_list(filtered_df, df):
             else:
                 st.caption("표시할 문서가 없습니다.")
 
-@st.cache_data(ttl=300, show_spinner=False)  # 5분 캐시
-def load_documents(_rag_instance):
+def load_documents(rag_instance):
     """문서 메타데이터 로드 - 기안자 정보 자동 추출 강화 (캐시됨)"""
     import html
     import re
@@ -690,10 +689,7 @@ def load_documents(_rag_instance):
     import pandas as pd
     import pdfplumber
 
-    # 콘솔 출력 대신 로깅 사용
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info("Loading documents from metadata cache...")
+    print("Loading documents from metadata cache...")
     documents = []
 
     # 기안자 추출을 위한 패턴
@@ -710,10 +706,10 @@ def load_documents(_rag_instance):
     # RAG 인스턴스의 메타데이터 캐시 활용
     try:
         # 메타데이터 캐시에서 직접 가져오기
-        if hasattr(_rag_instance, 'metadata_cache') and _rag_instance.metadata_cache:
-            logger.debug(f"Using cached metadata for {len(_rag_instance.metadata_cache)} documents")
+        if hasattr(rag_instance, 'metadata_cache') and rag_instance.metadata_cache:
+            print(f"Using cached metadata for {len(rag_instance.metadata_cache)} documents")
 
-            for cache_key, metadata in _rag_instance.metadata_cache.items():
+            for cache_key, metadata in rag_instance.metadata_cache.items():
                 if not metadata.get('is_pdf', True):
                     continue  # PDF 파일만 처리
 

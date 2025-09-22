@@ -142,7 +142,6 @@ class PerfectRAG:
         self.formatter = ResponseFormatter() if ResponseFormatter else None
 
         # Asset LLM 개선 모듈 초기화
-        self.asset_enhancer = None  # 필요시 로드
 
         # 자산 데이터 제거 (기안서 중심 시스템으로 전환)
 
@@ -658,7 +657,7 @@ class PerfectRAG:
                         info['날짜'] = date_str
                         date_found = True
                         break
-                    if len(match.groups()) == 3:
+                    elif len(match.groups()) == 3:
                         # 분리된 그룹인 경우
                         year, month, day = match.groups()
                         try:
@@ -749,6 +748,13 @@ class PerfectRAG:
                 is_asset_query = True
         
         # 자산 관련 질문이면 자산 파일 자동 찾기
+        if is_asset_query:
+            for cache_key, metadata in self.metadata_cache.items():
+                # TXT 파일이고 파일명에 '자산' 또는 큰 숫자(7904 등)가 있으면
+                if metadata.get('is_txt', False):
+                    filename = metadata.get('filename', cache_key)
+                    # 자산 관련 코드 제거됨
+        
         candidates = []
         
         # 기존 로직 계속
@@ -805,12 +811,12 @@ class PerfectRAG:
                                 weight = len(q_word) * 2
                                 score += weight
                             # 유사도 검사 (오타 처리)
-                            if self._calculate_similarity(q_word, f_word) >= 0.8:
+                            elif self._calculate_similarity(q_word, f_word) >= 0.8:
                                 # 80% 이상 유사하면 매칭으로 간주
                                 weight = len(q_word) * 1.5
                                 score += weight
                             # 부분 일치 (긴 단어일 경우)
-                            if len(q_word) >= 3 and len(f_word) >= 3:
+                            elif len(q_word) >= 3 and len(f_word) >= 3:
                                 if q_word in f_word or f_word in q_word:
                                     weight = min(len(q_word), len(f_word))
                                     score += weight
@@ -929,13 +935,13 @@ class PerfectRAG:
             for key, value in info.items():
                 if key != 'text':
                     result += f"• {key}: {value}\n"
-        if info_type == "기안자":
+        elif info_type == "기안자":
             result = f" 기안자: {info.get('기안자', '정보 없음')}"
-        if info_type == "날짜":
+        elif info_type == "날짜":
             result = f" 날짜: {info.get('날짜', '정보 없음')}"
-        if info_type == "부서":
+        elif info_type == "부서":
             result = f" 부서: {info.get('부서', '정보 없음')}"
-        if info_type == "금액":
+        elif info_type == "금액":
             amount = info.get('금액', '정보 없음')
             result = f" 금액: {amount}"
         else:
@@ -958,6 +964,7 @@ class PerfectRAG:
                     result += f"• 부서: {info['부서']}\n"
                 if '제목' in info:
                     result += f"• 제목: {info['제목']}\n"
+
         if info_type == "요약":
             # 간단한 요약 생성
             result = f" {file_path.stem} 요약\n"
@@ -1051,7 +1058,7 @@ class PerfectRAG:
             if purchase_info:
                 summary_parts.append(" " + " | ".join(purchase_info))
 
-        if '수리' in file_name or '보수' in file_name:
+        elif '수리' in file_name or '보수' in file_name:
             # 수리 문서
             repair_info = []
             if equipment_keywords:
@@ -1062,7 +1069,7 @@ class PerfectRAG:
             if repair_info:
                 summary_parts.append(" " + " | ".join(repair_info))
 
-        if '폐기' in file_name:
+        elif '폐기' in file_name:
             # 폐기 문서
             disposal_info = []
             if equipment_keywords:
@@ -1140,7 +1147,7 @@ class PerfectRAG:
             # 날짜 표시 개선
             if date and date != '날짜 미상' and len(date) >= 10:
                 display_date = date[:10]  # YYYY-MM-DD
-            if date and len(date) >= 4:
+            elif date and len(date) >= 4:
                 display_date = date[:4]  # 연도만
             else:
                 display_date = "날짜미상"
@@ -1232,6 +1239,19 @@ class PerfectRAG:
             asset_score += 3
         
         # 최종 결정
+        if doc_score > asset_score:
+            return 'document'
+        elif asset_score > doc_score:
+            return 'asset'
+        else:
+            # 점수가 같으면 문맥으로 판단
+            if '문서' in query or '내용' in query or '요약' in query:
+                return 'document'
+            elif '장비' in query or '현황' in query:
+                return 'asset'
+            else:
+                return 'document'  # 기본값
+    
     def answer_from_specific_document(self, query: str, filename: str) -> str:
         """특정 문서에 대해서만 답변 생성 (문서 전용 모드) - 초상세 버전
         
@@ -1265,9 +1285,9 @@ class PerfectRAG:
             # 질문 유형별 특화 프롬프트 생성
             if any(word in query for word in ['요약', '정리', '개요', '내용']):
                 prompt = self._create_detailed_summary_prompt(query, full_text, filename)
-            if any(word in query for word in ['상세', '자세히', '구체적', '세세히', '세부']):
+            elif any(word in query for word in ['상세', '자세히', '구체적', '세세히', '세부']):
                 prompt = self._create_ultra_detailed_prompt(query, full_text, filename)
-            if any(word in query for word in ['품목', '목록', '리스트', '항목']):
+            elif any(word in query for word in ['품목', '목록', '리스트', '항목']):
                 prompt = self._create_itemized_list_prompt(query, full_text, filename)
             else:
                 prompt = self._create_document_specific_prompt(query, full_text, filename)
@@ -1303,7 +1323,7 @@ class PerfectRAG:
             # 출처 추가
             answer += f"\n\n **출처**: {filename}"
             
-        if filename.endswith('.txt'):
+        elif filename.endswith('.txt'):
             # TXT 파일 처리 (자산 데이터)
             return self._search_asset_file(doc_path, query)
         else:
@@ -1678,6 +1698,272 @@ class PerfectRAG:
             # 모드에 따른 처리
             query_lower = query.lower()
             
+            if self.search_mode == 'asset':
+                # LLM 사전 로드 (Asset 모드에서 필요)
+                if self.llm is None:
+                    if not LLMSingleton.is_loaded():
+                        print(" LLM 모델 로딩 중 (Asset 답변 개선용)...")
+                    self.llm = LLMSingleton.get_instance(model_path=self.model_path)
+                
+                # 자산 파일 경로 찾기
+                doc_path = None
+                
+                # 자산 파일 자동 감지 (파일명 패턴 기반)
+                for cache_key, file_meta in self.metadata_cache.items():
+                    # 자산/전체/7904 등의 키워드가 파일명에 있으면 자산 파일
+                    if file_meta.get('is_txt', False):
+                        filename = file_meta.get('filename', cache_key)
+                        # Path 객체로 변환
+                        path_obj = Path(file_meta['path']) if isinstance(file_meta['path'], str) else file_meta['path']
+                        filename_str = path_obj.name
+                        # 자산 관련 코드 제거됨
+                        pass
+                
+                # 자산 파일이 없으면 기본 파일 사용
+                if not doc_path:
+                    # 여러 경로에서 자산 파일 찾기
+                    asset_paths = [
+                        self.docs_dir / "assets" / "채널A_방송장비_자산_전체_7904개_완전판.txt",
+                        self.docs_dir / "assets" / "채널A_방송장비_자산_전체_7904개_완전판.txt",
+                        self.docs_dir / "asset_complete" / "채널A_방송장비_자산_종합현황_전체.txt",
+                        self.docs_dir / "asset_reports" / "채널A_방송장비_자산_종합현황.txt"
+                    ]
+
+                    for asset_file in asset_paths:
+                        if asset_file.exists():
+                            doc_path = asset_file
+                            print(f" 자산 파일 사용: {asset_file.name}")
+                            break
+
+                    # 그래도 없으면 캐시에서 찾기
+                    if not doc_path:
+                        for cache_key, file_meta in self.metadata_cache.items():
+                            if file_meta.get('is_txt', False):
+                                filename = file_meta.get('filename', cache_key)
+                                path_obj = Path(file_meta['path']) if isinstance(file_meta['path'], str) else file_meta['path']
+                                if path_obj.exists():
+                                    doc_path = path_obj
+                                    print(f" 캐시에서 자산 파일 발견: {path_obj.name}")
+                                    break
+                
+                if doc_path:
+                    # 개선된 쿼리 파싱 사용
+                    query_intent = self._parse_asset_query(query)
+                    
+                    # 복합 조건 검색 처리
+                    if query_intent.get('has_multiple_conditions'):
+                        response = self._search_asset_complex(doc_path, query_intent)
+                    # 담당자/관리자 검색 - 우선순위 높임
+                    elif query_intent.get('search_type') == 'manager':
+                        response = self._search_asset_by_manager(doc_path, query)
+                    # 금액/가격 범위 검색
+                    elif query_intent.get('search_type') == 'price':
+                        response = self._search_asset_by_price_range(doc_path, query)
+                    # 시리얼 번호 검색
+                    elif query_intent.get('search_type') == 'serial' or '시리얼' in query_lower or 's/n' in query_lower:
+                        response = self._search_asset_detail(doc_path, query)
+                    # 구입연도 검색 - 범위 검색 포함
+                    elif query_intent.get('search_type') == 'year':
+                        response = self._search_asset_by_year_range(doc_path, query)
+                    # 제조사 검색
+                    elif query_intent.get('search_type') == 'manufacturer':
+                        response = self._search_asset_by_manufacturer(doc_path, query)
+                    # 모델 검색
+                    elif query_intent.get('search_type') == 'model':
+                        response = self._search_asset_by_model(doc_path, query)
+                    # 위치별 검색
+                    elif query_intent.get('search_type') == 'location':
+                        response = self._search_location_unified(doc_path, query)
+                    # 위치+장비 복합 검색
+                    elif query_intent.get('search_type') == 'location_equipment':
+                        response = self._search_location_equipment_combo(doc_path, query)
+                    # 장비 유형별 검색
+                    elif query_intent.get('search_type') == 'equipment':
+                        response = self._search_asset_by_equipment_type(doc_path, query)
+                    # "어디" 키워드가 있지만 위치가 명시되지 않은 경우 - 제조사/장비명으로 검색
+                    elif '어디' in query_lower:
+                        # 제조사나 장비명이 있으면 해당 검색 수행
+                        if re.search(self._get_manufacturer_pattern(), query):
+                            response = self._search_asset_by_manufacturer(doc_path, query)
+                        else:
+                            response = self._search_asset_with_llm(doc_path, query)
+                    # 전체/현황 요청인 경우
+                    elif "전체" in query_lower or "현황" in query_lower:
+                        # 특정 장비가 언급된 경우
+                        equipment_keywords = ["CCU", "카메라", "모니터", "오디오", "비디오", "서버", "스위치", "라우터"]
+                        found_equipment = None
+                        for eq in equipment_keywords:
+                            if eq.upper() in query.upper():
+                                found_equipment = eq
+                                break
+                        
+                        if found_equipment:
+                            # 위치별로 정리
+                            response = self._search_equipment_all_locations(doc_path, found_equipment)
+                        else:
+                            response = self._search_asset_with_llm(doc_path, query)
+                    # 일반 자산 검색 - LLM 활용
+                    else:
+                        response = self._search_asset_with_llm(doc_path, query)
+                else:
+                    response = " 자산 데이터 파일을 찾을 수 없습니다."
+            
+            # document 모드 또는 기본 모드인 경우 문서 검색 진행
+            elif self.search_mode == 'document' or self.search_mode not in ['asset']:
+                # 문서 읽고 정리 요청 (다 읽고, 정리해줘)
+                if any(keyword in query for keyword in ["다 읽고", "전부 읽고", "모두 읽고", "정리해", "종합해", "분석해"]) \
+                   and any(keyword in query for keyword in ["관련", "문서"]):
+                    return self._read_and_summarize_documents(query)
+
+                # 특정 내용 언급 시 관련 문서들도 함께 찾아서 정리
+                # 예: "DVR 교체 검토 내용 정리해줘" → DVR 관련 모든 문서 찾아서 정리
+                content_keywords = ['교체', '검토', '구매', '수리', '보수', '폐기', '도입', '업그레이드']
+                if any(keyword in query for keyword in content_keywords):
+                    # 내용 기반으로 관련 문서들 찾기
+                    return self._search_and_analyze_by_content(query)
+
+                # 여러 문서 검색 요청 (찾아줘, 관련 문서, 있어? 등)
+                # "문서 찾아줘", "문서 내용 찾아줘" 모두 문서 목록 표시
+                # DVR, CCU 등 장비명과 함께 문서/찾아 키워드가 있으면 문서 리스트 표시
+                if (any(keyword in query for keyword in ["찾아", "관련 문서", "관련된", "어떤", "있어", "있나", "리스트", "모두", "전부", "문서들", "보여줘"]) \
+                   or any(equipment in query.lower() for equipment in ['dvr', 'ccu', '카메라', '렌즈', '모니터'])) \
+                   and not any(keyword in query for keyword in ["요약", "알려", "설명", "정리"]):
+                    return self._search_multiple_documents(query)
+                
+                # 월 단위 검색도 여러 문서 반환 (요약 요청 제외)
+                if re.search(r'\d{1,2}\s*월', query) and any(word in query for word in ["문서", "작성", "구매", "검토"]) \
+                   and not any(keyword in query for keyword in ["요약", "내용", "알려", "설명"]):
+                    return self._search_multiple_documents(query)
+                
+                # 통계 관련 질문은 문서 찾기 없이 바로 처리
+                if any(keyword in query for keyword in ["전체 통계", "전체 현황", "연도별", "기안자별", "월별", "카테고리별", "부터", "까지"]):
+                    if any(word in query for word in ["내역", "정리", "목록", "총", "구매", "요약", "내용", "알려", "표", "리스트", "통계", "현황", "분석"]):
+                        return self._generate_statistics_report(query)
+                
+                # 1. 가장 적합한 문서 찾기
+                doc_path = self.find_best_document(query)
+                
+                if not doc_path:
+                    return " 관련 문서를 찾을 수 없습니다. 더 구체적으로 질문해주세요."
+                
+                print(f" 선택된 문서: {doc_path.name}")
+                
+                # 2. 질문 타입 파악
+                # 특정 정보 추출 질문 (교체, 대체 장비 등)
+                if ('교체' in query or '대체' in query) and ('어떤' in query or '뭐' in query or '무엇' in query):
+                    # PDF 내용 읽기
+                    pdf_info = self._extract_pdf_metadata(doc_path)
+                    context = pdf_info.get('전체텍스트', pdf_info.get('text', ''))
+                    
+                    # 교체/검토 장비 찾기
+                    models = []
+                    if 'Leofoto' in context:
+                        leofoto_match = re.search(r'Leofoto\s+([A-Za-z0-9\-\(\)]+)', context)
+                        if leofoto_match:
+                            # 금액 찾기
+                            price_match = re.search(r'Leofoto[^\\n]*?([0-9,]+)\s*원', context)
+                            price = price_match.group(1) if price_match else "금액 미상"
+                            models.append(f"**Leofoto {leofoto_match.group(1)}** - {price}원 (카본 구조, 경량)")
+                    
+                    if 'COMAN' in context:
+                        coman_match = re.search(r'COMAN\s+([A-Za-z0-9\-\(\)]+)', context)
+                        if coman_match:
+                            price_match = re.search(r'COMAN[^\\n]*?([0-9,]+)\s*원', context)
+                            price = price_match.group(1) if price_match else "금액 미상"
+                            models.append(f"**COMAN {coman_match.group(1)}** - {price}원 (알루미늄, 가격 경쟁력)")
+                    
+                    if models:
+                        answer = f" **미러클랩 카메라 삼각대 교체 검토 장비**\n\n"
+                        for i, model in enumerate(models, 1):
+                            answer += f"{i}. {model}\n"
+                        answer += f"\n 출처: {doc_path.name}"
+                        return answer
+                
+                # 단순 정보 추출 질문들
+                elif "기안자" in query or "누구" in query:
+                    return self.get_document_info(doc_path, "기안자")
+                elif "날짜" in query or "언제" in query:
+                    return self.get_document_info(doc_path, "날짜")
+                elif "부서" in query:
+                    return self.get_document_info(doc_path, "부서")
+                elif ("금액" in query or "얼마" in query or "비용" in query) and not any(word in query for word in ["내역", "정리", "목록", "총"]):
+                    # 단순 금액 질문만 (내역 정리가 아닌 경우)
+                    return self.get_document_info(doc_path, "금액")
+                
+                # LLM이 필요한 복잡한 질문들 (보고서, 정리, 요약 등)
+                elif any(word in query for word in ["내역", "정리", "목록", "총", "구매", "요약", "내용", "알려", "표", "리스트", "통계", "현황", "분석"]):
+                    # 전체 통계 요청인 경우 모든 문서 처리
+                    if any(keyword in query for keyword in ["전체 통계", "전체 현황", "연도별", "기안자별", "월별", "카테고리별", "부터", "까지"]):
+                        return self._generate_statistics_report(query)
+                    # 단일 문서 요약
+                    else:
+                        # LLM 사용하여 구조화된 답변 생성
+                        return self._generate_llm_summary(doc_path, query)
+                
+                # 긴급 상황, 수리, 고장 관련
+                elif any(word in query for word in ["긴급", "수리", "고장", "업체", "연락처"]):
+                    # LLM 사용하여 긴급 정보 제공
+                    return self._generate_llm_summary(doc_path, query)
+                
+                # 감사, 절차 관련
+                elif any(word in query for word in ["감사", "절차", "승인", "폐기", "프로세스"]):
+                    # LLM 사용하여 체크리스트 형식 답변
+                    answer = self._generate_llm_summary(doc_path, query)
+                    
+                    # 처리 시간 계산 및 로깅
+                    processing_time = time.time() - start_time
+                    if logger:
+                        logger.log_query(
+                            query=query,
+                            response=answer,
+                            search_mode=self.search_mode,
+                            processing_time=processing_time,
+                            metadata={'selected_doc': doc_path.name if doc_path else None}
+                        )
+                        logger.system_logger.info(f"Query completed successfully in {processing_time:.2f}s")
+                    return answer
+                
+                else:
+                    # LLM을 사용하여 문서 내용 분석 및 답변 생성
+                    answer = self._generate_llm_summary(doc_path, query)
+                    
+                    # 처리 시간 계산 및 로깅
+                    processing_time = time.time() - start_time
+                    if logger:
+                        logger.log_query(
+                            query=query,
+                            response=answer,
+                            search_mode=self.search_mode,
+                            processing_time=processing_time,
+                            metadata={'selected_doc': doc_path.name if doc_path else None}
+                        )
+                        logger.system_logger.info(f"Query completed successfully in {processing_time:.2f}s")
+                    return answer
+            
+            # asset 모드에서 response가 설정되지 않은 경우 처리
+            if self.search_mode == 'asset' and 'response' in locals():
+                # 처리 시간 계산 및 로깅
+                processing_time = time.time() - start_time
+                if logger:
+                    # metadata에서 Path 객체를 문자열로 변환
+                    safe_metadata = {}
+                    if 'metadata' in locals():
+                        for key, value in metadata.items():
+                            if isinstance(value, Path):
+                                safe_metadata[key] = str(value)
+                            else:
+                                safe_metadata[key] = value
+                    
+                    logger.log_query(
+                        query=query,
+                        response=response,
+                        search_mode=self.search_mode,
+                        processing_time=processing_time,
+                        metadata=safe_metadata
+                    )
+                    logger.system_logger.info(f"Asset query completed in {processing_time:.2f}s")
+                return response
+                
         except Exception as e:
             # 에러 발생
             error_msg = str(e)
@@ -1752,7 +2038,7 @@ class PerfectRAG:
 """
         
         # 보고서/내역 정리/기술검토서
-        if any(word in query for word in ["내역", "정리", "총", "목록", "구매", "품목", "검토서", "내용", "요약", "알려"]):
+        elif any(word in query for word in ["내역", "정리", "총", "목록", "구매", "품목", "검토서", "내용", "요약", "알려"]):
             # 기본 정보가 이미 추출되어 있는지 확인
             has_basic_info = 'basic_summary' in locals() if 'locals' in dir() else False
             
@@ -1801,7 +2087,7 @@ class PerfectRAG:
 """
         
         # 감사/절차 확인
-        if any(word in query for word in ["감사", "절차", "승인", "폐기"]):
+        elif any(word in query for word in ["감사", "절차", "승인", "폐기"]):
             return f"""
 [감사 대응 자료] 기술관리팀 문서 시스템
 
@@ -2084,7 +2370,7 @@ class PerfectRAG:
                         info['세부항목'] = repair_items
                 
                 # 지미집 Control Box 수리 항목 찾기
-                if 'Control Box' in full_text or '지미집' in full_text:
+                elif 'Control Box' in full_text or '지미집' in full_text:
                     repair_items = []
                     if 'Tilt 스피드' in full_text:
                         repair_items.append({'항목': 'Tilt 스피드단', '내용': '부품 교체'})
@@ -2124,13 +2410,13 @@ class PerfectRAG:
                         if amt_int >= 100000:  # 10만원 이상으로 낮춤
                             if '26,660,000' in amt:
                                 info['비용내역']['내외관보수'] = amt + '원'
-                            if '7,680,000' in amt:
+                            elif '7,680,000' in amt:
                                 info['비용내역']['방송시스템'] = amt + '원'
-                            if '34,340,000' in amt:
+                            elif '34,340,000' in amt:
                                 info['비용내역']['총합계'] = amt + '원 (VAT별도)'
-                            if '200,000' in amt:
+                            elif '200,000' in amt:
                                 info['비용내역']['수리비용'] = amt + '원 (VAT별도)'
-                            if not info['비용내역']:  # 첫 번째 금액
+                            elif not info['비용내역']:  # 첫 번째 금액
                                 info['비용내역']['금액'] = amt + '원'
                     except (ValueError, AttributeError):
                         pass  # 금액 변환 실패시 무시
@@ -2220,21 +2506,21 @@ class PerfectRAG:
         if any(word in query_lower for word in ['요약', '정리', '알려', '설명']):
             intent['type'] = 'summary'
             intent['needs_detail'] = True
-        if any(word in query_lower for word in ['비교', '차이', '어떤게 나은', '뭐가 좋']):
+        elif any(word in query_lower for word in ['비교', '차이', '어떤게 나은', '뭐가 좋']):
             intent['type'] = 'comparison'
             intent['wants_comparison'] = True
             intent['wants_recommendation'] = True
-        if any(word in query_lower for word in ['추천', '권장', '어떻게', '방법']):
+        elif any(word in query_lower for word in ['추천', '권장', '어떻게', '방법']):
             intent['type'] = 'recommendation'
             intent['wants_recommendation'] = True
-        if any(word in query_lower for word in ['긴급', '빨리', '급해', '바로']):
+        elif any(word in query_lower for word in ['긴급', '빨리', '급해', '바로']):
             intent['type'] = 'urgent'
             intent['is_urgent'] = True
             intent['tone'] = 'direct'
-        if any(word in query_lower for word in ['얼마', '비용', '가격', '금액']):
+        elif any(word in query_lower for word in ['얼마', '비용', '가격', '금액']):
             intent['type'] = 'cost'
             intent['needs_detail'] = True
-        if any(word in query_lower for word in ['문제', '고장', '수리', '장애']):
+        elif any(word in query_lower for word in ['문제', '고장', '수리', '장애']):
             intent['type'] = 'problem'
             intent['wants_recommendation'] = True
         
@@ -2245,7 +2531,7 @@ class PerfectRAG:
         # 응답 스타일 결정
         if '?' in query:
             intent['response_style'] = 'explanatory'
-        if any(word in query_lower for word in ['해줘', '부탁', '좀']):
+        elif any(word in query_lower for word in ['해줘', '부탁', '좀']):
             intent['response_style'] = 'helpful'
         
         return intent
@@ -2280,7 +2566,7 @@ class PerfectRAG:
 - 사용자가 추가로 알면 좋을 정보 제안
 - 딱딱한 리스트 형식이 아닌 자연스러운 문장으로 연결"""
         
-        if intent['type'] == 'comparison':
+        elif intent['type'] == 'comparison':
             user_prompt = f"""다음 정보를 바탕으로 비교 분석을 제공해주세요.
 
 정보:
@@ -2294,7 +2580,7 @@ class PerfectRAG:
 - 상황에 따른 추천 제공
 - "이런 경우엔 A가 좋고, 저런 경우엔 B가 낫다"는 식으로 설명"""
         
-        if intent['type'] == 'recommendation':
+        elif intent['type'] == 'recommendation':
             user_prompt = f"""다음 정보를 바탕으로 실용적인 추천을 제공해주세요.
 
 정보:
@@ -2308,7 +2594,7 @@ class PerfectRAG:
 - 고려사항이나 주의점도 함께 언급
 - 대안이 있다면 간단히 소개"""
         
-        if intent['type'] == 'cost':
+        elif intent['type'] == 'cost':
             user_prompt = f"""다음 정보에서 비용 관련 내용을 찾아 설명해주세요.
 
 정보:
@@ -2322,7 +2608,7 @@ class PerfectRAG:
 - 비용 대비 가치나 효과 언급
 - 예산 관련 조언이 있다면 추가"""
         
-        if intent['is_urgent']:
+        elif intent['is_urgent']:
             user_prompt = f"""다음 정보를 바탕으로 빠르고 명확한 답변을 제공해주세요.
 
 정보:
@@ -2397,7 +2683,7 @@ class PerfectRAG:
             response += f"요청하신 내용은 다음과 같습니다. "
             if key_info:
                 response += ' '.join(key_info[:3])
-        if intent['type'] == 'cost':
+        elif intent['type'] == 'cost':
             cost_info = [line for line in key_info if '원' in line or '금액' in line]
             if cost_info:
                 response += f"비용 관련 정보입니다. {cost_info[0]}"
@@ -2481,7 +2767,7 @@ class PerfectRAG:
                     if '총합계' in pdf_info['비용내역']:
                         summary.append(f"• **총 비용: {pdf_info['비용내역']['총합계']}**")
                 # 금액 정보 (기존 호환성 유지)
-                if '금액정보' in pdf_info and pdf_info['금액정보']:
+                elif '금액정보' in pdf_info and pdf_info['금액정보']:
                     summary.append(f"\n **주요 금액**")
                     # 금액 정렬 및 상위 표시
                     amounts = []
@@ -2534,11 +2820,11 @@ class PerfectRAG:
                             summary.append("\n** 최종 추천**")
                             if '1안' in opinion and ('유리' in opinion or '적절' in opinion or '추천' in opinion):
                                 summary.append("• **1안 채택 권장** - 장기적 운영 및 화질 개선 필요")
-                            if '2안' in opinion and ('유리' in opinion or '적절' in opinion):
+                            elif '2안' in opinion and ('유리' in opinion or '적절' in opinion):
                                 summary.append("• **2안 채택 권장** - 비용 절감 우선")
                     
                     # 중계차 관련인 경우
-                    if '중계차 임대' in opinion:
+                    elif '중계차 임대' in opinion:
                         summary.append("• 중계차 임대: 급작스런 특보 상황 시 대응 어려움")
                         if '중계차 제작' in opinion:
                             summary.append("• 신규 제작: 25-30억원 과도한 비용, 4K 송출 일정 불확실")
@@ -2769,7 +3055,7 @@ class PerfectRAG:
             stats_data['분석']['평균 연간 구매액'] = f"{total_amount // len(yearly_data):,}원"
             stats_data['추천'].append("구매 집중 시기를 파악하여 예산 계획 수립")
             
-        if target_year:
+        elif target_year:
             # 특정 연도 전체 통계
             stats_data['title'] = f"{target_year}년 전체 현황"
             stats_data['headers'] = ['구분', '건수', '총 금액', '비율']
@@ -2782,9 +3068,9 @@ class PerfectRAG:
                     # 카테고리 분류
                     if '구매' in filename or '구입' in filename:
                         cat = '구매'
-                    if '수리' in filename or '보수' in filename:
+                    elif '수리' in filename or '보수' in filename:
                         cat = '수리'
-                    if '폐기' in filename:
+                    elif '폐기' in filename:
                         cat = '폐기'
                     else:
                         cat = '기타'
@@ -2830,9 +3116,9 @@ class PerfectRAG:
             # 통계 타입 파악
             if "연도별" in query and "구매" in query:
                 return self._generate_yearly_purchase_report(query)
-            if "기안자별" in query:
+            elif "기안자별" in query:
                 return self._generate_drafter_report(query)
-            if "월별" in query and "수리" in query:
+            elif "월별" in query and "수리" in query:
                 return self._generate_monthly_repair_report(query)
             
             # 기본: 특정 연도 전체 통계
@@ -2866,11 +3152,11 @@ class PerfectRAG:
                 category = '기타'
                 if '구매' in filename:
                     category = '구매'
-                if '수리' in filename or '보수' in filename:
+                elif '수리' in filename or '보수' in filename:
                     category = '수리'
-                if '폐기' in filename:
+                elif '폐기' in filename:
                     category = '폐기'
-                if '소모품' in filename:
+                elif '소모품' in filename:
                     category = '소모품'
                 
                 # 통계에 추가
@@ -3076,9 +3362,9 @@ class PerfectRAG:
                 category = '기타'
                 if '구매' in filename:
                     category = '구매'
-                if '수리' in filename or '보수' in filename:
+                elif '수리' in filename or '보수' in filename:
                     category = '수리'
-                if '폐기' in filename:
+                elif '폐기' in filename:
                     category = '폐기'
                 
                 drafter_stats[drafter]['count'] += 1
@@ -3255,6 +3541,140 @@ class PerfectRAG:
         except Exception as e:
             return f" 월별 수리 내역 생성 실패: {e}"
     
+    def _parse_asset_query(self, query: str) -> dict:
+        """Asset 쿼리를 파싱하여 검색 의도와 조건을 추출
+        
+        Returns:
+            dict: 파싱된 쿼리 정보
+                - search_type: 검색 유형 (location, manufacturer, year, price, manager, model, etc.)
+                - conditions: 추출된 조건들
+                - has_multiple_conditions: 복합 조건 여부
+        """
+        query_lower = query.lower()
+        result = {
+            'search_type': None,
+            'conditions': {},
+            'has_multiple_conditions': False,
+            'original_query': query
+        }
+        
+        # 1. 위치 조건 추출
+        location_keywords = {
+            '중계차': '중계차',
+            '대형스튜디오': '대형스튜디오',
+            '소형부조정실': '소형부조정실',
+            '중형부조정실': '중형부조정실',
+            'news van': 'News VAN',
+            'van': 'News VAN',
+            '광화문': '광화문',
+            '편집실': '편집실',
+            '더빙실': '더빙실'
+        }
+        
+        for keyword, location in location_keywords.items():
+            if keyword in query_lower:
+                result['conditions']['location'] = location
+                break
+        
+        # 2. 제조사 조건 추출
+        manufacturer_match = re.search(self._get_manufacturer_pattern(), query, re.IGNORECASE)
+        if manufacturer_match:
+            result['conditions']['manufacturer'] = manufacturer_match.group(0).upper()
+        
+        # 3. 연도 조건 추출
+        year_match = re.search(r'(20\d{2})년', query)
+        if year_match:
+            result['conditions']['year'] = int(year_match.group(1))
+            
+            # 연도 범위 키워드 확인
+            if '이전' in query_lower:
+                result['conditions']['year_range'] = 'before'
+            elif '이후' in query_lower:
+                result['conditions']['year_range'] = 'after'
+            elif '부터' in query_lower and '까지' in query_lower:
+                # 범위 추출
+                range_match = re.search(r'(20\d{2})년부터\s*(20\d{2})년까지', query)
+                if range_match:
+                    result['conditions']['year_start'] = int(range_match.group(1))
+                    result['conditions']['year_end'] = int(range_match.group(2))
+                    result['conditions']['year_range'] = 'between'
+        
+        # 4. 금액 조건 추출
+        price_keywords = ['억원', '천만원', '백만원', '만원']
+        for keyword in price_keywords:
+            if keyword in query_lower:
+                # 금액 숫자 추출
+                price_match = re.search(r'(\d+(?:\.\d+)?)\s*' + keyword, query_lower)
+                if price_match:
+                    amount = float(price_match.group(1))
+                    if keyword == '억원':
+                        amount *= 100000000
+                    elif keyword == '천만원':
+                        amount *= 10000000
+                    elif keyword == '백만원':
+                        amount *= 1000000
+                    elif keyword == '만원':
+                        amount *= 10000
+                    result['conditions']['price'] = amount
+                    
+                    # 범위 키워드
+                    if '이상' in query_lower:
+                        result['conditions']['price_range'] = 'above'
+                    elif '이하' in query_lower:
+                        result['conditions']['price_range'] = 'below'
+                    elif '미만' in query_lower:
+                        result['conditions']['price_range'] = 'under'
+                    elif '초과' in query_lower:
+                        result['conditions']['price_range'] = 'over'
+                break
+        
+        # 5. 담당자 조건 추출
+        manager_keywords = ['담당', '관리', '차장', '부장', '과장', '대리', '사원']
+        for keyword in manager_keywords:
+            if keyword in query_lower:
+                result['conditions']['has_manager'] = True
+                result['search_type'] = 'manager'
+                break
+        
+        # 6. 장비 유형 추출
+        equipment_types = ['CCU', '카메라', '모니터', '오디오', '비디오', '서버', '스위치', '라우터', '렌즈']
+        for eq_type in equipment_types:
+            if eq_type.lower() in query_lower:
+                result['conditions']['equipment_type'] = eq_type
+                break
+        
+        # 7. 모델명 추출
+        model_match = re.search(r'[A-Z]+[-\s]?\d+', query, re.IGNORECASE)
+        if model_match:
+            result['conditions']['model'] = model_match.group(0).upper()
+        
+        # 복합 조건 여부 판단
+        condition_count = len([k for k in result['conditions'].keys() if not k.endswith('_range')])
+        result['has_multiple_conditions'] = condition_count >= 2
+        
+        # 검색 유형 결정 (우선순위 기반)
+        if not result['search_type']:
+            if result['conditions'].get('has_manager'):
+                result['search_type'] = 'manager'
+            elif 'price' in result['conditions']:
+                result['search_type'] = 'price'
+            elif 'year' in result['conditions']:
+                result['search_type'] = 'year'
+            elif 'location' in result['conditions'] and 'equipment_type' in result['conditions']:
+                result['search_type'] = 'location_equipment'
+            elif 'location' in result['conditions']:
+                result['search_type'] = 'location'
+            elif 'manufacturer' in result['conditions']:
+                result['search_type'] = 'manufacturer'
+            elif 'model' in result['conditions']:
+                result['search_type'] = 'model'
+            elif 'equipment_type' in result['conditions']:
+                result['search_type'] = 'equipment'
+            else:
+                result['search_type'] = 'general'
+        
+        return result
+    
     def _format_conditions(self, conditions: dict) -> str:
         """검색 조건을 읽기 쉽게 포맷팅"""
         formatted = []
@@ -3269,9 +3689,9 @@ class PerfectRAG:
             year_str = f"• 연도: {conditions['year']}년"
             if conditions.get('year_range') == 'before':
                 year_str += " 이전"
-            if conditions.get('year_range') == 'after':
+            elif conditions.get('year_range') == 'after':
                 year_str += " 이후"
-            if conditions.get('year_range') == 'between':
+            elif conditions.get('year_range') == 'between':
                 year_str = f"• 연도: {conditions.get('year_start')}년 ~ {conditions.get('year_end')}년"
             formatted.append(year_str)
         
@@ -3279,7 +3699,7 @@ class PerfectRAG:
             price_str = f"• 금액: {conditions['price']:,.0f}원"
             if conditions.get('price_range') == 'above':
                 price_str += " 이상"
-            if conditions.get('price_range') == 'below':
+            elif conditions.get('price_range') == 'below':
                 price_str += " 이하"
             formatted.append(price_str)
         
@@ -3418,7 +3838,7 @@ class PerfectRAG:
                     # 금액 포맷팅 (억/천만원 단위)
                     if total_amount >= 100000000:  # 1억 이상
                         amount_str = f"{total_amount/100000000:.1f}억원"
-                    if total_amount >= 10000000:  # 1천만원 이상
+                    elif total_amount >= 10000000:  # 1천만원 이상
                         amount_str = f"{total_amount/10000000:.0f}천만원"
                     else:
                         amount_str = f"{total_amount:,}원"
@@ -3441,7 +3861,7 @@ class PerfectRAG:
                     if category_amount > 0:
                         if category_amount >= 100000000:
                             response += f", {category_amount/100000000:.1f}억원"
-                        if category_amount >= 10000000:
+                        elif category_amount >= 10000000:
                             response += f", {category_amount/10000000:.0f}천만원"
                         else:
                             response += f", {category_amount:,}원"
@@ -3493,21 +3913,21 @@ class PerfectRAG:
         
         if any(kw in name_lower or kw in text_lower for kw in ['camera', '카메라', 'ccu', 'viewfinder', '뷰파인더']):
             return " 카메라 시스템"
-        if any(kw in name_lower or kw in text_lower for kw in ['monitor', '모니터', 'display']):
+        elif any(kw in name_lower or kw in text_lower for kw in ['monitor', '모니터', 'display']):
             return "️ 모니터"
-        if any(kw in name_lower or kw in text_lower for kw in ['audio', '오디오', 'mixer', '믹서', 'mic', '마이크']):
+        elif any(kw in name_lower or kw in text_lower for kw in ['audio', '오디오', 'mixer', '믹서', 'mic', '마이크']):
             return "️ 오디오 장비"
-        if any(kw in name_lower or kw in text_lower for kw in ['server', '서버', 'storage', '스토리지']):
+        elif any(kw in name_lower or kw in text_lower for kw in ['server', '서버', 'storage', '스토리지']):
             return " 서버/스토리지"
-        if any(kw in name_lower or kw in text_lower for kw in ['switch', '스위치', 'router', '라우터', 'matrix']):
+        elif any(kw in name_lower or kw in text_lower for kw in ['switch', '스위치', 'router', '라우터', 'matrix']):
             return " 스위칭/라우팅"
-        if any(kw in name_lower or kw in text_lower for kw in ['cable', '케이블', 'connector', '커넥터']):
+        elif any(kw in name_lower or kw in text_lower for kw in ['cable', '케이블', 'connector', '커넥터']):
             return " 케이블/커넥터"
-        if any(kw in name_lower or kw in text_lower for kw in ['tripod', '트라이포드', 'pedestal', '페데스탈']):
+        elif any(kw in name_lower or kw in text_lower for kw in ['tripod', '트라이포드', 'pedestal', '페데스탈']):
             return " 카메라 지원장비"
-        if any(kw in name_lower or kw in text_lower for kw in ['intercom', '인터컴', 'talkback']):
+        elif any(kw in name_lower or kw in text_lower for kw in ['intercom', '인터컴', 'talkback']):
             return " 인터컴"
-        if any(kw in name_lower or kw in text_lower for kw in ['converter', '컨버터', 'encoder', '인코더']):
+        elif any(kw in name_lower or kw in text_lower for kw in ['converter', '컨버터', 'encoder', '인코더']):
             return " 컨버터/인코더"
         else:
             return " 기타 장비"
@@ -3516,6 +3936,7 @@ class PerfectRAG:
         """통일된 위치별 검색 - 일관된 형식으로 출력"""
         try:
             # 완전판 파일 우선 사용
+            complete_path = self.docs_dir / "assets" / "채널A_방송장비_자산_전체_7904개_완전판.txt"
             if complete_path.exists():
                 txt_path = complete_path
             
@@ -3593,7 +4014,7 @@ class PerfectRAG:
                             item_count += 1
                     
                     current_item = [line]
-                if current_item:
+                elif current_item:
                     current_item.append(line)
             
             # 마지막 항목 처리
@@ -3620,17 +4041,17 @@ class PerfectRAG:
                             # 타입 분류
                             if 'Camera' in part_name or '카메라' in part_name:
                                 type_name = '카메라'
-                            if 'Monitor' in part_name or '모니터' in part_name:
+                            elif 'Monitor' in part_name or '모니터' in part_name:
                                 type_name = '모니터'
-                            if 'Audio' in part_name or '오디오' in part_name or 'Mic' in part_name:
+                            elif 'Audio' in part_name or '오디오' in part_name or 'Mic' in part_name:
                                 type_name = '오디오/마이크'
-                            if 'Light' in part_name or '조명' in part_name:
+                            elif 'Light' in part_name or '조명' in part_name:
                                 type_name = '조명'
-                            if 'Lens' in part_name or '렌즈' in part_name:
+                            elif 'Lens' in part_name or '렌즈' in part_name:
                                 type_name = '렌즈'
-                            if 'CCU' in part_name or 'Control Unit' in part_name:
+                            elif 'CCU' in part_name or 'Control Unit' in part_name:
                                 type_name = 'CCU/컨트롤'
-                            if 'Server' in part_name or '서버' in part_name:
+                            elif 'Server' in part_name or '서버' in part_name:
                                 type_name = '서버/스토리지'
                             else:
                                 type_name = '기타'
@@ -3655,15 +4076,15 @@ class PerfectRAG:
                     for line in lines:
                         if re.match(r'^\[\d{4}\]', line):
                             item_info['id'] = line.strip()
-                        if '부품명:' in line:
+                        elif '부품명:' in line:
                             item_info['name'] = line.split('부품명:')[1].strip()
-                        if '모델:' in line:
+                        elif '모델:' in line:
                             item_info['model'] = line.split('모델:')[1].strip()
-                        if '제조사:' in line and '모델:' not in line:
+                        elif '제조사:' in line and '모델:' not in line:
                             item_info['manufacturer'] = line.split('제조사:')[1].strip()
-                        if '구입일:' in line:
+                        elif '구입일:' in line:
                             item_info['date'] = line.split('구입일:')[1].strip()[:10]
-                        if '담당자:' in line:
+                        elif '담당자:' in line:
                             item_info['manager'] = line.split('담당자:')[1].strip()
                     
                     response += f"[{i}] **{item_info.get('id', '')}**"
@@ -3722,35 +4143,35 @@ class PerfectRAG:
         # 패턴 기반 동적 분류
         if any(word in name_lower for word in ['camera', 'ccu', '카메라', 'cam']):
             return '카메라 관련'
-        if any(word in name_lower for word in ['monitor', '모니터', 'display']):
+        elif any(word in name_lower for word in ['monitor', '모니터', 'display']):
             return '모니터/디스플레이'
-        if any(word in name_lower for word in ['mic', 'microphone', '마이크', 'audio']):
+        elif any(word in name_lower for word in ['mic', 'microphone', '마이크', 'audio']):
             return '오디오/마이크'
-        if any(word in name_lower for word in ['switcher', 'router', '스위처', '라우터']):
+        elif any(word in name_lower for word in ['switcher', 'router', '스위처', '라우터']):
             return '스위처/라우터'
-        if any(word in name_lower for word in ['server', '서버', 'storage', 'nas']):
+        elif any(word in name_lower for word in ['server', '서버', 'storage', 'nas']):
             return '서버/스토리지'
-        if any(word in name_lower for word in ['converter', '컨버터', 'adapter']):
+        elif any(word in name_lower for word in ['converter', '컨버터', 'adapter']):
             return '컨버터/어댑터'
-        if any(word in name_lower for word in ['lens', '렌즈', 'optical']):
+        elif any(word in name_lower for word in ['lens', '렌즈', 'optical']):
             return '렌즈/광학'
-        if any(word in name_lower for word in ['tripod', '삼각대', 'stand']):
+        elif any(word in name_lower for word in ['tripod', '삼각대', 'stand']):
             return '삼각대/스탠드'
-        if any(word in name_lower for word in ['battery', '배터리', 'charger', 'power']):
+        elif any(word in name_lower for word in ['battery', '배터리', 'charger', 'power']):
             return '전원/배터리'
-        if any(word in name_lower for word in ['cable', '케이블', 'connector']):
+        elif any(word in name_lower for word in ['cable', '케이블', 'connector']):
             return '케이블/커넥터'
-        if any(word in name_lower for word in ['analyzer', 'test', '분석', '테스트']):
+        elif any(word in name_lower for word in ['analyzer', 'test', '분석', '테스트']):
             return '분석/테스트 장비'
-        if any(word in name_lower for word in ['transmitter', 'receiver', '송신', '수신']):
+        elif any(word in name_lower for word in ['transmitter', 'receiver', '송신', '수신']):
             return '송수신 장비'
-        if any(word in name_lower for word in ['recorder', 'player', '레코더', '플레이어']):
+        elif any(word in name_lower for word in ['recorder', 'player', '레코더', '플레이어']):
             return '녹화/재생 장비'
-        if any(word in name_lower for word in ['light', '조명', 'led', 'lamp']):
+        elif any(word in name_lower for word in ['light', '조명', 'led', 'lamp']):
             return '조명 장비'
-        if 'nexio' in name_lower:
+        elif 'nexio' in name_lower:
             return 'NEXIO 시스템'
-        if 'hp' in name_lower and any(word in name_lower for word in ['z8', 'z6', 'z4', 'workstation']):
+        elif 'hp' in name_lower and any(word in name_lower for word in ['z8', 'z6', 'z4', 'workstation']):
             return 'HP 워크스테이션'
         else:
             # 기타 카테고리로 분류
@@ -3776,13 +4197,13 @@ class PerfectRAG:
                 # 새 항목 시작
                 current_item = [line]
                 is_matching = False
-            if current_item:
+            elif current_item:
                 current_item.append(line)
                 # 필드별 매칭 확인
                 if field_name == "담당자" and "담당자:" in line:
                     if search_value in line:
                         is_matching = True
-                if field_name == "위치" and "위치:" in line:
+                elif field_name == "위치" and "위치:" in line:
                     # 정확한 위치 매칭 로직 적용
                     location_match = re.search(r'위치:\s*([^|\n]+)', line)
                     if location_match:
@@ -3792,25 +4213,25 @@ class PerfectRAG:
                         if search_value == actual_location:
                             # 완전 일치
                             is_matching = True
-                        if search_value == '부조정실':
+                        elif search_value == '부조정실':
                             # '부조정실'로 검색시 '*부조정실' 패턴만 매칭
                             is_matching = actual_location.endswith('부조정실')
-                        if search_value == '스튜디오':
+                        elif search_value == '스튜디오':
                             # '스튜디오'로 검색시 '*스튜디오' 패턴만 매칭 
                             is_matching = actual_location.endswith('스튜디오')
-                        if search_value == '편집실':
+                        elif search_value == '편집실':
                             # '편집실'로 검색시 '*편집실' 패턴만 매칭
                             is_matching = actual_location.endswith('편집실')
-                        if search_value in ['중계차', 'van', 'Van', 'VAN']:
+                        elif search_value in ['중계차', 'van', 'Van', 'VAN']:
                             # 중계차 검색시 Van 관련 위치 모두 매칭
                             is_matching = 'Van' in actual_location or 'VAN' in actual_location
-                        if len(search_value) > 3:
+                        elif len(search_value) > 3:
                             # 3글자 이상의 구체적인 위치명은 부분 매칭 허용
                             is_matching = search_value in actual_location
-                if field_name == "벤더사" and "벤더사:" in line:
+                elif field_name == "벤더사" and "벤더사:" in line:
                     if search_value in line:
                         is_matching = True
-                if field_name == "제조사" and "제조사:" in line:
+                elif field_name == "제조사" and "제조사:" in line:
                     if search_value.upper() in line.upper():
                         is_matching = True
         
@@ -3825,6 +4246,88 @@ class PerfectRAG:
             'sample_items': items
         }
     
+        """자산 데이터를 상세하고 정확하게 포맷팅"""
+            return f" {model} 모델 장비가 없습니다."
+        
+        lines = []
+        lines.append(f" **{model} 장비 현황**")
+        lines.append("=" * 60)
+        
+        # 위치별 분포
+        locations = {}
+            if '위치' in item:
+                loc = item['위치']
+                locations[loc] = locations.get(loc, 0) + 1
+        
+        if locations:
+            lines.append("###  위치별 분포")
+            for loc, count in sorted(locations.items(), key=lambda x: x[1], reverse=True)[:5]:
+                lines.append(f"• **{loc}**: {count}개")
+            lines.append("")
+        
+        # 상세 목록 - 더 자세한 관리정보 중심 형식으로 변경
+        lines.append("###  상세 장비 정보")
+        lines.append("")
+        
+            # [1] 형식으로 변경하고 항목명 포함
+            item_name = f"{item.get('모델', model)}"
+            lines.append(f"[{i}]  {item_name}")
+            
+            # 기본정보 - 모델명 별도 표시
+            basic_info = []
+            if '제조사' in item:
+                basic_info.append(f"제조사: {item['제조사']}")
+            if '모델' in item:
+                basic_info.append(f"모델: {item['모델']}")
+            if 'S/N' in item:
+                basic_info.append(f"S/N: {item['S/N']}")
+            if basic_info:
+                lines.append(f"  기본정보: {' | '.join(basic_info)}")
+            
+            # 위치정보
+            location_info = []
+            if '위치' in item:
+                location_info.append(f"위치: {item['위치']}")
+            if '시스템' in item:
+                location_info.append(f"시스템: {item['시스템']}")
+            if location_info:
+                lines.append(f"  위치정보: {' | '.join(location_info)}")
+            
+            # 관리정보 - 더 상세한 정보 포함
+            mgmt_info = []
+            if '담당자' in item:
+                mgmt_info.append(f"담당자: {item['담당자']}")
+            if '연락처' in item:
+                mgmt_info.append(f"연락처: {item['연락처']}")
+            if '벤더사' in item:
+                mgmt_info.append(f"벤더사: {item['벤더사']}")
+            if '계약업체' in item:
+                mgmt_info.append(f"계약업체: {item['계약업체']}")
+            if mgmt_info:
+                lines.append(f"  관리정보: {' | '.join(mgmt_info)}")
+            
+            lines.append("")  # 각 항목 사이 공백
+        
+        
+        # 추가 통계
+        lines.append("\n###  추가 통계")
+        
+        # 구입연도별 분포
+        years = {}
+            if '구입일' in item:
+                year = item['구입일'][:4] if len(item['구입일']) >= 4 else None
+                if year and year.isdigit():
+                    years[year] = years.get(year, 0) + 1
+        
+        if years:
+            lines.append("\n**구입연도별 분포:**")
+            for year, count in sorted(years.items(), reverse=True)[:3]:
+                lines.append(f"• {year}년: {count}개")
+        
+        lines.append("\n---")
+        lines.append(" 출처: 채널A 방송장비 자산 데이터베이스")
+        
+        return '\n'.join(lines)
     
     def _search_multiple_documents(self, query: str) -> str:
         """여러 문서 검색 및 리스트 반환"""
@@ -3913,7 +4416,7 @@ class PerfectRAG:
                             # DVR이 정확히 있는지 확인 (D-tap, VR 등 제외)
                             if re.search(r'\bDVR\b', filename, re.IGNORECASE):
                                 score += 20  # DVR 완전 매칭
-                            if 'dvr' in filename_lower and 'd-tap' not in filename_lower and 'vr' not in filename_lower:
+                            elif 'dvr' in filename_lower and 'd-tap' not in filename_lower and 'vr' not in filename_lower:
                                 score += 15
                         else:
                             # 다른 장비명은 기존 방식
@@ -3932,7 +4435,7 @@ class PerfectRAG:
                             # 단어 길이에 비례한 점수
                             score += len(word) * 2
                         # 부분 매칭 - DVR 같은 짧은 단어는 제외
-                        if len(word) >= 4:  # 4글자 이상만 부분 매칭
+                        elif len(word) >= 4:  # 4글자 이상만 부분 매칭
                             for f_word in file_words:
                                 # 전체 포함이 아닌 부분 일치만
                                 if len(f_word) >= 4 and (word in f_word or f_word in word):
@@ -4024,7 +4527,7 @@ class PerfectRAG:
                     if doc['score'] > unique_docs[filename]['score']:
                         unique_docs[filename] = doc
                     # 같은 점수면 year_ 폴더 우선
-                    if doc['score'] == unique_docs[filename]['score'] and 'year_' in doc.get('cache_key', ''):
+                    elif doc['score'] == unique_docs[filename]['score'] and 'year_' in doc.get('cache_key', ''):
                         unique_docs[filename] = doc
 
             matched_docs = list(unique_docs.values())
@@ -4069,13 +4572,13 @@ class PerfectRAG:
                     if '구매' in filename:
                         category = "구매요청"
                         emoji = ""
-                    if '수리' in filename or '보수' in filename:
+                    elif '수리' in filename or '보수' in filename:
                         category = "수리/보수"
                         emoji = ""
-                    if '폐기' in filename:
+                    elif '폐기' in filename:
                         category = "폐기처리"
                         emoji = "️"
-                    if '검토' in filename:
+                    elif '검토' in filename:
                         category = "검토보고서"
                         emoji = ""
                     else:
@@ -4110,11 +4613,11 @@ class PerfectRAG:
                             purpose_match = re.search(r'목적[:\s]+([^\n]+)', text)
                             if purpose_match:
                                 summary = purpose_match.group(1).strip()
-                        if '내용' in text:
+                        elif '내용' in text:
                             content_match = re.search(r'내용[:\s]+([^\n]+)', text)
                             if content_match:
                                 summary = content_match.group(1).strip()
-                        if '사유' in text:
+                        elif '사유' in text:
                             reason_match = re.search(r'사유[:\s]+([^\n]+)', text)
                             if reason_match:
                                 summary = reason_match.group(1).strip()
@@ -4123,13 +4626,13 @@ class PerfectRAG:
                     if not summary:
                         if '구매' in filename:
                             summary = "장비 구매 요청"
-                        if '수리' in filename or '보수' in filename:
+                        elif '수리' in filename or '보수' in filename:
                             summary = "장비 수리/보수 건"
-                        if '폐기' in filename:
+                        elif '폐기' in filename:
                             summary = "노후 장비 폐기 처리"
-                        if '교체' in filename:
+                        elif '교체' in filename:
                             summary = "노후 장비 교체 검토"
-                        if '검토' in filename:
+                        elif '검토' in filename:
                             summary = "기술 검토 보고서"
                         else:
                             summary = "기술관리팀 업무 문서"
@@ -4211,7 +4714,7 @@ class PerfectRAG:
 
                     if has_equipment_keyword:
                         primary_files.append(path)
-                    if has_action_keyword:
+                    elif has_action_keyword:
                         secondary_files.append(path)
 
             # 3. 결과 병합 (최대 15개)
@@ -4515,7 +5018,7 @@ class PerfectRAG:
                     if current_item and self._is_location_match(current_item, location):
                         location_items.append('\n'.join(current_item))
                     current_item = [line]
-                if current_item:
+                elif current_item:
                     current_item.append(line)
             
             # 마지막 항목 처리
@@ -4596,7 +5099,7 @@ class PerfectRAG:
                     for line in lines:
                         if '[' in line and ']' in line:
                             response += f"{i}. {line.strip()}\n"
-                        if '모델:' in line or '제조사:' in line:
+                        elif '모델:' in line or '제조사:' in line:
                             response += f"   {line.strip()}\n"
                     response += "\n"
             
@@ -4619,22 +5122,22 @@ class PerfectRAG:
                     if location == actual_location:
                         # 완전 일치 (가장 우선)
                         return True
-                    if location == '부조정실':
+                    elif location == '부조정실':
                         # '부조정실'로 검색시 '*부조정실' 패턴만 매칭
                         return actual_location.endswith('부조정실')
-                    if location == '스튜디오':
+                    elif location == '스튜디오':
                         # '스튜디오'로 검색시 '*스튜디오' 패턴만 매칭 
                         return actual_location.endswith('스튜디오')
-                    if location == '편집실':
+                    elif location == '편집실':
                         # '편집실'로 검색시 '*편집실' 패턴만 매칭
                         return actual_location.endswith('편집실')
-                    if location in ['중계차', 'van', 'Van', 'VAN']:
+                    elif location in ['중계차', 'van', 'Van', 'VAN']:
                         # 중계차 검색시 Van 관련 위치 모두 매칭
                         return 'Van' in actual_location or 'VAN' in actual_location
-                    if location == "광화문부조정실":
+                    elif location == "광화문부조정실":
                         # "광화문 부조정실" 같은 복합 위치명 처리
                         return "광화문" in actual_location and "부조정실" in actual_location
-                    if len(location) > 3:
+                    elif len(location) > 3:
                         # 3글자 이상의 구체적인 위치명은 부분 매칭 허용
                         return location in actual_location
         
@@ -4644,6 +5147,7 @@ class PerfectRAG:
         """위치 + 장비명 복합 검색 (예: 중계차 CCU현황)"""
         try:
             # 완전판 파일 우선 사용
+            complete_path = self.docs_dir / "assets" / "채널A_방송장비_자산_전체_7904개_완전판.txt"
             if complete_path.exists():
                 txt_path = complete_path
             
@@ -4754,6 +5258,7 @@ class PerfectRAG:
         """특정 위치의 모든 장비를 상세하게 표시"""
         try:
             # 완전판 파일 우선 사용
+            complete_path = self.docs_dir / "assets" / "채널A_방송장비_자산_전체_7904개_완전판.txt"
             if complete_path.exists():
                 txt_path = complete_path
             
@@ -4875,12 +5380,12 @@ class PerfectRAG:
                                 item_info['model'] = parts[0]
                                 item_info['manufacturer'] = parts[1] if len(parts) > 1 else ''
                             response += f"     모델: {basic_info}\n"
-                    if '위치:' in line:
+                    elif '위치:' in line:
                         loc_match = re.search(r'위치:\s*([^|]+)', line)
                         if loc_match:
                             item_info['location'] = loc_match.group(1).strip()
                             response += f"     위치: {item_info['location']}\n"
-                    if '관리정보:' in line:
+                    elif '관리정보:' in line:
                         # 전체 관리정보 라인 파싱
                         mgmt_full = line.split('관리정보:')[1] if '관리정보:' in line else ''
                         mgmt_parts = mgmt_full.split('|')
@@ -4891,6 +5396,34 @@ class PerfectRAG:
                                 manager = part.replace('담당자:', '').strip()
                                 if manager:
                                     response += f"     담당자: {manager}\n"
+                            elif '자산번호:' in part:
+                                asset_no = part.replace('자산번호:', '').strip()
+                                if asset_no:
+                                    response += f"     자산번호: {asset_no}\n"
+                            elif '시리얼:' in part:
+                                serial = part.replace('시리얼:', '').strip()
+                                if serial and serial != 'N/A':
+                                    response += f"     시리얼: {serial}\n"
+                    elif '구입정보:' in line:
+                        # 전체 구입정보 라인 파싱
+                        purchase_full = line.split('구입정보:')[1] if '구입정보:' in line else ''
+                        purchase_parts = purchase_full.split('|')
+                        
+                        for part in purchase_parts:
+                            part = part.strip()
+                            if '구입일:' in part:
+                                purchase_date = part.replace('구입일:', '').strip()
+                                if purchase_date:
+                                    response += f"     구입일: {purchase_date}\n"
+                            elif '금액:' in part:
+                                amount = part.replace('금액:', '').strip()
+                                if amount and amount != '0원':
+                                    response += f"     금액: {amount}\n"
+                            elif '원' in part and '금액' not in part:
+                                # 금액이 따로 표시된 경우
+                                if part.strip() and part.strip() != '0원':
+                                    response += f"     금액: {part.strip()}\n"
+                
                 response += "\n"
             
             if len(matching_items) > len(display_items):
@@ -4902,8 +5435,9 @@ class PerfectRAG:
             if self.llm and len(matching_items) > 0:
                 try:
                     # Asset LLM Enhancer 로드
+                        from asset_llm_enhancer import AssetLLMEnhancer
+                    
                     # 답변 개선
-                    enhanced_response = self.asset_enhancer.enhance_asset_response(
                         raw_data=response,
                         query=query,
                         llm=self.llm
@@ -5026,15 +5560,15 @@ class PerfectRAG:
         # 정확한 매칭 규칙 적용
         if search_location == actual_location:
             return True
-        if search_location == '부조정실':
+        elif search_location == '부조정실':
             return actual_location.endswith('부조정실')
-        if search_location == '스튜디오':
+        elif search_location == '스튜디오':
             return actual_location.endswith('스튜디오')
-        if search_location == '편집실':
+        elif search_location == '편집실':
             return actual_location.endswith('편집실')
-        if search_location in ['중계차', 'van', 'Van', 'VAN']:
+        elif search_location in ['중계차', 'van', 'Van', 'VAN']:
             return 'Van' in actual_location or 'VAN' in actual_location or '중계차' in actual_location
-        if len(search_location) > 3:
+        elif len(search_location) > 3:
             return search_location in actual_location
         
         return False

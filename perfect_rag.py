@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 import time
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+from multiprocessing import cpu_count
+import threading
+from queue import Queue
+from functools import partial
+
 """
 Perfect RAG - 심플하지만 정확한 문서 검색 시스템
 동적으로 모든 PDF 문서와 자산 데이터를 정확하게 처리
@@ -1464,7 +1470,140 @@ class PerfectRAG:
             if pattern in query.upper():
                 raise ValueError(f"허용되지 않은 패턴: {pattern}")
 
+
+    def __del__(self):
+        """소멸자 - 리소스 정리"""
+        self.cleanup_executor()
         return query.strip()
+
+    def _parallel_search_pdfs(self, pdf_files, query, top_k=5):
+        """병렬 PDF 검색 - 성능 최적화"""
+        logger.info(f"병렬 검색 시작: {len(pdf_files)}개 PDF, {self.MAX_WORKERS}개 워커")
+
+        results = []
+        futures = []
+
+        # 검색 함수 정의
+        def search_single_pdf(pdf_path):
+            try:
+                # 캐시 확인
+                cache_key = f"{pdf_path}:{query}"
+                if cache_key in self.documents_cache:
+                    return self.documents_cache[cache_key]['data']
+
+                # PDF 내용 추출
+                content = self._safe_pdf_extract(pdf_path, max_retries=1)
+                if not content:
+                    return None
+
+                # 관련성 점수 계산
+                keywords = query.split()
+                score = self._score_document_relevance(content, keywords)
+
+                # 메타데이터 추출
+                metadata = self._extract_document_metadata(pdf_path)
+
+                result = {
+                    'path': pdf_path,
+                    'score': score,
+                    'content': content[:500],  # 미리보기용
+                    'metadata': metadata
+                }
+
+                # 캐시에 저장
+                self._add_to_cache(self.documents_cache, cache_key, result, self.MAX_CACHE_SIZE)
+
+                return result
+
+            except Exception as e:
+                logger.error(f"PDF 검색 오류 {pdf_path}: {e}")
+                return None
+
+        # 병렬 실행
+        with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
+            # 모든 PDF에 대해 비동기 작업 제출
+            future_to_pdf = {
+                executor.submit(search_single_pdf, pdf): pdf
+                for pdf in pdf_files
+            }
+
+            # 완료된 작업부터 처리
+            for future in as_completed(future_to_pdf):
+                pdf = future_to_pdf[future]
+                try:
+                    result = future.result(timeout=10)  # 10초 타임아웃
+                    if result and result['score'] > 0:
+                        results.append(result)
+                        logger.debug(f"검색 완료: {pdf.name}, 점수: {result['score']:.2f}")
+                except Exception as e:
+                    logger.error(f"검색 실패 {pdf}: {e}")
+
+        # 점수 순으로 정렬
+        results.sort(key=lambda x: x['score'], reverse=True)
+
+        logger.info(f"병렬 검색 완료: {len(results)}개 결과")
+        return results[:top_k]
+
+    def _parallel_extract_metadata(self, files):
+        """병렬 메타데이터 추출"""
+        logger.info(f"병렬 메타데이터 추출: {len(files)}개 파일")
+
+        def extract_single(file_path):
+            try:
+                return self._extract_document_metadata(file_path)
+            except Exception as e:
+                logger.error(f"메타데이터 추출 실패 {file_path}: {e}")
+                return {}
+
+        with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
+            futures = [executor.submit(extract_single, f) for f in files]
+            results = []
+
+            for future in as_completed(futures):
+                try:
+                    metadata = future.result(timeout=5)
+                    if metadata:
+                        results.append(metadata)
+                except Exception as e:
+                    logger.error(f"메타데이터 추출 오류: {e}")
+
+        return results
+
+    def _batch_process_documents(self, documents, process_func, batch_size=10):
+        """배치 문서 처리 - 메모리 효율성"""
+        total = len(documents)
+        processed = 0
+        results = []
+
+        for i in range(0, total, batch_size):
+            batch = documents[i:i+batch_size]
+
+            with ThreadPoolExecutor(max_workers=min(len(batch), self.MAX_WORKERS)) as executor:
+                futures = [executor.submit(process_func, doc) for doc in batch]
+
+                for future in as_completed(futures):
+                    try:
+                        result = future.result(timeout=30)
+                        if result:
+                            results.append(result)
+                    except Exception as e:
+                        logger.error(f"배치 처리 오류: {e}")
+
+            processed += len(batch)
+            logger.info(f"진행률: {processed}/{total} ({100*processed/total:.1f}%)")
+
+            # 메모리 정리
+            if processed % 50 == 0:
+                import gc
+                gc.collect()
+
+        return results
+
+    def cleanup_executor(self):
+        """병렬 처리 리소스 정리"""
+        if hasattr(self, 'executor'):
+            self.executor.shutdown(wait=True)
+            logger.info("병렬 처리 리소스 정리 완료")
         return f"""
 [문서 전체 요약 모드]
 

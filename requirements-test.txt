@@ -1,0 +1,11 @@
+# Testing requirements
+pytest>=7.0.0
+pytest-cov>=4.0.0
+pytest-mock>=3.10.0
+pytest-asyncio>=0.21.0
+pytest-timeout>=2.1.0
+pytest-xdist>=3.0.0  # 병렬 테스트 실행
+coverage>=7.0.0
+mock>=5.0.0
+faker>=20.0.0  # 테스트 데이터 생성
+hypothesis>=6.0.0  # Property-based testing

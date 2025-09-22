@@ -7,6 +7,7 @@
 """
 
 import json
+import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Set, Tuple
 import re
@@ -16,12 +17,22 @@ import hashlib
 from collections import defaultdict
 import time
 import os
+from functools import lru_cache
 import fcntl  # For file locking on Unix systems
 
+logger = logging.getLogger(__name__)
+
 class MetadataManager:
-    def __init__(self, db_path: str = "document_metadata.json", cache_ttl: int = 300):
-        self.db_path = Path(db_path)
-        self.cache_ttl = cache_ttl  # Cache time-to-live in seconds
+    # 상수 정의
+    DEFAULT_DB_PATH = "document_metadata.json"
+    DEFAULT_CACHE_TTL = 300  # 5분
+    AUTO_SAVE_INTERVAL = 10  # 10초마다 자동 저장
+    NAME_MIN_LENGTH = 2
+    NAME_MAX_LENGTH = 4
+
+    def __init__(self, db_path: str = None, cache_ttl: int = None):
+        self.db_path = Path(db_path) if db_path else Path(self.DEFAULT_DB_PATH)
+        self.cache_ttl = cache_ttl if cache_ttl is not None else self.DEFAULT_CACHE_TTL
 
         # Performance optimization
         self.metadata = self.load_metadata()
@@ -36,6 +47,14 @@ class MetadataManager:
         # Change tracking
         self._dirty = False  # Track if data needs saving
         self._last_save_time = time.time()
+
+        # Performance metrics
+        self._search_count = 0
+        self._cache_hits = 0
+        self._save_count = 0
+
+        # Compile patterns
+        self._compile_patterns()
 
     def load_metadata(self) -> Dict:
         """메타데이터 DB 로드 - 에러 처리 및 백업 지원"""
@@ -56,15 +75,15 @@ class MetadataManager:
                     return json.load(f)
         except json.JSONDecodeError as e:
             # 손상된 JSON 처리
-            print(f"⚠️ 메타데이터 파일 손상 감지: {e}")
+            logger.warning(f"메타데이터 파일 손상 감지: {e}")
             backup_path = self.db_path.with_suffix('.backup')
             if backup_path.exists():
-                print("📂 백업 파일에서 복구 시도...")
+                logger.info("백업 파일에서 복구 시도...")
                 with open(backup_path, 'r', encoding='utf-8') as f:
                     return json.load(f)
             return {}
         except Exception as e:
-            print(f"❌ 메타데이터 로드 실패: {e}")
+            logger.error(f"메타데이터 로드 실패: {e}")
             return {}
 
     def save_metadata(self, force: bool = False):
@@ -89,9 +108,10 @@ class MetadataManager:
 
                 self._dirty = False
                 self._last_save_time = time.time()
+                self._save_count += 1
 
             except Exception as e:
-                print(f"❌ 메타데이터 저장 실패: {e}")
+                logger.error(f"메타데이터 저장 실패: {e}")
                 # 백업에서 복구
                 backup_path = self.db_path.with_suffix('.backup')
                 if backup_path.exists():
@@ -124,7 +144,7 @@ class MetadataManager:
             self._invalidate_cache()
 
             # 자동 저장 (배치 처리를 위해 지연)
-            if time.time() - self._last_save_time > 10:  # 10초마다 저장
+            if time.time() - self._last_save_time > self.AUTO_SAVE_INTERVAL:
                 self.save_metadata()
 
     def get_document(self, filename: str) -> Optional[Dict]:
@@ -133,11 +153,14 @@ class MetadataManager:
 
     def search_by_drafter(self, drafter_name: str, fuzzy: bool = True) -> List[str]:
         """기안자로 검색 - 인덱스 기반 빠른 검색"""
+        self._search_count += 1
+
         # 캐시 확인
         cache_key = f"drafter:{drafter_name}:{fuzzy}"
         if cache_key in self._cache:
             cache_time, results = self._cache[cache_key]
             if time.time() - cache_time < self.cache_ttl:
+                self._cache_hits += 1
                 return results
 
         with self._lock:
@@ -163,11 +186,14 @@ class MetadataManager:
 
     def search_by_field(self, field: str, value: str, fuzzy: bool = True) -> List[str]:
         """특정 필드로 검색 - 인덱스 기반"""
+        self._search_count += 1
+
         # 캐시 확인
         cache_key = f"field:{field}:{value}:{fuzzy}"
         if cache_key in self._cache:
             cache_time, results = self._cache[cache_key]
             if time.time() - cache_time < self.cache_ttl:
+                self._cache_hits += 1
                 return results
 
         with self._lock:
@@ -191,37 +217,43 @@ class MetadataManager:
             self._cache[cache_key] = (time.time(), results)
             return results
 
-    def extract_from_text(self, text: str) -> Dict[str, Any]:
-        """텍스트에서 메타데이터 자동 추출"""
-        metadata = {}
-
-        # 기안자 추출
-        patterns = {
+    def _compile_patterns(self):
+        """정규식 패턴 컴파일"""
+        self._patterns = {
             'drafter': [
-                r'기안자[\s:：]*([가-힣]{2,4})',
-                r'작성자[\s:：]*([가-힣]{2,4})',
-                r'담당자[\s:：]*([가-힣]{2,4})'
+                re.compile(r'기안자[\s:：]*([가-힣]{2,4})'),
+                re.compile(r'작성자[\s:：]*([가-힣]{2,4})'),
+                re.compile(r'담당자[\s:：]*([가-힣]{2,4})')
             ],
             'department': [
-                r'기안부서[\s:：]*([^\n]+)',
-                r'부서[\s:：]*([^\n]+)',
-                r'소속[\s:：]*([^\n]+)'
+                re.compile(r'기안부서[\s:：]*([^\n]+)'),
+                re.compile(r'부서[\s:：]*([^\n]+)'),
+                re.compile(r'소속[\s:：]*([^\n]+)')
             ],
             'date': [
-                r'기안일자[\s:：]*(\d{4}[-./]\d{1,2}[-./]\d{1,2})',
-                r'작성일[\s:：]*(\d{4}[-./]\d{1,2}[-./]\d{1,2})',
-                r'날짜[\s:：]*(\d{4}[-./]\d{1,2}[-./]\d{1,2})'
+                re.compile(r'기안일자[\s:：]*(\d{4}[-./]\d{1,2}[-./]\d{1,2})'),
+                re.compile(r'작성일[\s:：]*(\d{4}[-./]\d{1,2}[-./]\d{1,2})'),
+                re.compile(r'날짜[\s:：]*(\d{4}[-./]\d{1,2}[-./]\d{1,2})')
             ],
             'amount': [
-                r'금액[\s:：]*([0-9,]+)원',
-                r'총액[\s:：]*([0-9,]+)원',
-                r'([0-9,]+)원'  # 금액 패턴
+                re.compile(r'금액[\s:：]*([0-9,]+)원'),
+                re.compile(r'총액[\s:：]*([0-9,]+)원'),
+                re.compile(r'([0-9,]+)원')  # 금액 패턴
             ]
         }
 
-        for field, pattern_list in patterns.items():
+        # 검증 패턴도 컴파일
+        self._name_pattern = re.compile(f'^[가-힣]{{{self.NAME_MIN_LENGTH},{self.NAME_MAX_LENGTH}}}$')
+        self._date_pattern = re.compile(r'\d{4}[-./]\d{1,2}[-./]\d{1,2}')
+
+    def extract_from_text(self, text: str) -> Dict[str, Any]:
+        """텍스트에서 메타데이터 자동 추출 (컴파일된 패턴 사용)"""
+        metadata = {}
+
+        # 컴파일된 패턴으로 추출
+        for field, pattern_list in self._patterns.items():
             for pattern in pattern_list:
-                match = re.search(pattern, text)
+                match = pattern.search(text)
                 if match:
                     metadata[field] = match.group(1).strip()
                     break
@@ -272,10 +304,10 @@ class MetadataManager:
             if value is None or (isinstance(value, str) and not value.strip()):
                 continue
 
-            # 타입별 검증
+            # 타입별 검증 (컴파일된 패턴 사용)
             if key == 'drafter':
                 # 이름 검증 (2-4자 한글)
-                if isinstance(value, str) and re.match(r'^[가-힣]{2,4}$', value):
+                if isinstance(value, str) and self._name_pattern.match(value):
                     validated[key] = value.strip()
             elif key == 'amount':
                 # 금액 정규화
@@ -286,7 +318,7 @@ class MetadataManager:
             elif key == 'date':
                 # 날짜 형식 검증
                 if isinstance(value, str):
-                    date_match = re.match(r'\d{4}[-./]\d{1,2}[-./]\d{1,2}', value)
+                    date_match = self._date_pattern.match(value)
                     if date_match:
                         validated[key] = date_match.group()
             else:
@@ -378,6 +410,20 @@ class MetadataManager:
 
         return stats
 
+    def get_performance_stats(self) -> Dict[str, Any]:
+        """성능 통계 반환"""
+        cache_hit_rate = (self._cache_hits / self._search_count * 100
+                         if self._search_count > 0 else 0)
+
+        return {
+            'search_count': self._search_count,
+            'cache_hits': self._cache_hits,
+            'cache_hit_rate': cache_hit_rate,
+            'save_count': self._save_count,
+            'cache_size': len(self._cache),
+            'index_size': sum(len(idx) for idx in self._index.values())
+        }
+
 
 # 테스트 및 초기 데이터
 if __name__ == "__main__":
@@ -435,8 +481,8 @@ if __name__ == "__main__":
         filename = data.pop('filename')
         manager.add_document(filename, **data)
 
-    print("✅ 메타데이터 DB 생성 완료!")
-    print(f"📊 총 {len(manager.metadata)}개 문서 정보 저장")
+    logger.info("메타데이터 DB 생성 완료!")
+    logger.info(f"총 {len(manager.metadata)}개 문서 정보 저장")
 
     # 통계 출력
     stats = manager.get_statistics()
@@ -453,3 +499,9 @@ if __name__ == "__main__":
     results = manager.search_by_drafter("최새름")
     for doc in results:
         print(f"  - {doc}")
+
+    # 성능 통계 출력
+    perf_stats = manager.get_performance_stats()
+    print("\n⚡ 성능 통계:")
+    print(f"  - 검색 횟수: {perf_stats['search_count']}")
+    print(f"  - 캐시 히트율: {perf_stats['cache_hit_rate']:.1f}%")

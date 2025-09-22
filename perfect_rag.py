@@ -64,6 +64,62 @@ from metadata_manager import MetadataManager
 # from error_handler import RAGErrorHandler, ErrorRecovery, DetailedError, safe_execute
 
 
+import logging
+from typing import Optional, Dict, Any, List, Tuple
+import traceback
+
+# 로깅 설정
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('perfect_rag.log', encoding='utf-8'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+
+class RAGException(Exception):
+    """RAG 시스템 기본 예외"""
+    pass
+
+class DocumentNotFoundException(RAGException):
+    """문서를 찾을 수 없을 때"""
+    pass
+
+class PDFExtractionException(RAGException):
+    """PDF 추출 실패"""
+    pass
+
+class LLMException(RAGException):
+    """LLM 관련 오류"""
+    pass
+
+class CacheException(RAGException):
+    """캐시 관련 오류"""
+    pass
+
+
+def handle_errors(default_return=None):
+    """에러 처리 데코레이터"""
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except RAGPDFExtractionException as e:
+                logger.error(f"{func.__name__} - RAG 오류: {str(e)}")
+                if default_return is not None:
+                    return default_return
+                raise
+            except PDFExtractionException as e:
+                logger.error(f"{func.__name__} - 예상치 못한 오류: {str(e)}", exc_info=True)
+                if default_return is not None:
+                    return default_return
+                raise RAGPDFExtractionException(f"처리 중 오류 발생: {str(e)}")
+        return wrapper
+    return decorator
+
 class PerfectRAG:
     """정확하고 심플한 RAG 시스템"""
 
@@ -223,7 +279,7 @@ class PerfectRAG:
                 elapsed = time.time() - start
                 if elapsed > 1.0:  # 1초 이상 걸린 경우만 표시
                     print(f" LLM 로드 완료 ({elapsed:.1f}초)")
-            except Exception as e:
+            except LLMException as e:
                 print(f"️ LLM 로드 실패: {e}")
     
     def _manage_cache(self, cache_dict, key, value):
@@ -299,7 +355,7 @@ class PerfectRAG:
                         try:
                             result = future.result(timeout=30)  # 30초 타임아웃
                             all_results[str(pdf_path)] = result
-                        except Exception as e:
+                        except PDFExtractionException as e:
                             print(f"   {pdf_path.name} 처리 실패: {str(e)[:50]}")
                             all_results[str(pdf_path)] = {'error': str(e)}
 
@@ -336,7 +392,7 @@ class PerfectRAG:
 
     def _build_metadata_cache(self):
         """모든 문서의 메타데이터를 미리 추출 (캐싱 지원)"""
-
+        logger.info("메타데이터 캐시 구축 시작")
         print(" 문서 메타데이터 구축 중...")
 
         # 병렬 처리 설정 확인
@@ -1380,6 +1436,35 @@ class PerfectRAG:
     
     def _create_detailed_summary_prompt(self, query: str, context: str, filename: str) -> str:
         """상세 요약 전용 프롬프트 - 통일된 포맷"""
+
+    def _safe_pdf_extract(self, pdf_path, max_retries=3):
+        """안전한 PDF 추출 with 재시도"""
+        for attempt in range(max_retries):
+            try:
+                return self._extract_full_pdf_content(pdf_path)
+            except PDFExtractionException as e:
+                logger.warning(f"PDF 추출 실패 (시도 {attempt+1}/{max_retries}): {e}")
+                if attempt == max_retries - 1:
+                    logger.error(f"PDF 추출 최종 실패: {pdf_path}")
+                    return None
+                time.sleep(1)  # 재시도 전 대기
+
+    def _validate_input(self, query):
+        """입력 검증"""
+        if not query:
+            raise ValueError("쿼리가 비어있습니다")
+
+        if len(query) > 1000:
+            logger.warning(f"쿼리가 너무 깁니다: {len(query)}자")
+            query = query[:1000]
+
+        # SQL 인젝션 방지
+        dangerous_patterns = ['DROP', 'DELETE', 'INSERT', 'UPDATE', '--', ';']
+        for pattern in dangerous_patterns:
+            if pattern in query.upper():
+                raise ValueError(f"허용되지 않은 패턴: {pattern}")
+
+        return query.strip()
         return f"""
 [문서 전체 요약 모드]
 
@@ -2470,7 +2555,7 @@ class PerfectRAG:
 
     def _generate_llm_summary(self, pdf_path: Path, query: str) -> str:
         """LLM을 사용한 상세 요약 - 대화형 스타일"""
-        
+        logger.info("LLM 요약 생성 시작")
         # 사용자 의도 분석
         intent = self._analyze_user_intent(query)
         
@@ -2727,7 +2812,7 @@ class PerfectRAG:
                         from rag_system.enhanced_ocr_processor import EnhancedOCRProcessor
                         ocr = EnhancedOCRProcessor()
                         text, _ = ocr.extract_text_with_ocr(str(pdf_path))
-                    except Exception as e:
+                    except PDFExtractionException as e:
                         pass
             
             if not text:

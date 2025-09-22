@@ -6,6 +6,8 @@
 import logging
 import io
 import re
+import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import List, Dict, Tuple, Optional
 from pathlib import Path
 import json
@@ -61,9 +63,16 @@ class EnhancedOCRProcessor:
         # OCR 언어 설정 (한국어 + 영어)
         self.tesseract_config = f'--oem {self.OCR_OEM_MODE} --psm {self.OCR_PSM_MODE}'
         self.tesseract_lang = self.OCR_LANGUAGES
-        
+
+        # 성능 통계
+        self.ocr_count = 0
+        self.total_ocr_time = 0.0
+        self.cache_hits = 0
+        self.cache_misses = 0
+
         # OCR 오류 패턴 초기화
         self._init_ocr_error_patterns()
+        self._compile_patterns()
     
     def _init_ocr_error_patterns(self):
         """OCR 오류 패턴 초기화"""
@@ -83,7 +92,20 @@ class EnhancedOCRProcessor:
             (r'(\d)\s*,\s*(\d)', r'\1,\2'),  # 3 , 0 0 0 -> 3,000
             (r'(\d)\s+(\d)\s+(\d)', r'\1\2\3'),  # 3 3 6 -> 336
         ]
-        
+
+    def _compile_patterns(self):
+        """정규식 패턴 컴파일"""
+        # OCR 오류 패턴 컴파일
+        self.compiled_ocr_patterns = [(re.compile(p), r) for p, r in self.ocr_error_patterns]
+
+        # 숫자 패턴 컴파일
+        self.compiled_number_patterns = [(re.compile(p), r) for p, r in self.number_patterns]
+
+        # 한글 병합 패턴 컴파일
+        self.korean_merge_pattern = re.compile(r'([가-힣])\s+([가-힣])\s+([가-힣])')
+
+        logger.info(f"패턴 컴파일 완료: {len(self.compiled_ocr_patterns)}개 OCR 패턴, {len(self.compiled_number_patterns)}개 숫자 패턴")
+
     def _load_cache(self, cache_file: Path) -> Dict:
         """캐시 파일 로드"""
         if cache_file.exists():
@@ -116,7 +138,11 @@ class EnhancedOCRProcessor:
         # OCR 캐시 확인
         if pdf_hash in self.ocr_cache:
             logger.info(f"OCR 캐시 사용: {Path(pdf_path).name}")
+            self.cache_hits += 1
             return self.ocr_cache[pdf_hash]['text'], self.ocr_cache[pdf_hash]['metadata']
+
+        self.cache_misses += 1
+        start_time = time.time()
         
         full_text = ""
         metadata = {
@@ -161,7 +187,11 @@ class EnhancedOCRProcessor:
                 'metadata': metadata
             }
             self._save_cache(self.ocr_cache_file, self.ocr_cache)
-            
+
+            # 성능 통계 업데이트
+            self.ocr_count += 1
+            self.total_ocr_time += time.time() - start_time
+
             return full_text, metadata
             
         except Exception as e:
@@ -199,14 +229,14 @@ class EnhancedOCRProcessor:
         return ocr_text
     
     def _post_process_text(self, text: str) -> str:
-        """텍스트 후처리 - 오타 수정 및 포맷팅"""
-        # 패턴 기반 수정 적용
-        for pattern, replacement in self.ocr_error_patterns:
-            text = re.sub(pattern, replacement, text)
-        
-        # 숫자 분리 문제 해결
-        for pattern, replacement in self.number_patterns:
-            text = re.sub(pattern, replacement, text)
+        """텍스트 후처리 - 오타 수정 및 포맷팅 (컴파일된 패턴 사용)"""
+        # 패턴 기반 수정 적용 (컴파일된 패턴 사용)
+        for pattern, replacement in self.compiled_ocr_patterns:
+            text = pattern.sub(replacement, text)
+
+        # 숫자 분리 문제 해결 (컴파일된 패턴 사용)
+        for pattern, replacement in self.compiled_number_patterns:
+            text = pattern.sub(replacement, text)
         
         # OCR로 분리된 한글 단어 복원
         text = self._merge_korean_words(text)
@@ -217,13 +247,12 @@ class EnhancedOCRProcessor:
         return text.strip()
     
     def _merge_korean_words(self, text: str) -> str:
-        """분리된 한글 단어 병합"""
+        """분리된 한글 단어 병합 (컴파일된 패턴 사용)"""
         # 2-3글자 한글이 공백으로 분리된 경우 합치기
-        return re.sub(
-            r'([가-힣])\s+([가-힣])\s+([가-힣])', 
-            lambda m: m.group(1) + m.group(2) + m.group(3) 
-            if len(m.group(1) + m.group(2) + m.group(3)) <= self.MAX_KOREAN_WORD_LENGTH 
-            else m.group(0), 
+        return self.korean_merge_pattern.sub(
+            lambda m: m.group(1) + m.group(2) + m.group(3)
+            if len(m.group(1) + m.group(2) + m.group(3)) <= self.MAX_KOREAN_WORD_LENGTH
+            else m.group(0),
             text
         )
     
@@ -232,20 +261,68 @@ class EnhancedOCRProcessor:
         relative_path = f"{self.DOCS_PREFIX}{Path(pdf_path).name}"
         return self.metadata_cache.get(relative_path)
     
-    def process_batch(self, pdf_files: List[str], use_multiprocessing: bool = False) -> Dict[str, Tuple[str, Dict]]:
+    def process_batch(self, pdf_files: List[str], use_multiprocessing: bool = False, max_workers: int = 4) -> Dict[str, Tuple[str, Dict]]:
         """
         여러 PDF 파일 배치 처리 (수백 개 문서 대응)
         """
         results = {}
         total = len(pdf_files)
-        
-        for idx, pdf_path in enumerate(pdf_files, 1):
-            logger.info(f"처리 중: {idx}/{total} - {Path(pdf_path).name}")
-            text, metadata = self.extract_text_with_ocr(pdf_path)
-            results[pdf_path] = (text, metadata)
-            
-            # 메모리 관리 (주기적 캐시 저장)
-            if idx % self.CACHE_SAVE_INTERVAL == 0:
-                self._save_cache(self.ocr_cache_file, self.ocr_cache)
-        
+        start_time = time.time()
+
+        if use_multiprocessing and total > 1:
+            # 멀티프로세싱 처리
+            with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                future_to_pdf = {executor.submit(self.extract_text_with_ocr, pdf): pdf
+                                for pdf in pdf_files}
+
+                for idx, future in enumerate(as_completed(future_to_pdf), 1):
+                    pdf_path = future_to_pdf[future]
+                    try:
+                        text, metadata = future.result()
+                        results[pdf_path] = (text, metadata)
+                        logger.info(f"처리 완료: {idx}/{total} - {Path(pdf_path).name}")
+                    except Exception as e:
+                        logger.error(f"처리 실패: {Path(pdf_path).name} - {e}")
+                        results[pdf_path] = ("", {})
+
+                    # 메모리 관리 (주기적 캐시 저장)
+                    if idx % self.CACHE_SAVE_INTERVAL == 0:
+                        self._save_cache(self.ocr_cache_file, self.ocr_cache)
+        else:
+            # 순차 처리
+            for idx, pdf_path in enumerate(pdf_files, 1):
+                logger.info(f"처리 중: {idx}/{total} - {Path(pdf_path).name}")
+                text, metadata = self.extract_text_with_ocr(pdf_path)
+                results[pdf_path] = (text, metadata)
+
+                # 메모리 관리 (주기적 캐시 저장)
+                if idx % self.CACHE_SAVE_INTERVAL == 0:
+                    self._save_cache(self.ocr_cache_file, self.ocr_cache)
+
+        batch_time = time.time() - start_time
+        logger.info(f"배치 처리 완료: {total}개 파일, {batch_time:.2f}초")
+
         return results
+
+    def get_stats(self) -> Dict:
+        """성능 통계 반환"""
+        cache_hit_rate = (self.cache_hits / (self.cache_hits + self.cache_misses) * 100
+                         if (self.cache_hits + self.cache_misses) > 0 else 0.0)
+
+        stats = {
+            'ocr_count': self.ocr_count,
+            'total_ocr_time': self.total_ocr_time,
+            'avg_ocr_time': self.total_ocr_time / self.ocr_count if self.ocr_count > 0 else 0.0,
+            'cache_hits': self.cache_hits,
+            'cache_misses': self.cache_misses,
+            'cache_hit_rate': cache_hit_rate,
+            'cache_size': {
+                'metadata': len(self.metadata_cache),
+                'ocr': len(self.ocr_cache)
+            },
+            'compiled_patterns': {
+                'ocr_error': len(self.compiled_ocr_patterns),
+                'number': len(self.compiled_number_patterns)
+            }
+        }
+        return stats

@@ -2414,6 +2414,60 @@ class PerfectRAG:
         
         return response
     
+
+    def _prepare_llm_context(self, content, max_length=2000):
+        """LLM 컨텍스트 준비 헬퍼"""
+        if not content:
+            return ""
+
+        # 내용이 너무 길면 요약
+        if len(content) > max_length:
+            # 처음과 끝 부분 추출
+            start = content[:max_length//2]
+            end = content[-(max_length//2):]
+            content = f"{start}\n\n... [중략] ...\n\n{end}"
+
+        return content
+
+    def _extract_key_sentences(self, content, num_sentences=5):
+        """핵심 문장 추출 헬퍼"""
+        if not content:
+            return []
+
+        # 문장 분리
+        sentences = re.split(r'[.!?]+', content)
+        sentences = [s.strip() for s in sentences if s.strip()]
+
+        if len(sentences) <= num_sentences:
+            return sentences
+
+        # 키워드 기반 중요도 계산
+        important_keywords = ['결정', '승인', '구매', '계약', '예산', '진행', '완료']
+        scored_sentences = []
+
+        for sentence in sentences:
+            score = sum(1 for keyword in important_keywords if keyword in sentence)
+            scored_sentences.append((sentence, score))
+
+        # 점수 순으로 정렬
+        scored_sentences.sort(key=lambda x: x[1], reverse=True)
+
+        return [s[0] for s in scored_sentences[:num_sentences]]
+
+    def _format_llm_response(self, raw_response):
+        """LLM 응답 포맷팅 헬퍼"""
+        if not raw_response:
+            return "응답 생성 실패"
+
+        # 불필요한 공백 제거
+        formatted = re.sub(r'\n{3,}', '\n\n', raw_response)
+        formatted = formatted.strip()
+
+        # 마크다운 스타일 개선
+        formatted = re.sub(r'^#', '##', formatted, flags=re.MULTILINE)
+
+        return formatted
+
     def _generate_llm_summary(self, pdf_path: Path, query: str) -> str:
         """LLM을 사용한 상세 요약 - 대화형 스타일"""
         
@@ -3833,6 +3887,110 @@ class PerfectRAG:
         }
     
     
+
+    def _extract_document_metadata(self, file_path):
+        """문서 메타데이터 추출 헬퍼"""
+        metadata = {}
+
+        try:
+            # 파일명에서 정보 추출
+            filename = file_path.stem if hasattr(file_path, 'stem') else str(file_path)
+
+            # 날짜 추출
+            date_patterns = [
+                r'(\d{4})[.\-_](\d{1,2})[.\-_](\d{1,2})',
+                r'(\d{4})(\d{2})(\d{2})',
+                r'(\d{2})[.\-_](\d{1,2})[.\-_](\d{1,2})'
+            ]
+            for pattern in date_patterns:
+                match = re.search(pattern, filename)
+                if match:
+                    metadata['date'] = match.group(0)
+                    break
+
+            # 기안자 추출
+            author_patterns = [
+                r'([가-힣]{2,4})([\s_\-])?기안',
+                r'기안자[\s_\-:]*([가-힣]{2,4})',
+                r'작성자[\s_\-:]*([가-힣]{2,4})'
+            ]
+            for pattern in author_patterns:
+                match = re.search(pattern, filename)
+                if match:
+                    metadata['author'] = match.group(1) if '기안' in pattern else match.group(1)
+                    break
+
+            return metadata
+        except Exception as e:
+            print(f"메타데이터 추출 오류: {e}")
+            return {}
+
+    def _score_document_relevance(self, content, keywords):
+        """문서 관련성 점수 계산 헬퍼"""
+        if not content or not keywords:
+            return 0
+
+        score = 0
+        content_lower = content.lower()
+
+        for keyword in keywords:
+            keyword_lower = keyword.lower()
+            # 정확한 매칭
+            exact_matches = content_lower.count(keyword_lower)
+            score += exact_matches * 2
+
+            # 부분 매칭
+            if len(keyword_lower) > 2:
+                partial_matches = sum(1 for word in content_lower.split()
+                                    if keyword_lower in word)
+                score += partial_matches
+
+        # 문서 길이 정규화
+        doc_length = len(content)
+        if doc_length > 0:
+            score = score / (doc_length / 1000)  # 1000자 단위로 정규화
+
+        return score
+
+    def _format_search_result(self, file_path, content, metadata):
+        """검색 결과 포맷팅 헬퍼"""
+        result = []
+
+        # 제목
+        filename = file_path.stem if hasattr(file_path, 'stem') else str(file_path)
+        result.append(f"📄 {filename}")
+        result.append("-" * 50)
+
+        # 메타데이터
+        if metadata.get('date'):
+            result.append(f"📅 날짜: {metadata['date']}")
+        if metadata.get('author'):
+            result.append(f"✍️ 기안자: {metadata['author']}")
+
+        # 내용 요약 (처음 200자)
+        if content:
+            summary = content[:200].replace('\n', ' ')
+            result.append(f"\n📝 내용 미리보기:")
+            result.append(summary + "...")
+
+        return '\n'.join(result)
+
+    def _aggregate_search_results(self, results):
+        """검색 결과 통합 헬퍼"""
+        if not results:
+            return "검색 결과가 없습니다."
+
+        aggregated = []
+        aggregated.append(f"🔍 총 {len(results)}개 문서 발견\n")
+        aggregated.append("=" * 60)
+
+        for i, result in enumerate(results, 1):
+            aggregated.append(f"\n[{i}] {result}")
+            if i < len(results):
+                aggregated.append("\n" + "-" * 60)
+
+        return '\n'.join(aggregated)
+
     def _search_multiple_documents(self, query: str) -> str:
         """여러 문서 검색 및 리스트 반환"""
         try:

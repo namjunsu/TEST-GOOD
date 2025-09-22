@@ -30,10 +30,18 @@ class KoreanTokenizer:
     MIN_TOKEN_LENGTH = 1
     VALID_POS_TAGS = ['N', 'V', 'A', 'M']  # 명사, 동사, 형용사, 수식언
     TOKEN_PATTERN = r'[^\w\s가-힣]'  # 한글, 영문, 숫자 외 제거
-    
+    CACHE_SIZE = 2048  # 토큰 캐시 크기
+
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        
+
+        # 패턴 컴파일
+        self._compiled_token_pattern = re.compile(self.TOKEN_PATTERN)
+
+        # 성능 통계
+        self.tokenize_count = 0
+        self.cache_hits = 0
+
         if KIWIPIEPY_AVAILABLE:
             try:
                 self.kiwi = Kiwi()
@@ -45,9 +53,13 @@ class KoreanTokenizer:
         else:
             self.use_kiwi = False
     
-    @lru_cache(maxsize=1024)
+    @lru_cache(maxsize=CACHE_SIZE)
     def tokenize(self, text: str) -> List[str]:
         """텍스트를 토큰으로 분할 (캐시됨)"""
+        self.tokenize_count += 1
+        if text in self.tokenize.__wrapped__.__dict__.get('cache', {}):
+            self.cache_hits += 1
+
         if not text or not text.strip():
             return []
         
@@ -63,14 +75,14 @@ class KoreanTokenizer:
                 return tokens
             else:
                 # 기본 토크나이저 (공백 + 특수문자 기준)
-                text = re.sub(self.TOKEN_PATTERN, ' ', text)  # 한글, 영문, 숫자만 유지
+                text = self._compiled_token_pattern.sub(' ', text)  # 한글, 영문, 숫자만 유지
                 tokens = [t.lower() for t in text.split() if len(t) > self.MIN_TOKEN_LENGTH]
                 return tokens
-                
+
         except Exception as e:
             self.logger.error(f"토큰화 실패: {e}")
             # fallback
-            text = re.sub(self.TOKEN_PATTERN, ' ', text)
+            text = self._compiled_token_pattern.sub(' ', text)
             return [t.lower() for t in text.split() if len(t) > self.MIN_TOKEN_LENGTH]
 
 class BM25Store:
@@ -174,16 +186,24 @@ class BM25Store:
             self.logger.error(f"BM25 인덱스 로드 실패: {e}")
             raise
     
-    def add_documents(self, texts: List[str], metadatas: List[Dict[str, Any]]):
-        """문서들을 인덱스에 추가 (배치 처리)"""
+    def add_documents(self, texts: List[str], metadatas: List[Dict[str, Any]], batch_size: int = 100) -> None:
+        """문서들을 인덱스에 추가 (배치 처리 최적화)"""
         if len(texts) != len(metadatas):
             raise ValueError("텍스트와 메타데이터 개수가 일치하지 않습니다")
 
         start_time = time.time()
+        total_docs = len(texts)
+
         try:
-            for text, metadata in zip(texts, metadatas):
-                # 토큰화
-                tokens = self.tokenizer.tokenize(text)
+            # 배치 처리 (메모리 효율성)
+            for batch_start in range(0, total_docs, batch_size):
+                batch_end = min(batch_start + batch_size, total_docs)
+                batch_texts = texts[batch_start:batch_end]
+                batch_metadatas = metadatas[batch_start:batch_end]
+
+                for text, metadata in zip(batch_texts, batch_metadatas):
+                    # 토큰화
+                    tokens = self.tokenizer.tokenize(text)
                 
                 # 문서 추가
                 self.documents.append(text)
@@ -202,6 +222,10 @@ class BM25Store:
                 for token in set(tokens):
                     self.doc_freqs[token] += 1
             
+                # 배치 로깅
+                if (batch_end - batch_start) >= 10:
+                    self.logger.debug(f"BM25 인덱싱 진행: {batch_end}/{total_docs}")
+
             # 평균 문서 길이 재계산
             if self.doc_lens:
                 self.avg_doc_len = sum(self.doc_lens) / len(self.doc_lens)
@@ -209,28 +233,21 @@ class BM25Store:
             # 인덱싱 시간 기록
             self.index_time += time.time() - start_time
 
-            self.logger.info(f"{len(texts)}개 문서 BM25 인덱싱 완료 (총 {len(self.documents)}개, {time.time() - start_time:.2f}초)")
+            self.logger.info(f"{total_docs}개 문서 BM25 인덱싱 완료 (총 {len(self.documents)}개, {time.time() - start_time:.2f}초)")
             
         except Exception as e:
             self.logger.error(f"BM25 문서 추가 실패: {e}")
             raise
 
-    def get_stats(self) -> Dict[str, Any]:
-        """BM25 인덱스 통계 반환"""
-        return {
-            "total_documents": len(self.documents),
-            "vocab_size": len(self.vocab),
-            "avg_doc_length": self.avg_doc_len,
-            "total_index_time": self.index_time,
-            "search_count": self.search_count,
-            "avg_search_time": self.total_search_time / self.search_count if self.search_count > 0 else 0
-        }
     
     def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
-        """BM25 스코어로 문서 검색"""
+        """BM25 스코어로 문서 검색 (성능 추적 포함)"""
         if not self.documents:
             return []
-        
+
+        start_time = time.time()
+        self.search_count += 1
+
         try:
             # 쿼리 토큰화
             query_tokens = self.tokenizer.tokenize(query)
@@ -282,14 +299,30 @@ class BM25Store:
                     }
                     results.append(result)
             
+            # 검색 시간 기록
+            search_time = time.time() - start_time
+            self.total_search_time += search_time
+
+            if self.search_count % 100 == 0:
+                self.logger.info(f"BM25 검색 통계: {self.search_count}회, 평균 {self.total_search_time/self.search_count:.3f}초")
+
             return results
-            
+
         except Exception as e:
             self.logger.error(f"BM25 검색 실패: {e}")
             return []
+        finally:
+            self.total_search_time += time.time() - start_time
     
     def get_stats(self) -> Dict[str, Any]:
-        """BM25 인덱스 통계"""
+        """BM25 인덱스 통계 (확장된 메트릭)"""
+        tokenizer_stats = {
+            'type': 'kiwipiepy' if self.tokenizer.use_kiwi else 'basic',
+            'tokenize_count': self.tokenizer.tokenize_count,
+            'cache_hits': self.tokenizer.cache_hits,
+            'cache_hit_rate': self.tokenizer.cache_hits / self.tokenizer.tokenize_count * 100 if self.tokenizer.tokenize_count > 0 else 0
+        }
+
         return {
             'total_documents': len(self.documents),
             'vocab_size': len(self.vocab),
@@ -299,7 +332,13 @@ class BM25Store:
                 'k1': self.k1,
                 'b': self.b
             },
-            'tokenizer': 'kiwipiepy' if self.tokenizer.use_kiwi else 'basic'
+            'tokenizer': tokenizer_stats,
+            'performance': {
+                'total_index_time': self.index_time,
+                'search_count': self.search_count,
+                'total_search_time': self.total_search_time,
+                'avg_search_time': self.total_search_time / self.search_count if self.search_count > 0 else 0
+            }
         }
 
 # 테스트 함수
@@ -390,8 +429,10 @@ def test_bm25_store():
         print(f"  총 문서 수: {stats['total_documents']}")
         print(f"  어휘 크기: {stats['vocab_size']}")
         print(f"  평균 문서 길이: {stats['avg_doc_length']:.1f}")
-        print(f"  토크나이저: {stats['tokenizer']}")
+        print(f"  토크나이저: {stats['tokenizer']['type']}")
+        print(f"  토큰 캐시 히트율: {stats['tokenizer']['cache_hit_rate']:.1f}%")
         print(f"  파라미터: k1={stats['parameters']['k1']}, b={stats['parameters']['b']}")
+        print(f"  평균 검색 시간: {stats['performance']['avg_search_time']:.3f}초")
         
         print("✅ BM25 스토어 테스트 완료")
         return True

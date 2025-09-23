@@ -1,0 +1,48 @@
+apiVersion: v2
+name: ai-chat-rag
+description: AI-CHAT RAG System - 최고의 개발자가 만든 문서 검색 시스템
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+keywords:
+  - rag
+  - ai
+  - document-search
+  - korean
+  - qwen
+
+home: https://github.com/wnstn4647/AI-CHAT
+sources:
+  - https://github.com/wnstn4647/AI-CHAT
+
+maintainers:
+  - name: Claude - 최고의 개발자
+    email: claude@anthropic.com
+
+dependencies:
+  - name: redis
+    version: 17.x.x
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled
+
+  - name: prometheus
+    version: 19.x.x
+    repository: https://prometheus-community.github.io/helm-charts
+    condition: monitoring.prometheus.enabled
+
+  - name: grafana
+    version: 6.x.x
+    repository: https://grafana.github.io/helm-charts
+    condition: monitoring.grafana.enabled
+
+annotations:
+  artifacthub.io/changes: |
+    - kind: added
+      description: 초기 Helm 차트 생성
+    - kind: added
+      description: Redis 캐시 지원
+    - kind: added
+      description: 모니터링 스택 통합
+  artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/license: MIT

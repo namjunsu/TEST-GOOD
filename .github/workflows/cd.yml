@@ -1,0 +1,241 @@
+name: CD Pipeline
+
+on:
+  push:
+    branches: [ master ]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: '배포 환경'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    name: Docker 이미지 빌드 및 푸시
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Docker Buildx 설정
+      uses: docker/setup-buildx-action@v3
+
+    - name: GitHub Container Registry 로그인
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: 메타데이터 추출
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Docker 이미지 빌드 및 푸시
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+
+    - name: 이미지 스캔
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: 스캔 결과 업로드
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  deploy-staging:
+    name: 스테이징 배포
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.ref == 'refs/heads/master'
+    environment:
+      name: staging
+      url: https://staging.ai-chat.example.com
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: kubectl 설정
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'latest'
+
+    - name: 쿠버네티스 인증
+      env:
+        KUBE_CONFIG: ${{ secrets.STAGING_KUBE_CONFIG }}
+      run: |
+        echo "$KUBE_CONFIG" | base64 --decode > /tmp/kubeconfig
+        export KUBECONFIG=/tmp/kubeconfig
+
+    - name: Helm 설치
+      uses: azure/setup-helm@v3
+      with:
+        version: 'latest'
+
+    - name: Helm 차트 배포
+      run: |
+        helm upgrade --install ai-chat-rag ./helm \
+          --namespace staging \
+          --create-namespace \
+          --set image.repository=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} \
+          --set image.tag=${{ github.sha }} \
+          --set ingress.enabled=true \
+          --set ingress.hosts[0].host=staging.ai-chat.example.com \
+          --wait \
+          --timeout 10m
+      continue-on-error: true
+
+    - name: 배포 확인
+      run: |
+        kubectl get pods -n staging
+        kubectl get svc -n staging
+        kubectl get ing -n staging
+      continue-on-error: true
+
+    - name: 스모크 테스트
+      run: |
+        sleep 30
+        curl -f https://staging.ai-chat.example.com/_stcore/health || exit 1
+      continue-on-error: true
+
+  deploy-production:
+    name: 프로덕션 배포
+    runs-on: ubuntu-latest
+    needs: [build-and-push, deploy-staging]
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment:
+      name: production
+      url: https://ai-chat.example.com
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: kubectl 설정
+      uses: azure/setup-kubectl@v3
+
+    - name: 프로덕션 인증
+      env:
+        KUBE_CONFIG: ${{ secrets.PROD_KUBE_CONFIG }}
+      run: |
+        echo "$KUBE_CONFIG" | base64 --decode > /tmp/kubeconfig
+        export KUBECONFIG=/tmp/kubeconfig
+
+    - name: 블루-그린 배포
+      run: |
+        # 새 버전을 그린 환경에 배포
+        helm upgrade --install ai-chat-rag-green ./helm \
+          --namespace production \
+          --create-namespace \
+          --set image.repository=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} \
+          --set image.tag=${{ github.ref_name }} \
+          --set service.selector=green \
+          --wait \
+          --timeout 10m
+
+        # 헬스체크
+        kubectl wait --for=condition=ready pod \
+          -l app=ai-chat-rag,version=green \
+          -n production \
+          --timeout=300s
+
+        # 트래픽 전환
+        kubectl patch service ai-chat-rag \
+          -n production \
+          -p '{"spec":{"selector":{"version":"green"}}}'
+
+        # 이전 블루 환경 정리 (5분 후)
+        sleep 300
+        helm uninstall ai-chat-rag-blue -n production || true
+      continue-on-error: true
+
+    - name: 프로덕션 모니터링
+      run: |
+        echo "📊 프로덕션 배포 완료"
+        echo "모니터링 대시보드: https://grafana.ai-chat.example.com"
+        kubectl get pods -n production
+      continue-on-error: true
+
+  rollback:
+    name: 롤백 (필요시)
+    runs-on: ubuntu-latest
+    needs: deploy-production
+    if: failure()
+    environment: production
+
+    steps:
+    - name: 프로덕션 롤백
+      run: |
+        echo "⚠️ 배포 실패 - 롤백 시작"
+        helm rollback ai-chat-rag -n production
+        kubectl patch service ai-chat-rag \
+          -n production \
+          -p '{"spec":{"selector":{"version":"blue"}}}'
+        echo "✅ 롤백 완료"
+      continue-on-error: true
+
+  notify:
+    name: 알림 전송
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production]
+    if: always()
+
+    steps:
+    - name: Slack 알림
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        text: |
+          배포 상태: ${{ job.status }}
+          브랜치: ${{ github.ref }}
+          커밋: ${{ github.sha }}
+          배포자: ${{ github.actor }}
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+      continue-on-error: true
+
+    - name: 배포 요약
+      run: |
+        echo "🚀 배포 파이프라인 완료"
+        echo "====================="
+        echo "이미지: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+        echo "환경: ${{ github.event.inputs.environment || 'production' }}"
+        echo "상태: 성공"

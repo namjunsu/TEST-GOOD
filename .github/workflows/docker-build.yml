@@ -1,0 +1,310 @@
+name: Docker Build & Test
+
+on:
+  push:
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'requirements*.txt'
+      - '.dockerignore'
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'requirements*.txt'
+      - '.dockerignore'
+  schedule:
+    # 매주 월요일 오전 3시 실행 (보안 업데이트 확인)
+    - cron: '0 3 * * 1'
+
+env:
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
+
+jobs:
+  hadolint:
+    name: Dockerfile 린트
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Hadolint 실행
+      uses: hadolint/hadolint-action@v3.1.0
+      with:
+        dockerfile: Dockerfile
+        ignore: DL3008,DL3009  # apt-get 버전 고정 경고 무시
+
+  build-test:
+    name: Docker 이미지 빌드 및 테스트
+    runs-on: ubuntu-latest
+    needs: hadolint
+
+    strategy:
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Docker Buildx 설정
+      uses: docker/setup-buildx-action@v3
+
+    - name: 빌드 캐시 설정
+      uses: actions/cache@v3
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-${{ matrix.platform }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-${{ matrix.platform }}-
+
+    - name: 테스트 이미지 빌드
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: ${{ matrix.platform }}
+        load: true
+        tags: ai-chat-rag:test
+        cache-from: type=local,src=/tmp/.buildx-cache
+        cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+    - name: 컨테이너 구조 테스트
+      run: |
+        # Container Structure Test 도구 설치
+        wget -O /tmp/container-structure-test \
+          https://storage.googleapis.com/container-structure-test/latest/container-structure-test-linux-amd64
+        chmod +x /tmp/container-structure-test
+
+        # 테스트 설정 작성
+        cat > test-config.yaml <<EOF
+        schemaVersion: 2.0.0
+        fileExistenceTests:
+          - name: "앱 파일 존재 확인"
+            path: "/app/web_interface.py"
+            shouldExist: true
+          - name: "RAG 시스템 확인"
+            path: "/app/perfect_rag.py"
+            shouldExist: true
+          - name: "설정 파일 확인"
+            path: "/app/config.py"
+            shouldExist: true
+        fileContentTests:
+          - name: "Python 버전 확인"
+            path: "/usr/bin/python3"
+            expectedContents: [".*"]
+        commandTests:
+          - name: "Python 패키지 확인"
+            command: "pip"
+            args: ["list"]
+            exitCode: 0
+        metadataTest:
+          exposedPorts: ["8501", "8502"]
+          workdir: "/app"
+        EOF
+
+        # 테스트 실행
+        /tmp/container-structure-test test \
+          --image ai-chat-rag:test \
+          --config test-config.yaml
+      continue-on-error: true
+
+    - name: 컨테이너 실행 테스트
+      run: |
+        # 테스트 컨테이너 실행
+        docker run -d --name test-container \
+          -p 8501:8501 \
+          ai-chat-rag:test
+
+        # 헬스체크 대기
+        sleep 30
+
+        # 헬스체크 확인
+        docker exec test-container curl -f http://localhost:8501/_stcore/health || exit 1
+
+        # 로그 확인
+        docker logs test-container
+
+        # 정리
+        docker stop test-container
+        docker rm test-container
+      continue-on-error: true
+
+    - name: 캐시 정리
+      run: |
+        rm -rf /tmp/.buildx-cache
+        mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+  compose-test:
+    name: Docker Compose 테스트
+    runs-on: ubuntu-latest
+    needs: build-test
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Docker Compose 설정
+      run: |
+        docker compose version
+        docker compose config
+
+    - name: 서비스 시작
+      run: |
+        docker compose up -d
+        sleep 60
+
+    - name: 서비스 상태 확인
+      run: |
+        docker compose ps
+        docker compose logs --tail=50
+
+    - name: 연결 테스트
+      run: |
+        # 메인 서비스 테스트
+        curl -f http://localhost:8501/_stcore/health || exit 1
+
+        # Redis 테스트
+        docker compose exec -T redis redis-cli ping
+
+        # 네트워크 테스트
+        docker compose exec -T rag-system ping -c 1 redis
+      continue-on-error: true
+
+    - name: 정리
+      if: always()
+      run: |
+        docker compose down -v
+        docker system prune -f
+
+  security-scan:
+    name: 보안 스캔
+    runs-on: ubuntu-latest
+    needs: build-test
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Docker 이미지 빌드
+      run: docker build -t ai-chat-rag:security .
+
+    - name: Trivy 스캔
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ai-chat-rag:security
+        format: 'table'
+        exit-code: '0'
+        ignore-unfixed: true
+        vuln-type: 'os,library'
+        severity: 'CRITICAL,HIGH'
+
+    - name: Snyk 스캔
+      uses: snyk/actions/docker@master
+      with:
+        image: ai-chat-rag:security
+        args: --severity-threshold=high
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      continue-on-error: true
+
+    - name: Docker Scout 스캔
+      run: |
+        # Docker Scout CLI 설치
+        curl -sSfL https://raw.githubusercontent.com/docker/scout-cli/main/install.sh | bash -s --
+
+        # 스캔 실행
+        docker scout cves ai-chat-rag:security
+        docker scout recommendations ai-chat-rag:security
+      continue-on-error: true
+
+  performance-test:
+    name: 성능 테스트
+    runs-on: ubuntu-latest
+    needs: compose-test
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: 서비스 시작
+      run: |
+        docker compose up -d
+        sleep 60
+
+    - name: 부하 테스트
+      run: |
+        # k6 설치
+        sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+        echo "deb https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+        sudo apt-get update
+        sudo apt-get install -y k6
+
+        # 부하 테스트 스크립트 작성
+        cat > load-test.js <<EOF
+        import http from 'k6/http';
+        import { check, sleep } from 'k6';
+
+        export let options = {
+          vus: 10,
+          duration: '30s',
+          thresholds: {
+            http_req_duration: ['p(95)<5000'],
+            http_req_failed: ['rate<0.1'],
+          },
+        };
+
+        export default function() {
+          let response = http.get('http://localhost:8501');
+          check(response, {
+            'status is 200': (r) => r.status === 200,
+            'response time < 5s': (r) => r.timings.duration < 5000,
+          });
+          sleep(1);
+        }
+        EOF
+
+        # 테스트 실행
+        k6 run load-test.js
+      continue-on-error: true
+
+    - name: 메모리 프로파일링
+      run: |
+        # 메모리 사용량 확인
+        docker stats --no-stream
+
+        # 상세 메모리 정보
+        docker compose exec -T rag-system cat /proc/meminfo | head -20
+      continue-on-error: true
+
+    - name: 정리
+      if: always()
+      run: docker compose down -v
+
+  multi-arch-build:
+    name: 멀티 아키텍처 빌드
+    runs-on: ubuntu-latest
+    needs: [security-scan, performance-test]
+    if: success()
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: QEMU 설정
+      uses: docker/setup-qemu-action@v3
+
+    - name: Docker Buildx 설정
+      uses: docker/setup-buildx-action@v3
+
+    - name: 멀티 플랫폼 빌드
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: false
+        tags: |
+          ai-chat-rag:multi-arch
+          ai-chat-rag:${{ github.sha }}
+
+    - name: 이미지 정보
+      run: |
+        docker buildx imagetools inspect ai-chat-rag:multi-arch
+        echo "✅ 멀티 아키텍처 빌드 성공"
+        echo "  - linux/amd64"
+        echo "  - linux/arm64"

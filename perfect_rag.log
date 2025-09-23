@@ -627,3 +627,353 @@
 2025-09-23 08:49:35,333 - rag_system.llm_singleton - INFO - 🤖 LLM 모델 최초 로딩...
 2025-09-23 08:50:08,361 - rag_system.qwen_llm - INFO - Qwen 모델 로드 완료: /home/wnstn4647/AI-CHAT/models/qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf
 2025-09-23 08:50:08,370 - rag_system.llm_singleton - INFO - ✅ LLM 로드 완료 (33.0초)
+2025-09-23 21:19:28,825 - perfect_rag - INFO - Performance config loaded from /home/wnstn4647/AI-CHAT/performance_config.yaml
+2025-09-23 21:19:28,837 - perfect_rag - INFO - 메타데이터 캐시 구축 시작
+2025-09-23 21:19:35,196 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:35,196 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2015-11-24_장비구매기안서_상암제작CG파트.pdf
+2025-09-23 21:19:35,196 - perfect_rag - INFO - OCR 성공: 2015-11-24_장비구매기안서_상암제작CG파트.pdf - 626자 추출
+2025-09-23 21:19:35,200 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:35,200 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-04-07_상암DDMC_스튜디오_조명_소모품_신청서.pdf
+2025-09-23 21:19:35,209 - perfect_rag - INFO - OCR 성공: 2016-04-07_상암DDMC_스튜디오_조명_소모품_신청서.pdf - 439자 추출
+2025-09-23 21:19:35,222 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:35,222 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2019-01-14_ENG_카메라용_무선마이크_소모품_구매_건.pdf
+2025-09-23 21:19:35,222 - perfect_rag - INFO - OCR 성공: 2019-01-14_ENG_카메라용_무선마이크_소모품_구매_건.pdf - 966자 추출
+2025-09-23 21:19:35,241 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:35,242 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:35,242 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2014-07-02_헬리캠_구매_기안서.pdf
+2025-09-23 21:19:35,242 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2019-03-07_영상취재팀_EX-3카메라_수리의_건.pdf
+2025-09-23 21:19:35,242 - perfect_rag - INFO - OCR 성공: 2014-07-02_헬리캠_구매_기안서.pdf - 700자 추출
+2025-09-23 21:19:35,242 - perfect_rag - INFO - OCR 성공: 2019-03-07_영상취재팀_EX-3카메라_수리의_건.pdf - 74자 추출
+2025-09-23 21:19:37,760 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:37,761 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2019-01-07_중계차_BNC_케이블_구매_건.pdf
+2025-09-23 21:19:37,762 - perfect_rag - INFO - OCR 성공: 2019-01-07_중계차_BNC_케이블_구매_건.pdf - 799자 추출
+2025-09-23 21:19:38,285 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:38,287 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-04-05_무선_핀_마이크_수리_건.pdf
+2025-09-23 21:19:38,305 - perfect_rag - INFO - OCR 성공: 2017-04-05_무선_핀_마이크_수리_건.pdf - 450자 추출
+2025-09-23 21:19:38,805 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:38,805 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-08-29_HDMI_리피터_장비_구매.pdf
+2025-09-23 21:19:38,811 - perfect_rag - INFO - OCR 성공: 2017-08-29_HDMI_리피터_장비_구매.pdf - 695자 추출
+2025-09-23 21:19:39,536 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:39,542 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-07-27_중계차_소모장비_구매건.pdf
+2025-09-23 21:19:39,548 - perfect_rag - INFO - OCR 성공: 2016-07-27_중계차_소모장비_구매건.pdf - 600자 추출
+2025-09-23 21:19:39,923 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:39,924 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-08-10_다목적_부조정실_프롬프터_분리에_대한_기술검토.pdf
+2025-09-23 21:19:39,924 - perfect_rag - INFO - OCR 성공: 2017-08-10_다목적_부조정실_프롬프터_분리에_대한_기술검토.pdf - 1710자 추출
+2025-09-23 21:19:41,824 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:41,824 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2019-01-14_카메라_트라이포트_발판_수리_건.pdf
+2025-09-23 21:19:41,829 - perfect_rag - INFO - OCR 성공: 2019-01-14_카메라_트라이포트_발판_수리_건.pdf - 668자 추출
+2025-09-23 21:19:42,481 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:42,487 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-11-13_EX-3_외장마이크_보드_교체_건.pdf
+2025-09-23 21:19:42,487 - perfect_rag - INFO - OCR 성공: 2017-11-13_EX-3_외장마이크_보드_교체_건.pdf - 596자 추출
+2025-09-23 21:19:43,019 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:43,019 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-11-30_부조정실_자막기_리모트_버튼_구매_건.pdf
+2025-09-23 21:19:43,035 - perfect_rag - INFO - OCR 성공: 2017-11-30_부조정실_자막기_리모트_버튼_구매_건.pdf - 803자 추출
+2025-09-23 21:19:43,415 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:43,452 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-12-14_핀_마이크_소모품_구매_건.pdf
+2025-09-23 21:19:43,457 - perfect_rag - INFO - OCR 성공: 2017-12-14_핀_마이크_소모품_구매_건.pdf - 587자 추출
+2025-09-23 21:19:43,579 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:43,584 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-04-05_카메라_트라이포트_수리_건.pdf
+2025-09-23 21:19:43,584 - perfect_rag - INFO - OCR 성공: 2017-04-05_카메라_트라이포트_수리_건.pdf - 526자 추출
+2025-09-23 21:19:43,669 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:43,669 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-04-25_중계차_EFP_카메라_방수_커버_도입_건.pdf
+2025-09-23 21:19:43,669 - perfect_rag - INFO - OCR 성공: 2017-04-25_중계차_EFP_카메라_방수_커버_도입_건.pdf - 824자 추출
+2025-09-23 21:19:45,185 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:45,185 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2015-12-17_취재용_사다리_구매의_건(영상취재팀).pdf
+2025-09-23 21:19:45,185 - perfect_rag - INFO - OCR 성공: 2015-12-17_취재용_사다리_구매의_건(영상취재팀).pdf - 409자 추출
+2025-09-23 21:19:47,067 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:47,068 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-03-22_무선_마이크_원드_스크린_구매_건.pdf
+2025-09-23 21:19:47,068 - perfect_rag - INFO - OCR 성공: 2017-03-22_무선_마이크_원드_스크린_구매_건.pdf - 483자 추출
+2025-09-23 21:19:47,436 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:47,442 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-10-30_주조정실_로고모션_수리_건.pdf
+2025-09-23 21:19:47,447 - perfect_rag - INFO - OCR 성공: 2017-10-30_주조정실_로고모션_수리_건.pdf - 459자 추출
+2025-09-23 21:19:47,524 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:47,525 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2015-11-02_상암DDMC_스튜디오_조명_소모품_신청서.pdf
+2025-09-23 21:19:47,525 - perfect_rag - INFO - OCR 성공: 2015-11-02_상암DDMC_스튜디오_조명_소모품_신청서.pdf - 631자 추출
+2025-09-23 21:19:50,138 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:50,144 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-12-28_무선_친_마이크_케이블_교체_건.pdf
+2025-09-23 21:19:50,144 - perfect_rag - INFO - OCR 성공: 2017-12-28_무선_친_마이크_케이블_교체_건.pdf - 568자 추출
+2025-09-23 21:19:51,132 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:51,138 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2015-01-22_광화문_뉴스,_멀티_오픈_스튜디오_조명_소모품_신청서.pdf
+2025-09-23 21:19:51,138 - perfect_rag - INFO - OCR 성공: 2015-01-22_광화문_뉴스,_멀티_오픈_스튜디오_조명_소모품_신청서.pdf - 421자 추출
+2025-09-23 21:19:51,244 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:51,250 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-03-20_한손_짐벌_구매_검토_건.pdf
+2025-09-23 21:19:51,255 - perfect_rag - INFO - OCR 성공: 2017-03-20_한손_짐벌_구매_검토_건.pdf - 2073자 추출
+2025-09-23 21:19:51,445 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:51,445 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-05-24_6mm_카메라_엑세사리_구매_건.pdf
+2025-09-23 21:19:51,445 - perfect_rag - INFO - OCR 성공: 2017-05-24_6mm_카메라_엑세사리_구매_건.pdf - 2118자 추출
+2025-09-23 21:19:53,603 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:53,614 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-03-20_카메라_트라이포드_발판_교체_건.pdf
+2025-09-23 21:19:53,614 - perfect_rag - INFO - OCR 성공: 2017-03-20_카메라_트라이포드_발판_교체_건.pdf - 437자 추출
+2025-09-23 21:19:54,102 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:54,103 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-08-18_뉴스,_멀티_부조정실_문자_발생기_5대_구매_기술_검토.pdf
+2025-09-23 21:19:54,103 - perfect_rag - INFO - OCR 성공: 2017-08-18_뉴스,_멀티_부조정실_문자_발생기_5대_구매_기술_검토.pdf - 972자 추출
+2025-09-23 21:19:56,310 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:56,310 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2019-01-30_ENG_카메라_수리_신청서.pdf
+2025-09-23 21:19:56,310 - perfect_rag - INFO - OCR 성공: 2019-01-30_ENG_카메라_수리_신청서.pdf - 944자 추출
+2025-09-23 21:19:56,982 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:56,988 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2015-12-09_방송기술팀_조명관련_소모품_신청서.pdf
+2025-09-23 21:19:56,988 - perfect_rag - INFO - OCR 성공: 2015-12-09_방송기술팀_조명관련_소모품_신청서.pdf - 403자 추출
+2025-09-23 21:19:57,127 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:57,127 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-01-19_멀티부조_예비_콘솔_및_랙_장비_보호_커버_설치의_건.pdf
+2025-09-23 21:19:57,127 - perfect_rag - INFO - OCR 성공: 2016-01-19_멀티부조_예비_콘솔_및_랙_장비_보호_커버_설치의_건.pdf - 1005자 추출
+2025-09-23 21:19:59,348 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:59,352 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2019-03-20_영상취재팀_EX-3_카메라_수리요청.pdf
+2025-09-23 21:19:59,354 - perfect_rag - INFO - OCR 성공: 2019-03-20_영상취재팀_EX-3_카메라_수리요청.pdf - 940자 추출
+2025-09-23 21:19:59,789 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:59,793 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-05-18_선거_방송용_모니터_수리_건.pdf
+2025-09-23 21:19:59,793 - perfect_rag - INFO - OCR 성공: 2017-05-18_선거_방송용_모니터_수리_건.pdf - 446자 추출
+2025-09-23 21:19:59,989 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:19:59,989 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2015-04-27_웹하드_대용량_서비스_신청건.pdf
+2025-09-23 21:19:59,989 - perfect_rag - INFO - OCR 성공: 2015-04-27_웹하드_대용량_서비스_신청건.pdf - 730자 추출
+2025-09-23 21:20:00,133 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:00,134 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-08-10_무선_IFB_인터컴_인이어_구매의_건.pdf
+2025-09-23 21:20:00,134 - perfect_rag - INFO - OCR 성공: 2016-08-10_무선_IFB_인터컴_인이어_구매의_건.pdf - 709자 추출
+2025-09-23 21:20:02,953 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:02,953 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2019-01-31_영상취재용_D-tap전원케이블_구매.pdf
+2025-09-23 21:20:02,954 - perfect_rag - INFO - OCR 성공: 2019-01-31_영상취재용_D-tap전원케이블_구매.pdf - 895자 추출
+2025-09-23 21:20:03,449 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:03,449 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2019-03-20_중계용_Audio_Amp_구매.pdf
+2025-09-23 21:20:03,449 - perfect_rag - INFO - OCR 성공: 2019-03-20_중계용_Audio_Amp_구매.pdf - 936자 추출
+2025-09-23 21:20:04,273 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:04,273 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-07-27_방송기술팀_뉴스,_멀티_부조_무선마이크_구매_건.pdf
+2025-09-23 21:20:04,273 - perfect_rag - INFO - OCR 성공: 2016-07-27_방송기술팀_뉴스,_멀티_부조_무선마이크_구매_건.pdf - 723자 추출
+2025-09-23 21:20:04,499 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:04,499 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2015-03-23_영상취재팀_필요_장비_목록.pdf
+2025-09-23 21:20:04,499 - perfect_rag - INFO - OCR 성공: 2015-03-23_영상취재팀_필요_장비_목록.pdf - 1243자 추출
+2025-09-23 21:20:06,808 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:06,813 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-06-13_다목적_스튜디오_TV_수리_건.pdf
+2025-09-23 21:20:06,814 - perfect_rag - INFO - OCR 성공: 2017-06-13_다목적_스튜디오_TV_수리_건.pdf - 663자 추출
+2025-09-23 21:20:06,960 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:06,971 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-10-26_중계차_보호물품_구매_건.pdf
+2025-09-23 21:20:06,971 - perfect_rag - INFO - OCR 성공: 2017-10-26_중계차_보호물품_구매_건.pdf - 664자 추출
+2025-09-23 21:20:07,937 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:07,942 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-01-08_방송기술팀_조명_관련_소모품_신청서.pdf
+2025-09-23 21:20:07,946 - perfect_rag - INFO - OCR 성공: 2016-01-08_방송기술팀_조명_관련_소모품_신청서.pdf - 395자 추출
+2025-09-23 21:20:07,950 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:07,950 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-12-21_방송_송출_보존용_DVR_교체_검토의_건.pdf
+2025-09-23 21:20:07,950 - perfect_rag - INFO - OCR 성공: 2017-12-21_방송_송출_보존용_DVR_교체_검토의_건.pdf - 1457자 추출
+2025-09-23 21:20:10,246 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:10,247 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2015-02-12_광커넥터클리너_소포품신청서.pdf
+2025-09-23 21:20:10,249 - perfect_rag - INFO - OCR 성공: 2015-02-12_광커넥터클리너_소포품신청서.pdf - 564자 추출
+2025-09-23 21:20:13,253 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:13,269 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-10-16_조명_소모품_구매.pdf
+2025-09-23 21:20:13,280 - perfect_rag - INFO - OCR 성공: 2017-10-16_조명_소모품_구매.pdf - 881자 추출
+2025-09-23 21:20:13,412 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:13,416 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-10-30_뉴스_스튜디오_페데스탈Guard_수리_및_나사_예비품_구매_요청_건.pdf
+2025-09-23 21:20:13,416 - perfect_rag - INFO - OCR 성공: 2017-10-30_뉴스_스튜디오_페데스탈Guard_수리_및_나사_예비품_구매_요청_건.pdf - 1001자 추출
+2025-09-23 21:20:13,505 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:13,506 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-02-22_광화문_스튜디오_조명_소모품_신청서.pdf
+2025-09-23 21:20:13,506 - perfect_rag - INFO - OCR 성공: 2016-02-22_광화문_스튜디오_조명_소모품_신청서.pdf - 597자 추출
+2025-09-23 21:20:15,699 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:15,700 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2019-03-11_카메라_트라이포트_유압조절_이상_외_2건_수리요청서.pdf
+2025-09-23 21:20:15,703 - perfect_rag - INFO - OCR 성공: 2019-03-11_카메라_트라이포트_유압조절_이상_외_2건_수리요청서.pdf - 982자 추출
+2025-09-23 21:20:16,414 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:16,420 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-12-14_송출_녹화용_DVR_수리의_건.pdf
+2025-09-23 21:20:16,428 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:16,439 - perfect_rag - INFO - OCR 성공: 2017-12-14_송출_녹화용_DVR_수리의_건.pdf - 871자 추출
+2025-09-23 21:20:16,444 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-09-28_중계2호차_시스템_액세사리_구매_건.pdf
+2025-09-23 21:20:16,445 - perfect_rag - INFO - OCR 성공: 2017-09-28_중계2호차_시스템_액세사리_구매_건.pdf - 886자 추출
+2025-09-23 21:20:16,481 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:16,481 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2014-12-31_지미질_훈멸_필수_잡비_구매_신첩.pdf
+2025-09-23 21:20:16,481 - perfect_rag - INFO - OCR 성공: 2014-12-31_지미질_훈멸_필수_잡비_구매_신첩.pdf - 505자 추출
+2025-09-23 21:20:16,636 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:16,706 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2019-01-02_카메라_트라이포트발판_교체_건.pdf
+2025-09-23 21:20:16,711 - perfect_rag - INFO - OCR 성공: 2019-01-02_카메라_트라이포트발판_교체_건.pdf - 666자 추출
+2025-09-23 21:20:18,786 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:18,795 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2019-01-14_휴대용_LED_조명_전원케이블_수리_건.pdf
+2025-09-23 21:20:18,795 - perfect_rag - INFO - OCR 성공: 2019-01-14_휴대용_LED_조명_전원케이블_수리_건.pdf - 1005자 추출
+2025-09-23 21:20:19,757 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:19,768 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-08-01_ENG_트라이포드_헤드_수리_건.pdf
+2025-09-23 21:20:19,769 - perfect_rag - INFO - OCR 성공: 2017-08-01_ENG_트라이포드_헤드_수리_건.pdf - 845자 추출
+2025-09-23 21:20:20,075 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:20,076 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-08-03_조명_소모품_구매.pdf
+2025-09-23 21:20:20,076 - perfect_rag - INFO - OCR 성공: 2017-08-03_조명_소모품_구매.pdf - 688자 추출
+2025-09-23 21:20:20,524 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:20,524 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-02-28_채널에이플러스_주조정실_방송장비_수리_요청의건.pdf
+2025-09-23 21:20:20,524 - perfect_rag - INFO - OCR 성공: 2016-02-28_채널에이플러스_주조정실_방송장비_수리_요청의건.pdf - 616자 추출
+2025-09-23 21:20:20,528 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:20,528 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-11-22_광화문_및_상암동_스튜디오_조명_소모품_신청서.pdf
+2025-09-23 21:20:20,528 - perfect_rag - INFO - OCR 성공: 2016-11-22_광화문_및_상암동_스튜디오_조명_소모품_신청서.pdf - 568자 추출
+2025-09-23 21:20:23,171 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:23,182 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-07-25_스테디캠_줌_컨트롤러_수리_건.pdf
+2025-09-23 21:20:23,188 - perfect_rag - INFO - OCR 성공: 2017-07-25_스테디캠_줌_컨트롤러_수리_건.pdf - 461자 추출
+2025-09-23 21:20:23,934 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:23,934 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-06-20_일민_미술관_카메라_케이블_매립_공사_건.pdf
+2025-09-23 21:20:23,934 - perfect_rag - INFO - OCR 성공: 2017-06-20_일민_미술관_카메라_케이블_매립_공사_건.pdf - 2700자 추출
+2025-09-23 21:20:26,689 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:26,698 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-11-29_상암_제작CG_종편_소모품_신청서.pdf
+2025-09-23 21:20:26,698 - perfect_rag - INFO - OCR 성공: 2016-11-29_상암_제작CG_종편_소모품_신청서.pdf - 495자 추출
+2025-09-23 21:20:26,704 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:26,704 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-11-13_ENG_카메라_ND_필터_수리_건.pdf
+2025-09-23 21:20:26,704 - perfect_rag - INFO - OCR 성공: 2017-11-13_ENG_카메라_ND_필터_수리_건.pdf - 470자 추출
+2025-09-23 21:20:26,909 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:26,910 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2015-10-08_상암DDMC_스튜디오_조명_소모품_신청서.pdf
+2025-09-23 21:20:26,910 - perfect_rag - INFO - OCR 성공: 2015-10-08_상암DDMC_스튜디오_조명_소모품_신청서.pdf - 541자 추출
+2025-09-23 21:20:29,273 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:29,295 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-07-26_음향_소모품_구매.pdf
+2025-09-23 21:20:29,329 - perfect_rag - INFO - OCR 성공: 2017-07-26_음향_소모품_구매.pdf - 495자 추출
+2025-09-23 21:20:29,431 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:29,436 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-09-05_ENG_카메라_스피커_수리_건.pdf
+2025-09-23 21:20:29,437 - perfect_rag - INFO - OCR 성공: 2017-09-05_ENG_카메라_스피커_수리_건.pdf - 632자 추출
+2025-09-23 21:20:29,906 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:29,912 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2014-12-19_12월_장비구매기안서_명상제작팀.pdf
+2025-09-23 21:20:29,917 - perfect_rag - INFO - OCR 성공: 2014-12-19_12월_장비구매기안서_명상제작팀.pdf - 826자 추출
+2025-09-23 21:20:30,416 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:30,416 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-04-28_문자_발생기_구매_검토.pdf
+2025-09-23 21:20:30,416 - perfect_rag - INFO - OCR 성공: 2017-04-28_문자_발생기_구매_검토.pdf - 1392자 추출
+2025-09-23 21:20:33,030 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:33,052 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2019-03-26_중계2호차_트라이포트_수리요청.pdf
+2025-09-23 21:20:33,052 - perfect_rag - INFO - OCR 성공: 2019-03-26_중계2호차_트라이포트_수리요청.pdf - 730자 추출
+2025-09-23 21:20:33,173 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:33,174 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2019-03-25_신규_구매_프롬프터용_컨버터_구매_신청.pdf
+2025-09-23 21:20:33,174 - perfect_rag - INFO - OCR 성공: 2019-03-25_신규_구매_프롬프터용_컨버터_구매_신청.pdf - 966자 추출
+2025-09-23 21:20:33,812 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:33,824 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-09-08_광화문_비디오서버_EOS_따른_교체_계획_기술_검토서.pdf
+2025-09-23 21:20:33,830 - perfect_rag - INFO - OCR 성공: 2017-09-08_광화문_비디오서버_EOS_따른_교체_계획_기술_검토서.pdf - 935자 추출
+2025-09-23 21:20:33,916 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:33,917 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-07-21_상암DDMC_스튜디오_조명_소모품_신청서.pdf
+2025-09-23 21:20:33,917 - perfect_rag - INFO - OCR 성공: 2016-07-21_상암DDMC_스튜디오_조명_소모품_신청서.pdf - 588자 추출
+2025-09-23 21:20:36,789 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:36,790 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-10-18_중계차_위성방송수신설비(Skylife_TV)업그레이_건.pdf
+2025-09-23 21:20:36,790 - perfect_rag - INFO - OCR 성공: 2017-10-18_중계차_위성방송수신설비(Skylife_TV)업그레이_건.pdf - 1322자 추출
+2025-09-23 21:20:36,818 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:36,820 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2014-08-11_방송기술_중계팀_물품청구서.pdf
+2025-09-23 21:20:36,821 - perfect_rag - INFO - OCR 성공: 2014-08-11_방송기술_중계팀_물품청구서.pdf - 800자 추출
+2025-09-23 21:20:37,171 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:37,177 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2015-12-09_방송기술팀_중계_관련_소모품_신청서.pdf
+2025-09-23 21:20:37,177 - perfect_rag - INFO - OCR 성공: 2015-12-09_방송기술팀_중계_관련_소모품_신청서.pdf - 389자 추출
+2025-09-23 21:20:37,226 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:37,226 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-12-22_채널에이_주조정실_방송장비_수리_요청의_건.pdf
+2025-09-23 21:20:37,226 - perfect_rag - INFO - OCR 성공: 2016-12-22_채널에이_주조정실_방송장비_수리_요청의_건.pdf - 623자 추출
+2025-09-23 21:20:39,227 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:39,232 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-06-13_무선_마이크_클립_구매_건.pdf
+2025-09-23 21:20:39,243 - perfect_rag - INFO - OCR 성공: 2017-06-13_무선_마이크_클립_구매_건.pdf - 561자 추출
+2025-09-23 21:20:39,384 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:39,385 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-09-05_뉴스_스튜디오_방송_케이블_구매_건.pdf
+2025-09-23 21:20:39,385 - perfect_rag - INFO - OCR 성공: 2017-09-05_뉴스_스튜디오_방송_케이블_구매_건.pdf - 1221자 추출
+2025-09-23 21:20:42,035 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:42,040 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2015-06-30_MPDP_패널_구매_요청.pdf
+2025-09-23 21:20:42,046 - perfect_rag - INFO - OCR 성공: 2015-06-30_MPDP_패널_구매_요청.pdf - 571자 추출
+2025-09-23 21:20:42,058 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:42,059 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-05-16_삼성_기어VR_패키지_구매기안.pdf
+2025-09-23 21:20:42,059 - perfect_rag - INFO - OCR 성공: 2016-05-16_삼성_기어VR_패키지_구매기안.pdf - 930자 추출
+2025-09-23 21:20:43,565 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:43,565 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-05-25_스튜디오_카메라_Pan_Bar_수리_건.pdf
+2025-09-23 21:20:43,565 - perfect_rag - INFO - OCR 성공: 2017-05-25_스튜디오_카메라_Pan_Bar_수리_건.pdf - 822자 추출
+2025-09-23 21:20:45,868 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:45,869 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-11-29_카메라_트라이포드_발판_교체_건.pdf
+2025-09-23 21:20:45,869 - perfect_rag - INFO - OCR 성공: 2017-11-29_카메라_트라이포드_발판_교체_건.pdf - 509자 추출
+2025-09-23 21:20:46,053 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:46,054 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-08-31_뉴스_스튜디오_조명_물품_구매_건.pdf
+2025-09-23 21:20:46,054 - perfect_rag - INFO - OCR 성공: 2017-08-31_뉴스_스튜디오_조명_물품_구매_건.pdf - 664자 추출
+2025-09-23 21:20:47,222 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:47,223 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-04-25_LTE_라우터_도입에_따른_검토_보고서.pdf
+2025-09-23 21:20:47,223 - perfect_rag - INFO - OCR 성공: 2017-04-25_LTE_라우터_도입에_따른_검토_보고서.pdf - 2549자 추출
+2025-09-23 21:20:49,503 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:49,514 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-10-31_뉴스이노베이션_취재용_카메라(EX-3)_수리_건.pdf
+2025-09-23 21:20:49,534 - perfect_rag - INFO - OCR 성공: 2017-10-31_뉴스이노베이션_취재용_카메라(EX-3)_수리_건.pdf - 764자 추출
+2025-09-23 21:20:49,667 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:49,668 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-03-23_광화문_스튜디오_조명_소모품_구매_요청서.pdf
+2025-09-23 21:20:49,668 - perfect_rag - INFO - OCR 성공: 2017-03-23_광화문_스튜디오_조명_소모품_구매_요청서.pdf - 345자 추출
+2025-09-23 21:20:50,218 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:50,223 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-05-19_영상제작팀_아카이브파트_인테스트(NQC)_셋톱박스_연결_어뎁터_구매건.pdf
+2025-09-23 21:20:50,223 - perfect_rag - INFO - OCR 성공: 2016-05-19_영상제작팀_아카이브파트_인테스트(NQC)_셋톱박스_연결_어뎁터_구매건.pdf - 587자 추출
+2025-09-23 21:20:50,290 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:50,291 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-10-05_방송기술팀_오픈스튜디오_기계실_보수,_BNC케이블_구매건.pdf
+2025-09-23 21:20:50,291 - perfect_rag - INFO - OCR 성공: 2016-10-05_방송기술팀_오픈스튜디오_기계실_보수,_BNC케이블_구매건.pdf - 1336자 추출
+2025-09-23 21:20:50,354 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:50,354 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2019-02-26_영상_취재용_ENG_카메라_배터리_결합_부위_수리.pdf
+2025-09-23 21:20:50,355 - perfect_rag - INFO - OCR 성공: 2019-02-26_영상_취재용_ENG_카메라_배터리_결합_부위_수리.pdf - 890자 추출
+2025-09-23 21:20:52,506 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:52,506 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-11-23_카메라_페데스탈_정밀점검(오버홀)_검토_건.pdf
+2025-09-23 21:20:52,545 - perfect_rag - INFO - OCR 성공: 2017-11-23_카메라_페데스탈_정밀점검(오버홀)_검토_건.pdf - 1118자 추출
+2025-09-23 21:20:53,035 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:53,035 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-11-17_상암_D9000_무선마이크_송신기_악세사리_구매의_건.pdf
+2025-09-23 21:20:53,035 - perfect_rag - INFO - OCR 성공: 2016-11-17_상암_D9000_무선마이크_송신기_악세사리_구매의_건.pdf - 1064자 추출
+2025-09-23 21:20:55,448 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:55,458 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-03-20_카메라_트라이포트_발판_교체_건.pdf
+2025-09-23 21:20:55,459 - perfect_rag - INFO - OCR 성공: 2017-03-20_카메라_트라이포트_발판_교체_건.pdf - 477자 추출
+2025-09-23 21:20:55,515 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:55,528 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-03-20_ENG_무선_마이크_스위치_교체_건.pdf
+2025-09-23 21:20:55,533 - perfect_rag - INFO - OCR 성공: 2017-03-20_ENG_무선_마이크_스위치_교체_건.pdf - 412자 추출
+2025-09-23 21:20:56,150 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:56,151 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-12-21_IFB_고장_수리의_건.pdf
+2025-09-23 21:20:56,152 - perfect_rag - INFO - OCR 성공: 2017-12-21_IFB_고장_수리의_건.pdf - 731자 추출
+2025-09-23 21:20:56,209 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:56,209 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-09-26_영상편집팀_NLE_증설_요청_기술_검토서.pdf
+2025-09-23 21:20:56,209 - perfect_rag - INFO - OCR 성공: 2017-09-26_영상편집팀_NLE_증설_요청_기술_검토서.pdf - 857자 추출
+2025-09-23 21:20:56,493 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:56,494 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-06-07_상암DDMC_스튜디오_조명_소모품_신청서.pdf
+2025-09-23 21:20:56,494 - perfect_rag - INFO - OCR 성공: 2016-06-07_상암DDMC_스튜디오_조명_소모품_신청서.pdf - 645자 추출
+2025-09-23 21:20:58,774 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:58,779 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-02-22_뉴스&멀티부조_인터컴_배터리_구매_기안서.pdf
+2025-09-23 21:20:58,779 - perfect_rag - INFO - OCR 성공: 2016-02-22_뉴스&멀티부조_인터컴_배터리_구매_기안서.pdf - 452자 추출
+2025-09-23 21:20:59,135 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:20:59,135 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2015-03-19_영상취재팀_장비_구매_목록.pdf
+2025-09-23 21:20:59,136 - perfect_rag - INFO - OCR 성공: 2015-03-19_영상취재팀_장비_구매_목록.pdf - 1307자 추출
+2025-09-23 21:21:01,378 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:21:01,384 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-08-07_트라이포드_조임새_수리_건.pdf
+2025-09-23 21:21:01,396 - perfect_rag - INFO - OCR 성공: 2017-08-07_트라이포드_조임새_수리_건.pdf - 561자 추출
+2025-09-23 21:21:01,426 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:21:01,427 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-07-06_아카이브팀_NLE에디우스_구매의_건.pdf
+2025-09-23 21:21:01,427 - perfect_rag - INFO - OCR 성공: 2017-07-06_아카이브팀_NLE에디우스_구매의_건.pdf - 659자 추출
+2025-09-23 21:21:01,637 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:21:01,638 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2015-11-17_상암DDMC_스튜디오_조명_소모품_신청서.pdf
+2025-09-23 21:21:01,638 - perfect_rag - INFO - OCR 성공: 2015-11-17_상암DDMC_스튜디오_조명_소모품_신청서.pdf - 454자 추출
+2025-09-23 21:21:04,140 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:21:04,141 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-11-01_뉴스,_멀티부조정실_장비_보호케이스_제작_건.pdf
+2025-09-23 21:21:04,141 - perfect_rag - INFO - OCR 성공: 2017-11-01_뉴스,_멀티부조정실_장비_보호케이스_제작_건.pdf - 1284자 추출
+2025-09-23 21:21:04,271 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:21:04,276 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2015-03-10_지미집_운영_필수_장비_구매_신청.pdf
+2025-09-23 21:21:04,276 - perfect_rag - INFO - OCR 성공: 2015-03-10_지미집_운영_필수_장비_구매_신청.pdf - 580자 추출
+2025-09-23 21:21:04,420 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:21:04,420 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-12-26_채널에이_주조정실_방송장비_수리_요청의_건.pdf
+2025-09-23 21:21:04,420 - perfect_rag - INFO - OCR 성공: 2016-12-26_채널에이_주조정실_방송장비_수리_요청의_건.pdf - 595자 추출
+2025-09-23 21:21:07,058 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:21:07,058 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2019-03-10_카메라_트라이포트_길이조정_부분_수리_건.pdf
+2025-09-23 21:21:07,060 - perfect_rag - INFO - OCR 성공: 2019-03-10_카메라_트라이포트_길이조정_부분_수리_건.pdf - 829자 추출
+2025-09-23 21:21:08,628 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:21:08,628 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-07-25_중계차_카메라_케이블_수리_건.pdf
+2025-09-23 21:21:08,633 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:21:08,635 - perfect_rag - INFO - OCR 성공: 2017-07-25_중계차_카메라_케이블_수리_건.pdf - 520자 추출
+2025-09-23 21:21:08,636 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-08-03_ENG_카메라_뷰파인더_수리_건.pdf
+2025-09-23 21:21:08,638 - perfect_rag - INFO - OCR 성공: 2017-08-03_ENG_카메라_뷰파인더_수리_건.pdf - 635자 추출
+2025-09-23 21:21:08,840 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:21:08,840 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2014-07-02_TV-UPACK용_BNC케이블_구매.pdf
+2025-09-23 21:21:08,840 - perfect_rag - INFO - OCR 성공: 2014-07-02_TV-UPACK용_BNC케이블_구매.pdf - 509자 추출
+2025-09-23 21:21:09,495 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:21:09,512 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2014-11-20_인터럼용_밧데리_2개_구매_요첨.pdf
+2025-09-23 21:21:09,517 - perfect_rag - INFO - OCR 성공: 2014-11-20_인터럼용_밧데리_2개_구매_요첨.pdf - 450자 추출
+2025-09-23 21:21:09,704 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:21:09,704 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2014-09-08_그래픽디자인파트_보도문자_-_무선마우스_지급_요철.pdf
+2025-09-23 21:21:09,704 - perfect_rag - INFO - OCR 성공: 2014-09-08_그래픽디자인파트_보도문자_-_무선마우스_지급_요철.pdf - 949자 추출
+2025-09-23 21:21:09,853 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:21:09,853 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2015-04-09_상암DDMC_스튜디오에서_사용되는_예비_램프_및_필터_필요물품_구매요청.pdf
+2025-09-23 21:21:09,853 - perfect_rag - INFO - OCR 성공: 2015-04-09_상암DDMC_스튜디오에서_사용되는_예비_램프_및_필터_필요물품_구매요청.pdf - 542자 추출
+2025-09-23 21:21:11,773 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:21:11,775 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-05-24_조명_소모품_구매.pdf
+2025-09-23 21:21:11,775 - perfect_rag - INFO - OCR 성공: 2017-05-24_조명_소모품_구매.pdf - 388자 추출
+2025-09-23 21:21:12,095 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:21:12,096 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2014-12-30_상암동_DDMC_조명_소모품_신청서.pdf
+2025-09-23 21:21:12,096 - perfect_rag - INFO - OCR 성공: 2014-12-30_상암동_DDMC_조명_소모품_신청서.pdf - 601자 추출
+2025-09-23 21:21:14,226 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:21:14,226 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-11-21_주조정실_장거리용_USB케이블_구매_건.pdf
+2025-09-23 21:21:14,226 - perfect_rag - INFO - OCR 성공: 2017-11-21_주조정실_장거리용_USB케이블_구매_건.pdf - 1075자 추출
+2025-09-23 21:21:14,306 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:21:14,308 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-10-23_무선_마이크_전원_스위치_수리_건.pdf
+2025-09-23 21:21:14,310 - perfect_rag - INFO - OCR 성공: 2017-10-23_무선_마이크_전원_스위치_수리_건.pdf - 489자 추출
+2025-09-23 21:21:14,517 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:21:14,517 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-05-09_방송기술팀_중걔_관련_소모품_신청서.pdf
+2025-09-23 21:21:14,517 - perfect_rag - INFO - OCR 성공: 2016-05-09_방송기술팀_중걔_관련_소모품_신청서.pdf - 518자 추출
+2025-09-23 21:21:16,836 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:21:16,843 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-08-10_다목적_부조정실_월_모니터_수리_건.pdf
+2025-09-23 21:21:16,848 - perfect_rag - INFO - OCR 성공: 2017-08-10_다목적_부조정실_월_모니터_수리_건.pdf - 456자 추출
+2025-09-23 21:21:17,342 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:21:17,353 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2016-06-22_방송기술팀_뉴스,_멀티_음향장비_구매_기안서.pdf
+2025-09-23 21:21:17,358 - perfect_rag - INFO - OCR 성공: 2016-06-22_방송기술팀_뉴스,_멀티_음향장비_구매_기안서.pdf - 728자 추출
+2025-09-23 21:21:19,932 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:21:19,933 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2019-01-23_SDI_컨버터형_분배기_구매.pdf
+2025-09-23 21:21:19,933 - perfect_rag - INFO - OCR 성공: 2019-01-23_SDI_컨버터형_분배기_구매.pdf - 935자 추출
+2025-09-23 21:21:20,946 - rag_system.enhanced_ocr_processor - INFO - 패턴 컴파일 완료: 4개 OCR 패턴, 2개 숫자 패턴
+2025-09-23 21:21:20,947 - rag_system.enhanced_ocr_processor - INFO - OCR 캐시 사용: 2017-04-17_헬리캠_엑세사리_구매_검토_건.pdf
+2025-09-23 21:21:20,947 - perfect_rag - INFO - OCR 성공: 2017-04-17_헬리캠_엑세사리_구매_검토_건.pdf - 1129자 추출

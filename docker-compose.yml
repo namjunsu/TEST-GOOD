@@ -5,6 +5,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      cache_from:
+        - python:3.10-slim
+        - nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
+    image: ai-chat-rag-system:optimized
     container_name: ai-chat-rag
 
     # GPU 지원

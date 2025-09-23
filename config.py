@@ -91,9 +91,9 @@ COMPLETENESS_THRESHOLD = validate_threshold(get_env_float('COMPLETENESS_THRESHOL
 # LLM 생성 설정 (성능 최적화)
 # 환경별 기본값
 LLM_DEFAULTS = {
-    'development': {'temperature': 0.7, 'max_tokens': 1200, 'top_p': 0.9},
-    'staging': {'temperature': 0.5, 'max_tokens': 1000, 'top_p': 0.87},
-    'production': {'temperature': 0.3, 'max_tokens': 800, 'top_p': 0.85}
+    'development': {'temperature': 0.7, 'max_tokens': 800, 'top_p': 0.9},
+    'staging': {'temperature': 0.5, 'max_tokens': 600, 'top_p': 0.87},
+    'production': {'temperature': 0.3, 'max_tokens': 512, 'top_p': 0.85}  # 800→512 (-36%)
 }
 
 defaults = LLM_DEFAULTS.get(ENVIRONMENT, LLM_DEFAULTS['production'])
@@ -105,11 +105,13 @@ TOP_K = max(1, min(100, get_env_int('TOP_K', 30)))  # 1-100 범위
 REPEAT_PENALTY = max(1.0, min(2.0, get_env_float('REPEAT_PENALTY', 1.15)))  # 1.0-2.0 범위
 
 # GPU 최적화 설정 (NVIDIA RTX PRO 4000 - 16GB VRAM)
-N_THREADS = max(1, min(32, get_env_int('N_THREADS', 8)))  # 1-32 스레드
-N_CTX = max(512, min(32768, get_env_int('N_CTX', 16384)))  # 512-32768 컨텍스트
-N_BATCH = max(1, min(2048, get_env_int('N_BATCH', 512)))  # 1-2048 배치
+# 🔥 메모리 최적화 설정 (14GB → 8GB 목표)
+N_THREADS = max(1, min(32, get_env_int('N_THREADS', 4)))  # 스레드 줄임 8→4
+N_CTX = max(512, min(32768, get_env_int('N_CTX', 4096)))  # 컨텍스트 줄임 16384→4096 (-75%)
+N_BATCH = max(1, min(2048, get_env_int('N_BATCH', 256)))  # 배치 줄임 512→256 (-50%)
 USE_MLOCK = get_env_bool('USE_MLOCK', False)
 USE_MMAP = get_env_bool('USE_MMAP', True)
+LOW_VRAM = get_env_bool('LOW_VRAM', True)  # 낮은 VRAM 모드 추가
 
 # GPU 설정 (활성화됨!)
 N_GPU_LAYERS = get_env_int('N_GPU_LAYERS', -1)  # -1 = 모든 레이어 GPU 사용

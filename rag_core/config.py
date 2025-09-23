@@ -61,6 +61,15 @@ class RAGConfig:
     log_level: str = "INFO"
     log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
+    def __post_init__(self):
+        """초기화 후 처리 (테스트 모드 확인 등)"""
+        # 테스트 모드 확인
+        if os.environ.get('RAG_TEST_MODE') == 'true':
+            self.n_gpu_layers = 0  # CPU만 사용
+            self.n_ctx = 2048  # 컨텍스트 크기 줄임
+            self.search_top_k = 3  # 검색 결과 줄임
+            self.batch_size = 1  # 배치 크기 줄임
+
     @classmethod
     def from_file(cls, config_path: str = "config.json") -> "RAGConfig":
         """파일에서 설정 로드"""

@@ -786,7 +786,7 @@ def load_documents(rag_instance):
                 if file_path and file_path.exists():
                     try:
                         doc_metadata['modified'] = datetime.fromtimestamp(file_path.stat().st_mtime)
-                    except:
+                    except Exception as e:
                         pass
 
                 documents.append(doc_metadata)
@@ -904,7 +904,7 @@ def load_documents(rag_instance):
                                             if re.match(r'^[가-힣]{2,4}$', candidate):
                                                 drafter = candidate
                                                 break
-                    except:
+                    except Exception as e:
                         pass
 
                 # 메타데이터 생성

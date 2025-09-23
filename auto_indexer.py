@@ -51,7 +51,7 @@ class AutoIndexer:
             try:
                 with open(self.index_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
-            except:
+            except Exception as e:
                 pass
         return {
             'files': {},

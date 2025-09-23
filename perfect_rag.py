@@ -2230,7 +2230,7 @@ class PerfectRAG:
                                     'amount': amount,
                                     'context': context
                                 })
-                        except:
+                        except Exception as e:
                             pass
                 
                 # 가장 큰 금액을 주요 금액으로 판단
@@ -3591,7 +3591,7 @@ class PerfectRAG:
                                         try:
                                             info['price'] = int(amount_str)
                                             total_amount += info['price']
-                                        except:
+                                        except Exception as e:
                                             pass
                                 
                                 # 수량
@@ -3643,7 +3643,7 @@ class PerfectRAG:
                                 try:
                                     info['price'] = int(amount_str)
                                     total_amount += info['price']
-                                except:
+                                except Exception as e:
                                     pass
                         if "수량:" in item_line:
                             qty_match = re.search(r'수량:\s*(\d+)', item_line)
@@ -4248,7 +4248,7 @@ class PerfectRAG:
                                                             score += 50
                                                             found_drafter = True
                                                         break
-                                except:
+                                except Exception as e:
                                     pass
 
                         # 기안자 검색인데 매칭 안되면 건너뜀
@@ -4582,7 +4582,7 @@ class PerfectRAG:
                                         content_match_files.append(metadata['path'])
                                         if len(content_match_files) >= 5:  # 최대 5개
                                             break
-                            except:
+                            except Exception as e:
                                 continue
                     relevant_files.extend(content_match_files)
 
@@ -5187,7 +5187,7 @@ class PerfectRAG:
                     amount_str = amount_match.group(1).replace(',', '')
                     try:
                         total_value += int(amount_str)
-                    except:
+                    except Exception as e:
                         pass
             
             if total_value > 0:

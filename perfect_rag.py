@@ -336,19 +336,25 @@ class PerfectRAG:
             'method': result.get('method', 'parallel')
         }
 
-    def process_pdfs_in_batch(self, pdf_paths: List[Path], batch_size: int = 5) -> Dict:
+    def process_pdfs_in_batch(self, pdf_paths: List[Path], batch_size: int = None) -> Dict:
         """여러 PDF를 배치로 병렬 처리 (안전하게 개선)"""
         from concurrent.futures import ThreadPoolExecutor, as_completed
         import gc
 
         all_results = {}
 
+        # 동적 배치 크기 계산
+        if batch_size is None:
+            batch_size = min(20, max(10, len(pdf_paths) // 30))
+            logger.info(f"동적 배치 크기 설정: {batch_size}")
+
         # pdf_processor가 없으면 순차 처리로 폴백
         if self.pdf_processor is None:
             print("️ 병렬 처리기 미활성화 - 순차 처리 모드")
 
-            # ThreadPoolExecutor로 간단한 병렬 처리
-            with ThreadPoolExecutor(max_workers=min(4, batch_size)) as executor:
+            # ThreadPoolExecutor로 간단한 병렬 처리 (CPU 코어 수 기반 최적화)
+            optimal_workers = min(os.cpu_count() or 4, 12, max(4, batch_size))
+            with ThreadPoolExecutor(max_workers=optimal_workers) as executor:
                 for i in range(0, len(pdf_paths), batch_size):
                     batch = pdf_paths[i:i + batch_size]
                     print(f" 배치 {i//batch_size + 1}/{(len(pdf_paths)-1)//batch_size + 1} 처리 중 ({len(batch)}개 파일)")

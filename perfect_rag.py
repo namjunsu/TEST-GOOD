@@ -28,9 +28,9 @@ from contextlib import nullcontext
 # 로깅 시스템 추가
 try:
     from log_system import get_logger, TimerContext
-    logger = get_logger()
+    chat_logger = get_logger()
 except ImportError:
-    logger = None
+    chat_logger = None
     TimerContext = None
     
 # query_logger는 log_system으로 통합됨
@@ -1857,12 +1857,12 @@ class PerfectRAG:
         
         try:
             # 로깅 시스템 시작
-            if logger:
-                logger.system_logger.info(f"=== Query Start: {query[:100]}...")
+            if chat_logger:
+                chat_logger.info(f"=== Query Start: {query[:100]}...")
             
             # 검색 의도 분류
             if mode == 'auto':
-                with TimerContext(logger, "classify_intent") if logger else nullcontext():
+                with TimerContext(chat_logger, "classify_intent") if chat_logger else nullcontext():
                     mode = self._classify_search_intent(query)
                 print(f" 검색 모드: {mode}")
             
@@ -1882,8 +1882,8 @@ class PerfectRAG:
             processing_time = time.time() - start_time
             
             # 로깅 시스템
-            if logger:
-                logger.log_error(
+            if chat_logger:
+                chat_logger.log_error(
                     error_type=type(e).__name__,
                     error_msg=error_msg,
                     query=query

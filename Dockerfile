@@ -31,7 +31,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Python 의존성 설치 (캐시 활용)
-COPY requirements.txt requirements_updated.txt ./
+COPY requirements_updated.txt ./
 RUN pip3 install --no-cache-dir --upgrade pip && \
     pip3 install --no-cache-dir -r requirements_updated.txt
 

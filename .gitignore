@@ -1,5 +1,75 @@
+# Python
 *.pyc
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+
+# Models & Data
 models/
+*.bin
+*.safetensors
+*.gguf
+
+# Logs
 logs/
+*.log
+streamlit.log
+
+# Environment
 .env
+.env.local
+
+# Cache
+.streamlit/
+.cache/
+*.cache
+.ocr_cache.json
+cache/
+indexes/
+rag-cache/
+rag-indexes/
+
+# Backup folders
+backup/
+archive/
+old_files/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+*.Zone.Identifier
+
+# Docker
+docker-compose.override.yml
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Test files
+test_*.py
+*_test.py
+quick_*.py
+
+# Documents (large files)
+docs/**/*.pdf
+docs/**/*.docx
+docs/**/*.xlsx

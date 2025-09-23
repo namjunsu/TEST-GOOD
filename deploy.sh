@@ -52,19 +52,24 @@ print_header() {
 check_requirements() {
     log_info "시스템 요구사항 확인 중..."
 
-    # Docker 체크
+    # Docker 체크 (선택사항)
     if ! command -v docker &> /dev/null; then
-        log_error "Docker가 설치되지 않았습니다"
-        exit 1
+        log_warning "Docker가 설치되지 않았습니다 (Native 모드로 실행)"
+        DOCKER_AVAILABLE=false
+    else
+        log_success "Docker 확인 완료"
+        DOCKER_AVAILABLE=true
     fi
-    log_success "Docker 확인 완료"
 
-    # Docker Compose 체크
-    if ! command -v docker compose &> /dev/null && ! command -v docker-compose &> /dev/null; then
-        log_error "Docker Compose가 설치되지 않았습니다"
-        exit 1
+    # Docker Compose 체크 (선택사항)
+    if [ "$DOCKER_AVAILABLE" = "true" ]; then
+        if ! command -v docker compose &> /dev/null && ! command -v docker-compose &> /dev/null; then
+            log_warning "Docker Compose가 설치되지 않았습니다"
+            DOCKER_AVAILABLE=false
+        else
+            log_success "Docker Compose 확인 완료"
+        fi
     fi
-    log_success "Docker Compose 확인 완료"
 
     # Git 체크
     if ! command -v git &> /dev/null; then
@@ -152,6 +157,11 @@ EOF
 
 # Docker 이미지 빌드
 build_docker_image() {
+    if [ "$DOCKER_AVAILABLE" = "false" ]; then
+        log_warning "Docker가 없어 이미지 빌드를 건너뜁니다"
+        return 0
+    fi
+
     log_info "Docker 이미지 빌드 중..."
 
     docker build -t ai-chat-rag:${VERSION} . || {
@@ -166,14 +176,40 @@ build_docker_image() {
 deploy_local() {
     log_info "로컬 환경에 배포 중..."
 
-    # 기존 컨테이너 정지
-    docker compose down 2>/dev/null || true
+    if [ "$DOCKER_AVAILABLE" = "true" ]; then
+        # Docker 모드
+        # 기존 컨테이너 정지
+        docker compose down 2>/dev/null || true
 
-    # 새로운 컨테이너 시작
-    docker compose up -d || {
-        log_error "Docker Compose 시작 실패"
-        exit 1
-    }
+        # 새로운 컨테이너 시작
+        docker compose up -d || {
+            log_error "Docker Compose 시작 실패"
+            exit 1
+        }
+    else
+        # Native 모드 (Docker 없이)
+        log_info "Native 모드로 서비스 시작 중..."
+
+        # 기존 프로세스 정리
+        pkill -f streamlit 2>/dev/null || true
+        pkill -f auto_indexer 2>/dev/null || true
+
+        # 자동 인덱서 시작
+        log_info "자동 인덱서 시작..."
+        nohup python3 auto_indexer.py > logs/auto_indexer.log 2>&1 &
+        INDEXER_PID=$!
+        log_success "자동 인덱서 시작됨 (PID: $INDEXER_PID)"
+
+        # 웹 인터페이스 시작
+        log_info "웹 인터페이스 시작..."
+        nohup streamlit run web_interface.py --server.port 8501 --server.address 0.0.0.0 > logs/web_interface.log 2>&1 &
+        WEB_PID=$!
+        log_success "웹 인터페이스 시작됨 (PID: $WEB_PID)"
+
+        # PID 저장
+        echo $INDEXER_PID > logs/indexer.pid
+        echo $WEB_PID > logs/web.pid
+    fi
 
     # 헬스체크 대기
     log_info "서비스 시작 대기 중..."
@@ -238,23 +274,56 @@ deploy_production() {
 check_status() {
     log_info "시스템 상태 확인 중..."
 
-    echo ""
-    echo "🐳 Docker 컨테이너 상태:"
-    docker compose ps
+    if [ "$DOCKER_AVAILABLE" = "true" ]; then
+        echo ""
+        echo "🐳 Docker 컨테이너 상태:"
+        docker compose ps
 
-    echo ""
-    echo "📊 리소스 사용량:"
-    docker stats --no-stream
+        echo ""
+        echo "📊 리소스 사용량:"
+        docker stats --no-stream
 
-    echo ""
-    echo "📝 최근 로그:"
-    docker compose logs --tail=10
+        echo ""
+        echo "📝 최근 로그:"
+        docker compose logs --tail=10
+    else
+        echo ""
+        echo "🚀 Native 모드 프로세스 상태:"
+
+        # 프로세스 확인
+        if [ -f logs/web.pid ]; then
+            WEB_PID=$(cat logs/web.pid)
+            if ps -p $WEB_PID > /dev/null; then
+                echo "  ✅ 웹 인터페이스: 실행 중 (PID: $WEB_PID)"
+            else
+                echo "  ❌ 웹 인터페이스: 중지됨"
+            fi
+        fi
+
+        if [ -f logs/indexer.pid ]; then
+            INDEXER_PID=$(cat logs/indexer.pid)
+            if ps -p $INDEXER_PID > /dev/null; then
+                echo "  ✅ 자동 인덱서: 실행 중 (PID: $INDEXER_PID)"
+            else
+                echo "  ❌ 자동 인덱서: 중지됨"
+            fi
+        fi
+
+        echo ""
+        echo "📝 최근 로그:"
+        if [ -f logs/web_interface.log ]; then
+            tail -10 logs/web_interface.log
+        fi
+    fi
 
     echo ""
     echo "🌐 접속 URL:"
     echo "  - 메인 서비스: http://localhost:8501"
     echo "  - 모니터링: http://localhost:8502"
-    echo "  - Redis: localhost:6379"
+
+    if [ "$DOCKER_AVAILABLE" = "true" ]; then
+        echo "  - Redis: localhost:6379"
+    fi
 
     if [ "${ENVIRONMENT}" == "production" ]; then
         echo "  - 프로덕션: https://ai-chat.example.com"

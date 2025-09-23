@@ -1,10 +1,10 @@
 # 🚀 AI-CHAT RAG System
 
-> **최고의 개발자 Claude가 설계한 프로덕션급 문서 검색 시스템**
+> **프로덕션급 한국어 문서 검색 및 AI 대화 시스템**
 
-[![CI Pipeline](https://github.com/wnstn4647/AI-CHAT/workflows/CI%20Pipeline/badge.svg)](https://github.com/wnstn4647/AI-CHAT/actions)
-[![Docker Build](https://github.com/wnstn4647/AI-CHAT/workflows/Docker%20Build/badge.svg)](https://github.com/wnstn4647/AI-CHAT/actions)
-[![Code Quality](https://img.shields.io/badge/Grade-B%2B-brightgreen)](https://github.com/wnstn4647/AI-CHAT)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue)](https://www.docker.com/)
+[![GPU](https://img.shields.io/badge/NVIDIA-GPU%20Accelerated-green)](https://developer.nvidia.com/cuda-toolkit)
+[![Python](https://img.shields.io/badge/Python-3.10+-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## 📋 목차

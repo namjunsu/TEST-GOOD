@@ -2659,15 +2659,18 @@ class PerfectRAG:
         logger.info("LLM 요약 생성 시작")
         # 사용자 의도 분석
         intent = self._analyze_user_intent(query)
-        
+
+        # 변수 초기화 (스코프 문제 방지)
+        basic_summary = ""
+        summary = []
+
         # PDF 파일인 경우 먼저 구조화된 정보 추출 시도
         if pdf_path.suffix.lower() == '.pdf':
             pdf_info = self._extract_full_pdf_content(pdf_path)
             
             # 대화형 응답 생성을 위한 컨텍스트 준비
             context_parts = []
-            summary = []
-            
+
             # 요약이나 내용 관련 질문인 경우
             if pdf_info and 'error' not in pdf_info:
                 # 컨텍스트 구성 - 자연스러운 문장으로
@@ -3726,7 +3729,8 @@ class PerfectRAG:
                 
                 response += f"\n 출처: {txt_path.name}"
                 # LLM으로 답변 개선
-                return self._enhance_asset_response(response, query)
+                enhanced_query = f"{location_keyword} 장비 현황"
+                return self._enhance_asset_response(response, enhanced_query)
             else:
                 return f" {location}에서 장비를 찾을 수 없습니다."
                 
@@ -3934,7 +3938,8 @@ class PerfectRAG:
                 
                 response += f"\n 출처: {txt_path.name}"
                 # LLM으로 답변 개선
-                return self._enhance_asset_response(response, query)
+                enhanced_query = f"{location_keyword} 장비 현황"
+                return self._enhance_asset_response(response, enhanced_query)
             else:
                 return f" {location_keyword}에서 장비를 찾을 수 없습니다."
             

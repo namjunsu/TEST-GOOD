@@ -1837,7 +1837,7 @@ class PerfectRAG:
         try:
             # 로깅 시스템 시작
             if chat_logger:
-                chat_logger.info(f"=== Query Start: {query[:100]}...")
+                chat_logger.log_query(query, "started")
             
             # 검색 의도 분류
             if mode == 'auto':

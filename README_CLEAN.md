@@ -30,16 +30,36 @@ AI-CHAT/
 
 ## 🚀 실행 방법
 
-### 1️⃣ 웹 인터페이스 실행
+### 방법 1: 로컬 실행 (간단)
 ```bash
-streamlit run web_interface.py
-```
-브라우저에서 http://localhost:8501 접속
+# 1. 패키지 설치 (처음 한번만)
+pip install -r requirements_updated.txt
 
-### 2️⃣ Docker로 실행 (권장)
-```bash
-docker compose up
+# 2. Streamlit 실행
+streamlit run web_interface.py
+
+# 3. 브라우저에서 접속
+http://localhost:8501
 ```
+
+### 방법 2: Docker 실행 (권장)
+```bash
+# 1. Docker 실행 (이미지 빌드 포함)
+docker compose up --build
+
+# 2. 브라우저에서 접속
+http://localhost:8501
+
+# 3. 종료할 때
+docker compose down
+```
+
+### ⚠️ 첫 실행 주의사항:
+- **첫 로딩 2-3분** (480개 PDF 로딩)
+- **메모리 16GB 이상** 필요
+- **두 번째부터는 빠름** (캐시 사용)
+
+📖 **자세한 설명**: [HOW_TO_RUN.md](HOW_TO_RUN.md) 참조
 
 ## 💡 주요 기능
 

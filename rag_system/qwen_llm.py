@@ -128,17 +128,27 @@ class QwenLLM:
                 N_THREADS, N_CTX, N_BATCH = 8, 8192, 512
                 USE_MLOCK, USE_MMAP, N_GPU_LAYERS, F16_KV = False, True, -1, True
             
+            # GPU 가속 및 최적화 옵션
+            gpu_params = {
+                'offload_kqv': True,      # KQV 연산을 GPU로 오프로드
+                'flash_attn': True,       # Flash Attention 활성화 (속도 2x)
+                'mul_mat_q': True,        # 행렬 곱셈 양자화
+                'tensor_split': None,     # GPU 분할 자동
+                'rope_scaling_type': 0,   # RoPE 스케일링 비활성화
+            }
+
             self.llm = Llama(
                 model_path=str(self.model_path),
                 chat_format=self.chat_format,
-                n_ctx=N_CTX,           # config: 4096 (컨텍스트)
-                n_threads=N_THREADS,   # config: 8 (GPU 사용시 CPU 스레드 줄이기)
+                n_ctx=N_CTX,           # config: 16384 (확장된 컨텍스트)
+                n_threads=N_THREADS,   # config: 20 (24코어 CPU 활용)
                 n_gpu_layers=N_GPU_LAYERS,  # config: -1 (모든 레이어 GPU 사용!)
                 f16_kv=F16_KV,        # config: True (GPU 메모리 최적화)
                 use_mlock=USE_MLOCK,  # config: False (GPU 사용시 비활성화)
                 use_mmap=USE_MMAP,    # config: True (메모리 매핑)
                 verbose=True,         # GPU 로딩 상태 확인
-                n_batch=N_BATCH       # config: 512 (배치 크기)
+                n_batch=N_BATCH,      # config: 1024 (배치 크기 증가)
+                **gpu_params          # GPU 최적화 파라미터 추가
             )
             
             self.logger.info(f"Qwen 모델 로드 완료: {self.model_path}")

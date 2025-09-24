@@ -156,6 +156,22 @@ class ChatLogger:
         archive_thread = threading.Thread(target=archive_old_logs, daemon=True)
         archive_thread.start()
 
+    def info(self, message: str):
+        """info 메서드 추가 (호환성을 위해)"""
+        self.system_logger.info(message)
+
+    def debug(self, message: str):
+        """debug 메서드 추가 (호환성을 위해)"""
+        self.system_logger.debug(message)
+
+    def warning(self, message: str):
+        """warning 메서드 추가 (호환성을 위해)"""
+        self.system_logger.warning(message)
+
+    def error(self, message: str):
+        """error 메서드 추가 (호환성을 위해)"""
+        self.error_logger.error(message)
+
     def log_query(self,
                   query: str,
                   response: str,

@@ -106,12 +106,12 @@ REPEAT_PENALTY = max(1.0, min(2.0, get_env_float('REPEAT_PENALTY', 1.15)))  # 1.
 
 # GPU 최적화 설정 (NVIDIA RTX PRO 4000 - 16GB VRAM)
 # 🔥 메모리 최적화 설정 (14GB → 8GB 목표)
-N_THREADS = max(1, min(32, get_env_int('N_THREADS', 4)))  # 스레드 줄임 8→4
-N_CTX = max(512, min(32768, get_env_int('N_CTX', 4096)))  # 컨텍스트 줄임 16384→4096 (-75%)
-N_BATCH = max(1, min(2048, get_env_int('N_BATCH', 256)))  # 배치 줄임 512→256 (-50%)
+N_THREADS = max(1, min(32, get_env_int('N_THREADS', 20)))  # Intel Ultra 9 24코어 활용 (24-4=20)
+N_CTX = max(512, min(32768, get_env_int('N_CTX', 16384)))  # 컨텍스트 확장으로 더 많은 문서 처리
+N_BATCH = max(1, min(2048, get_env_int('N_BATCH', 1024)))  # 배치 크기 증가로 처리 속도 향상
 USE_MLOCK = get_env_bool('USE_MLOCK', False)
 USE_MMAP = get_env_bool('USE_MMAP', True)
-LOW_VRAM = get_env_bool('LOW_VRAM', True)  # 낮은 VRAM 모드 추가
+LOW_VRAM = get_env_bool('LOW_VRAM', False)  # RTX 4000 16GB VRAM 충분
 
 # GPU 설정 (활성화됨!)
 N_GPU_LAYERS = get_env_int('N_GPU_LAYERS', -1)  # -1 = 모든 레이어 GPU 사용
@@ -120,15 +120,15 @@ F16_KV = get_env_bool('F16_KV', True)  # GPU 메모리 최적화
 
 # 성능 최적화 설정 (2025-01-18 추가)
 # 문서 검색 최적화
-MAX_DOCUMENTS_TO_PROCESS = max(1, min(50, get_env_int('MAX_DOCUMENTS_TO_PROCESS', 5)))
-MAX_PAGES_PER_PDF = max(1, min(100, get_env_int('MAX_PAGES_PER_PDF', 10)))
+MAX_DOCUMENTS_TO_PROCESS = max(1, min(50, get_env_int('MAX_DOCUMENTS_TO_PROCESS', 20)))  # 더 많은 문서 동시 처리
+MAX_PAGES_PER_PDF = max(1, min(100, get_env_int('MAX_PAGES_PER_PDF', 50)))  # PDF 페이지 처리 증가
 PDF_TIMEOUT_SECONDS = max(1, min(60, get_env_int('PDF_TIMEOUT_SECONDS', 5)))
 SEARCH_TIMEOUT_SECONDS = max(5, min(300, get_env_int('SEARCH_TIMEOUT_SECONDS', 20)))
 
 # 병렬 처리 설정
 max_workers = multiprocessing.cpu_count()
-PARALLEL_WORKERS = max(1, min(max_workers, get_env_int('PARALLEL_WORKERS', min(4, max_workers))))
-BATCH_SIZE = max(1, min(20, get_env_int('BATCH_SIZE', 5)))
+PARALLEL_WORKERS = max(1, min(max_workers, get_env_int('PARALLEL_WORKERS', min(12, max_workers))))  # 병렬 워커 증가
+BATCH_SIZE = max(1, min(20, get_env_int('BATCH_SIZE', 10)))  # 배치 크기 증가
 
 # 캐싱 설정 강화
 PDF_TEXT_CACHE_SIZE = max(10, min(1000, get_env_int('PDF_TEXT_CACHE_SIZE', 100)))

@@ -1520,6 +1520,18 @@ def main():
     # 메인 영역 - 2개 탭만 (깔끔하게)
     # 기안서 중심 RAG 시스템 - 장비 자산 검색 탭 제거
     st.markdown("### 💬 기안서 문서 검색")
+
+    # 검색 모드 선택 (새로 추가)
+    col1, col2, col3 = st.columns([2, 2, 3])
+    with col1:
+        search_mode = st.radio(
+            "검색 모드",
+            ["📄 단일 문서 (상세)", "📚 다중 문서 (종합)"],
+            key="search_mode_radio",
+            horizontal=False,
+            help="단일: 1개 문서 상세 분석 / 다중: 여러 문서 통합 검색"
+        )
+
     # 문서 전용 모드가 활성화되어 있으면 안내만 표시
     if 'selected_doc' in st.session_state and st.session_state.get('show_doc_preview', False):
         st.info(f"📌 **문서 전용 모드 활성화 중**  \n위에서 [{st.session_state.selected_doc['filename']}] 문서를 분석 중입니다.  \n문서 전용 질문은 위의 탭을 이용해주세요.")
@@ -1527,7 +1539,10 @@ def main():
         query = None
     else:
         # 일반 모드일 때
-        st.caption("💡 **문서 검색**: 모든 기안서 PDF 문서를 검색합니다. 사이드바에서 특정 문서를 선택하면 해당 문서만 집중 분석합니다.")
+        if search_mode == "📄 단일 문서 (상세)":
+            st.caption("💡 **단일 문서 모드**: 가장 관련성 높은 1개 문서를 찾아 상세 분석합니다.")
+        else:
+            st.caption("💡 **다중 문서 모드**: 여러 문서를 검색하여 종합 답변을 생성합니다. (총액, 비교, 유사 사례 등)")
 
         # 질문 입력 폼 정렬을 위한 CSS
         st.markdown("""
@@ -1663,8 +1678,25 @@ def main():
         if final_query:
             with st.spinner("🔍 답변을 생성하고 있습니다..."):
                 try:
-                    # 일반 RAG 처리
-                    answer = st.session_state.rag.answer(final_query)
+                    # 검색 모드에 따라 처리
+                    if search_mode == "📄 단일 문서 (상세)":
+                        # 기존 단일 문서 모드
+                        answer = st.session_state.rag.answer(final_query)
+                    else:
+                        # 다중 문서 모드 (새로운 기능)
+                        # MultiDocumentSearch 초기화
+                        if 'multi_search' not in st.session_state:
+                            from multi_doc_search import MultiDocumentSearch
+                            st.session_state.multi_search = MultiDocumentSearch()
+
+                        # 다중 문서 검색
+                        documents = st.session_state.multi_search.search_multiple_docs(final_query, top_k=5)
+
+                        if documents:
+                            # 종합 답변 생성
+                            answer = st.session_state.multi_search.aggregate_answer(final_query, documents)
+                        else:
+                            answer = "❌ 관련 문서를 찾을 수 없습니다."
                     
                     # 검색 결과를 session_state에 저장
                     st.session_state['last_query'] = final_query

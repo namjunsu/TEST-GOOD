@@ -29,8 +29,11 @@ from contextlib import nullcontext
 try:
     from log_system import get_logger, TimerContext
     chat_logger = get_logger()
+    # chat_logger를 logger로도 사용
+    logger = chat_logger
 except ImportError:
     chat_logger = None
+    logger = None
     TimerContext = None
     
 # query_logger는 log_system으로 통합됨
@@ -63,7 +66,7 @@ except ImportError:
 
 from rag_system.qwen_llm import QwenLLM
 from rag_system.llm_singleton import LLMSingleton
-from metadata_manager import MetadataManager
+# from metadata_manager import MetadataManager  # 파일 없음
 
 # 새로운 모듈 import (제거됨 - 백업 폴더로 이동)
 # from pdf_parallel_processor import PDFParallelProcessor
@@ -74,16 +77,18 @@ import logging
 from typing import Optional, Dict, Any, List, Tuple
 import traceback
 
-# 로깅 설정
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('perfect_rag.log', encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+# 로깅 설정 - 이미 상단에서 logger가 설정됨
+# logger가 None인 경우 (log_system import 실패 시) 표준 로깅 사용
+if logger is None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler('perfect_rag.log', encoding='utf-8'),
+            logging.StreamHandler()
+        ]
+    )
+    logger = logging.getLogger(__name__)
 
 
 class RAGException(Exception):
@@ -195,7 +200,7 @@ class PerfectRAG:
 
         self.documents_cache = OrderedDict()  # LRU 캐시처럼 동작
         self.metadata_cache = OrderedDict()  # 메타데이터 캐시
-        self.search_mode = 'document'  # 검색 모드: 'document', 'asset', 'auto' (기본값: document)
+        self.search_mode = 'document'  # 검색 모드는 항상 document
         self.answer_cache = OrderedDict()  # 답변 캐시 (LRU)
         self.pdf_text_cache = OrderedDict()  # PDF 텍스트 추출 캐시 (성능 최적화)
 
@@ -210,7 +215,7 @@ class PerfectRAG:
         # 응답 포맷터 초기화
         self.formatter = ResponseFormatter() if ResponseFormatter else None
 
-        # Asset LLM 개선 모듈 초기화
+        # LLM 개선 모듈 초기화
 
         # 자산 데이터 제거 (기안서 중심 시스템으로 전환)
 
@@ -403,6 +408,22 @@ class PerfectRAG:
 
     def _build_metadata_cache(self):
         """모든 문서의 메타데이터를 미리 추출 (캐싱 지원)"""
+        # 캐시 파일 경로 (Docker volume에 저장)
+        cache_dir = Path("/app/cache") if Path("/app/cache").exists() else Path("cache")
+        cache_dir.mkdir(exist_ok=True)
+        cache_file = cache_dir / "metadata_cache.pkl"
+
+        # 기존 캐시 파일이 있으면 로드
+        if cache_file.exists():
+            try:
+                import pickle
+                with open(cache_file, 'rb') as f:
+                    self.metadata_cache = pickle.load(f)
+                print(f"✅ 캐시 로드 완료: {len(self.metadata_cache)}개 문서")
+                return  # 캐시가 있으면 재구축 불필요
+            except Exception as e:
+                print(f"⚠️ 캐시 로드 실패, 재구축: {e}")
+
         logger.info("메타데이터 캐시 구축 시작")
         print(" 문서 메타데이터 구축 중...")
 
@@ -484,6 +505,15 @@ class PerfectRAG:
             }
 
         print(f" {len(self.metadata_cache)}개 문서 메타데이터 구축 완료")
+
+        # 캐시 저장
+        try:
+            import pickle
+            with open(cache_file, 'wb') as f:
+                pickle.dump(self.metadata_cache, f)
+            print(f"✅ 캐시 저장 완료: {cache_file}")
+        except Exception as e:
+            print(f"⚠️ 캐시 저장 실패: {e}")
     
     def _extract_txt_info(self, txt_path: Path) -> Dict:
         """TXT 파일에서 정보 동적 추출"""
@@ -1223,69 +1253,9 @@ class PerfectRAG:
         return response
 
     def _classify_search_intent(self, query: str) -> str:
-        """검색 의도 분류: document(기안서) vs asset(자산)
-        
-        Returns:
-            'document': PDF 기안서/검토서 검색
-            'asset': 자산 데이터베이스 검색
-        """
-        query_lower = query.lower()
-        
-        # 명시적 문서 관련 키워드 (확장)
-        document_keywords = [
-            '기안', '검토서', '수리', '보수', '구매 건', '폐기', 
-            '문서', 'pdf', '내용 요약', '상세 내용', '절차',
-            '기안자', '담당자', '업체명', '검토 결과',
-            '교체', '대체', '어떤', '무엇', '뭐', '뭘로',
-            '미러클랩', '미라클랩', '삼각대'
-        ]
-        
-        # 명시적 자산 관련 키워드
-        asset_keywords = [
-            '몇 대', '수량', '보유', '자산', '시리얼', 's/n',
-            '현황', '통계', '목록', '전체 장비', '설치 위치',
-            '도입 시기', '제조사별', '모델별', '위치별'
-        ]
-        
-        # 패턴 가져오기
-        manufacturer_pattern = self._get_manufacturer_pattern()
-        model_pattern = self._get_model_pattern()
-        
-        # 점수 기반 분류
-        doc_score = 0
-        asset_score = 0
-        
-        # 문서 점수 계산
-        for keyword in document_keywords:
-            if keyword in query_lower:
-                doc_score += 2
-        
-        # 자산 점수 계산
-        for keyword in asset_keywords:
-            if keyword in query_lower:
-                asset_score += 2
-        
-        # 날짜가 있으면서 '구매', '수리' 등이 있으면 문서
-        if re.search(r'20\d{2}년', query) and any(w in query for w in ['구매', '수리', '보수', '검토']):
-            doc_score += 3
-        
-        # 제조사나 모델명이 있으면 자산
-        if re.search(manufacturer_pattern, query) or re.search(model_pattern, query, re.IGNORECASE):
-            asset_score += 2
+        """검색 의도 분류 - 항상 document 모드 반환"""
+        return 'document'  # Asset 모드 제거, 항상 문서 검색
 
-        # 장비명이 있으면 자산 가중치 증가 (DVR, CCU 등)
-        # 하지만 '관련 문서', '찾아줘' 같은 문서 검색 표현이 있으면 제외
-        if not any(w in query_lower for w in ['문서', '찾아줘', '검색', '기안', '검토']):
-            equipment_names = ['dvr', 'ccu', '카메라', '렌즈', '모니터', '스위처', '마이크', '믹서']
-            for equipment in equipment_names:
-                if equipment in query_lower:
-                    asset_score += 3  # 높은 가중치
-        
-        # 수량 관련 표현이 있으면 자산
-        if re.search(r'\d+대|\d+개|몇\s*대|몇\s*개', query):
-            asset_score += 3
-        
-        # 최종 결정
     def answer_from_specific_document(self, query: str, filename: str) -> str:
         """특정 문서에 대해서만 답변 생성 (문서 전용 모드) - 초상세 버전
         
@@ -1359,7 +1329,7 @@ class PerfectRAG:
             
         if filename.endswith('.txt'):
             # TXT 파일 처리 (자산 데이터)
-            return self._search_asset_file(doc_path, query)
+            return None  # Asset 검색 제거
         else:
             return f" 지원하지 않는 파일 형식입니다: {filename}"
         
@@ -1459,7 +1429,6 @@ class PerfectRAG:
     def __del__(self):
         """소멸자 - 리소스 정리"""
         self.cleanup_executor()
-        return query.strip()
 
     def _parallel_search_pdfs(self, pdf_files, query, top_k=5):
         """병렬 PDF 검색 - 성능 최적화"""
@@ -1821,10 +1790,7 @@ class PerfectRAG:
         
         Args:
             query: 사용자 질문
-            mode: 검색 모드 ('document', 'asset', 'auto')
-                - document: PDF 문서 검색
-                - asset: 자산 데이터 검색
-                - auto: 자동 판단
+            mode: 검색 모드 (항상 'document' 사용)
         """
         
         # 시작 시간 기록
@@ -1835,9 +1801,9 @@ class PerfectRAG:
         metadata = {}
         
         try:
-            # 로깅 시스템 시작
-            if chat_logger:
-                chat_logger.log_query(query, "started")
+            # 로깅 시스템 시작 - log_query는 답변 완료 후에 호출해야 함
+            # if chat_logger:
+            #     chat_logger.log_query(query, "started")
             
             # 검색 의도 분류
             if mode == 'auto':
@@ -1850,7 +1816,37 @@ class PerfectRAG:
             
             # 모드에 따른 처리
             query_lower = query.lower()
-            
+
+            # document 모드인 경우
+            if self.search_mode == 'document':
+                # 1. 가장 적합한 문서 찾기
+                doc_path = self.find_best_document(query)
+
+                if not doc_path:
+                    response = "❌ 관련 문서를 찾을 수 없습니다. 더 구체적으로 질문해주세요."
+                else:
+                    print(f"📄 선택된 문서: {doc_path.name}")
+
+                    # LLM을 사용하여 문서 내용 분석 및 답변 생성
+                    response = self._generate_llm_summary(doc_path, query)
+            else:
+                # Document 모드가 아닌 경우 (발생하지 않아야 함)
+                response = "❌ 문서 검색 중 오류가 발생했습니다."
+
+            # 처리 시간 계산 및 로깅
+            processing_time = time.time() - start_time
+            if chat_logger:
+                chat_logger.log_query(
+                    query=query,
+                    response=response,
+                    search_mode=self.search_mode,
+                    processing_time=processing_time,
+                    metadata=metadata
+                )
+                print(f"✅ Query completed in {processing_time:.2f}s")
+
+            return response
+
         except Exception as e:
             # 에러 발생
             error_msg = str(e)
@@ -3522,7 +3518,7 @@ class PerfectRAG:
     
     def _search_location_summary(self, txt_path: Path, location: str) -> str:
         """특정 위치의 장비를 카테고리별로 정리"""
-        query = f"{location} 장비 현황"  # query 변수 생성 for _enhance_asset_response
+        # Asset 모드 제거됨
         try:
             with open(txt_path, 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -3707,9 +3703,8 @@ class PerfectRAG:
                         response += f"  ... 외 {len(sorted_equipment)-5}종\n"
                 
                 response += f"\n 출처: {txt_path.name}"
-                # LLM으로 답변 개선
-                enhanced_query = f"{location_keyword} 장비 현황"
-                return self._enhance_asset_response(response, enhanced_query)
+                # Asset 모드 제거됨 - 직접 응답 반환
+                return response
             else:
                 return f" {location}에서 장비를 찾을 수 없습니다."
                 

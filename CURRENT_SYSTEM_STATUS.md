@@ -191,6 +191,16 @@ docker-compose logs -f rag-system
 
 ## 📝 변경 이력
 
+### 2025-09-25 (현재)
+- ✅ **Phase 1.1: 내용 검색 기능 추가 완료**
+  - content_search.py 모듈 생성
+  - ContentSearcher 클래스 구현 (PDF 텍스트 추출 및 검색)
+  - perfect_rag.py의 find_best_document에 통합
+  - LRU 캐싱으로 성능 최적화 (최대 100개 PDF 캐시)
+  - 점수 시스템: 정확한 매칭, 토큰 매칭, 근접도 계산
+  - 성능: 첫 검색 7.5초, 캐시 히트 시 0.0초
+  - 검색 범위: 최대 30개 파일로 제한 (성능 최적화)
+
 ### 2025-01-24
 - ✅ ChatLogger 오류 수정
 - ✅ _classify_search_intent return 문 수정

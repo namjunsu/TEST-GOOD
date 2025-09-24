@@ -821,19 +821,24 @@ class PerfectRAG:
         return info
     
     def find_best_document(self, query: str) -> Optional[Path]:
-        """질문에 가장 적합한 문서 찾기 - 동적 매칭"""
-        
+        """질문에 가장 적합한 문서 찾기 - 동적 매칭 + 내용 검색"""
+
+        # 내용 검색 기능 통합
+        if not hasattr(self, 'content_searcher'):
+            from content_search import ContentSearcher
+            self.content_searcher = ContentSearcher(self.docs_dir)
+
         query_lower = query.lower()
-        
+
         # PDF 문서 우선 처리 키워드 확장
         pdf_priority_keywords = [
             '수리', '보수', '내용', '요약', '검토서', '기술검토',
             '교체', '구매', '폐기', '소모품', '기안', '검토',
             '어떤', '무엇', '뭐', '뭘로', '어디서', '누가'
         ]
-        
-        # 문서 검색 후보 초기화
-        candidates = []
+
+        # 문서 검색 후보 초기화 - 딕셔너리로 변경하여 중복 관리
+        candidates = {}  # path -> (score, filename)
         
         # 기존 로직 계속
         # 질문 정규화 및 토큰화
@@ -922,24 +927,60 @@ class PerfectRAG:
             for doc_type in doc_types:
                 if doc_type in query and doc_type in filename:
                     score += 5
-            
+
             if score > 0:
-                candidates.append((score, metadata['path'], filename))
-        
-        # 점수순 정렬
-        candidates.sort(reverse=True)
-        
+                candidates[metadata['path']] = (score, filename)
+
+        # 내용 검색 추가 (파일명 매칭과 함께)
+        try:
+            # PDF 파일 리스트 준비
+            pdf_files = [p for p in self.pdf_files if p.suffix.lower() == '.pdf']
+
+            if pdf_files:
+                logger.info(f"내용 검색 시작: {len(pdf_files)}개 PDF 대상")
+                # 성능을 위해 최대 30개 파일만 내용 검색 (더 정확한 파일명 매칭이 우선)
+                content_results = self.content_searcher.search_by_content(query, pdf_files, top_k=10, max_files=30)
+
+                # 내용 검색 결과를 점수에 반영
+                for result in content_results:
+                    pdf_path = result['path']
+                    content_score = result['score']
+
+                    if pdf_path in candidates:
+                        # 이미 파일명 매칭 점수가 있는 경우, 가중 평균
+                        old_score, filename = candidates[pdf_path]
+                        # 파일명 점수 60%, 내용 점수 40%
+                        new_score = old_score * 0.6 + content_score * 0.4
+                        candidates[pdf_path] = (new_score, filename)
+                    else:
+                        # 파일명 매칭되지 않은 경우, 내용 점수만 사용 (0.8 가중치)
+                        candidates[pdf_path] = (content_score * 0.8, pdf_path.name)
+
+                logger.info(f"내용 검색 완료: {len(content_results)}개 매칭")
+        except Exception as e:
+            logger.warning(f"내용 검색 중 오류 (무시하고 계속): {e}")
+
+        # 딕셔너리를 리스트로 변환하고 점수순 정렬
+        sorted_candidates = sorted(
+            [(score, path, filename) for path, (score, filename) in candidates.items()],
+            reverse=True
+        )
+
         # 디버깅 출력 (상위 3개)
-        if candidates:
-            top_score = candidates[0][0]
+        if sorted_candidates:
+            logger.info("상위 3개 후보 문서:")
+            for score, path, filename in sorted_candidates[:3]:
+                logger.info(f"  - {filename}: {score:.2f}점")
+
+            top_score = sorted_candidates[0][0]
             # 동점자가 있는지 확인
-            same_score = [c for c in candidates if c[0] == top_score]
+            same_score = [c for c in sorted_candidates if c[0] == top_score]
             if len(same_score) > 1:
                 # 동점일 때는 파일명 길이가 짧은 것 우선
                 same_score.sort(key=lambda x: len(x[2]))
                 return same_score[0][1]
-            return candidates[0][1]
-        
+            return sorted_candidates[0][1]
+
         return None
 
     def _calculate_similarity(self, str1: str, str2: str) -> float:

@@ -16,12 +16,9 @@ from functools import lru_cache
 import math
 
 # kiwipiepy 토크나이저 (한국어 특화)
-try:
-    from kiwipiepy import Kiwi
-    KIWIPIEPY_AVAILABLE = True
-except ImportError:
-    KIWIPIEPY_AVAILABLE = False
-    print("⚠️  kiwipiepy not available, falling back to basic tokenization")
+# AVX-VNNI 문제로 인해 비활성화
+KIWIPIEPY_AVAILABLE = False
+print("⚠️  kiwipiepy disabled due to AVX-VNNI issue, using basic tokenization")
 
 class KoreanTokenizer:
     """한국어 토크나이저"""
@@ -44,7 +41,8 @@ class KoreanTokenizer:
 
         if KIWIPIEPY_AVAILABLE:
             try:
-                self.kiwi = Kiwi()
+                # AVX-VNNI 문제 해결을 위해 num_workers=0으로 설정
+                self.kiwi = Kiwi(num_workers=0)
                 self.use_kiwi = True
                 self.logger.info("Kiwi 한국어 토크나이저 로드 완료")
             except Exception as e:

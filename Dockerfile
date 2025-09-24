@@ -55,6 +55,8 @@ RUN pip install --no-cache-dir --no-deps /wheels/*.whl && \
 COPY web_interface.py perfect_rag.py ./
 COPY config.py log_system.py response_formatter.py ./
 COPY smart_search_enhancer.py auto_indexer.py ./
+# 새로 추가된 다중 문서 검색 파일
+COPY multi_doc_search.py index_builder.py ./
 COPY rag_system/ ./rag_system/
 COPY .streamlit/ ./.streamlit/
 

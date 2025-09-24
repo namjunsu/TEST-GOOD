@@ -137,11 +137,12 @@ class IndexBuilder:
         """BM25 인덱스 구축"""
         bm25 = BM25Store()
 
-        # 텍스트만 추출
+        # 텍스트와 메타데이터 추출
         texts = [chunk['content'] for chunk in chunks]
+        metadatas = [chunk['metadata'] for chunk in chunks]
 
-        # 인덱스 구축
-        bm25.build_index(texts)
+        # 인덱스 구축 (add_documents 사용)
+        bm25.add_documents(texts, metadatas)
 
         # 저장
         index_path = self.index_dir / "bm25_index.pkl"

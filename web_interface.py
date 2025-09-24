@@ -1521,17 +1521,6 @@ def main():
     # 기안서 중심 RAG 시스템 - 장비 자산 검색 탭 제거
     st.markdown("### 💬 기안서 문서 검색")
 
-    # 검색 모드 선택 (새로 추가)
-    col1, col2, col3 = st.columns([2, 2, 3])
-    with col1:
-        search_mode = st.radio(
-            "검색 모드",
-            ["📄 단일 문서 (상세)", "📚 다중 문서 (종합)"],
-            key="search_mode_radio",
-            horizontal=False,
-            help="단일: 1개 문서 상세 분석 / 다중: 여러 문서 통합 검색"
-        )
-
     # 문서 전용 모드가 활성화되어 있으면 안내만 표시
     if 'selected_doc' in st.session_state and st.session_state.get('show_doc_preview', False):
         st.info(f"📌 **문서 전용 모드 활성화 중**  \n위에서 [{st.session_state.selected_doc['filename']}] 문서를 분석 중입니다.  \n문서 전용 질문은 위의 탭을 이용해주세요.")
@@ -1539,10 +1528,7 @@ def main():
         query = None
     else:
         # 일반 모드일 때
-        if search_mode == "📄 단일 문서 (상세)":
-            st.caption("💡 **단일 문서 모드**: 가장 관련성 높은 1개 문서를 찾아 상세 분석합니다.")
-        else:
-            st.caption("💡 **다중 문서 모드**: 여러 문서를 검색하여 종합 답변을 생성합니다. (총액, 비교, 유사 사례 등)")
+        st.caption("💡 **문서 검색**: 질문 내용에 따라 자동으로 단일 문서 또는 다중 문서를 검색합니다.")
 
         # 질문 입력 폼 정렬을 위한 CSS
         st.markdown("""
@@ -1678,12 +1664,16 @@ def main():
         if final_query:
             with st.spinner("🔍 답변을 생성하고 있습니다..."):
                 try:
-                    # 검색 모드에 따라 처리
-                    if search_mode == "📄 단일 문서 (상세)":
-                        # 기존 단일 문서 모드
-                        answer = st.session_state.rag.answer(final_query)
-                    else:
-                        # 다중 문서 모드 (새로운 기능)
+                    # 질문 자동 분석 - 다중 문서가 필요한지 판단
+                    query_lower = final_query.lower()
+                    needs_multi = any(keyword in query_lower for keyword in [
+                        "총액", "합계", "모든", "전체", "비교", "차이",
+                        "유사", "비슷한", "관련", "연도별", "월별",
+                        "추이", "현황", "통계", "리스트", "목록"
+                    ])
+
+                    if needs_multi:
+                        # 다중 문서 모드 (자동 선택)
                         # MultiDocumentSearch 초기화
                         if 'multi_search' not in st.session_state:
                             from multi_doc_search import MultiDocumentSearch
@@ -1696,7 +1686,11 @@ def main():
                             # 종합 답변 생성
                             answer = st.session_state.multi_search.aggregate_answer(final_query, documents)
                         else:
-                            answer = "❌ 관련 문서를 찾을 수 없습니다."
+                            # 다중 문서 검색 실패시 단일 문서로 폴백
+                            answer = st.session_state.rag.answer(final_query)
+                    else:
+                        # 단일 문서 모드 (자동 선택)
+                        answer = st.session_state.rag.answer(final_query)
                     
                     # 검색 결과를 session_state에 저장
                     st.session_state['last_query'] = final_query

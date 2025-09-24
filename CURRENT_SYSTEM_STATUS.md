@@ -153,6 +153,7 @@ docs/
 - **Docker 데몬**: 실행 중
 - **컨테이너**: 없음 (현재 직접 실행 중)
 - **이미지**: 미빌드
+- **Dockerfile**: ✅ 업데이트됨 (multi_doc_search.py, index_builder.py 추가)
 
 ### Docker 실행 방법:
 ```bash
@@ -202,6 +203,11 @@ docker-compose logs -f rag-system
   - 중복 RAG 모듈 제거 (rag_core/, rag_modules/)
   - 테스트/모니터링 폴더 제거
   - 65개 항목 → 43개로 정리
+- 🆕 **다중 문서 검색 기능 추가**:
+  - 12개 RAG 모듈 복구 (BM25, Vector, Hybrid 등)
+  - multi_doc_search.py, index_builder.py 생성
+  - UI에 검색 모드 선택 추가 (단일/다중)
+  - ⚠️ AVX-VNNI 문제로 kiwipiepy 비활성화
 
 ### 이전
 - 시스템 초기 구축

@@ -1680,7 +1680,15 @@ def main():
                             st.session_state.multi_search = MultiDocumentSearch()
 
                         # 다중 문서 검색
-                        documents = st.session_state.multi_search.search_multiple_docs(final_query, top_k=5)
+                        search_results = st.session_state.multi_search.search_multiple_docs(final_query, top_k=5)
+
+                        # 결과가 딕셔너리인 경우 documents 키에서 실제 문서 추출
+                        if isinstance(search_results, dict) and 'documents' in search_results:
+                            documents = search_results['documents']
+                        elif isinstance(search_results, list):
+                            documents = search_results
+                        else:
+                            documents = None
 
                         if documents:
                             # 종합 답변 생성

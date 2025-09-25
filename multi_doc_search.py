@@ -55,13 +55,21 @@ class MultiDocumentSearch:
         # 하이브리드 검색 수행
         results = self.hybrid_search.search(
             query=query,
-            top_k=top_k * 2,  # Reranking을 위해 더 많이 검색
-            search_type=query_type
+            top_k=top_k * 2  # Reranking을 위해 더 많이 검색
         )
 
         # Reranking
         if results:
-            results = self.reranker.rerank(results, query, top_k)
+            # HybridSearch.search()는 딕셔너리를 반환하므로 'documents' 키에서 결과를 가져옴
+            if isinstance(results, dict) and 'documents' in results:
+                docs = results['documents']
+                if docs:
+                    # reranker는 query, search_results, top_k 순서로 받음
+                    docs = self.reranker.rerank(query, docs, top_k)
+                    results['documents'] = docs
+            elif isinstance(results, list):
+                # 리스트 형태로 반환된 경우
+                results = self.reranker.rerank(query, results, top_k)
 
         return results
 

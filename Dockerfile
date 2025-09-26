@@ -57,11 +57,13 @@ COPY config.py log_system.py response_formatter.py ./
 COPY smart_search_enhancer.py auto_indexer.py ./
 # 새로 추가된 다중 문서 검색 파일
 COPY multi_doc_search.py index_builder.py ./
+# Phase 1 개선 파일
+COPY content_search.py metadata_db.py ./
 COPY rag_system/ ./rag_system/
 COPY .streamlit/ ./.streamlit/
 
 # 디렉토리 생성 (모델은 마운트로만)
-RUN mkdir -p logs cache indexes && \
+RUN mkdir -p logs cache indexes config && \
     chmod 755 /app
 
 # 모델과 문서는 볼륨으로만 마운트

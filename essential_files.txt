@@ -1,0 +1,23 @@
+# 진짜 필수 파일만 (프로덕션급 RAG용)
+
+## 메인 파일 (3개)
+web_interface.py
+config.py
+requirements_updated.txt
+
+## 새로 만들 파일 (5개)
+rag_core.py          # 진짜 RAG 엔진
+document_processor.py # 문서 처리
+vector_store.py      # 벡터 DB
+search_engine.py     # 검색 엔진
+llm_handler.py       # LLM 처리
+
+## 유틸리티 (2개)
+log_system.py
+Dockerfile
+
+## 설정 (2개)
+.streamlit/config.toml
+.env
+
+총 12개 파일이면 충분!

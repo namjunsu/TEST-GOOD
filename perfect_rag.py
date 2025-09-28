@@ -927,9 +927,10 @@ class PerfectRAG:
         return info
 
     def _search_by_content(self, query: str) -> List[Dict[str, Any]]:
-        """🔥 NEW: PDF 내용 기반 검색 - 파일명이 아닌 실제 내용 검색"""
+        """🔥 NEW: PDF 내용 및 파일명 기반 검색 - 둘 다 검색"""
 
         results = []
+        query_lower = query.lower()
         keywords = [kw.lower() for kw in query.split() if len(kw) > 1]
 
         # 모든 PDF 파일 검색
@@ -938,7 +939,34 @@ class PerfectRAG:
         if logger:
             logger.info(f"내용 검색 시작: {len(pdf_files)}개 PDF, 키워드: {keywords}")
 
-        for pdf_path in pdf_files[:100]:  # 일단 100개만 테스트
+        # 먼저 파일명 검색 (빠름)
+        for pdf_path in pdf_files:
+            filename_lower = pdf_path.name.lower()
+            score = 0
+            matched_keywords = []
+
+            # 파일명에 전체 쿼리가 포함되면 최고 점수
+            if query_lower in filename_lower:
+                score = 100
+                matched_keywords = [query]
+            # 파일명에 각 키워드가 포함되면 점수 부여
+            else:
+                for kw in keywords:
+                    if kw in filename_lower:
+                        score += 20
+                        matched_keywords.append(kw)
+
+            if score > 0:
+                results.append({
+                    'path': pdf_path,
+                    'filename': pdf_path.name,
+                    'score': score,
+                    'matched_keywords': matched_keywords,
+                    'context': f"파일명 매칭: {pdf_path.name}"
+                })
+
+        # 내용 검색 (느림, 일부만)
+        for pdf_path in pdf_files[:50]:  # 상위 50개만
             try:
                 # 캐시 확인
                 cache_key = str(pdf_path)
@@ -2108,16 +2136,46 @@ class PerfectRAG:
 
             # document 모드인 경우
             if self.search_mode == 'document':
-                # 1. 가장 적합한 문서 찾기
-                doc_path = self.find_best_document(query)
+                # "문서", "찾아", "검색" 키워드가 있으면 여러 문서 목록 반환
+                if any(keyword in query_lower for keyword in ["문서", "찾아", "검색", "어떤", "무엇", "뭐"]):
+                    # 여러 문서 검색
+                    search_results = self._search_by_content(query)
 
-                if not doc_path:
-                    response = "❌ 관련 문서를 찾을 수 없습니다. 더 구체적으로 질문해주세요."
+                    if not search_results:
+                        response = "❌ 관련 문서를 찾을 수 없습니다. 더 구체적으로 질문해주세요."
+                    else:
+                        # 상위 5개 문서 목록 표시
+                        response = f"**{query}** 검색 결과 ({len(search_results)}개 문서)\n\n"
+
+                        # 중복 제거 (파일명 기준)
+                        seen = set()
+                        unique_results = []
+                        for r in search_results:
+                            if r['filename'] not in seen:
+                                seen.add(r['filename'])
+                                unique_results.append(r)
+
+                        for i, result in enumerate(unique_results[:5], 1):
+                            response += f"**{i}. {result['filename']}**\n"
+                            # 간단한 요약 추가
+                            if result.get('context'):
+                                response += f"   - {result['context'][:200]}...\n"
+                            response += "\n"
+
+                        if len(unique_results) > 5:
+                            response += f"\n... 외 {len(unique_results) - 5}개 문서\n"
                 else:
-                    print(f"📄 선택된 문서: {doc_path.name}")
+                    # 단일 문서 상세 답변
+                    # 1. 가장 적합한 문서 찾기
+                    doc_path = self.find_best_document(query)
 
-                    # LLM을 사용하여 문서 내용 분석 및 답변 생성
-                    response = self._generate_llm_summary(doc_path, query)
+                    if not doc_path:
+                        response = "❌ 관련 문서를 찾을 수 없습니다. 더 구체적으로 질문해주세요."
+                    else:
+                        print(f"📄 선택된 문서: {doc_path.name}")
+
+                        # LLM을 사용하여 문서 내용 분석 및 답변 생성
+                        response = self._generate_llm_summary(doc_path, query)
             else:
                 # Document 모드가 아닌 경우 (발생하지 않아야 함)
                 response = "❌ 문서 검색 중 오류가 발생했습니다."

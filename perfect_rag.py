@@ -86,7 +86,7 @@ except ImportError:
     if logger:
         logger.warning("MetadataExtractor not available, metadata extraction disabled")
 
-# 검색 모듈 추가 (2025-09-29 리팩토링)
+# 리팩토링된 모듈들 (2025-09-29)
 try:
     from search_module import SearchModule
     SEARCH_MODULE_AVAILABLE = True
@@ -94,6 +94,14 @@ except ImportError:
     SEARCH_MODULE_AVAILABLE = False
     if logger:
         logger.warning("SearchModule not available - using embedded search")
+
+try:
+    from document_module import DocumentModule
+    DOCUMENT_MODULE_AVAILABLE = True
+except ImportError:
+    DOCUMENT_MODULE_AVAILABLE = False
+    if logger:
+        logger.warning("DocumentModule not available - using embedded document processing")
 
 # 새로운 모듈 import (제거됨 - 백업 폴더로 이동)
 # from pdf_parallel_processor import PDFParallelProcessor
@@ -216,6 +224,9 @@ class PerfectRAG:
             self.pdf_workers = self.perf_config.get('parallel', {}).get('pdf_workers', 4)
             self.chunk_size = self.perf_config.get('parallel', {}).get('chunk_size', 5)
 
+        # PDF 캐시 크기 설정 (DocumentModule 초기화 전에 필요)
+        self.max_pdf_cache = 50  # 최대 50개 PDF 캐싱
+
         # 설정 디렉토리 설정
         self.config_dir = Path(__file__).parent / 'config'
         self.config_dir.mkdir(exist_ok=True)
@@ -254,6 +265,24 @@ class PerfectRAG:
                 if logger:
                     logger.error(f"❌ SearchModule 초기화 실패: {e}")
                 self.search_module = None
+
+        # DocumentModule 초기화 (2025-09-29 리팩토링)
+        self.document_module = None
+        if DOCUMENT_MODULE_AVAILABLE:
+            try:
+                doc_config = {
+                    'max_pdf_cache': self.max_pdf_cache,
+                    'max_text_length': self.max_text_length,
+                    'max_pdf_pages': self.max_pdf_pages,
+                    'enable_ocr': False  # OCR은 필요시 활성화
+                }
+                self.document_module = DocumentModule(doc_config)
+                if logger:
+                    logger.info("✅ DocumentModule 초기화 성공")
+            except Exception as e:
+                if logger:
+                    logger.error(f"❌ DocumentModule 초기화 실패: {e}")
+                self.document_module = None
 
         # Everything-like 초고속 검색 시스템 초기화 (SearchModule이 없을 때만)
         self.everything_search = None
@@ -722,6 +751,11 @@ class PerfectRAG:
 
     def _optimize_context(self, text: str, query: str, max_length: int = 3000) -> str:
         """컨텍스트 최적화 - 가장 관련성 높은 부분만 추출"""
+        # DocumentModule을 사용하여 컨텍스트 최적화
+        if self.document_module:
+            return self.document_module.optimize_context(text, query, max_length)
+
+        # DocumentModule이 없으면 기존 방법 사용
         if not text or len(text) <= max_length:
             return text
 
@@ -778,60 +812,19 @@ class PerfectRAG:
         return result_text if result_text else text[:max_length]
 
     def _extract_pdf_info_with_retry(self, pdf_path: Path) -> Dict:
-        """PDF 정보 추출 (병렬 처리 및 에러 핸들링 개선)"""
-        max_retries = 2
-        retry_count = 0
-
-        while retry_count < max_retries:
+        """PDF 정보 추출 (DocumentModule 사용)"""
+        # DocumentModule을 사용하여 PDF 처리
+        if self.document_module:
             try:
-                # 병렬 처리기 사용 여부 확인
-                use_parallel = USE_YAML_CONFIG and cfg.get('parallel_processing.enabled', True)
-
-                if use_parallel and self.pdf_processor is not None:
-                    # 병렬 처리로 PDF 추출
-                    results = self.pdf_processor.process_multiple_pdfs([pdf_path])
-                    result = results.get(str(pdf_path), {})
-
-                    if 'error' not in result:
-                        return self._parse_pdf_result(result)
-                    else:
-                        # 에러 발생 시 폴백
-                        print(f"️ 병렬 처리 실패, 순차 처리로 폴백: {pdf_path.name}")
-                        result = self._extract_pdf_info(pdf_path)
-                else:
-                    # 순차 처리 (병렬 처리기 없거나 비활성화)
-                    result = self._extract_pdf_info(pdf_path)
-
-                # 결과 확인
+                result = self.document_module.extract_pdf_text_with_retry(pdf_path, max_retries=2)
                 if result:
                     return result
-
-                # 빈 결과일 때 OCR 시도
-                if hasattr(self, '_try_ocr_extraction'):
-                    ocr_text = self._try_ocr_extraction(pdf_path)
-                    if ocr_text:
-                        return {'text': ocr_text, 'is_ocr': True}
-
-                retry_count += 1
-                if retry_count < max_retries:
-                    time.sleep(0.5)  # 재시도 전 대기
-
-            except MemoryError:
-                print(f"   메모리 부족: {pdf_path.name} (재시도 {retry_count + 1}/{max_retries})")
-                import gc
-                gc.collect()  # 메모리 정리
-                retry_count += 1
-
-            except FileNotFoundError:
-                print(f"   파일 없음: {pdf_path}")
-                break  # 파일 없으면 재시도 불필요
-
             except Exception as e:
-                print(f"   PDF 처리 오류 ({retry_count + 1}/{max_retries}): {pdf_path.name}")
-                print(f"     오류: {type(e).__name__}: {str(e)[:50]}")
-                retry_count += 1
+                if logger:
+                    logger.error(f"DocumentModule PDF 처리 오류: {e}")
 
-        return {}
+        # DocumentModule이 없으면 기존 방법 사용
+        return self._extract_pdf_info(pdf_path)
     
     def _extract_pdf_info(self, pdf_path: Path) -> Dict:
         """기존 PDF 추출 방식 (폴백용) - 캐싱 적용"""

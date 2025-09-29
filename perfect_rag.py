@@ -68,6 +68,24 @@ from rag_system.qwen_llm import QwenLLM
 from rag_system.llm_singleton import LLMSingleton
 from metadata_db import MetadataDB  # Phase 1.2: 메타데이터 DB
 
+# Everything-like 초고속 검색 시스템 추가
+try:
+    from everything_like_search import EverythingLikeSearch
+    EVERYTHING_SEARCH_AVAILABLE = True
+except ImportError:
+    EVERYTHING_SEARCH_AVAILABLE = False
+    if logger:
+        logger.warning("EverythingLikeSearch not available, using legacy search")
+
+# 메타데이터 추출 시스템 추가 (2025-09-29)
+try:
+    from metadata_extractor import MetadataExtractor
+    METADATA_EXTRACTOR_AVAILABLE = True
+except ImportError:
+    METADATA_EXTRACTOR_AVAILABLE = False
+    if logger:
+        logger.warning("MetadataExtractor not available, metadata extraction disabled")
+
 # 새로운 모듈 import (제거됨 - 백업 폴더로 이동)
 # from pdf_parallel_processor import PDFParallelProcessor
 # from error_handler import RAGErrorHandler, ErrorRecovery, DetailedError, safe_execute
@@ -215,9 +233,37 @@ class PerfectRAG:
         self.pdf_processor = None
         self.error_handler = None
         self.error_recovery = None
+
+        # Everything-like 초고속 검색 시스템 초기화
+        self.everything_search = None
+        if EVERYTHING_SEARCH_AVAILABLE:
+            try:
+                self.everything_search = EverythingLikeSearch()
+                # 초기 인덱싱 - 한 번만 실행
+                if not hasattr(self, '_index_initialized'):
+                    self.everything_search.index_all_files()
+                    self.__class__._index_initialized = True
+                if logger:
+                    logger.info("Everything-like search initialized successfully")
+            except Exception as e:
+                if logger:
+                    logger.error(f"Failed to initialize Everything-like search: {e}")
+                self.everything_search = None
         
         # 응답 포맷터 초기화
         self.formatter = ResponseFormatter() if ResponseFormatter else None
+
+        # 메타데이터 추출기 초기화 (2025-09-29 추가)
+        self.metadata_extractor = None
+        if METADATA_EXTRACTOR_AVAILABLE:
+            try:
+                self.metadata_extractor = MetadataExtractor()
+                if logger:
+                    logger.info("✅ MetadataExtractor 초기화 성공")
+            except Exception as e:
+                if logger:
+                    logger.error(f"❌ MetadataExtractor 초기화 실패: {e}")
+                self.metadata_extractor = None
 
         # LLM 개선 모듈 초기화
 
@@ -927,9 +973,74 @@ class PerfectRAG:
         return info
 
     def _search_by_content(self, query: str) -> List[Dict[str, Any]]:
-        """🔥 NEW: PDF 내용 및 파일명 기반 검색 - 둘 다 검색"""
+        """🔥 NEW: Everything-like 초고속 파일 검색"""
 
-        results = []
+        # Everything-like 검색 사용 가능한 경우
+        if self.everything_search:
+            try:
+                # 초고속 SQLite 검색
+                search_results = self.everything_search.search(query, limit=20)
+
+                results = []
+                for doc in search_results:
+                    # 검색 결과를 기존 형식으로 변환
+                    result = {
+                        'filename': doc['filename'],
+                        'path': doc['path'],
+                        'date': doc.get('date', ''),
+                        'year': doc.get('year', ''),
+                        'category': doc.get('category', '기타'),
+                        'keywords': doc.get('keywords', ''),
+                        'score': 1.0,  # Everything 검색은 관련도 점수가 없으므로 기본값
+                        'source': 'everything_search'
+                    }
+
+                    # 메타데이터 추출 (2025-09-29 추가)
+                    if self.metadata_extractor:
+                        try:
+                            # PDF 파일인 경우 첫 페이지 텍스트 추출
+                            if doc['path'].endswith('.pdf'):
+                                with pdfplumber.open(doc['path']) as pdf:
+                                    text = pdf.pages[0].extract_text() if pdf.pages else ""
+
+                                # 메타데이터 추출
+                                metadata = self.metadata_extractor.extract_all(
+                                    text[:1000] if text else "",  # 첫 1000자만
+                                    doc['filename']
+                                )
+
+                                # 요약 정보를 결과에 추가
+                                result['metadata_info'] = metadata.get('summary', {})
+
+                                # 주요 필드 직접 추가 (호환성 유지)
+                                if metadata['summary'].get('date'):
+                                    result['extracted_date'] = metadata['summary']['date']
+                                if metadata['summary'].get('amount'):
+                                    result['extracted_amount'] = metadata['summary']['amount']
+                                if metadata['summary'].get('department'):
+                                    result['extracted_dept'] = metadata['summary']['department']
+                                if metadata['summary'].get('doc_type'):
+                                    result['extracted_type'] = metadata['summary']['doc_type']
+
+                        except Exception as e:
+                            # 메타데이터 추출 실패해도 검색은 계속
+                            if logger:
+                                logger.debug(f"Metadata extraction failed for {doc['filename']}: {e}")
+
+                    results.append(result)
+
+                if logger:
+                    logger.info(f"Everything search found {len(results)} documents for query: {query}")
+
+                return results
+
+            except Exception as e:
+                if logger:
+                    logger.error(f"Everything search failed: {e}, falling back to legacy search")
+                # 실패 시 기존 검색으로 폴백
+
+        # 기존 검색 로직 (Everything 사용 불가 시)
+        file_scores = {}  # filename -> result dict
         query_lower = query.lower()
         keywords = [kw.lower() for kw in query.split() if len(kw) > 1]
 
@@ -951,19 +1062,30 @@ class PerfectRAG:
                 matched_keywords = [query]
             # 파일명에 각 키워드가 포함되면 점수 부여
             else:
-                for kw in keywords:
-                    if kw in filename_lower:
-                        score += 20
-                        matched_keywords.append(kw)
+                # 핵심 키워드 찾기 (관련, 문서 제외)
+                important_keywords = [kw for kw in keywords if kw not in ['관련', '문서', '찾아', '내용']]
+
+                # 모든 중요 키워드가 파일명에 있는지 확인
+                if important_keywords:
+                    all_important_match = all(kw in filename_lower for kw in important_keywords)
+
+                    for kw in keywords:
+                        if kw in filename_lower:
+                            # 중요 키워드는 높은 점수
+                            if kw in important_keywords:
+                                score += 50 if all_important_match else 30
+                            else:
+                                score += 10  # 관련, 문서 등은 낮은 점수
+                            matched_keywords.append(kw)
 
             if score > 0:
-                results.append({
+                file_scores[pdf_path.name] = {
                     'path': pdf_path,
                     'filename': pdf_path.name,
                     'score': score,
                     'matched_keywords': matched_keywords,
                     'context': f"파일명 매칭: {pdf_path.name}"
-                })
+                }
 
         # 내용 검색 (느림, 일부만)
         for pdf_path in pdf_files[:50]:  # 상위 50개만
@@ -996,30 +1118,40 @@ class PerfectRAG:
 
                 if matched_keywords:
                     # 점수 계산: 매칭된 키워드 수 + 근접도
-                    score = len(matched_keywords) * 10
+                    content_score = len(matched_keywords) * 10
 
                     # 키워드가 가까이 있으면 보너스
                     for i in range(len(matched_keywords) - 1):
                         if abs(text_lower.find(matched_keywords[i]) - text_lower.find(matched_keywords[i+1])) < 200:
-                            score += 5
+                            content_score += 5
 
                     # 컨텍스트 추출 (키워드 주변 200자)
                     context = self._extract_context(text, matched_keywords[0], 200)
 
-                    results.append({
-                        'path': pdf_path,
-                        'filename': pdf_path.name,
-                        'score': score,
-                        'matched_keywords': matched_keywords,
-                        'context': context
-                    })
+                    # 기존 파일명 점수와 내용 점수 중 높은 것 사용
+                    if pdf_path.name in file_scores:
+                        # 이미 파일명으로 매칭된 경우, 더 높은 점수 유지
+                        if content_score > file_scores[pdf_path.name]['score']:
+                            file_scores[pdf_path.name]['score'] = content_score
+                            file_scores[pdf_path.name]['context'] = context
+                            file_scores[pdf_path.name]['matched_keywords'].extend(matched_keywords)
+                    else:
+                        # 새로운 파일 추가
+                        file_scores[pdf_path.name] = {
+                            'path': pdf_path,
+                            'filename': pdf_path.name,
+                            'score': content_score,
+                            'matched_keywords': matched_keywords,
+                            'context': context
+                        }
 
             except Exception as e:
                 if logger:
                     logger.warning(f"PDF 내용 검색 실패 {pdf_path.name}: {e}")
                 continue
 
-        # 점수 기준 정렬
+        # 딕셔너리를 리스트로 변환하고 점수 기준 정렬
+        results = list(file_scores.values())
         results.sort(key=lambda x: x['score'], reverse=True)
 
         if logger and results:
@@ -1538,6 +1670,14 @@ class PerfectRAG:
             category = doc.get('category', '기타')
             drafter = doc.get('drafter', '미상')
 
+            # 메타데이터 추출 정보 우선 사용 (2025-09-29 추가)
+            if 'extracted_date' in doc:
+                date = doc['extracted_date']
+            if 'extracted_type' in doc:
+                category = doc['extracted_type']
+            if 'extracted_dept' in doc:
+                drafter = doc['extracted_dept']
+
             # 날짜 표시 개선
             if date and date != '날짜 미상' and len(date) >= 10:
                 display_date = date[:10]  # YYYY-MM-DD
@@ -1547,7 +1687,14 @@ class PerfectRAG:
                 display_date = "날짜미상"
 
             response += f"**{i}. [{category}] {title}**\n"
-            response += f"    {display_date} |  {drafter}\n"
+            response += f"    {display_date} |  {drafter}"
+
+            # 추출된 금액 정보 추가 (2025-09-29)
+            if 'extracted_amount' in doc:
+                amount = doc['extracted_amount']
+                response += f" | 💰 {amount:,}원"
+
+            response += "\n"
 
             # 문서 요약 추가
             if 'path' in doc:
@@ -2145,37 +2292,74 @@ class PerfectRAG:
                         response = "❌ 관련 문서를 찾을 수 없습니다. 더 구체적으로 질문해주세요."
                     else:
                         # 상위 5개 문서 목록 표시
-                        response = f"**{query}** 검색 결과 ({len(search_results)}개 문서)\n\n"
+                        response = f"**{query}** 검색 결과\n\n"
 
-                        # 중복 제거 (파일명 기준)
+                        # 중복 제거하면서 정렬 순서 유지
                         seen = set()
                         unique_results = []
-                        for r in search_results:
+                        for r in sorted(search_results, key=lambda x: x.get('score', 0), reverse=True):
                             if r['filename'] not in seen:
                                 seen.add(r['filename'])
                                 unique_results.append(r)
 
-                        for i, result in enumerate(unique_results[:5], 1):
+                        response += f"총 {len(unique_results)}개 문서 발견\n\n"
+
+                        for i, result in enumerate(unique_results[:10], 1):
                             response += f"**{i}. {result['filename']}**\n"
-                            # 간단한 요약 추가
-                            if result.get('context'):
-                                response += f"   - {result['context'][:200]}...\n"
+
+                            # Everything search의 경우 메타데이터만 깔끔하게 표시
+                            if result.get('source') == 'everything_search':
+                                if result.get('date'):
+                                    response += f"   📅 날짜: {result['date']}\n"
+                                if result.get('category') and result['category'] != '기타':
+                                    response += f"   📁 카테고리: {result['category']}\n"
+                                if result.get('keywords'):
+                                    # 키워드를 깔끔하게 표시
+                                    keywords_list = result['keywords'].split()[:5]  # 최대 5개 키워드만
+                                    if keywords_list:
+                                        response += f"   🔑 키워드: {', '.join(keywords_list)}\n"
+                            # 기존 검색 결과
+                            elif result.get('context'):
+                                # OCR 텍스트인지 확인하고 깔끔하게 처리
+                                context = result['context']
+                                if '[OCR' in context or '페이지' in context:
+                                    # OCR 텍스트는 표시하지 않고 메타데이터만
+                                    response += f"   📄 스캔 문서 (OCR 필요)\n"
+                                else:
+                                    # 일반 텍스트는 깔끔하게 표시
+                                    clean_text = context.replace('\n', ' ').strip()[:150]
+                                    response += f"   📝 {clean_text}...\n"
                             response += "\n"
 
                         if len(unique_results) > 5:
                             response += f"\n... 외 {len(unique_results) - 5}개 문서\n"
                 else:
                     # 단일 문서 상세 답변
-                    # 1. 가장 적합한 문서 찾기
-                    doc_path = self.find_best_document(query)
+                    # Everything search를 사용하여 가장 관련된 문서 찾기
+                    if self.everything_search:
+                        search_results = self.everything_search.search(query, limit=1)
+                        if search_results:
+                            top_result = search_results[0]
+                            doc_path = Path(top_result['path'])
 
-                    if not doc_path:
-                        response = "❌ 관련 문서를 찾을 수 없습니다. 더 구체적으로 질문해주세요."
+                            if doc_path.exists():
+                                print(f"📄 선택된 문서: {doc_path.name}")
+                                # LLM을 사용하여 문서 내용 분석 및 답변 생성
+                                response = self._generate_llm_summary(doc_path, query)
+                            else:
+                                response = "❌ 관련 문서를 찾을 수 없습니다. 더 구체적으로 질문해주세요."
+                        else:
+                            response = "❌ 관련 문서를 찾을 수 없습니다. 더 구체적으로 질문해주세요."
                     else:
-                        print(f"📄 선택된 문서: {doc_path.name}")
+                        # 기존 방식 (Everything search 없을 때)
+                        doc_path = self.find_best_document(query)
 
-                        # LLM을 사용하여 문서 내용 분석 및 답변 생성
-                        response = self._generate_llm_summary(doc_path, query)
+                        if not doc_path:
+                            response = "❌ 관련 문서를 찾을 수 없습니다. 더 구체적으로 질문해주세요."
+                        else:
+                            print(f"📄 선택된 문서: {doc_path.name}")
+                            # LLM을 사용하여 문서 내용 분석 및 답변 생성
+                            response = self._generate_llm_summary(doc_path, query)
             else:
                 # Document 모드가 아닌 경우 (발생하지 않아야 함)
                 response = "❌ 문서 검색 중 오류가 발생했습니다."

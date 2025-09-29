@@ -119,6 +119,14 @@ except ImportError:
     if logger:
         logger.warning("CacheModule not available - using embedded cache management")
 
+try:
+    from statistics_module import StatisticsModule
+    STATISTICS_MODULE_AVAILABLE = True
+except ImportError:
+    STATISTICS_MODULE_AVAILABLE = False
+    if logger:
+        logger.warning("StatisticsModule not available - using embedded statistics")
+
 # 새로운 모듈 import (제거됨 - 백업 폴더로 이동)
 # from pdf_parallel_processor import PDFParallelProcessor
 # from error_handler import RAGErrorHandler, ErrorRecovery, DetailedError, safe_execute
@@ -334,6 +342,21 @@ class PerfectRAG:
                 if logger:
                     logger.error(f"❌ CacheModule 초기화 실패: {e}")
                 self.cache_module = None
+
+        # StatisticsModule 초기화 (2025-09-29 리팩토링)
+        self.statistics_module = None
+        if STATISTICS_MODULE_AVAILABLE:
+            try:
+                stats_config = {
+                    'docs_dir': str(self.docs_dir)
+                }
+                self.statistics_module = StatisticsModule(stats_config)
+                if logger:
+                    logger.info("✅ StatisticsModule 초기화 성공")
+            except Exception as e:
+                if logger:
+                    logger.error(f"❌ StatisticsModule 초기화 실패: {e}")
+                self.statistics_module = None
 
         # Everything-like 초고속 검색 시스템 초기화 (SearchModule이 없을 때만)
         self.everything_search = None
@@ -3594,7 +3617,11 @@ class PerfectRAG:
             return f" 요약 생성 실패: {e}"
     
     def _collect_statistics_data(self, query: str) -> Dict:
-        """통계 데이터 수집 및 구조화"""
+        """통계 데이터 수집 및 구조화 - StatisticsModule로 위임 (2025-09-29 리팩토링)"""
+        if self.statistics_module:
+            return self.statistics_module.collect_statistics_data(query, self.metadata_cache)
+
+        # 기존 로직 유지 (폴백)
         stats_data = {
             'title': '',
             'headers': [],
@@ -3701,12 +3728,33 @@ class PerfectRAG:
     def _generate_statistics_report(self, query: str) -> str:
         """전체 문서에 대한 통계 보고서 생성 - 구조화된 포맷"""
         try:
-            # formatter 사용 가능 시 구조화된 포맷 적용
+            # StatisticsModule 사용 (2025-09-29 리팩토링)
+            if self.statistics_module:
+                # 통계 타입 파악 및 생성
+                if "연도별" in query and "구매" in query:
+                    return self.statistics_module.generate_yearly_purchase_report(
+                        query, self.metadata_cache
+                    )
+                elif "기안자별" in query:
+                    return self.statistics_module.generate_drafter_report(
+                        query, self.metadata_cache
+                    )
+                elif "월별" in query and "수리" in query:
+                    return self.statistics_module.generate_monthly_repair_report(
+                        query, self.metadata_cache
+                    )
+                else:
+                    # 일반 통계 보고서
+                    return self.statistics_module.generate_general_statistics_report(
+                        query, self.metadata_cache
+                    )
+
+            # formatter 사용 가능 시 구조화된 포맷 적용 (폴백)
             if self.formatter:
                 stats_data = self._collect_statistics_data(query)
                 return self.formatter.format_statistics_response(stats_data, query)
-            
-            # 기존 방식 (formatter 없을 때)
+
+            # 기존 방식 (모듈/formatter 없을 때)
             # 통계 타입 파악
             if "연도별" in query and "구매" in query:
                 return self._generate_yearly_purchase_report(query)

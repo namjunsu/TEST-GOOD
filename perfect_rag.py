@@ -103,6 +103,14 @@ except ImportError:
     if logger:
         logger.warning("DocumentModule not available - using embedded document processing")
 
+try:
+    from llm_module import LLMModule
+    LLM_MODULE_AVAILABLE = True
+except ImportError:
+    LLM_MODULE_AVAILABLE = False
+    if logger:
+        logger.warning("LLMModule not available - using embedded LLM handling")
+
 # 새로운 모듈 import (제거됨 - 백업 폴더로 이동)
 # from pdf_parallel_processor import PDFParallelProcessor
 # from error_handler import RAGErrorHandler, ErrorRecovery, DetailedError, safe_execute
@@ -284,6 +292,22 @@ class PerfectRAG:
                     logger.error(f"❌ DocumentModule 초기화 실패: {e}")
                 self.document_module = None
 
+        # LLMModule 초기화 (2025-09-29 리팩토링)
+        self.llm_module = None
+        if LLM_MODULE_AVAILABLE:
+            try:
+                llm_config = {
+                    'model_path': self.model_path,
+                    'preload_llm': preload_llm  # 생성자 파라미터 전달
+                }
+                self.llm_module = LLMModule(llm_config)
+                if logger:
+                    logger.info("✅ LLMModule 초기화 성공")
+            except Exception as e:
+                if logger:
+                    logger.error(f"❌ LLMModule 초기화 실패: {e}")
+                self.llm_module = None
+
         # Everything-like 초고속 검색 시스템 초기화 (SearchModule이 없을 때만)
         self.everything_search = None
         if not self.search_module and EVERYTHING_SEARCH_AVAILABLE:
@@ -380,13 +404,20 @@ class PerfectRAG:
             self._preload_llm()
 
     def _preload_llm(self):
-        """LLM을 미리 로드 (싱글톤 사용)"""
+        """LLM을 미리 로드"""
+        # LLMModule을 사용하여 LLM 로드
+        if self.llm_module:
+            if self.llm_module.load_llm():
+                self.llm = self.llm_module.llm
+                return
+
+        # LLMModule이 없으면 기존 방식 사용
         if self.llm is None:
             if not LLMSingleton.is_loaded():
                 print(" LLM 모델 최초 로딩 중...")
             else:
                 print("️ LLM 모델 재사용")
-            
+
             try:
                 start = time.time()
                 self.llm = LLMSingleton.get_instance(model_path=self.model_path)
@@ -2974,12 +3005,31 @@ class PerfectRAG:
         
         return intent
     
-    def _generate_conversational_response(self, context: str, query: str, intent: Dict[str, Any], 
+    def _generate_conversational_response(self, context: str, query: str, intent: Dict[str, Any],
                                          pdf_info: Dict[str, Any] = None) -> str:
-        """자연스럽고 대화형 응답 생성 (ChatGPT/Claude 스타일)"""
-        
+        """자연스럽고 대화형 응답 생성"""
+
+        # LLMModule을 사용하여 응답 생성
+        if self.llm_module:
+            try:
+                response = self.llm_module.generate_conversational_response(
+                    context=context[:3000],  # 컨텍스트 제한
+                    query=query,
+                    intent=intent
+                )
+
+                # 추가 컨텍스트나 추천 사항 자연스럽게 추가
+                if intent.get('wants_recommendation') and '추천' not in response:
+                    response += "\n\n참고로, 이와 관련해서 추가로 검토하시면 좋을 사항들도 있습니다. 필요하시면 말씀해 주세요."
+
+                return response
+            except Exception as e:
+                logger.error(f"LLMModule 응답 생성 오류: {e}")
+                return self._generate_fallback_response(context, query, intent)
+
+        # LLMModule이 없으면 기존 방식 사용
         # LLM에게 자연스러운 대화형 응답을 요청하는 프롬프트
-        system_prompt = """당신은 친절하고 유능한 AI 어시스턴트입니다. 
+        system_prompt = """당신은 친절하고 유능한 AI 어시스턴트입니다.
 사용자의 질문 의도를 정확히 파악하여 도움이 되는 답변을 제공합니다.
 
 중요 원칙:

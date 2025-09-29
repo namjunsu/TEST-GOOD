@@ -841,67 +841,6 @@ class PerfectRAG:
     # @RAGErrorHandler.retry_with_backoff(max_retries=3, backoff_factor=1.5)
     # @RAGErrorHandler.handle_pdf_extraction_error
 
-    def _optimize_context(self, text: str, query: str, max_length: int = 3000) -> str:
-        """컨텍스트 최적화 - 가장 관련성 높은 부분만 추출"""
-        # DocumentModule을 사용하여 컨텍스트 최적화
-        if self.document_module:
-            return self.document_module.optimize_context(text, query, max_length)
-
-        # DocumentModule이 없으면 기존 방법 사용
-        if not text or len(text) <= max_length:
-            return text
-
-        # 쿼리 키워드 추출
-        keywords = re.findall(r'[가-힣]+|[A-Za-z]+|\d+', query.lower())
-        keywords = [k for k in keywords if len(k) >= 2]
-
-        # 문장 단위로 분리
-        sentences = re.split(r'[.!?\n]+', text)
-
-        # 각 문장의 관련성 점수 계산
-        scored_sentences = []
-        for i, sentence in enumerate(sentences):
-            if not sentence.strip():
-                continue
-
-            score = 0
-            sentence_lower = sentence.lower()
-
-            # 키워드 매칭 점수
-            for keyword in keywords:
-                if keyword in sentence_lower:
-                    score += 10
-
-            # 중요 패턴 보너스
-            if re.search(r'\d+[,\d]*\s*원', sentence):  # 금액
-                score += 5
-            if re.search(r'\d{4}[-년]', sentence):  # 연도
-                score += 3
-            if re.search(r'총|합계|전체', sentence):  # 요약 정보
-                score += 3
-
-            # 위치 점수 (문서 앞부분 선호)
-            position_score = max(0, 5 - i * 0.1)
-            score += position_score
-
-            scored_sentences.append((sentence, score))
-
-        # 점수 순으로 정렬
-        scored_sentences.sort(key=lambda x: x[1], reverse=True)
-
-        # 상위 문장들로 컨텍스트 구성
-        result = []
-        current_length = 0
-
-        for sentence, score in scored_sentences:
-            if current_length + len(sentence) > max_length:
-                break
-            result.append(sentence)
-            current_length += len(sentence)
-
-        # 원래 순서대로 재정렬
-        result_text = '. '.join(result)
-        return result_text if result_text else text[:max_length]
 
     def _extract_pdf_info_with_retry(self, pdf_path: Path) -> Dict:
         """PDF 정보 추출 (DocumentModule 사용)"""
@@ -919,7 +858,16 @@ class PerfectRAG:
         return self._extract_pdf_info(pdf_path)
     
     def _extract_pdf_info(self, pdf_path: Path) -> Dict:
-        """기존 PDF 추출 방식 (폴백용) - 캐싱 적용"""
+        """PDF 정보 추출 (StatisticsModule 위임 또는 폴백용) - 캐싱 적용"""
+        # StatisticsModule이 있으면 위임
+        if self.statistics_module:
+            try:
+                return self.statistics_module._extract_pdf_info(pdf_path)
+            except Exception as e:
+                if logger:
+                    logger.error(f"StatisticsModule PDF 처리 오류: {e}, 폴백 사용")
+
+        # StatisticsModule이 없거나 실패한 경우 기존 방법 사용
         # 캐시 키 생성 (파일 경로 기반)
         cache_key = str(pdf_path)
 
@@ -3755,13 +3703,9 @@ class PerfectRAG:
                 return self.formatter.format_statistics_response(stats_data, query)
 
             # 기존 방식 (모듈/formatter 없을 때)
-            # 통계 타입 파악
-            if "연도별" in query and "구매" in query:
-                return self._generate_yearly_purchase_report(query)
-            if "기안자별" in query:
-                return self._generate_drafter_report(query)
-            if "월별" in query and "수리" in query:
-                return self._generate_monthly_repair_report(query)
+            # 통계 타입 파악 - 이제 statistics_module에서 처리
+            if ("연도별" in query and "구매" in query) or "기안자별" in query or ("월별" in query and "수리" in query):
+                return "⚠️ 통계 모듈이 필요합니다. statistics_module을 로드해주세요."
             
             # 기본: 특정 연도 전체 통계
             year_match = re.search(r'(20\d{2})', query)
@@ -3907,281 +3851,11 @@ class PerfectRAG:
         except Exception as e:
             return f" 통계 보고서 생성 실패: {e}"
     
-    def _generate_yearly_purchase_report(self, query: str) -> str:
-        """연도별 구매 현황 보고서"""
-        try:
-            yearly_stats = {}
-            
-            for filename, metadata in self.metadata_cache.items():
-                if '구매' not in filename:
-                    continue
-                    
-                year = metadata['year']
-                if year not in yearly_stats:
-                    yearly_stats[year] = {'count': 0, 'amount': 0, 'items': []}
-                
-                pdf_path = self.docs_dir / filename
-                info = self._extract_pdf_info(pdf_path)
-                
-                yearly_stats[year]['count'] += 1
-                yearly_stats[year]['items'].append({
-                    'filename': filename,
-                    'date': info.get('날짜', ''),
-                    'drafter': info.get('기안자', ''),
-                    'amount': info.get('금액', ''),
-                    'title': info.get('제목', filename.replace('.pdf', ''))
-                })
-                
-                # 금액 합계
-                if info.get('금액'):
-                    amount_num = re.search(r'(\d+(?:,\d+)*)', info['금액'])
-                    if amount_num:
-                        try:
-                            yearly_stats[year]['amount'] += int(amount_num.group(1).replace(',', ''))
-                        except (ValueError, AttributeError):
-                            pass  # 금액 변환 실패시 무시
-            
-            # 보고서 생성
-            report = []
-            report.append(" 연도별 구매 현황 보고서 (2021-2025)")
-            report.append("=" * 50)
-            report.append("")
-            
-            report.append("###  연도별 구매 통계")
-            report.append("")
-            
-            total_count = 0
-            total_amount = 0
-            
-            for year in sorted(yearly_stats.keys()):
-                stats = yearly_stats[year]
-                total_count += stats['count']
-                total_amount += stats['amount']
-                
-                amount_str = f"{stats['amount']:,}원" if stats['amount'] > 0 else "금액미상"
-                report.append(f"• **{year}년**: {stats['count']}건 - {amount_str}")
-            
-            report.append("")
-            report.append(f"** 총계: {total_count}건 - {total_amount:,}원**")
-            report.append("")
-            
-            # 연도별 상세 내역
-            report.append("###  연도별 상세 내역")
-            for year in sorted(yearly_stats.keys()):
-                stats = yearly_stats[year]
-                if stats['items']:
-                    report.append(f"\n▶ {year}년 ({stats['count']}건)")
-                    for item in stats['items']:
-                        date = item['date'][:10] if item['date'] else '날짜없음'
-                        title = item['title'][:35] + "..." if len(item['title']) > 35 else item['title']
-                        amount = f" - {item['amount']}" if item['amount'] else ""
-                        report.append(f"  • [{date}] {title}{amount}")
-            
-            return "\n".join(report)
-            
-        except Exception as e:
-            return f" 연도별 구매 현황 생성 실패: {e}"
+    # REMOVED: _generate_yearly_purchase_report method - now handled by statistics_module
     
-    def _generate_drafter_report(self, query: str) -> str:
-        """기안자별 문서 현황 보고서"""
-        try:
-            drafter_stats = {}
-            
-            for filename, metadata in self.metadata_cache.items():
-                pdf_path = self.docs_dir / filename
-                info = self._extract_pdf_info(pdf_path)
-                
-                drafter = info.get('기안자', '미상')
-                if drafter not in drafter_stats:
-                    drafter_stats[drafter] = {
-                        'count': 0,
-                        'categories': {'구매': 0, '수리': 0, '폐기': 0, '기타': 0},
-                        'years': {},
-                        'items': []
-                    }
-                
-                # 카테고리 분류
-                category = '기타'
-                if '구매' in filename:
-                    category = '구매'
-                if '수리' in filename or '보수' in filename:
-                    category = '수리'
-                if '폐기' in filename:
-                    category = '폐기'
-                
-                drafter_stats[drafter]['count'] += 1
-                drafter_stats[drafter]['categories'][category] += 1
-                
-                # 연도별 집계
-                year = metadata['year']
-                if year not in drafter_stats[drafter]['years']:
-                    drafter_stats[drafter]['years'][year] = 0
-                drafter_stats[drafter]['years'][year] += 1
-                
-                drafter_stats[drafter]['items'].append({
-                    'filename': filename,
-                    'date': info.get('날짜', ''),
-                    'category': category,
-                    'title': info.get('제목', filename.replace('.pdf', ''))
-                })
-            
-            # 보고서 생성
-            report = []
-            report.append(" 기안자별 문서 작성 현황")
-            report.append("=" * 50)
-            report.append("")
-            
-            report.append("###  기안자별 전체 통계")
-            report.append("")
-            
-            for drafter in sorted(drafter_stats.keys()):
-                if drafter and drafter != '미상':
-                    stats = drafter_stats[drafter]
-                    cat_str = f"구매 {stats['categories']['구매']}건, 수리 {stats['categories']['수리']}건"
-                    if stats['categories']['폐기'] > 0:
-                        cat_str += f", 폐기 {stats['categories']['폐기']}건"
-                    if stats['categories']['기타'] > 0:
-                        cat_str += f", 기타 {stats['categories']['기타']}건"
-                    report.append(f"• **{drafter}**: 총 {stats['count']}건 ({cat_str})")
-            
-            report.append("")
-            
-            # 기안자별 연도 분포
-            report.append("###  기안자별 연도 분포")
-            for drafter in sorted(drafter_stats.keys()):
-                if drafter and drafter != '미상':
-                    stats = drafter_stats[drafter]
-                    year_str = ", ".join([f"{year}년({count}건)" for year, count in sorted(stats['years'].items())])
-                    report.append(f"• {drafter}: {year_str}")
-            report.append("")
-            
-            # 기안자별 모든 문서
-            report.append("###  기안자별 담당 문서 (전체)")
-            report.append("* 실무 담당자에게 직접 문의 가능*")
-            report.append("")
-            
-            for drafter in sorted(drafter_stats.keys()):
-                if drafter and drafter != '미상':
-                    stats = drafter_stats[drafter]
-                    report.append(f"####  **{drafter}** ({stats['count']}건)")
-                    
-                    # 연도별로 그룹화
-                    docs_by_year = {}
-                    for item in sorted(stats['items'], key=lambda x: x['date'], reverse=True):
-                        year = item['date'][:4] if item['date'] else '연도없음'
-                        if year not in docs_by_year:
-                            docs_by_year[year] = []
-                        docs_by_year[year].append(item)
-                    
-                    # 연도별로 표시
-                    for year in sorted(docs_by_year.keys(), reverse=True):
-                        report.append(f"\n**{year}년:**")
-                        for item in docs_by_year[year]:
-                            date = item['date'][5:10] if item['date'] and len(item['date']) >= 10 else '날짜없음'
-                            cat_emoji = {
-                                '구매': '',
-                                '수리': '', 
-                                '폐기': '️',
-                                '기타': ''
-                            }.get(item['category'], '')
-                            
-                            # 전체 제목 표시 (축약 없이)
-                            title = item['title']
-                            report.append(f"  • [{date}] {cat_emoji} {title}")
-                    report.append("")
-            
-            return "\n".join(report)
-            
-        except Exception as e:
-            return f" 기안자별 현황 생성 실패: {e}"
+    # REMOVED: _generate_drafter_report method - now handled by statistics_module
     
-    def _generate_monthly_repair_report(self, query: str) -> str:
-        """월별 수리 내역 보고서"""
-        try:
-            monthly_stats = {}
-            total_amount = 0
-            
-            for filename, metadata in self.metadata_cache.items():
-                if '수리' not in filename and '보수' not in filename:
-                    continue
-                
-                pdf_path = self.docs_dir / filename
-                info = self._extract_pdf_info(pdf_path)
-                
-                # 월 추출
-                date = info.get('날짜', '')
-                if date:
-                    month_match = re.search(r'-(\d{2})-', date)
-                    if month_match:
-                        month = int(month_match.group(1))
-                        year = metadata['year']
-                        month_key = f"{year}-{month:02d}"
-                        
-                        if month_key not in monthly_stats:
-                            monthly_stats[month_key] = {'count': 0, 'amount': 0, 'items': []}
-                        
-                        monthly_stats[month_key]['count'] += 1
-                        monthly_stats[month_key]['items'].append({
-                            'filename': filename,
-                            'date': date,
-                            'drafter': info.get('기안자', ''),
-                            'amount': info.get('금액', ''),
-                            'title': info.get('제목', filename.replace('.pdf', ''))
-                        })
-                        
-                        # 금액 합계
-                        if info.get('금액'):
-                            amount_num = re.search(r'(\d+(?:,\d+)*)', info['금액'])
-                            if amount_num:
-                                try:
-                                    amount = int(amount_num.group(1).replace(',', ''))
-                                    monthly_stats[month_key]['amount'] += amount
-                                    total_amount += amount
-                                except (ValueError, KeyError):
-                                    pass  # 금액 처리 실패시 무시
-            
-            # 보고서 생성
-            report = []
-            report.append(" 월별 수리 내역 및 비용 분석")
-            report.append("=" * 50)
-            report.append("")
-            
-            report.append("###  전체 요약")
-            total_count = sum(stats['count'] for stats in monthly_stats.values())
-            report.append(f"• 총 수리 건수: {total_count}건")
-            if total_amount > 0:
-                report.append(f"• 총 수리 비용: {total_amount:,}원")
-                report.append(f"• 평균 수리 비용: {total_amount // total_count:,}원")
-            report.append("")
-            
-            report.append("###  월별 수리 현황")
-            report.append("")
-            
-            for month_key in sorted(monthly_stats.keys()):
-                stats = monthly_stats[month_key]
-                year, month = month_key.split('-')
-                amount_str = f"{stats['amount']:,}원" if stats['amount'] > 0 else "금액미상"
-                report.append(f"• **{year}년 {int(month)}월**: {stats['count']}건 - {amount_str}")
-            
-            report.append("")
-            
-            # 월별 상세 내역
-            report.append("###  월별 상세 수리 내역")
-            for month_key in sorted(monthly_stats.keys()):
-                stats = monthly_stats[month_key]
-                year, month = month_key.split('-')
-                report.append(f"\n▶ {year}년 {int(month)}월 ({stats['count']}건)")
-                
-                for item in stats['items']:
-                    date = item['date'][:10] if item['date'] else '날짜없음'
-                    title = item['title'][:35] + "..." if len(item['title']) > 35 else item['title']
-                    amount = f" - {item['amount']}" if item['amount'] else ""
-                    report.append(f"  • [{date}] {title}{amount}")
-            
-            return "\n".join(report)
-            
-        except Exception as e:
-            return f" 월별 수리 내역 생성 실패: {e}"
+    # REMOVED: _generate_monthly_repair_report method - now handled by statistics_module
     
     def _format_conditions(self, conditions: dict) -> str:
         """검색 조건을 읽기 쉽게 포맷팅"""

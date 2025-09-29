@@ -86,6 +86,15 @@ except ImportError:
     if logger:
         logger.warning("MetadataExtractor not available, metadata extraction disabled")
 
+# 검색 모듈 추가 (2025-09-29 리팩토링)
+try:
+    from search_module import SearchModule
+    SEARCH_MODULE_AVAILABLE = True
+except ImportError:
+    SEARCH_MODULE_AVAILABLE = False
+    if logger:
+        logger.warning("SearchModule not available - using embedded search")
+
 # 새로운 모듈 import (제거됨 - 백업 폴더로 이동)
 # from pdf_parallel_processor import PDFParallelProcessor
 # from error_handler import RAGErrorHandler, ErrorRecovery, DetailedError, safe_execute
@@ -234,9 +243,21 @@ class PerfectRAG:
         self.error_handler = None
         self.error_recovery = None
 
-        # Everything-like 초고속 검색 시스템 초기화
+        # SearchModule 초기화 (2025-09-29 리팩토링)
+        self.search_module = None
+        if SEARCH_MODULE_AVAILABLE:
+            try:
+                self.search_module = SearchModule(str(self.docs_dir))
+                if logger:
+                    logger.info("✅ SearchModule 초기화 성공")
+            except Exception as e:
+                if logger:
+                    logger.error(f"❌ SearchModule 초기화 실패: {e}")
+                self.search_module = None
+
+        # Everything-like 초고속 검색 시스템 초기화 (SearchModule이 없을 때만)
         self.everything_search = None
-        if EVERYTHING_SEARCH_AVAILABLE:
+        if not self.search_module and EVERYTHING_SEARCH_AVAILABLE:
             try:
                 self.everything_search = EverythingLikeSearch()
                 # 초기 인덱싱 - 한 번만 실행
@@ -975,7 +996,18 @@ class PerfectRAG:
     def _search_by_content(self, query: str) -> List[Dict[str, Any]]:
         """🔥 NEW: Everything-like 초고속 파일 검색"""
 
-        # Everything-like 검색 사용 가능한 경우
+        # SearchModule 사용 (2025-09-29 리팩토링)
+        if self.search_module:
+            try:
+                results = self.search_module.search_by_content(query, top_k=20)
+                if logger:
+                    logger.info(f"SearchModule found {len(results)} documents for query: {query}")
+                return results
+            except Exception as e:
+                if logger:
+                    logger.error(f"SearchModule failed: {e}, falling back to embedded search")
+
+        # Everything-like 검색 사용 가능한 경우 (폴백)
         if self.everything_search:
             try:
                 # 초고속 SQLite 검색

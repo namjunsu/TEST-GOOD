@@ -38,6 +38,10 @@ rag-indexes/
 backup/
 archive/
 old_files/
+old_backups/
+backup_*/
+*_backup_*.py
+unused_files/
 
 # IDE
 .vscode/
@@ -64,10 +68,10 @@ tmp/
 *.sqlite
 *.sqlite3
 
-# Test files
-test_*.py
-*_test.py
-quick_*.py
+# Test files (uncomment if you want to exclude tests from git)
+# test_*.py
+# *_test.py
+# quick_*.py
 
 # Documents (large files)
 docs/**/*.pdf

@@ -1663,12 +1663,8 @@ def main():
                 try:
                     # 질문 자동 분석 - 다중 문서가 필요한지 판단
                     query_lower = final_query.lower()
-                    needs_multi = any(keyword in query_lower for keyword in [
-                        "총액", "합계", "모든", "전체", "비교", "차이",
-                        "유사", "비슷한", "관련", "연도별", "월별",
-                        "추이", "현황", "통계", "리스트", "목록",
-                        "문서", "찾아", "검색", "어떤", "무엇", "뭐"
-                    ])
+                    # MultiDocumentSearch는 에러가 있으므로 사용하지 않음
+                    needs_multi = False
 
                     if needs_multi:
                         # 다중 문서 모드 (자동 선택)

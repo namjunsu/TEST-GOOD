@@ -30,7 +30,8 @@ class EverythingLikeSearch:
 
     def setup_database(self):
         """SQLite DB 설정 - 초고속 검색을 위해"""
-        self.conn = sqlite3.connect(str(self.db_path))
+        # check_same_thread=False로 멀티스레드 지원
+        self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
         cursor = self.conn.cursor()
 
         # 파일 인덱스 테이블

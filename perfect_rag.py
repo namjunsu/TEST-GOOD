@@ -111,6 +111,14 @@ except ImportError:
     if logger:
         logger.warning("LLMModule not available - using embedded LLM handling")
 
+try:
+    from cache_module import CacheModule
+    CACHE_MODULE_AVAILABLE = True
+except ImportError:
+    CACHE_MODULE_AVAILABLE = False
+    if logger:
+        logger.warning("CacheModule not available - using embedded cache management")
+
 # 새로운 모듈 import (제거됨 - 백업 폴더로 이동)
 # from pdf_parallel_processor import PDFParallelProcessor
 # from error_handler import RAGErrorHandler, ErrorRecovery, DetailedError, safe_execute
@@ -307,6 +315,25 @@ class PerfectRAG:
                 if logger:
                     logger.error(f"❌ LLMModule 초기화 실패: {e}")
                 self.llm_module = None
+
+        # CacheModule 초기화 (2025-09-29 리팩토링)
+        self.cache_module = None
+        if CACHE_MODULE_AVAILABLE:
+            try:
+                cache_config = {
+                    'max_cache_size': self.MAX_CACHE_SIZE,
+                    'max_metadata_cache': self.MAX_METADATA_CACHE,
+                    'max_pdf_cache': self.MAX_PDF_CACHE,
+                    'cache_ttl': self.CACHE_TTL,
+                    'cache_dir': str(self.config_dir / 'cache')
+                }
+                self.cache_module = CacheModule(cache_config)
+                if logger:
+                    logger.info("✅ CacheModule 초기화 성공")
+            except Exception as e:
+                if logger:
+                    logger.error(f"❌ CacheModule 초기화 실패: {e}")
+                self.cache_module = None
 
         # Everything-like 초고속 검색 시스템 초기화 (SearchModule이 없을 때만)
         self.everything_search = None
@@ -527,6 +554,12 @@ class PerfectRAG:
 
     def _manage_cache(self, cache_dict, key, value):
         """캐시 크기 관리 - LRU 방식"""
+        # CacheModule을 사용하여 캐시 관리
+        if self.cache_module:
+            self.cache_module.manage_cache(cache_dict, key, value)
+            return
+
+        # CacheModule이 없으면 기존 방식 사용
         if key in cache_dict:
             # 기존 항목을 끝으로 이동 (가장 최근 사용)
             cache_dict.move_to_end(key)
@@ -539,6 +572,11 @@ class PerfectRAG:
     
     def _get_from_cache(self, cache_dict, key):
         """캐시에서 가져오기 (TTL 체크 및 타임스탬프 갱신)"""
+        # CacheModule을 사용하여 캐시 조회
+        if self.cache_module:
+            return self.cache_module.get_from_cache(cache_dict, key)
+
+        # CacheModule이 없으면 기존 방식 사용
         if key in cache_dict:
             cache_value = cache_dict[key]
             current_time = time.time()
@@ -2283,6 +2321,12 @@ class PerfectRAG:
     
     def clear_cache(self):
         """캐시 초기화"""
+        # CacheModule을 사용하여 캐시 초기화
+        if self.cache_module:
+            self.cache_module.clear_all_cache()
+            return
+
+        # CacheModule이 없으면 기존 방식 사용
         self.answer_cache.clear()
         self.documents_cache.clear()
         self.metadata_cache.clear()
@@ -2290,6 +2334,11 @@ class PerfectRAG:
     
     def get_cache_stats(self) -> Dict:
         """캐시 상태 정보 반환"""
+        # CacheModule을 사용하여 캐시 통계 반환
+        if self.cache_module:
+            return self.cache_module.get_cache_stats()
+
+        # CacheModule이 없으면 기존 방식 사용
         response_cache_size = len(self.response_cache) if hasattr(self, 'response_cache') else 0
         total_size = len(self.answer_cache) + len(self.documents_cache) + len(self.metadata_cache) + response_cache_size
         return {

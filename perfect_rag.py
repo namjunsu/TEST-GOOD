@@ -22,7 +22,6 @@ import sys
 import os
 from functools import lru_cache
 import hashlib
-import time
 from contextlib import nullcontext
 
 # 로깅 시스템 추가
@@ -135,10 +134,6 @@ except ImportError:
     if logger:
         logger.warning("IntentModule not available - using embedded intent analysis")
 
-
-
-import logging
-from typing import Optional, Dict, Any, List, Tuple
 import traceback
 
 # 로깅 설정 - 이미 상단에서 logger가 설정됨
@@ -153,8 +148,6 @@ if logger is None:
         ]
     )
     logger = logging.getLogger(__name__)
-
-
 class RAGException(Exception):
     """RAG 시스템 기본 예외"""
     pass
@@ -174,8 +167,6 @@ class LLMException(RAGException):
 class CacheException(RAGException):
     """캐시 관련 오류"""
     pass
-
-
 def handle_errors(default_return=None):
     """에러 처리 데코레이터"""
     def decorator(func):
@@ -274,31 +265,6 @@ class PerfectRAG:
         self.search_mode = 'document'  # 검색 모드는 항상 document
         self.answer_cache = OrderedDict()  # 답변 캐시 (LRU)
         self.pdf_text_cache = OrderedDict()  # PDF 텍스트 추출 캐시 (성능 최적화)
-
-    def _manage_cache_size(self, cache_dict, max_size, cache_name="cache"):
-        """캐시 크기 관리 - LRU 방식으로 오래된 항목 제거"""
-        if len(cache_dict) > max_size:
-            # 가장 오래된 항목들 제거 (FIFO)
-            items_to_remove = len(cache_dict) - max_size
-            for _ in range(items_to_remove):
-                removed = cache_dict.popitem(last=False)  # 가장 오래된 항목 제거
-            if logger:
-                logger.debug(f"캐시 정리: {cache_name}에서 {items_to_remove}개 항목 제거")
-
-    def _add_to_cache(self, cache_dict, key, value, max_size):
-        """캐시에 항목 추가 with 크기 제한"""
-        # 기존 항목이면 삭제 후 다시 추가 (LRU를 위해)
-        if key in cache_dict:
-            del cache_dict[key]
-
-        # 새 항목 추가
-        cache_dict[key] = {
-            'data': value,
-            'timestamp': time.time()
-        }
-
-        # 크기 제한 확인
-        self._manage_cache_size(cache_dict, max_size, str(type(cache_dict)))
 
         # PDF 처리 - 기존 방식 사용
         self.pdf_processor = None
@@ -412,7 +378,7 @@ class PerfectRAG:
                 if logger:
                     logger.error(f"Failed to initialize Everything-like search: {e}")
                 self.everything_search = None
-        
+
         # 응답 포맷터 초기화
         self.formatter = ResponseFormatter() if ResponseFormatter else None
 
@@ -428,10 +394,6 @@ class PerfectRAG:
                     logger.error(f"❌ MetadataExtractor 초기화 실패: {e}")
                 self.metadata_extractor = None
 
-        # LLM 개선 모듈 초기화
-
-        # 자산 데이터 제거 (기안서 중심 시스템으로 전환)
-
         # 메타데이터 DB 초기화
         try:
             self.metadata_db = MetadataDB(db_path=str(self.config_dir / "metadata.db"))
@@ -439,7 +401,7 @@ class PerfectRAG:
         except Exception as e:
             logger.error(f"️ MetadataDB 초기화 실패: {e}")
             self.metadata_db = None
-        
+
         # 모든 PDF와 TXT 파일 목록 (새로운 폴더 구조 포함)
         self.pdf_files = []
         self.txt_files = []
@@ -454,11 +416,6 @@ class PerfectRAG:
             if year_folder.exists():
                 self.pdf_files.extend(list(year_folder.glob('*.pdf')))
                 self.txt_files.extend(list(year_folder.glob('*.txt')))
-
-        # 카테고리별 폴더는 심볼릭 링크만 있으므로 건너뛰기
-        # 실제 파일은 모두 year_* 폴더에 있음
-        # category_folders = ['category_purchase', 'category_repair', 'category_review',
-        #                   'category_disposal', 'category_consumables']
 
         # 특별 폴더 (자산 관련 폴더 제거)
         special_folders = ['recent', 'archive']
@@ -476,8 +433,6 @@ class PerfectRAG:
         if logger:
             logger.info(f"{len(self.pdf_files)}개 PDF, {len(self.txt_files)}개 TXT 문서 발견")
 
-        # 자산 데이터 로드 (metadata_db 초기화 포함)
-
         # 문서 메타데이터 사전 추출 (빠른 검색용)
         self._build_metadata_cache()
 
@@ -487,6 +442,28 @@ class PerfectRAG:
         # LLM 사전 로드 옵션
         if preload_llm:
             self._preload_llm()
+
+    def _manage_cache_size(self, cache_dict, max_size, cache_name="cache"):
+        """캐시 크기 관리 - LRU 방식으로 오래된 항목 제거"""
+        if len(cache_dict) > max_size:
+            # 가장 오래된 항목들 제거 (FIFO)
+            items_to_remove = len(cache_dict) - max_size
+            for _ in range(items_to_remove):
+                removed = cache_dict.popitem(last=False)  # 가장 오래된 항목 제거
+            if logger:
+                logger.debug(f"캐시 정리: {cache_name}에서 {items_to_remove}개 항목 제거")
+
+    def _add_to_cache(self, cache_dict, key, value, max_size):
+        """캐시에 항목 추가 with 크기 제한"""
+        if key in cache_dict:
+            del cache_dict[key]
+
+        cache_dict[key] = {
+            'data': value,
+            'timestamp': time.time()
+        }
+
+        self._manage_cache_size(cache_dict, max_size, str(type(cache_dict)))
 
     def _preload_llm(self):
         """LLM을 미리 로드"""
@@ -646,7 +623,8 @@ class PerfectRAG:
             with ThreadPoolExecutor(max_workers=optimal_workers) as executor:
                 for i in range(0, len(pdf_paths), batch_size):
                     batch = pdf_paths[i:i + batch_size]
-                    print(f" 배치 {i//batch_size + 1}/{(len(pdf_paths)-1)//batch_size + 1} 처리 중 ({len(batch)}개 파일)")
+                    if logger:
+                        logger.info(f"배치 {i//batch_size + 1}/{(len(pdf_paths)-1)//batch_size + 1} 처리 중 ({len(batch)}개 파일)")
 
                     # 각 PDF를 병렬로 처리
                     futures = {executor.submit(self._extract_pdf_info, pdf): pdf for pdf in batch}
@@ -657,7 +635,8 @@ class PerfectRAG:
                             result = future.result(timeout=30)  # 30초 타임아웃
                             all_results[str(pdf_path)] = result
                         except PDFExtractionException as e:
-                            print(f"   {pdf_path.name} 처리 실패: {str(e)[:50]}")
+                            if logger:
+                                logger.warning(f"{pdf_path.name} 처리 실패: {str(e)[:50]}")
                             all_results[str(pdf_path)] = {'error': str(e)}
 
                     # 메모리 최적화
@@ -667,7 +646,6 @@ class PerfectRAG:
             # 기존 pdf_processor 사용
             for i in range(0, len(pdf_paths), batch_size):
                 batch = pdf_paths[i:i + batch_size]
-                print(f"배치 {i//batch_size + 1} 처리 중 ({len(batch)}개 파일)")
 
                 batch_results = self.pdf_processor.process_multiple_pdfs(batch)
                 all_results.update(batch_results)
@@ -838,8 +816,6 @@ class PerfectRAG:
     # 데코레이터 제거 (error_handler 백업 폴더로 이동)
     # @RAGErrorHandler.retry_with_backoff(max_retries=3, backoff_factor=1.5)
     # @RAGErrorHandler.handle_pdf_extraction_error
-
-
     def _extract_pdf_info_with_retry(self, pdf_path: Path) -> Dict:
         """PDF 정보 추출 (DocumentModule 사용)"""
         # DocumentModule을 사용하여 PDF 처리
@@ -1416,8 +1392,6 @@ class PerfectRAG:
         self.documents_cache[cache_key] = result
         
         return result
-
-
     def _remove_duplicate_documents(self, documents: list) -> list:
         """중복 문서 제거 (파일명 기준)"""
         seen = set()
@@ -1498,8 +1472,6 @@ class PerfectRAG:
         response += " **특정 문서를 선택하여 자세한 내용을 확인하세요.**"
 
         return response
-
-
     def answer_from_specific_document(self, query: str, filename: str) -> str:
         """특정 문서에 대해서만 답변 생성 (문서 전용 모드) - 초상세 버전
         
@@ -1669,13 +1641,9 @@ class PerfectRAG:
         for pattern in dangerous_patterns:
             if pattern in query.upper():
                 raise ValueError(f"허용되지 않은 패턴: {pattern}")
-
-
     def __del__(self):
         """소멸자 - 리소스 정리"""
         self.cleanup_executor()
-
-
     def _batch_process_documents(self, documents, process_func, batch_size=10):
         """배치 문서 처리 - 메모리 효율성"""
         total = len(documents)
@@ -1780,8 +1748,6 @@ class PerfectRAG:
  분석 대상 문서: {filename}
 
 이 문서만을 분석하여 아래 형식으로 답변하세요.
-
-
  [문서 제목]
 
  **기본 정보**
@@ -1872,7 +1838,6 @@ class PerfectRAG:
         hash_key = hashlib.md5(cache_str.encode('utf-8')).hexdigest()
 
         # 디버깅 (필요시 활성화)
-        # print(f"Cache: '{query}' → '{' '.join(cleaned_words)}' → {hash_key[:8]}...")
 
         return hash_key
 
@@ -1901,7 +1866,6 @@ class PerfectRAG:
         
         # 캐시 저장
         self.answer_cache[cache_key] = (response, time.time())
-        print(f"⏱️ 답변 생성: {generation_time:.1f}초 (캐시 저장됨)")
         
         # 캐시 크기 제한 (LRU 방식)
         if len(self.answer_cache) > self.max_cache_size:
@@ -1925,7 +1889,6 @@ class PerfectRAG:
         self.answer_cache.clear()
         self.documents_cache.clear()
         self.metadata_cache.clear()
-        print("️ 모든 캐시가 초기화되었습니다.")
     
     def get_cache_stats(self) -> Dict:
         """캐시 상태 정보 반환"""
@@ -1976,7 +1939,6 @@ class PerfectRAG:
                         mode = self.intent_module.classify_search_intent(query)
                     else:
                         mode = self._classify_search_intent(query)
-                print(f" 검색 모드: {mode}")
             
             self.search_mode = mode
             metadata['search_mode'] = mode
@@ -2046,7 +2008,6 @@ class PerfectRAG:
                             doc_path = Path(top_result['path'])
 
                             if doc_path.exists():
-                                print(f"📄 선택된 문서: {doc_path.name}")
                                 # LLM을 사용하여 문서 내용 분석 및 답변 생성
                                 if self.llm_module:
                                     # LLMModule을 사용하여 문서 요약 생성
@@ -2076,7 +2037,6 @@ class PerfectRAG:
                         if not doc_path:
                             response = "❌ 관련 문서를 찾을 수 없습니다. 더 구체적으로 질문해주세요."
                         else:
-                            print(f"📄 선택된 문서: {doc_path.name}")
                             # LLM을 사용하여 문서 내용 분석 및 답변 생성
                             if self.llm_module:
                                 # LLMModule을 사용하여 문서 요약 생성
@@ -2109,7 +2069,6 @@ class PerfectRAG:
                     processing_time=processing_time,
                     metadata=metadata
                 )
-                print(f"✅ Query completed in {processing_time:.2f}s")
 
             return response
 
@@ -2160,151 +2119,6 @@ class PerfectRAG:
 간결하고 핵심적으로 답변하세요.
 """
 
-    def _get_optimized_prompt(self, query: str, context: str, filename: str) -> str:
-        """기술관리팀 실무 최적화 프롬프트"""
-        
-        # 긴급 상황 키워드
-        if any(word in query for word in ["긴급", "수리", "고장", "업체", "연락처"]):
-            return f"""
-[긴급 장비 조회] 방송 장비 관리 시스템
-
-상황: 긴급 대응 필요
-문서: {filename}
-
-다음 정보를 즉시 제공하세요:
-• 수리 업체명:
-• 담당자 연락처:
-• 이전 처리 비용:
-• 처리 기간:
-
-문서 내용:
-{context}
-
-질문: {query}
-
-️ 30초 내 답변 필요
-️ 없는 정보는 "확인 필요"로 표시
-"""
-        
-        # 보고서/내역 정리/기술검토서
-        if any(word in query for word in ["내역", "정리", "총", "목록", "구매", "품목", "검토서", "내용", "요약", "알려"]):
-            # 기본 정보가 이미 추출되어 있는지 확인
-            has_basic_info = 'basic_summary' in locals() if 'locals' in dir() else False
-            
-            if has_basic_info:
-                # 기본 정보가 이미 있으면 상세 내용만 요청
-                return f"""
-[문서 상세 분석] {filename}
-
-️ 기본 정보(기안자, 날짜 등)는 이미 추출됨. 아래 내용만 작성하세요:
-
- **핵심 내용**
-• 구매/수리 사유: [파손 상태, 문제점 등 구체적으로]
-• 현재 상황: [현황 설명]  
-• 해결 방안: [제안 내용]
-
- **기술 검토 내용** (해당시)
-• 기존 장비 문제점: [구체적 문제 설명]
-• 대체 장비: [모델명, 제조사]
-• 주요 사양: [핵심 스펙]
-• 선정 이유: [선택 근거]
-
- **비용 정보**
-• 총액: [금액] (부가세 포함/별도)
-• 세부 내역:
-  - [품목1]: [모델명] - [수량] x [단가] = [금액]
-  - [품목2]: [모델명] - [수량] x [단가] = [금액]
-• 납품업체: [업체명]
-
- **검토 의견**
-• [검토사항 1]
-• [검토사항 2]
-• 결론: [최종 의견/승인사항]
-
- 출처: {filename}
-
-문서 내용:
-{context}
-
-요청: {query}
-
-️ 주의사항:
-- 위 형식을 반드시 따를 것
-- 모든 품목/장비 정보를 빠짐없이 포함
-- 금액은 천단위 콤마 포함 (예: 820,000원)
-- 모델명, 업체명 등 고유명사는 정확히 표기
-"""
-        
-        # 감사/절차 확인
-        if any(word in query for word in ["감사", "절차", "승인", "폐기"]):
-            return f"""
-[감사 대응 자료] 기술관리팀 문서 시스템
-
-문서: {filename}
-요청: {query}
-
-필수 확인 사항:
-□ 요청 일자:
-□ 품의서 번호:
-□ 대상 장비:
-□ 처리 사유:
-□ 승인 라인:
-  - 1차:
-  - 2차:
-  - 최종:
-□ 처리 완료일:
-
-문서 내용:
-{context}
-
-️ 감사 지적 방지를 위해 정확히 확인
-"""
-        
-        # 기본 프롬프트 (통일된 포맷)
-        else:
-            return f"""
-[기술관리팀 문서 분석]
-
-
- {filename.replace('.pdf', '')}
-
- **기본 정보**
-• 기안자: [문서에서 찾은 기안자명]
-• 날짜: [문서 날짜]
-• 문서 종류: [기안서/검토서/보고서 등]
-
- **주요 내용**
-[질문과 관련된 핵심 내용을 구조화하여 표시]
-• [주요 사항 1]
-• [주요 사항 2]
-• [세부 내용들...]
-
- **비용 정보** (비용 관련 내용이 있는 경우)
-• 총액: [금액]
-• 세부 내역:
-  - [품목1]: [금액]
-  - [품목2]: [금액]
-
- **검토 의견** (검토 의견이 있는 경우)
-• [검토사항 1]
-• [검토사항 2]
-• 결론: [최종 의견]
-
- 출처: {filename}
-
-문서 내용:
-{context}
-
-요청: {query}
-
-️ 주의사항:
-- 위 형식을 반드시 따를 것
-- 질문과 관련된 모든 정보를 상세히 포함
-- 실무자가 바로 활용할 수 있도록 구체적으로 답변
-- 모든 고유명사(모델명, 업체명, 담당자명)는 정확히 표기
-- 금액은 천단위 콤마 포함 (예: 1,234,000원)
-- 문서에 없는 정보는 추측하지 말 것
-"""
     
     def _is_gian_document(self, text: str) -> bool:
         """기안서 문서인지 확인"""
@@ -2340,240 +2154,20 @@ class PerfectRAG:
             return ""
     
     def _extract_full_pdf_content(self, pdf_path: Path) -> dict:
-        """PDF 전체 내용 추출 및 구조화"""
+        """PDF 전체 내용 추출 및 구조화 - DocumentModule 활용으로 단순화"""
         try:
-            import PyPDF2
-            
-            with open(pdf_path, 'rb') as f:
-                reader = PyPDF2.PdfReader(f)
-                
-                # 전체 텍스트 추출 (메모리 효율적으로)
-                full_text = ""
-                max_pages = min(len(reader.pages), 50)  # 최대 50페이지로 증가
-                for page_num in range(max_pages):
-                    page = reader.pages[page_num]
-                    page_text = page.extract_text()
-                    
-                    # 그룹웨어 URL 제거
-                    page_text = re.sub(r'gw\.channela[^\n]+', '', page_text)
-                    page_text = re.sub(r'\d+\.\s*\d+\.\s*\d+\.\s*오[전후]\s*\d+:\d+\s*장비구매.*?기안서', '', page_text)
-                    
-                    full_text += f"\n[페이지 {page_num+1}]\n{page_text}\n"
-                    
-                    # 텍스트가 너무 길면 중단
-                    if len(full_text) > 100000:  # 100K 문자로 증가
-                        break
-                
-                # 텍스트가 비어있으면 OCR 시도
-                if not full_text.strip():
-                    logger.info(f"텍스트 추출 실패, OCR 시도: {pdf_path.name}")
-                    full_text = self._try_ocr_extraction(pdf_path)
-                    if not full_text:
-                        return None
-                
-                # 구조화된 정보 추출
-                info = {}
-                
-                # 기안서 문서인지 확인
-                is_gian = self._is_gian_document(full_text)
-                
-                if is_gian:
-                    # 기안서 전용 파싱
-                    patterns = {
-                        '기안자': r'기안자\s+([가-힣]+)',
-                        '제목': r'제목\s+(.+?)(?:\n|$)',
-                        '기안일자': r'기안일자\s+(\d{4}-\d{2}-\d{2})',
-                        '기안부서': r'기안부서\s+([^\s]+)',
-                        '보존기간': r'보존기간\s+([^\s\n]+)',
-                        '시행일자': r'시행일자\s+(\d{4}-\d{2}-\d{2})',
-                        '문서번호': r'문서번호\s+([^\s]+)',
-                    }
-                else:
-                    # 일반 문서 파싱
-                    patterns = {
-                        '기안자': r'기안자\s+([^\s\n]+)',
-                        '제목': r'제목\s+(.+?)(?:\n|$)',
-                        '기안일자': r'기안일자\s+(\d{4}-\d{2}-\d{2})',
-                        '기안부서': r'기안부서\s+([^\s\n]+)',
-                        '보존기간': r'보존기간\s+([^\s\n]+)'
-                    }
-                
-                for key, pattern in patterns.items():
-                    match = re.search(pattern, full_text)
-                    if match:
-                        info[key] = match.group(1).strip()
-                
-                # 개요 추출 (기안서 형식에 맞춤)
-                if is_gian:
-                    # 기안서는 1. 개요 형식
-                    match = re.search(r'1\.\s*개요\s*\n(.+?)(?:\n2\.|$)', full_text, re.DOTALL)
-                    if match:
-                        overview = match.group(1).strip()
-                        # 불필요한 줄바꿈 정리
-                        overview = re.sub(r'\n(?![-•·])', ' ', overview)
-                        info['개요'] = overview[:800]  # 800자 제한
-                    
-                    # 2. 내용 추출
-                    match = re.search(r'2\.\s*내용\s*\n(.+?)(?:\n3\.|$)', full_text, re.DOTALL)
-                    if match:
-                        content = match.group(1).strip()
-                        content = re.sub(r'\n(?![-•·\d\)])', ' ', content)
-                        info['내용'] = content[:1000]  # 1000자 제한
-                    
-                    # 3. 검토 의견 추출
-                    match = re.search(r'3\.\s*검토\s*의견\s*\n(.+?)(?:\n4\.|$)', full_text, re.DOTALL)
-                    if match:
-                        review = match.group(1).strip()
-                        review = re.sub(r'\n(?![-•·])', ' ', review)
-                        info['검토의견'] = review[:2500]  # 800 -> 2500
-                else:
-                    # 일반 문서는 기존 방식
-                    if '개요' in full_text:
-                        match = re.search(r'개요\s*\n(.+?)(?:\n\d+\.|$)', full_text, re.DOTALL)
-                        if match:
-                            info['개요'] = match.group(1).strip()
-                
-                # 금액 정보 (패턴 개선 - 더 정확한 컨텍스트 기반 추출)
-                # 실제 금액이 나오는 컨텍스트를 포함한 패턴
-                amount_patterns = [
-                    # 총액, 합계 등 명시적 금액 (원 없이도 매칭)
-                    r'(?:총액|합계|총\s*액|총\s*비용|검토\s*비용|검토\s*금액)[:\s]*(\d{1,3}(?:,\d{3})*)\s*(?:원)?',
-                    r'(?:금액|비용|가격)[:\s]*(\d{1,3}(?:,\d{3})*)\s*(?:원)?',
-                    # VAT 관련 금액
-                    r'(\d{1,3}(?:,\d{3})*)\s*원\s*\(?(?:VAT|부가세)',
-                    r'(\d{1,3}(?:,\d{3})*)\s*\(?(?:VAT|부가세)',  # 원 없이
-                    # 발생 비용 패턴
-                    r'발생\s*비용\s*(\d{1,3}(?:,\d{3})*)\s*원',
-                    # 백만원, 천만원 단위 표기
-                    r'(\d{1,3}(?:,\d{3})*)\s*(?:백만|천만|억)\s*원',
-                    # 일반적인 금액 패턴 (천만원 이상만)
-                    r'(\d{1,3}(?:,\d{3})*)\s*원',
-                ]
-                
-                amounts = []
-                amount_contexts = []  # 금액과 컨텍스트 함께 저장
-                
-                for pattern in amount_patterns:
-                    matches = re.finditer(pattern, full_text, re.IGNORECASE)
-                    for match in matches:
-                        amount = match.group(1)
-                        # 컨텍스트 추출 (금액 주변 텍스트)
-                        start = max(0, match.start() - 50)
-                        end = min(len(full_text), match.end() + 50)
-                        context = full_text[start:end].strip()
-                        
-                        # 금액이 유의미한지 검증 (10만원 이상)
-                        try:
-                            amount_int = int(amount.replace(',', ''))
-                            if amount_int >= 100000:  # 10만원 이상만
-                                amounts.append(amount)
-                                amount_contexts.append({
-                                    'amount': amount,
-                                    'context': context
-                                })
-                        except Exception as e:
-                            pass
-                
-                # 가장 큰 금액을 주요 금액으로 판단
-                if amounts:
-                    # 금액을 정수로 변환하여 정렬
-                    sorted_amounts = sorted(amounts, 
-                                          key=lambda x: int(x.replace(',', '')), 
-                                          reverse=True)
-                    # 상위 3개만 저장
-                    info['금액정보'] = sorted_amounts[:3]
-                    info['금액컨텍스트'] = amount_contexts[:3]
-                
-                # 업체 정보
-                if '업체' in full_text or '벤더' in full_text:
-                    vendor_match = re.search(r'(?:업체|벤더)[:\s]*([^\n]+)', full_text)
-                    if vendor_match:
-                        info['업체'] = vendor_match.group(1).strip()
-                
-                # 검토 의견 추출 (새로 추가)
-                if '검토 의견' in full_text:
-                    match = re.search(r'검토 의견(.+?)(?:3\.|$)', full_text, re.DOTALL)
-                    if match:
-                        opinion = match.group(1).strip()
-                        opinion = re.sub(r'\n+', ' ', opinion)
-                        opinion = re.sub(r'\s+', ' ', opinion)
-                        info['검토의견'] = opinion[:2500]  # 500 -> 2500자로 증가
-                
-                # 세부 항목 추출 (테이블 데이터가 없을 경우를 위해)
-                info['세부항목'] = []
-                
-                # 중계차 보수 항목 찾기
-                if '중계차' in full_text and '보수' in full_text:
-                    # 도어, 발전기, 배터리 등 항목 찾기
-                    repair_items = []
-                    if '도어' in full_text:
-                        repair_items.append({'항목': '도어', '내용': '부식 및 작동 불량'})
-                    if '발전기' in full_text:
-                        repair_items.append({'항목': '발전기', '내용': '누수 및 점검 필요'})
-                    if '레벨잭' in full_text:
-                        repair_items.append({'항목': '레벨잭', '내용': '작동 불량'})
-                    if '배터리' in full_text:
-                        repair_items.append({'항목': '배터리', '내용': '교체 필요'})
-                    if repair_items:
-                        info['세부항목'] = repair_items
-                
-                # 지미집 Control Box 수리 항목 찾기
-                if 'Control Box' in full_text or '지미집' in full_text:
-                    repair_items = []
-                    if 'Tilt 스피드' in full_text:
-                        repair_items.append({'항목': 'Tilt 스피드단', '내용': '부품 교체'})
-                    if repair_items:
-                        info['세부항목'] = repair_items
-                    
-                    # 장애 내용 추출
-                    if '장애 내용' in full_text:
-                        match = re.search(r'장애 내용(.+?)(?:\d+\)|$)', full_text, re.DOTALL)
-                        if match:
-                            info['장애내용'] = match.group(1).strip()[:300]
-                
-                # 비용 내역 추출 (개선 - DVR 포함)
-                info['비용내역'] = {}
-                
-                # DVR 관련 비용 체크
-                if 'DVR' in full_text or '2,446,000' in full_text:
-                    # DVR 비용 표 찾기
-                    cost_match = re.search(r'검토 비용.*?총액\s*([\d,]+)', full_text, re.DOTALL)
-                    if cost_match:
-                        info['비용내역']['총액'] = cost_match.group(1) + '원'
-                    
-                    # 세부 항목 추출
-                    if '666,000' in full_text:
-                        info['비용내역']['DVR'] = '666,000원 (2EA)'
-                    if '1,520,000' in full_text:
-                        info['비용내역']['HDD'] = '1,520,000원 (10TB x 4EA)'
-                    if '260,000' in full_text:
-                        info['비용내역']['컨버터'] = '260,000원 (2EA)'
-                    if '2,446,000' in full_text:
-                        info['비용내역']['총액'] = '2,446,000원'
-                
-                # 기존 금액 처리
-                for amt in info.get('금액정보', []):
-                    try:
-                        amt_int = int(amt.replace(',', ''))
-                        if amt_int >= 100000:  # 10만원 이상으로 낮춤
-                            if '26,660,000' in amt:
-                                info['비용내역']['내외관보수'] = amt + '원'
-                            if '7,680,000' in amt:
-                                info['비용내역']['방송시스템'] = amt + '원'
-                            if '34,340,000' in amt:
-                                info['비용내역']['총합계'] = amt + '원 (VAT별도)'
-                            if '200,000' in amt:
-                                info['비용내역']['수리비용'] = amt + '원 (VAT별도)'
-                            if not info['비용내역']:  # 첫 번째 금액
-                                info['비용내역']['금액'] = amt + '원'
-                    except (ValueError, AttributeError):
-                        pass  # 금액 변환 실패시 무시
-                
-                info['전체텍스트'] = full_text[:8000]  # LLM 컨텍스트 제한
-                
-                return info
-                
+            # DocumentModule이 있으면 사용
+            if self.document_module:
+                result = self.document_module.extract_pdf_text_with_retry(pdf_path, max_retries=2)
+                if result:
+                    return result
+
+            # 기본 PDF 추출 로직
+            return self._extract_pdf_info(pdf_path)
+
         except Exception as e:
+            if logger:
+                logger.error(f"PDF 추출 실패 ({pdf_path.name}): {e}")
             return {'error': str(e)}
     
     def _prepare_formatted_data(self, pdf_info: Dict, pdf_path: Path) -> Dict:
@@ -2638,8 +2232,6 @@ class PerfectRAG:
     
     
     
-
-
     def _extract_key_sentences(self, content, num_sentences=5):
         """핵심 문장 추출 헬퍼"""
         if not content:
@@ -2664,8 +2256,6 @@ class PerfectRAG:
         scored_sentences.sort(key=lambda x: x[1], reverse=True)
 
         return [s[0] for s in scored_sentences[:num_sentences]]
-
-
     def _generate_llm_summary(self, pdf_path: Path, query: str) -> str:
         """LLM을 사용한 상세 요약 - LLMModule로 위임 (2025-09-29 리팩토링)"""
         if logger:
@@ -2750,200 +2340,6 @@ class PerfectRAG:
         
         return '\n'.join(formatted) if formatted else "조건 없음"
     
-    def _search_location_summary(self, txt_path: Path, location: str) -> str:
-        """특정 위치의 장비를 카테고리별로 정리"""
-        # Asset 모드 제거됨
-        try:
-            with open(txt_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            
-            lines = content.split('\n')
-            equipment_by_category = {}  # {카테고리: [장비 정보]}
-            current_item = []
-            total_count = 0
-            total_amount = 0  # 총 금액
-            
-            for line in lines:
-                if re.match(r'^\[\d{4}\]', line.strip()):
-                    if current_item:
-                        item_text = '\n'.join(current_item)
-                        # 위치 확인
-                        if self._check_location_in_item(item_text, location):
-                            total_count += 1
-                            # 장비 카테고리 분류
-                            equipment_name = current_item[0].split(']')[1].strip() if ']' in current_item[0] else current_item[0]
-                            
-                            # 카테고리 결정
-                            category = self._determine_equipment_category(equipment_name, item_text)
-                            
-                            if category not in equipment_by_category:
-                                equipment_by_category[category] = []
-                            
-                            # 정보 추출
-                            info = {
-                                'name': equipment_name,
-                                'model': "N/A",
-                                'price': 0,
-                                'quantity': 1,
-                                'date': "N/A"
-                            }
-                            
-                            for item_line in current_item:
-                                # 모델명
-                                if "모델:" in item_line:
-                                    model_match = re.search(r'모델:\s*([^|]+)', item_line)
-                                    if model_match:
-                                        info['model'] = model_match.group(1).strip()
-                                
-                                # 금액 정보
-                                if "금액:" in item_line:
-                                    amount_match = re.search(r'금액:\s*([\d,]+)원', item_line)
-                                    if amount_match:
-                                        amount_str = amount_match.group(1).replace(',', '')
-                                        try:
-                                            info['price'] = int(amount_str)
-                                            total_amount += info['price']
-                                        except Exception as e:
-                                            pass
-                                
-                                # 수량
-                                if "수량:" in item_line:
-                                    qty_match = re.search(r'수량:\s*(\d+)', item_line)
-                                    if qty_match:
-                                        info['quantity'] = int(qty_match.group(1))
-                                
-                                # 구입일
-                                if "구입일:" in item_line:
-                                    date_match = re.search(r'구입일:\s*([^\s|]+)', item_line)
-                                    if date_match:
-                                        info['date'] = date_match.group(1).strip()
-                            
-                            equipment_by_category[category].append(info)
-                    
-                    current_item = [line]
-                else:
-                    if current_item:
-                        current_item.append(line)
-            
-            # 마지막 항목 처리
-            if current_item:
-                item_text = '\n'.join(current_item)
-                if self._check_location_in_item(item_text, location):
-                    total_count += 1
-                    equipment_name = current_item[0].split(']')[1].strip() if ']' in current_item[0] else current_item[0]
-                    category = self._determine_equipment_category(equipment_name, item_text)
-                    if category not in equipment_by_category:
-                        equipment_by_category[category] = []
-                    
-                    info = {
-                        'name': equipment_name,
-                        'model': "N/A",
-                        'price': 0,
-                        'quantity': 1,
-                        'date': "N/A"
-                    }
-                    
-                    for item_line in current_item:
-                        if "모델:" in item_line:
-                            model_match = re.search(r'모델:\s*([^|]+)', item_line)
-                            if model_match:
-                                info['model'] = model_match.group(1).strip()
-                        if "금액:" in item_line:
-                            amount_match = re.search(r'금액:\s*([\d,]+)원', item_line)
-                            if amount_match:
-                                amount_str = amount_match.group(1).replace(',', '')
-                                try:
-                                    info['price'] = int(amount_str)
-                                    total_amount += info['price']
-                                except Exception as e:
-                                    pass
-                        if "수량:" in item_line:
-                            qty_match = re.search(r'수량:\s*(\d+)', item_line)
-                            if qty_match:
-                                info['quantity'] = int(qty_match.group(1))
-                        if "구입일:" in item_line:
-                            date_match = re.search(r'구입일:\s*([^\s|]+)', item_line)
-                            if date_match:
-                                info['date'] = date_match.group(1).strip()
-                    
-                    equipment_by_category[category].append(info)
-            
-            # 결과 포맷팅
-            if equipment_by_category:
-                response = f" **{location} 장비 현황**\n"
-                response += "=" * 70 + "\n"
-                response += f" 총 **{total_count}개** 장비\n"
-                if total_amount > 0:
-                    # 금액 포맷팅 (억/천만원 단위)
-                    if total_amount >= 100000000:  # 1억 이상
-                        amount_str = f"{total_amount/100000000:.1f}억원"
-                    if total_amount >= 10000000:  # 1천만원 이상
-                        amount_str = f"{total_amount/10000000:.0f}천만원"
-                    else:
-                        amount_str = f"{total_amount:,}원"
-                    response += f" 총 자산가치: **{amount_str}**\n\n"
-                else:
-                    response += "\n"
-                
-                # 카테고리별 요약
-                response += "###  카테고리별 상세 현황\n"
-                response += "-" * 50 + "\n"
-                
-                # 카테고리 정렬 (장비 수 많은 순)
-                sorted_categories = sorted(equipment_by_category.items(), key=lambda x: len(x[1]), reverse=True)
-                
-                for category, items in sorted_categories:
-                    # 카테고리별 총액 계산
-                    category_amount = sum(item['price'] for item in items)
-                    
-                    response += f"\n**{category}** ({len(items)}개"
-                    if category_amount > 0:
-                        if category_amount >= 100000000:
-                            response += f", {category_amount/100000000:.1f}억원"
-                        if category_amount >= 10000000:
-                            response += f", {category_amount/10000000:.0f}천만원"
-                        else:
-                            response += f", {category_amount:,}원"
-                    response += ")\n"
-                    
-                    # 같은 장비명끼리 그룹화
-                    equipment_summary = {}
-                    for item in items:
-                        key = f"{item['name']} ({item['model']})" if item['model'] != "N/A" else item['name']
-                        if key not in equipment_summary:
-                            equipment_summary[key] = {
-                                'count': 0,
-                                'total_price': 0,
-                                'unit_price': item['price'] // item['quantity'] if item['quantity'] > 0 else item['price']
-                            }
-                        equipment_summary[key]['count'] += item['quantity']
-                        equipment_summary[key]['total_price'] += item['price']
-                    
-                    # 금액 많은 순으로 정렬
-                    sorted_equipment = sorted(equipment_summary.items(), 
-                                           key=lambda x: x[1]['total_price'], 
-                                           reverse=True)
-                    
-                    # 상위 5개만 표시
-                    for i, (equip_name, equip_info) in enumerate(sorted_equipment[:5], 1):
-                        line = f"  {i}. {equip_name}"
-                        if equip_info['count'] > 1:
-                            line += f" - {equip_info['count']}개"
-                        if equip_info['total_price'] > 0:
-                            line += f" ({equip_info['total_price']:,}원)"
-                        response += line + "\n"
-                    
-                    if len(sorted_equipment) > 5:
-                        response += f"  ... 외 {len(sorted_equipment)-5}종\n"
-                
-                response += f"\n 출처: {txt_path.name}"
-                # Asset 모드 제거됨 - 직접 응답 반환
-                return response
-            else:
-                return f" {location}에서 장비를 찾을 수 없습니다."
-                
-        except Exception as e:
-            return f" 검색 실패: {e}"
     
     def _determine_equipment_category(self, equipment_name: str, item_text: str) -> str:
         """장비명과 텍스트로 카테고리 결정"""
@@ -3144,344 +2540,6 @@ class PerfectRAG:
                 aggregated.append("\n" + "-" * 60)
 
         return '\n'.join(aggregated)
-
-
-    def _search_and_analyze_by_content(self, query: str) -> str:
-        """특정 내용이 언급된 경우 관련 문서들을 모두 찾아서 분석
-
-        예시:
-        - "DVR 교체 검토 내용" → DVR 관련 모든 문서 찾고 교체 검토 내용 정리
-        - "삼각대 구매 건" → 삼각대 관련 모든 구매 문서 찾기
-        """
-        try:
-            # 1. 핵심 키워드와 작업 타입 분리
-            query_lower = query.lower()
-
-            # 장비/시스템 키워드
-            equipment_keywords = []
-            equipment_terms = ['DVR', '중계차', '카메라', '삼각대', '모니터', 'CCU', '오디오', '서버', '마이크', '스위치']
-            for term in equipment_terms:
-                if term.lower() in query_lower:
-                    equipment_keywords.append(term)
-
-            # 작업 타입 키워드
-            action_keywords = []
-            action_terms = ['교체', '검토', '구매', '수리', '보수', '폐기', '도입', '업그레이드', '설치']
-            for term in action_terms:
-                if term in query_lower:
-                    action_keywords.append(term)
-
-            if not equipment_keywords:
-                # 문장에서 명사 추출
-                nouns = re.findall(r'[\uac00-\ud7a3]{2,}', query)
-                equipment_keywords = [n for n in nouns if n not in ['관련', '문서', '내용', '정리', '분석']]
-
-            print(f" 장비 키워드: {equipment_keywords}, 작업 키워드: {action_keywords}")
-
-            # 2. 단계별 문서 검색
-            # 단계 1: 파일명에 키워드가 있는 문서
-            primary_files = []
-            # 단계 2: 작업 타입만 일치하는 문서
-            secondary_files = []
-            # 단계 3: 내용에 키워드가 있는 문서 (느림, 필요시만)
-            content_match_files = []
-
-            for cache_key, metadata in self.metadata_cache.items():
-                if metadata.get('is_pdf'):
-                    # 실제 파일명 사용 (cache_key가 아닌 metadata['filename'])
-                    filename_lower = metadata.get('filename', cache_key).lower()
-                    path = metadata['path']
-
-                    # 파일명에 장비 키워드가 있는지 확인
-                    has_equipment_keyword = any(kw.lower() in filename_lower for kw in equipment_keywords)
-                    has_action_keyword = any(kw.lower() in filename_lower for kw in action_keywords)
-
-                    if has_equipment_keyword:
-                        primary_files.append(path)
-                    if has_action_keyword:
-                        secondary_files.append(path)
-
-            # 3. 결과 병합 (최대 15개)
-            relevant_files = primary_files[:10] + secondary_files[:5]
-
-            if not relevant_files:
-                # 키워드가 너무 없으면 내용 검색 시도 (시간 소요)
-                if len(equipment_keywords) > 0:
-                    print(" 파일명에서 찾지 못함, 내용 검색 시작...")
-                    for file_path, metadata in list(self.metadata_cache.items())[:30]:  # 최대 30개만
-                        if metadata.get('is_pdf'):
-                            try:
-                                info = self._extract_pdf_info(metadata['path'])
-                                if info and 'text' in info:
-                                    content = info['text'][:2000]  # 처음 2000자만
-                                    if any(kw.lower() in content.lower() for kw in equipment_keywords):
-                                        content_match_files.append(metadata['path'])
-                                        if len(content_match_files) >= 5:  # 최대 5개
-                                            break
-                            except Exception as e:
-                                continue
-                    relevant_files.extend(content_match_files)
-
-            if not relevant_files:
-                return f" '{', '.join(equipment_keywords + action_keywords)}' 관련 문서를 찾을 수 없습니다."
-
-            print(f" {len(relevant_files)}개 관련 문서 발견")
-
-            # 성능 최적화: 상위 5개 문서만 처리
-            max_docs_to_process = 5
-            files_to_process = relevant_files[:max_docs_to_process]
-            if len(relevant_files) > max_docs_to_process:
-                print(f" 성능 최적화: 상위 {max_docs_to_process}개 문서만 처리 (전체 {len(relevant_files)}개 중)")
-
-            # 4. 각 문서의 내용 추출 및 분석
-            document_analyses = []
-            all_contents = []
-
-            for file_path in files_to_process:
-                try:
-                    info = self._extract_pdf_info(file_path)
-                    if info:
-                        # 작업 키워드와 관련된 부분 추출
-                        relevant_content = []
-                        if 'text' in info:
-                            lines = info['text'].split('\n')
-                            for i, line in enumerate(lines):
-                                line_lower = line.lower()
-                                # 작업 키워드가 포함된 문장과 주변 문맥 추출
-                                if any(kw in line_lower for kw in action_keywords + equipment_keywords):
-                                    # 전후 2줄씩 포함
-                                    start = max(0, i-2)
-                                    end = min(len(lines), i+3)
-                                    context = ' '.join(lines[start:end])
-                                    relevant_content.append(context)
-
-                        doc_analysis = {
-                            'filename': file_path.name,
-                            'title': info.get('제목', file_path.stem),
-                            'date': info.get('날짜', ''),
-                            'drafter': info.get('기안자', ''),
-                            'amount': info.get('금액', ''),
-                            'relevant_content': relevant_content[:3],  # 최대 3개 관련 부분
-                            'full_text': info.get('text', '')[:2000]  # 전체 텍스트 일부
-                        }
-                        document_analyses.append(doc_analysis)
-                        all_contents.append(f"[{file_path.name}]\n" + '\n'.join(relevant_content[:3]))
-                except Exception as e:
-                    print(f"️ {file_path.name} 처리 실패: {e}")
-                    continue
-
-            if not document_analyses:
-                return " 문서 내용을 분석할 수 없습니다."
-
-            # 5. LLM을 사용하여 종합 분석
-            if self.llm is None:
-                if not LLMSingleton.is_loaded():
-                    print(" LLM 모델 로딩 중...")
-                self.llm = LLMSingleton.get_instance(model_path=self.model_path)
-
-            combined_text = '\n\n'.join(all_contents)
-
-            prompt = f"""다음은 '{', '.join(equipment_keywords)}' 관련 '{', '.join(action_keywords)}' 문서들의 핵심 내용입니다.
-
-사용자 질문: {query}
-
-문서 내용:
-{combined_text[:6000]}
-
-위 내용을 바탕으로 사용자 질문에 대해 답변해주세요.
-포함해야 할 내용:
-1. 각 문서에서 찾은 핵심 정보
-2. 연도별/시기별 변화 (있다면)
-3. 기술적 사양이나 모델 정보
-4. 비용 정보
-5. 결론 및 추천사항
-
-자연스럽게 설명해주세요."""
-
-            context_chunks = [{
-                'content': combined_text[:6000],
-                'metadata': {'source': 'multiple_documents'},
-                'score': 1.0
-            }]
-
-            response_obj = self.llm.generate_response(prompt, context_chunks)
-            llm_response = response_obj.answer if hasattr(response_obj, 'answer') else str(response_obj)
-
-            # 6. 결과 구성
-            result = []
-            result.append(f" **'{', '.join(equipment_keywords)}' 관련 {len(document_analyses)}개 문서 분석**\n")
-            result.append("="*50 + "\n\n")
-
-            # LLM 분석 결과
-            result.append(llm_response)
-            result.append("\n" + "="*50 + "\n")
-
-            # 분석된 문서 목록
-            result.append("\n **분석된 문서:**\n")
-            for doc in document_analyses:
-                result.append(f"\n• **{doc['title']}**")
-                if doc['date']:
-                    result.append(f"  - 날짜: {doc['date']}")
-                if doc['drafter']:
-                    result.append(f"  - 기안자: {doc['drafter']}")
-                if doc['amount']:
-                    result.append(f"  - 금액: {doc['amount']}")
-                if doc['relevant_content']:
-                    result.append(f"  - 핵심 내용: {len(doc['relevant_content'])}개 부분 발견")
-
-            return '\n'.join(result)
-
-        except Exception as e:
-            return f" 내용 기반 분석 실패: {e}"
-
-    def _read_and_summarize_documents(self, query: str) -> str:
-        """관련 문서들을 실제로 읽고 종합 정리하는 메서드
-
-        Args:
-            query: 사용자 질문 (예: "DVR관련 문서 다 읽고 정리해줘")
-
-        Returns:
-            종합 정리된 내용
-        """
-        try:
-            # 키워드 추출
-            query_lower = query.lower()
-            keywords = []
-
-            # 주요 키워드 추출
-            important_keywords = ['DVR', '중계차', '카메라', '삼각대', '모니터', '오디오', '서버', '스위치']
-            for kw in important_keywords:
-                if kw.lower() in query_lower:
-                    keywords.append(kw)
-
-            # 키워드가 없으면 기본 기준 사용
-            if not keywords:
-                # 문장에서 명사 추출
-                nouns = re.findall(r'[\uac00-\ud7a3]{2,}', query)
-                keywords = [n for n in nouns if n not in ['관련', '문서', '읽고', '정리', '내용', '모두', '전부']]
-
-            if not keywords:
-                return " 검색 키워드를 찾을 수 없습니다. 구체적인 키워드를 지정해주세요."
-
-            print(f" 키워드로 문서 검색: {keywords}")
-
-            # 관련 문서 찾기
-            relevant_files = []
-            for file_path, metadata in self.metadata_cache.items():
-                if metadata.get('is_pdf'):
-                    # 파일명이나 제목에 키워드가 포함되어 있는지 확인
-                    filename_lower = file_path.lower()
-                    for kw in keywords:
-                        if kw.lower() in filename_lower:
-                            relevant_files.append(metadata['path'])
-                            break
-
-            if not relevant_files:
-                return f" '{', '.join(keywords)}' 관련 문서를 찾을 수 없습니다."
-
-            print(f" {len(relevant_files)}개 관련 문서 발견")
-
-            # 각 문서의 내용 추출
-            all_contents = []
-            document_summaries = []
-
-            for file_path in relevant_files[:10]:  # 최대 10개 문서만 처리
-                try:
-                    # PDF 내용 추출
-                    info = self._extract_pdf_info(file_path)
-                    if info:
-                        doc_summary = {
-                            'filename': file_path.name,
-                            'title': info.get('제목', file_path.stem),
-                            'date': info.get('날짜', '날짜 미상'),
-                            'drafter': info.get('기안자', '미상'),
-                            'amount': info.get('금액', ''),
-                            'content': info.get('text', '')[:3000]  # 처음 3000자
-                        }
-
-                        # 주요 내용 추출
-                        if 'text' in info:
-                            # 중요한 문장 추출
-                            important_sentences = []
-                            lines = info['text'].split('\n')
-                            for line in lines:
-                                line = line.strip()
-                                if line and len(line) > 20:
-                                    # 중요 키워드가 포함된 문장
-                                    if any(kw in line for kw in ['개요', '목적', '내용', '결과', '결론', '추천', '필요', '예산', '금액']):
-                                        important_sentences.append(line[:200])
-
-                            doc_summary['key_points'] = important_sentences[:5]
-
-                        document_summaries.append(doc_summary)
-                        all_contents.append(f"\n[{file_path.name}]\n{info.get('text', '')[:3000]}")
-
-                except Exception as e:
-                    print(f"️ {file_path.name} 처리 실패: {e}")
-                    continue
-
-            if not document_summaries:
-                return " 문서 내용을 읽을 수 없습니다."
-
-            # LLM을 사용하여 종합 정리
-            if self.llm is None:
-                if not LLMSingleton.is_loaded():
-                    print(" LLM 모델 로딩 중...")
-                self.llm = LLMSingleton.get_instance(model_path=self.model_path)
-
-            # 종합 정리 프롬프트
-            combined_text = '\n\n'.join(all_contents)
-
-            prompt = f"""다음은 '{', '.join(keywords)}' 관련 문서들의 내용입니다.
-
-이 문서들을 읽고 종합적으로 정리해주세요.
-
-포함해야 할 내용:
-1. 주요 내용 요약
-2. 연도별/시기별 주요 사항
-3. 기술적 사양이나 모델 정보 (있다면)
-4. 비용 정보 (있다면)
-5. 검토 결과나 추천사항
-6. 공통점과 차이점
-
-문서 내용:
-{combined_text[:8000]}
-
-자연스럽고 이해하기 쉽게 정리해주세요. 테플릿 형식이 아닌 대화형 형식으로 답변해주세요."""
-
-            # LLM 호출
-            context_chunks = [{
-                'content': combined_text[:8000],
-                'metadata': {'source': 'multiple_documents'},
-                'score': 1.0
-            }]
-
-            response_obj = self.llm.generate_response(prompt, context_chunks)
-            llm_response = response_obj.answer if hasattr(response_obj, 'answer') else str(response_obj)
-
-            # 결과 구성
-            result = []
-            result.append(f" **{len(document_summaries)}개 {', '.join(keywords)} 관련 문서 종합 분석**\n")
-            result.append("="*50 + "\n")
-
-            # LLM 응답 추가
-            result.append(llm_response)
-            result.append("\n" + "="*50 + "\n")
-
-            # 각 문서 간단 정보
-            result.append("\n **분석된 문서 목록:**\n")
-            for doc in document_summaries:
-                result.append(f"\n• **{doc['title']}**")
-                result.append(f"  - 날짜: {doc['date']}")
-                result.append(f"  - 기안자: {doc['drafter']}")
-                if doc['amount']:
-                    result.append(f"  - 금액: {doc['amount']}")
-
-            return '\n'.join(result)
-
-        except Exception as e:
-            return f" 문서 종합 분석 실패: {e}"
-
     def _is_location_match(self, item_lines: list, location: str) -> bool:
         """위치 매칭 로직 개선 - 정확한 위치 매칭"""
         item_text = '\n'.join(item_lines)
@@ -3518,101 +2576,6 @@ class PerfectRAG:
                         return location in actual_location
         
         return False
-
-    def _search_equipment_all_locations(self, txt_path: Path, equipment: str) -> str:
-        """모든 위치별 장비 현황 정리"""
-        try:
-            with open(txt_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            
-            # 항목별로 검색
-            lines = content.split('\n')
-            location_equipment = {}  # {위치: [장비 목록]}
-            current_item = []
-            
-            for line in lines:
-                # [NNNN] 형식의 시작 라인을 찾기
-                if re.match(r'^\[\d{4}\]', line.strip()):
-                    # 이전 항목 검사
-                    if current_item:
-                        item_text = '\n'.join(current_item)
-                        # 장비명 조건 확인
-                        if equipment.upper() == "CCU":
-                            equipment_match = "CCU" in item_text.upper() or "Camera Control Unit" in item_text
-                        else:
-                            equipment_match = equipment.upper() in item_text.upper()
-                        
-                        if equipment_match:
-                            # 위치 추출
-                            location_info = None
-                            for item_line in current_item:
-                                if "위치:" in item_line:
-                                    # 위치: 뒤의 값 추출
-                                    match = re.search(r'위치:\s*([^|]+)', item_line)
-                                    if match:
-                                        location_info = match.group(1).strip()
-                                        break
-                            
-                            if location_info:
-                                if location_info not in location_equipment:
-                                    location_equipment[location_info] = []
-                                # 장비 정보 추출 (첫 줄만)
-                                location_equipment[location_info].append(current_item[0])
-                    
-                    current_item = [line]
-                else:
-                    if current_item:
-                        current_item.append(line)
-            
-            # 마지막 항목 처리
-            if current_item:
-                item_text = '\n'.join(current_item)
-                if equipment.upper() == "CCU":
-                    equipment_match = "CCU" in item_text.upper() or "Camera Control Unit" in item_text
-                else:
-                    equipment_match = equipment.upper() in item_text.upper()
-                
-                if equipment_match:
-                    location_info = None
-                    for item_line in current_item:
-                        if "위치:" in item_line:
-                            match = re.search(r'위치:\s*([^|]+)', item_line)
-                            if match:
-                                location_info = match.group(1).strip()
-                                break
-                    
-                    if location_info:
-                        if location_info not in location_equipment:
-                            location_equipment[location_info] = []
-                        location_equipment[location_info].append(current_item[0])
-            
-            # 결과 포맷팅
-            if location_equipment:
-                total_count = sum(len(items) for items in location_equipment.values())
-                response = f" **{equipment.upper()} 위치별 현황**\n"
-                response += "=" * 70 + "\n"
-                response += f" 총 {total_count}개 장비가 {len(location_equipment)}개 위치에 분포\n\n"
-                
-                # 위치별 정렬 (많은 순)
-                sorted_locations = sorted(location_equipment.items(), key=lambda x: len(x[1]), reverse=True)
-                
-                for location, items in sorted_locations:
-                    response += f" **{location}**: {len(items)}개\n"
-                    # 샘플 3개만 표시
-                    for i, item in enumerate(items[:3], 1):
-                        response += f"   {i}. {item}\n"
-                    if len(items) > 3:
-                        response += f"   ... 외 {len(items)-3}개\n"
-                    response += "\n"
-                
-                response += f" 출처: {txt_path.name}"
-                return response
-            else:
-                return f" {equipment.upper()} 장비를 찾을 수 없습니다."
-                
-        except Exception as e:
-            return f" 검색 실패: {e}"
-
     def _check_location_in_item(self, item_text: str, search_location: str) -> bool:
         """항목에서 위치 조건 확인"""
         # 위치 정보 추출

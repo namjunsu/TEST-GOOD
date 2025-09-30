@@ -1,0 +1,22 @@
+{
+  "original": {
+    "load_time": 8.56018328666687,
+    "cold_start": 7.554452896118164,
+    "warm_start": 8.723681926727295,
+    "memory": 540.4609375
+  },
+  "optimized": {
+    "load_time": 4.374253988265991,
+    "cold_start": 8.493452310562134,
+    "warm_start": 6.5168375968933105,
+    "memory": 821.70703125
+  },
+  "analysis": {
+    "load_improvement": 48.899996159203496,
+    "cold_improvement": -12.429747426533986,
+    "warm_improvement": 25.297166361289907,
+    "memory_reduction": -52.03819078043915,
+    "avg_improvement": 6.433709467377961
+  },
+  "timestamp": "2025-10-01 00:21:41"
+}

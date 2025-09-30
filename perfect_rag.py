@@ -7,8 +7,6 @@ from queue import Queue
 from functools import partial
 
 """
-Perfect RAG - 심플하지만 정확한 문서 검색 시스템
-동적으로 모든 PDF 문서와 자산 데이터를 정확하게 처리
 """
 
 import re
@@ -24,38 +22,29 @@ from functools import lru_cache
 import hashlib
 from contextlib import nullcontext
 
-# 로깅 시스템 추가
 try:
     from log_system import get_logger, TimerContext
     chat_logger = get_logger()
-    # chat_logger를 logger로도 사용
     logger = chat_logger
 except ImportError:
     chat_logger = None
     logger = None
     TimerContext = None
     
-# query_logger는 log_system으로 통합됨
-
-# 응답 포맷터 추가
 try:
     from response_formatter import ResponseFormatter
 except ImportError:
     ResponseFormatter = None
 
-# FontBBox 경고 메시지 필터링
 warnings.filterwarnings("ignore", message=".*FontBBox.*")
 warnings.filterwarnings("ignore", category=UserWarning, module="pdfplumber")
 
-# pdfplumber 로깅 레벨 조정
 logging.getLogger("pdfplumber").setLevel(logging.ERROR)
 logging.getLogger("pdfminer").setLevel(logging.ERROR)
 
-# 프로젝트 루트를 동적으로 찾기
 current_dir = Path(__file__).parent.absolute()
 sys.path.insert(0, str(current_dir))
 
-# 설정 파일 import
 try:
     from config_manager import config_manager as cfg
     USE_YAML_CONFIG = True
@@ -65,9 +54,8 @@ except ImportError:
 
 from rag_system.qwen_llm import QwenLLM
 from rag_system.llm_singleton import LLMSingleton
-from metadata_db import MetadataDB  # Phase 1.2: 메타데이터 DB
+from metadata_db import MetadataDB
 
-# Everything-like 초고속 검색 시스템 추가
 try:
     from everything_like_search import EverythingLikeSearch
     EVERYTHING_SEARCH_AVAILABLE = True
@@ -76,7 +64,6 @@ except ImportError:
     if logger:
         logger.warning("EverythingLikeSearch not available, using legacy search")
 
-# 메타데이터 추출 시스템 추가 (2025-09-29)
 try:
     from metadata_extractor import MetadataExtractor
     METADATA_EXTRACTOR_AVAILABLE = True
@@ -85,7 +72,6 @@ except ImportError:
     if logger:
         logger.warning("MetadataExtractor not available, metadata extraction disabled")
 
-# 리팩토링된 모듈들 (2025-09-29)
 try:
     from search_module import SearchModule
     SEARCH_MODULE_AVAILABLE = True
@@ -136,8 +122,6 @@ except ImportError:
 
 import traceback
 
-# 로깅 설정 - 이미 상단에서 logger가 설정됨
-# logger가 None인 경우 (log_system import 실패 시) 표준 로깅 사용
 if logger is None:
     logging.basicConfig(
         level=logging.INFO,
@@ -150,26 +134,24 @@ if logger is None:
     logger = logging.getLogger(__name__)
 class RAGException(Exception):
     """RAG 시스템 기본 예외"""
-    pass
 
 class DocumentNotFoundException(RAGException):
     """문서를 찾을 수 없을 때"""
-    pass
 
 class PDFExtractionException(RAGException):
     """PDF 추출 실패"""
-    pass
 
 class LLMException(RAGException):
     """LLM 관련 오류"""
-    pass
 
 class CacheException(RAGException):
     """캐시 관련 오류"""
-    pass
+
 def handle_errors(default_return=None):
     """에러 처리 데코레이터"""
+
     def decorator(func):
+
         def wrapper(*args, **kwargs):
             try:
                 return func(*args, **kwargs)
@@ -206,7 +188,6 @@ class PerfectRAG:
         else:
             self.perf_config = {}
 
-    # 클래스 레벨 상수 - config.yaml에서 로드
     def _get_manufacturer_pattern(self):
         if USE_YAML_CONFIG:
             manufacturers = cfg.get('patterns.manufacturers', [])
@@ -221,10 +202,8 @@ class PerfectRAG:
         return r'\b[A-Z]{2,}[-\s]?\d+'
     
     def __init__(self, preload_llm=False):
-        # performance_config.yaml 로드 시도
         self._load_performance_config()
 
-        # 설정 로드 (YAML 우선)
         if USE_YAML_CONFIG:
             self.docs_dir = Path(cfg.get('paths.documents_dir', './docs'))
             self.model_path = cfg.get('models.qwen.path', './models/qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf')
@@ -244,34 +223,30 @@ class PerfectRAG:
             self.pdf_workers = self.perf_config.get('parallel', {}).get('pdf_workers', 4)
             self.chunk_size = self.perf_config.get('parallel', {}).get('chunk_size', 5)
 
-        # PDF 캐시 크기 설정 (DocumentModule 초기화 전에 필요)
-        self.max_pdf_cache = 50  # 최대 50개 PDF 캐싱
+        self.max_pdf_cache = 50
 
-        # 설정 디렉토리 설정
         self.config_dir = Path(__file__).parent / 'config'
         self.config_dir.mkdir(exist_ok=True)
+        self.cache_dir = self.config_dir / 'cache'
+        self.cache_dir.mkdir(exist_ok=True)
 
         self.llm = None
-        # 캐시 관리 개선 (크기 제한 및 TTL)
         from collections import OrderedDict
-        # 캐시 크기 제한 설정
-        self.MAX_CACHE_SIZE = 100  # 응답 캐시 최대 크기
-        self.MAX_METADATA_CACHE = 500  # 메타데이터 캐시 최대 크기
-        self.MAX_PDF_CACHE = 50  # PDF 텍스트 캐시 최대 크기
-        self.CACHE_TTL = 3600  # 캐시 유효 시간 (1시간)
+        self.MAX_CACHE_SIZE = 100
+        self.MAX_METADATA_CACHE = 500
+        self.MAX_PDF_CACHE = 50
+        self.CACHE_TTL = 3600
 
-        self.documents_cache = OrderedDict()  # LRU 캐시처럼 동작
-        self.metadata_cache = OrderedDict()  # 메타데이터 캐시
-        self.search_mode = 'document'  # 검색 모드는 항상 document
-        self.answer_cache = OrderedDict()  # 답변 캐시 (LRU)
-        self.pdf_text_cache = OrderedDict()  # PDF 텍스트 추출 캐시 (성능 최적화)
+        self.documents_cache = OrderedDict()
+        self.metadata_cache = OrderedDict()
+        self.search_mode = 'document'
+        self.answer_cache = OrderedDict()
+        self.pdf_text_cache = OrderedDict()
 
-        # PDF 처리 - 기존 방식 사용
         self.pdf_processor = None
         self.error_handler = None
         self.error_recovery = None
 
-        # SearchModule 초기화 (2025-09-29 리팩토링)
         self.search_module = None
         if SEARCH_MODULE_AVAILABLE:
             try:
@@ -283,7 +258,6 @@ class PerfectRAG:
                     logger.error(f"❌ SearchModule 초기화 실패: {e}")
                 self.search_module = None
 
-        # DocumentModule 초기화 (2025-09-29 리팩토링)
         self.document_module = None
         if DOCUMENT_MODULE_AVAILABLE:
             try:
@@ -291,7 +265,7 @@ class PerfectRAG:
                     'max_pdf_cache': self.max_pdf_cache,
                     'max_text_length': self.max_text_length,
                     'max_pdf_pages': self.max_pdf_pages,
-                    'enable_ocr': False  # OCR은 필요시 활성화
+                    'enable_ocr': False
                 }
                 self.document_module = DocumentModule(doc_config)
                 if logger:
@@ -301,13 +275,12 @@ class PerfectRAG:
                     logger.error(f"❌ DocumentModule 초기화 실패: {e}")
                 self.document_module = None
 
-        # LLMModule 초기화 (2025-09-29 리팩토링)
         self.llm_module = None
         if LLM_MODULE_AVAILABLE:
             try:
                 llm_config = {
                     'model_path': self.model_path,
-                    'preload_llm': preload_llm  # 생성자 파라미터 전달
+                    'preload_llm': preload_llm
                 }
                 self.llm_module = LLMModule(llm_config)
                 if logger:
@@ -317,7 +290,6 @@ class PerfectRAG:
                     logger.error(f"❌ LLMModule 초기화 실패: {e}")
                 self.llm_module = None
 
-        # CacheModule 초기화 (2025-09-29 리팩토링)
         self.cache_module = None
         if CACHE_MODULE_AVAILABLE:
             try:
@@ -336,7 +308,6 @@ class PerfectRAG:
                     logger.error(f"❌ CacheModule 초기화 실패: {e}")
                 self.cache_module = None
 
-        # StatisticsModule 초기화 (2025-09-29 리팩토링)
         self.statistics_module = None
         if STATISTICS_MODULE_AVAILABLE:
             try:
@@ -351,7 +322,6 @@ class PerfectRAG:
                     logger.error(f"❌ StatisticsModule 초기화 실패: {e}")
                 self.statistics_module = None
 
-        # IntentModule 초기화 (2025-09-30 리팩토링)
         self.intent_module = None
         if INTENT_MODULE_AVAILABLE:
             try:
@@ -363,12 +333,10 @@ class PerfectRAG:
                     logger.error(f"❌ IntentModule 초기화 실패: {e}")
                 self.intent_module = None
 
-        # Everything-like 초고속 검색 시스템 초기화 (SearchModule이 없을 때만)
         self.everything_search = None
         if not self.search_module and EVERYTHING_SEARCH_AVAILABLE:
             try:
                 self.everything_search = EverythingLikeSearch()
-                # 초기 인덱싱 - 한 번만 실행
                 if not hasattr(self, '_index_initialized'):
                     self.everything_search.index_all_files()
                     self.__class__._index_initialized = True
@@ -379,10 +347,8 @@ class PerfectRAG:
                     logger.error(f"Failed to initialize Everything-like search: {e}")
                 self.everything_search = None
 
-        # 응답 포맷터 초기화
         self.formatter = ResponseFormatter() if ResponseFormatter else None
 
-        # 메타데이터 추출기 초기화 (2025-09-29 추가)
         self.metadata_extractor = None
         if METADATA_EXTRACTOR_AVAILABLE:
             try:
@@ -394,7 +360,6 @@ class PerfectRAG:
                     logger.error(f"❌ MetadataExtractor 초기화 실패: {e}")
                 self.metadata_extractor = None
 
-        # 메타데이터 DB 초기화
         try:
             self.metadata_db = MetadataDB(db_path=str(self.config_dir / "metadata.db"))
             logger.info("✅ MetadataDB 초기화 성공")
@@ -402,22 +367,18 @@ class PerfectRAG:
             logger.error(f"️ MetadataDB 초기화 실패: {e}")
             self.metadata_db = None
 
-        # 모든 PDF와 TXT 파일 목록 (새로운 폴더 구조 포함)
         self.pdf_files = []
         self.txt_files = []
 
-        # 루트 폴더 파일
         self.pdf_files.extend(list(self.docs_dir.glob('*.pdf')))
         self.txt_files.extend(list(self.docs_dir.glob('*.txt')))
 
-        # 연도별 폴더 (year_2014 ~ year_2025)
         for year in range(2014, 2026):
             year_folder = self.docs_dir / f"year_{year}"
             if year_folder.exists():
                 self.pdf_files.extend(list(year_folder.glob('*.pdf')))
                 self.txt_files.extend(list(year_folder.glob('*.txt')))
 
-        # 특별 폴더 (자산 관련 폴더 제거)
         special_folders = ['recent', 'archive']
         for folder in special_folders:
             special_folder = self.docs_dir / folder
@@ -425,7 +386,6 @@ class PerfectRAG:
                 self.pdf_files.extend(list(special_folder.glob('*.pdf')))
                 self.txt_files.extend(list(special_folder.glob('*.txt')))
 
-        # 중복 제거 (같은 파일이 여러 폴더에 있을 수 있음)
         self.pdf_files = list(set(self.pdf_files))
         self.txt_files = list(set(self.txt_files))
         self.all_files = self.pdf_files + self.txt_files
@@ -433,25 +393,15 @@ class PerfectRAG:
         if logger:
             logger.info(f"{len(self.pdf_files)}개 PDF, {len(self.txt_files)}개 TXT 문서 발견")
 
-        # 문서 메타데이터 사전 추출 (빠른 검색용)
         self._build_metadata_cache()
 
-        # 메타데이터 DB 인덱스 구축 (Phase 1.2)
         self._build_metadata_index()
 
-        # LLM 사전 로드 옵션
         if preload_llm:
             self._preload_llm()
 
     def _manage_cache_size(self, cache_dict, max_size, cache_name="cache"):
         """캐시 크기 관리 - LRU 방식으로 오래된 항목 제거"""
-        if len(cache_dict) > max_size:
-            # 가장 오래된 항목들 제거 (FIFO)
-            items_to_remove = len(cache_dict) - max_size
-            for _ in range(items_to_remove):
-                removed = cache_dict.popitem(last=False)  # 가장 오래된 항목 제거
-            if logger:
-                logger.debug(f"캐시 정리: {cache_name}에서 {items_to_remove}개 항목 제거")
 
     def _add_to_cache(self, cache_dict, key, value, max_size):
         """캐시에 항목 추가 with 크기 제한"""
@@ -467,20 +417,14 @@ class PerfectRAG:
 
     def _preload_llm(self):
         """LLM을 미리 로드"""
-        # LLMModule을 사용하여 LLM 로드
-        if self.llm_module:
-            if self.llm_module.load_llm():
-                self.llm = self.llm_module.llm
-                return
 
         # LLMModule이 없으면 기존 방식 사용
         if self.llm is None:
             if not LLMSingleton.is_loaded():
                 if logger:
                     logger.info("LLM 모델 로딩 중...")
-            else:
-                if logger:
-                    logger.info("LLM 모델 재사용")
+            elif logger:
+                logger.info("LLM 모델 재사용")
 
             try:
                 start = time.time()
@@ -501,17 +445,14 @@ class PerfectRAG:
         logger.info("📚 메타데이터 인덱스 구축 시작...")
         indexed = 0
 
-        for pdf_path in self.pdf_files[:30]:  # 처음 30개만 빠르게 처리
+        for pdf_path in self.pdf_files[:30]:
             try:
-                # DB에 이미 있는지 확인
                 existing = self.metadata_db.get_document(pdf_path.name)
                 if existing and existing.get('title'):
-                    continue  # 이미 처리됨
+                    continue
 
-                # 메타데이터 추출
                 metadata = self._extract_pdf_metadata(pdf_path)
                 if metadata:
-                    # DB에 저장
                     self.metadata_db.add_document(metadata)
                     indexed += 1
 
@@ -524,14 +465,12 @@ class PerfectRAG:
     def _extract_pdf_metadata(self, pdf_path: Path) -> Optional[Dict[str, Any]]:
         """PDF에서 메타데이터 추출"""
         try:
-            with pdfplumber.open(pdf_path) as pdf:
-                if not pdf.pages:
-                    return None
+            import PyPDF2
+            with open(pdf_path, 'rb') as file:
+                pdf = PyPDF2.PdfReader(file)
 
                 # 첫 페이지에서 텍스트 추출
-                first_page = pdf.pages[0].extract_text() or ""
-                if not first_page:
-                    return None
+                first_page = pdf.pages[0].extract_text() if pdf.pages else ""
 
                 # 기본 메타데이터
                 metadata = {
@@ -591,7 +530,6 @@ class PerfectRAG:
             logger.error(f"PDF 메타데이터 추출 오류 {pdf_path.name}: {e}")
             return None
 
-    
     def _parse_pdf_result(self, result: Dict) -> Dict:
         """병렬 처리 결과를 기존 형식으로 변환"""
         return {
@@ -603,8 +541,6 @@ class PerfectRAG:
 
     def process_pdfs_in_batch(self, pdf_paths: List[Path], batch_size: int = None) -> Dict:
         """여러 PDF를 배치로 병렬 처리 (안전하게 개선)"""
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        import gc
 
         all_results = {}
 
@@ -642,8 +578,6 @@ class PerfectRAG:
                     # 메모리 최적화
                     if i % (batch_size * 5) == 0:
                         gc.collect()
-        else:
-            # 기존 pdf_processor 사용
             for i in range(0, len(pdf_paths), batch_size):
                 batch = pdf_paths[i:i + batch_size]
 
@@ -658,23 +592,16 @@ class PerfectRAG:
 
     def _find_metadata_by_filename(self, filename: str) -> Optional[Dict]:
         """파일명으로 메타데이터 찾기 (새로운 캐시 구조 지원)"""
-        # 먼저 정확한 파일명으로 찾기
         if filename in self.metadata_cache:
             return self.metadata_cache[filename]
 
-        # 상대 경로 포함한 키에서 찾기
         for cache_key, metadata in self.metadata_cache.items():
             if metadata.get('filename') == filename:
                 return metadata
 
-        return None
-
     def _build_metadata_cache(self):
         """모든 문서의 메타데이터를 미리 추출 (캐싱 지원)"""
-        # 캐시 파일 경로 (Docker volume에 저장)
-        cache_dir = Path("/app/cache") if Path("/app/cache").exists() else Path("cache")
-        cache_dir.mkdir(exist_ok=True)
-        cache_file = cache_dir / "metadata_cache.pkl"
+        cache_file = self.cache_dir / "metadata_cache.pkl"
 
         # 기존 캐시 파일이 있으면 로드
         if cache_file.exists():
@@ -784,38 +711,7 @@ class PerfectRAG:
         except Exception as e:
             if logger:
                 logger.warning(f"캐시 저장 실패: {e}")
-    
-    def _extract_txt_info(self, txt_path: Path) -> Dict:
-        """TXT 파일에서 정보 동적 추출"""
-        try:
-            with open(txt_path, 'r', encoding='utf-8') as f:
-                text = f.read()
-            
-            info = {'text': text[:3000]}  # 처음 3000자만
-            
-            # 자산 파일 관련 코드 제거됨
-            
-            return info
 
-        except Exception as e:
-            if logger:
-                print(f"️ TXT 읽기 오류 ({txt_path.name}): {e}")
-            else:
-                print(f"️ TXT 읽기 오류 ({txt_path.name}): {e}")
-            # 에러 핸들러로 안전하게 파일 읽기 시도
-            # error_handler 제거 - 직접 파일 읽기
-            try:
-                with open(txt_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                if content:
-                    return {'text': content[:3000]}
-            except Exception:
-                pass
-            return {}
-
-    # 데코레이터 제거 (error_handler 백업 폴더로 이동)
-    # @RAGErrorHandler.retry_with_backoff(max_retries=3, backoff_factor=1.5)
-    # @RAGErrorHandler.handle_pdf_extraction_error
     def _extract_pdf_info_with_retry(self, pdf_path: Path) -> Dict:
         """PDF 정보 추출 (DocumentModule 사용)"""
         # DocumentModule을 사용하여 PDF 처리
@@ -833,67 +729,48 @@ class PerfectRAG:
     
     def _extract_pdf_info(self, pdf_path: Path) -> Dict:
         """PDF 정보 추출 (StatisticsModule 위임 또는 폴백용) - 캐싱 적용"""
-        # StatisticsModule이 있으면 위임
-        if self.statistics_module:
-            try:
-                return self.statistics_module._extract_pdf_info(pdf_path)
-            except Exception as e:
-                if logger:
-                    logger.error(f"StatisticsModule PDF 처리 오류: {e}, 폴백 사용")
 
-        # StatisticsModule이 없거나 실패한 경우 기존 방법 사용
-        # 캐시 키 생성 (파일 경로 기반)
         cache_key = str(pdf_path)
 
-        # 캐시에서 먼저 확인
         if cache_key in self.pdf_text_cache:
-            # 캐시 히트 - LRU를 위해 맨 뒤로 이동
             cached_result = self.pdf_text_cache.pop(cache_key)
             self.pdf_text_cache[cache_key] = cached_result
             return cached_result
 
         text = ""
 
-        # 에러 핸들러로 안전하게 파일 읽기
         def extract_with_pdfplumber():
             nonlocal text
             with pdfplumber.open(pdf_path) as pdf:
-                # 문서 전체 또는 설정된 최대 페이지 읽기
                 pages_to_read = min(len(pdf.pages), self.max_pdf_pages)
                 for page in pdf.pages[:pages_to_read]:
-                    # safe_execute 제거 (error_handler 백업 폴더로 이동)
                     try:
                         page_text = page.extract_text() or ""
                     except Exception:
                         page_text = ""
                     if page_text:
                         text += page_text + "\n"
-                        # 충분한 텍스트가 추출되면 중단 (메모리 절약)
                         if len(text) > self.max_text_length:
                             break
             return text
 
-        # 여러 방법으로 시도
-        # error_recovery가 없으므로 직접 시도
         text = extract_with_pdfplumber()
         if not text and hasattr(self, '_try_ocr_extraction'):
             text = self._try_ocr_extraction(pdf_path)
 
-        # pdfplumber 실패시 OCR 시도
         if not text:
             try:
                 from rag_system.enhanced_ocr_processor import EnhancedOCRProcessor
                 ocr = EnhancedOCRProcessor()
                 text, _ = ocr.extract_text_with_ocr(str(pdf_path))
             except Exception:
-                pass  # OCR 실패시 무시
+                pass
 
         if not text:
             return {}
 
         info = {}
 
-        # 기안자 추출 (여러 패턴)
         patterns = [
             r'기안자[\s:：]*([가-힣]+)',
             r'작성자[\s:：]*([가-힣]+)',
@@ -905,14 +782,13 @@ class PerfectRAG:
                 info['기안자'] = match.group(1).strip()
                 break
             
-        # 날짜 추출 (문서 내용 우선, 파일명 fallback)
         date_patterns = [
             r'기안일[\s:：]*(\d{4}[-년]\s*\d{1,2}[-월]\s*\d{1,2})',
             r'시행일자[\s:：]*(\d{4}[-년]\s*\d{1,2}[-월]\s*\d{1,2})',
             r'(\d{4}-\d{2}-\d{2})\s*\d{2}:\d{2}',
             r'일자[\s:：]*(\d{4}[-./년]\s*\d{1,2}[-./월]\s*\d{1,2})',
             r'날짜[\s:：]*(\d{4}[-./년]\s*\d{1,2}[-./월]\s*\d{1,2})',
-            r'(\d{4}[./-]\d{1,2}[./-]\d{1,2})'  # 일반적인 날짜 형식
+            r'(\d{4}[./-]\d{1,2}[./-]\d{1,2})'
         ]
 
         date_found = False
@@ -923,27 +799,23 @@ class PerfectRAG:
                 date_found = True
                 break
 
-        # 문서 내용에서 날짜를 찾지 못한 경우 파일명에서 추출
         if not date_found:
             filename = pdf_path.name
-            # 파일명에서 날짜 패턴 찾기 (YYYY-MM-DD, YYYY.MM.DD, YYYY_MM_DD 등)
             filename_date_patterns = [
-                r'(20\d{2}[-_.]0?[1-9]|1[0-2][-_.][0-2]?\d|3[01])',  # YYYY-MM-DD
-                r'(20\d{2})[-_.]?(\d{1,2})[-_.]?(\d{1,2})',  # YYYY MM DD (분리된 형태)
+                r'(20\d{2}[-_.]0?[1-9]|1[0-2][-_.][0-2]?\d|3[01])',
+                r'(20\d{2})[-_.]?(\d{1,2})[-_.]?(\d{1,2})',
             ]
 
             for pattern in filename_date_patterns:
                 match = re.search(pattern, filename)
                 if match:
                     if len(match.groups()) == 1:
-                        # 전체 매치인 경우
                         date_str = match.group(1)
                         date_str = date_str.replace('_', '-').replace('.', '-')
                         info['날짜'] = date_str
                         date_found = True
                         break
                     if len(match.groups()) == 3:
-                        # 분리된 그룹인 경우
                         year, month, day = match.groups()
                         try:
                             normalized_date = f"{year}-{int(month):02d}-{int(day):02d}"
@@ -953,21 +825,17 @@ class PerfectRAG:
                         except ValueError:
                             continue
             
-            # 부서 추출 (여러 패턴 시도)
-            # 패턴 1: 기안부서 라벨
             dept_match = re.search(r'기안부서[\s:：]*([^\n시행]+)', text)
             if dept_match:
                 dept = dept_match.group(1).strip()
                 dept = dept.split('시행')[0].strip()
                 info['부서'] = dept
             
-            # 패턴 2: 팀-파트 형식 (채널A 스타일)
             if '부서' not in info:
                 team_match = re.search(r'([가-힣]+팀[\-가-힣]+파트)', text)
                 if team_match:
                     info['부서'] = team_match.group(1)
             
-            # 금액 추출 (가장 큰 금액)
             amounts = re.findall(r'(\d{1,3}(?:,\d{3})*)\s*원', text)
             if amounts:
                 numeric_amounts = []
@@ -976,26 +844,21 @@ class PerfectRAG:
                         num = int(amt.replace(',', ''))
                         numeric_amounts.append((num, amt))
                     except (ValueError, AttributeError):
-                        pass  # 금액 변환 실패시 무시
+                        pass
                 if numeric_amounts:
                     numeric_amounts.sort(reverse=True)
                     info['금액'] = f"{numeric_amounts[0][1]}원"
             
-            # 제목 추출
             title_match = re.search(r'제목[\s:：]*([^\n]+)', text)
             if title_match:
                 info['제목'] = title_match.group(1).strip()
             
-            # 텍스트 저장
-            info['text'] = text[:3000]  # 처음 3000자만
+            info['text'] = text[:3000]
 
-        # 캐시에 저장 (크기 제한 적용)
-        MAX_PDF_CACHE_SIZE = 50  # 최대 50개 PDF 캐싱
+        MAX_PDF_CACHE_SIZE = 50
         if len(self.pdf_text_cache) >= MAX_PDF_CACHE_SIZE:
-            # 가장 오래된 항목 제거 (LRU)
             self.pdf_text_cache.popitem(last=False)
 
-        # 새 결과를 캐시에 저장
         self.pdf_text_cache[cache_key] = info
 
         return info
@@ -1008,10 +871,7 @@ class PerfectRAG:
                 if logger:
                     logger.info(f"SearchModule found {len(results)} documents for query: {query}")
                 return results
-            except Exception as e:
-                if logger:
-                    logger.error(f"SearchModule failed: {e}")
-                return []
+            except Exception: return None
 
         # SearchModule이 없으면 빈 결과 반환
         if logger:
@@ -1020,8 +880,6 @@ class PerfectRAG:
 
     def _extract_context(self, text: str, keyword: str, window: int = 200) -> str:
         """키워드 주변 컨텍스트 추출"""
-        keyword_lower = keyword.lower()
-        text_lower = text.lower()
 
         pos = text_lower.find(keyword_lower)
         if pos == -1:
@@ -1031,7 +889,6 @@ class PerfectRAG:
         end = min(len(text), pos + len(keyword) + window)
 
         context = text[start:end]
-        # 키워드 하이라이트
         context = context.replace(keyword, f"**{keyword}**")
 
         return f"...{context}..."
@@ -1060,18 +917,16 @@ class PerfectRAG:
             filename_lower = metadata.get('filename', cache_key).lower()
             if any(word in filename_lower for word in query.lower().split() if len(word) > 1):
                 return Path(metadata.get('path', self.docs_dir / cache_key))
-
-        return None
         
     def _calculate_similarity(self, str1: str, str2: str) -> float:
         """두 문자열의 유사도 계산 (0~1)
-        레벤슈타인 거리 기반 + 한글 자모 분해 비교
         """
         # 길이가 너무 다르면 낮은 유사도
         if abs(len(str1) - len(str2)) > 2:
             return 0.0
 
         # 간단한 레벤슈타인 거리 계산
+
         def levenshtein_distance(s1: str, s2: str) -> int:
             if len(s1) < len(s2):
                 return levenshtein_distance(s2, s1)
@@ -1109,62 +964,34 @@ class PerfectRAG:
     def get_document_info(self, file_path: Path, info_type: str = "all") -> str:
         """문서에서 특정 정보 추출 (PDF/TXT 모두 지원)"""
         
-        # 캐시 확인
         cache_key = f"{file_path.name}_{info_type}"
         if cache_key in self.documents_cache:
             return self.documents_cache[cache_key]
         
-        # 파일 타입에 따라 정보 추출
-        if file_path.suffix == '.txt':
-            info = self._extract_txt_info(file_path)
-        else:
-            info = self._extract_pdf_info(file_path)
+        info = self._extract_txt_info(file_path) if file_path.suffix == '.txt' else self._extract_pdf_info(file_path)
         
         if not info:
             return " 문서를 읽을 수 없습니다"
         
         result = ""
         
-        # 자산 파일 관련 코드 제거됨
-
-        # 일반 문서 처리
         if info_type == "all":
             result = f" {file_path.stem}\n"
             result += f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
             for key, value in info.items():
                 if key != 'text':
                     result += f"• {key}: {value}\n"
-        if info_type == "기안자":
-            result = f" 기안자: {info.get('기안자', '정보 없음')}"
-        if info_type == "날짜":
-            result = f" 날짜: {info.get('날짜', '정보 없음')}"
-        if info_type == "부서":
-            result = f" 부서: {info.get('부서', '정보 없음')}"
-        if info_type == "금액":
-            amount = info.get('금액', '정보 없음')
-            result = f" 금액: {amount}"
+        if info_type in ["기안자", "날짜", "부서", "금액"]:
+            result = f" {info_type}: {info.get(info_type, '정보 없음')}"
         else:
-            # 특정 정보 요청
-            if info_type in info:
-                result = f" {info_type}: {info[info_type]}"
-            else:
-                result = f" {info_type} 정보를 찾을 수 없습니다"
-            
-            # 짧은 답변 보완 - 추가 정보 제공
-            if amount != '정보 없음' and len(result) < 50:
-                # 문서 정보 추가
-                result += f"\n\n 문서 정보:\n"
-                result += f"• 문서명: {file_path.stem}\n"
-                if '날짜' in info:
-                    result += f"• 날짜: {info['날짜']}\n"
-                if '기안자' in info:
-                    result += f"• 기안자: {info['기안자']}\n"
-                if '부서' in info:
-                    result += f"• 부서: {info['부서']}\n"
-                if '제목' in info:
-                    result += f"• 제목: {info['제목']}\n"
+            result = ""
+            if '기안자' in info:
+                result += f"• 기안자: {info['기안자']}\n"
+            if '부서' in info:
+                result += f"• 부서: {info['부서']}\n"
+            if '제목' in info:
+                result += f"• 제목: {info['제목']}\n"
         if info_type == "요약":
-            # 간단한 요약 생성
             result = f" {file_path.stem} 요약\n"
             result += f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
             if '기안자' in info:
@@ -1177,9 +1004,8 @@ class PerfectRAG:
                 result += f"• 금액: {info['금액']}\n"
             if '제목' in info:
                 result += f"• 제목: {info['제목']}\n"
-        else:  # all
-            # LLM 응답과 유사한 포맷으로 통일
-            result = f" {file_path.stem}\n\n"
+            else:
+                result = f" {file_path.stem}\n\n"
             result += f" **기본 정보**\n"
             if '기안자' in info:
                 result += f"• 기안자: {info['기안자']}\n"
@@ -1190,13 +1016,10 @@ class PerfectRAG:
             
             result += f"\n **주요 내용**\n"
             
-            # text 필드에서 주요 내용 추출 (개선된 요약 시스템)
             if 'text' in info:
-                # LLMModule을 사용하여 요약 생성
                 if self.llm_module:
                     summary = self.llm_module.generate_smart_summary(info['text'], str(file_path.name))
                 else:
-                    # 폴백: 기존 방식 사용
                     summary = self._generate_smart_summary(info['text'], file_path)
                 result += summary
             
@@ -1206,10 +1029,10 @@ class PerfectRAG:
             
             result += f"\n 출처: {file_path.name}"
         
-        # 캐시 저장
         self.documents_cache[cache_key] = result
         
         return result
+
     def _remove_duplicate_documents(self, documents: list) -> list:
         """중복 문서 제거 (파일명 기준)"""
         seen = set()
@@ -1226,21 +1049,17 @@ class PerfectRAG:
 
     def _format_enhanced_response(self, results: list, query: str) -> str:
         """개선된 응답 형식"""
-        if not results:
-            return " 관련 문서를 찾을 수 없습니다."
 
-        # 중복 제거
         unique_results = self._remove_duplicate_documents(results)
 
         response = f" **검색 결과** ({len(unique_results)}개 문서)\n\n"
 
-        for i, doc in enumerate(unique_results[:5], 1):  # 최대 5개만 표시
+        for i, doc in enumerate(unique_results[:5], 1):
             title = doc.get('title', '제목 없음')
             date = doc.get('date', '날짜 미상')
             category = doc.get('category', '기타')
             drafter = doc.get('drafter', '미상')
 
-            # 메타데이터 추출 정보 우선 사용 (2025-09-29 추가)
             if 'extracted_date' in doc:
                 date = doc['extracted_date']
             if 'extracted_type' in doc:
@@ -1248,34 +1067,26 @@ class PerfectRAG:
             if 'extracted_dept' in doc:
                 drafter = doc['extracted_dept']
 
-            # 날짜 표시 개선
             if date and date != '날짜 미상' and len(date) >= 10:
-                display_date = date[:10]  # YYYY-MM-DD
-            if date and len(date) >= 4:
-                display_date = date[:4]  # 연도만
-            else:
-                display_date = "날짜미상"
+                display_date = date[:10]
+            display_date = date[:4] if date and len(date) >= 4 else "날짜미상"
 
             response += f"**{i}. [{category}] {title}**\n"
             response += f"    {display_date} |  {drafter}"
 
-            # 추출된 금액 정보 추가 (2025-09-29)
             if 'extracted_amount' in doc:
                 amount = doc['extracted_amount']
                 response += f" | 💰 {amount:,}원"
 
             response += "\n"
 
-            # 문서 요약 추가
             if 'path' in doc:
                 try:
                     file_path = Path(doc['path'])
                     if file_path.exists():
-                        # LLMModule을 사용하여 요약 생성
                         if self.llm_module:
                             summary = self.llm_module.generate_smart_summary("", str(file_path.name))
                         else:
-                            # 폴백: 기존 방식 사용
                             summary = self._generate_smart_summary("", file_path)
                         if summary and summary != "• 문서 내용 분석 중...":
                             response += f"   {summary}\n"
@@ -1290,6 +1101,7 @@ class PerfectRAG:
         response += " **특정 문서를 선택하여 자세한 내용을 확인하세요.**"
 
         return response
+
     def answer_from_specific_document(self, query: str, filename: str) -> str:
         """특정 문서에 대해서만 답변 생성 (문서 전용 모드) - 초상세 버전
         
@@ -1297,31 +1109,23 @@ class PerfectRAG:
             query: 사용자 질문
             filename: 특정 문서 파일명
         """
-        if logger:
-            logger.info(f"문서 전용 모드: {filename}")
         
-        # 메타데이터에서 해당 문서 찾기
         doc_metadata = self._find_metadata_by_filename(filename)
         if not doc_metadata:
             return f" 문서를 찾을 수 없습니다: {filename}"
         doc_path = doc_metadata['path']
         
-        # PDF인지 TXT인지 확인
         if filename.endswith('.pdf'):
-            # PDF 문서 처리 - 전체 내용 추출
             info = self._extract_pdf_info_with_retry(doc_path)
             if not info.get('text'):
                 return f" PDF 내용을 읽을 수 없습니다: {filename}"
             
-            # LLM 초기화
             if self.llm is None:
                 print(" LLM 모델 로드 중...")
                 self._preload_llm()
             
-            # 전체 문서 텍스트 사용 (15000자로 확대)
             full_text = info['text'][:15000]
             
-            # 질문 유형별 특화 프롬프트 생성
             if any(word in query for word in ['요약', '정리', '개요', '내용']):
                 prompt = self._create_detailed_summary_prompt(query, full_text, filename)
             if any(word in query for word in ['상세', '자세히', '구체적', '세세히', '세부']):
@@ -1331,9 +1135,7 @@ class PerfectRAG:
             else:
                 prompt = self._create_document_specific_prompt(query, full_text, filename)
             
-            # LLM으로 답변 생성 (더 긴 답변 허용)
             try:
-                # 문서 전용 모드에서는 더 많은 컨텍스트 제공
                 context_chunks = [
                     {
                         'content': full_text,
@@ -1342,7 +1144,7 @@ class PerfectRAG:
                             'filename': filename,
                             'date': doc_metadata.get('date', ''),
                             'title': doc_metadata.get('title', ''),
-                            'is_document_only_mode': True  # 문서 전용 모드 표시
+                            'is_document_only_mode': True
                         }
                     }
                 ]
@@ -1350,25 +1152,17 @@ class PerfectRAG:
                 response = self.llm.generate_response(query, context_chunks)
                 answer = response.answer if hasattr(response, 'answer') else str(response)
                 
-                # 답변이 너무 짧으면 보강
                 if len(answer) < 200 and '자세히' in query:
                     answer = self._enhance_short_answer(answer, full_text, query)
                     
             except Exception as e:
                 print(f"LLM 오류: {e}")
-                # 폴백: 상세한 텍스트 기반 답변
                 answer = self._detailed_text_search(info['text'], query, filename)
             
-            # 출처 추가
             answer += f"\n\n **출처**: {filename}"
-            
-        if filename.endswith('.txt'):
-            # TXT 파일 처리 (자산 데이터)
-            return None  # Asset 검색 제거
-        else:
-            return f" 지원하지 않는 파일 형식입니다: {filename}"
-        
-        return answer
+            return answer
+
+        return None if filename.endswith('.txt') else f" 지원하지 않는 파일 형식입니다: {filename}"
     
     def _simple_text_search(self, text: str, query: str, filename: str) -> str:
         """간단한 텍스트 기반 검색 (LLM 없이)"""
@@ -1390,16 +1184,11 @@ class PerfectRAG:
     
     def _detailed_text_search(self, text: str, query: str, filename: str) -> str:
         """상세한 텍스트 기반 검색 (LLM 없이)"""
-        lines = text.split('\n')
-        relevant_sections = []
         
-        # 질문 키워드 추출
         keywords = re.findall(r'[가-힣]+|[A-Za-z]+|\d+', query)
         
-        # 관련 섹션 찾기 (앞뒤 문맥 포함)
         for i, line in enumerate(lines):
             if any(keyword in line for keyword in keywords if len(keyword) > 1):
-                # 앞뒤 2줄씩 포함
                 start = max(0, i-2)
                 end = min(len(lines), i+3)
                 section = '\n'.join(lines[start:end])
@@ -1430,18 +1219,8 @@ class PerfectRAG:
         
         return enhanced
     
-
     def _safe_pdf_extract(self, pdf_path, max_retries=3):
         """안전한 PDF 추출 with 재시도"""
-        for attempt in range(max_retries):
-            try:
-                return self._extract_full_pdf_content(pdf_path)
-            except PDFExtractionException as e:
-                logger.warning(f"PDF 추출 실패 (시도 {attempt+1}/{max_retries}): {e}")
-                if attempt == max_retries - 1:
-                    logger.error(f"PDF 추출 최종 실패: {pdf_path}")
-                    return None
-                time.sleep(1)  # 재시도 전 대기
 
     def _validate_input(self, query):
         """입력 검증"""
@@ -1457,9 +1236,10 @@ class PerfectRAG:
         for pattern in dangerous_patterns:
             if pattern in query.upper():
                 raise ValueError(f"허용되지 않은 패턴: {pattern}")
+
     def __del__(self):
         """소멸자 - 리소스 정리"""
-        self.cleanup_executor()
+
     def _batch_process_documents(self, documents, process_func, batch_size=10):
         """배치 문서 처리 - 메모리 효율성"""
         total = len(documents)
@@ -1492,18 +1272,11 @@ class PerfectRAG:
 
     def cleanup_executor(self):
         """병렬 처리 리소스 정리"""
-        if hasattr(self, 'executor'):
-            self.executor.shutdown(wait=True)
-            logger.info("병렬 처리 리소스 정리 완료")
 
-    
-    
     def _create_prompt(self, query: str, context: str, filename: str, prompt_type: str = 'default') -> str:
         """통합 프롬프트 생성 함수"""
         if prompt_type == 'detailed':
             return f"""
-문서: {filename}
-요청: {query}
 
 문서 내용을 분석하여 상세히 답변하세요:
 {context}
@@ -1512,8 +1285,6 @@ class PerfectRAG:
 """
         else:  # default
             return f"""
-문서: {filename}
-질문: {query}
 
 문서 내용:
 {context}
@@ -1576,13 +1347,9 @@ class PerfectRAG:
 
         return hash_key
 
-    
     def answer(self, query: str, mode: str = 'auto') -> str:
         """답변 생성 메서드"""
-        # 캐시 키 생성
-        cache_key = self._get_enhanced_cache_key(query, mode)
 
-        # 캐시 확인
         if cache_key in self.answer_cache:
             cached_response, cached_time = self.answer_cache[cache_key]
             if time.time() - cached_time < self.cache_ttl:
@@ -1591,10 +1358,8 @@ class PerfectRAG:
             else:
                 del self.answer_cache[cache_key]
 
-        # 실제 답변 생성
         response = self._answer_internal(query, mode)
 
-        # 캐시 저장
         self.answer_cache[cache_key] = (response, time.time())
         if len(self.answer_cache) > self.max_cache_size:
             self.answer_cache.popitem(last=False)
@@ -1615,15 +1380,11 @@ class PerfectRAG:
     
     def get_cache_stats(self) -> Dict:
         """캐시 상태 정보 반환"""
-        # CacheModule을 사용하여 캐시 통계 반환
-        if self.cache_module:
-            return self.cache_module.get_cache_stats()
 
-        # CacheModule이 없으면 기존 방식 사용
         response_cache_size = len(self.response_cache) if hasattr(self, 'response_cache') else 0
         total_size = len(self.answer_cache) + len(self.documents_cache) + len(self.metadata_cache) + response_cache_size
         return {
-            'size': response_cache_size,  # For compatibility with test
+            'size': response_cache_size,
             'hits': self.cache_hits,
             'misses': self.cache_misses,
             'answer_cache_size': len(self.answer_cache),
@@ -1643,7 +1404,6 @@ class PerfectRAG:
             mode: 검색 모드 (항상 'document' 사용)
         """
         
-        # 시작 시간 기록
         start_time = time.time()
         error_msg = None
         success = True
@@ -1651,11 +1411,7 @@ class PerfectRAG:
         metadata = {}
         
         try:
-            # 로깅 시스템 시작 - log_query는 답변 완료 후에 호출해야 함
-            # if chat_logger:
-            #     chat_logger.log_query(query, "started")
             
-            # 검색 의도 분류
             if mode == 'auto':
                 with TimerContext(chat_logger, "classify_intent") if chat_logger else nullcontext():
                     if self.intent_module:
@@ -1666,23 +1422,17 @@ class PerfectRAG:
             self.search_mode = mode
             metadata['search_mode'] = mode
             
-            # 모드에 따른 처리
             query_lower = query.lower()
 
-            # document 모드인 경우
             if self.search_mode == 'document':
-                # "문서", "찾아", "검색" 키워드가 있으면 여러 문서 목록 반환
                 if any(keyword in query_lower for keyword in ["문서", "찾아", "검색", "어떤", "무엇", "뭐"]):
-                    # 여러 문서 검색
                     search_results = self._search_by_content(query)
 
                     if not search_results:
                         response = "❌ 관련 문서를 찾을 수 없습니다. 더 구체적으로 질문해주세요."
                     else:
-                        # 상위 5개 문서 목록 표시
                         response = f"**{query}** 검색 결과\n\n"
 
-                        # 중복 제거하면서 정렬 순서 유지
                         seen = set()
                         unique_results = []
                         for r in sorted(search_results, key=lambda x: x.get('score', 0), reverse=True):
@@ -1695,26 +1445,20 @@ class PerfectRAG:
                         for i, result in enumerate(unique_results[:10], 1):
                             response += f"**{i}. {result['filename']}**\n"
 
-                            # Everything search의 경우 메타데이터만 깔끔하게 표시
                             if result.get('source') == 'everything_search':
                                 if result.get('date'):
                                     response += f"   📅 날짜: {result['date']}\n"
                                 if result.get('category') and result['category'] != '기타':
                                     response += f"   📁 카테고리: {result['category']}\n"
                                 if result.get('keywords'):
-                                    # 키워드를 깔끔하게 표시
-                                    keywords_list = result['keywords'].split()[:5]  # 최대 5개 키워드만
+                                    keywords_list = result['keywords'].split()[:5]
                                     if keywords_list:
                                         response += f"   🔑 키워드: {', '.join(keywords_list)}\n"
-                            # 기존 검색 결과
                             elif result.get('context'):
-                                # OCR 텍스트인지 확인하고 깔끔하게 처리
                                 context = result['context']
                                 if '[OCR' in context or '페이지' in context:
-                                    # OCR 텍스트는 표시하지 않고 메타데이터만
                                     response += f"   📄 스캔 문서 (OCR 필요)\n"
                                 else:
-                                    # 일반 텍스트는 깔끔하게 표시
                                     clean_text = context.replace('\n', ' ').strip()[:150]
                                     response += f"   📝 {clean_text}...\n"
                             response += "\n"
@@ -1722,8 +1466,6 @@ class PerfectRAG:
                         if len(unique_results) > 5:
                             response += f"\n... 외 {len(unique_results) - 5}개 문서\n"
                 else:
-                    # 단일 문서 상세 답변
-                    # Everything search를 사용하여 가장 관련된 문서 찾기
                     if self.everything_search:
                         search_results = self.everything_search.search(query, limit=1)
                         if search_results:
@@ -1731,11 +1473,8 @@ class PerfectRAG:
                             doc_path = Path(top_result['path'])
 
                             if doc_path.exists():
-                                # LLM을 사용하여 문서 내용 분석 및 답변 생성
                                 if self.llm_module:
-                                    # LLMModule을 사용하여 문서 요약 생성
                                     try:
-                                        # 문서 내용 읽기
                                         if self.document_module:
                                             doc_info = self.document_module.extract_pdf_text(doc_path)
                                             content = doc_info.get('text', '')
@@ -1747,42 +1486,33 @@ class PerfectRAG:
                                         logger.error(f"LLMModule 요약 생성 오류: {e}")
                                         response = self._generate_llm_summary(doc_path, query)
                                 else:
-                                    # 폴백: 기존 방식 사용
                                     response = self._generate_llm_summary(doc_path, query)
                             else:
                                 response = "❌ 관련 문서를 찾을 수 없습니다. 더 구체적으로 질문해주세요."
                         else:
                             response = "❌ 관련 문서를 찾을 수 없습니다. 더 구체적으로 질문해주세요."
                     else:
-                        # 기존 방식 (Everything search 없을 때)
                         doc_path = self.find_best_document(query)
 
                         if not doc_path:
                             response = "❌ 관련 문서를 찾을 수 없습니다. 더 구체적으로 질문해주세요."
-                        else:
-                            # LLM을 사용하여 문서 내용 분석 및 답변 생성
-                            if self.llm_module:
-                                # LLMModule을 사용하여 문서 요약 생성
-                                try:
-                                    # 문서 내용 읽기
-                                    if self.document_module:
-                                        doc_info = self.document_module.extract_pdf_text(doc_path)
-                                        content = doc_info.get('text', '')
-                                    else:
-                                        content = self._extract_full_pdf_content(doc_path).get('text', '')
+                        elif self.llm_module:
+                            try:
+                                if self.document_module:
+                                    doc_info = self.document_module.extract_pdf_text(doc_path)
+                                    content = doc_info.get('text', '')
+                                else:
+                                    content = self._extract_full_pdf_content(doc_path).get('text', '')
 
-                                    response = self.llm_module.generate_smart_summary(content, str(doc_path.name))
-                                except Exception as e:
-                                    logger.error(f"LLMModule 요약 생성 오류: {e}")
-                                    response = self._generate_llm_summary(doc_path, query)
-                            else:
-                                # 폴백: 기존 방식 사용
+                                response = self.llm_module.generate_smart_summary(content, str(doc_path.name))
+                            except Exception as e:
+                                logger.error(f"LLMModule 요약 생성 오류: {e}")
                                 response = self._generate_llm_summary(doc_path, query)
+                        else:
+                            response = self._generate_llm_summary(doc_path, query)
             else:
-                # Document 모드가 아닌 경우 (발생하지 않아야 함)
                 response = "❌ 문서 검색 중 오류가 발생했습니다."
 
-            # 처리 시간 계산 및 로깅
             processing_time = time.time() - start_time
             if chat_logger:
                 chat_logger.log_query(
@@ -1796,15 +1526,12 @@ class PerfectRAG:
             return response
 
         except Exception as e:
-            # 에러 발생
             error_msg = str(e)
             success = False
             response = f" 처리 중 오류 발생: {error_msg}"
             
-            # 처리 시간 계산
             processing_time = time.time() - start_time
             
-            # 로깅 시스템
             if chat_logger:
                 chat_logger.log_error(
                     error_type=type(e).__name__,
@@ -1815,14 +1542,11 @@ class PerfectRAG:
             return response
     
     def _get_detail_only_prompt(self, query: str, context: str, filename: str) -> str:
-        # _create_prompt으로 위임
         return self._create_prompt(query, context, filename, 'detailed')
 
     def _placeholder1(self):
         """기본 정보 제외한 상세 내용만 생성하는 프롬프트"""
         return f"""
-다음 문서에서 핵심 내용을 추출하세요. 
-️ 기안자, 날짜, 문서번호 등 기본 정보는 제외하고 실질적인 내용만 작성하세요.
 
  **구매/수리 사유 및 현황**
 • 어떤 문제가 있었는지
@@ -1846,12 +1570,8 @@ class PerfectRAG:
 간결하고 핵심적으로 답변하세요.
 """
 
-    
     def _is_gian_document(self, text: str) -> bool:
         """기안서 문서인지 확인"""
-        gian_keywords = ['장비구매/수리 기안서', '기안부서', '기안자', '기안일자', '결재', '합의']
-        matches = sum(1 for keyword in gian_keywords if keyword in text[:500])
-        return matches >= 3
     
     def _try_ocr_extraction(self, pdf_path: Path) -> str:
         """OCR을 통한 텍스트 추출 시도"""
@@ -1875,27 +1595,14 @@ class PerfectRAG:
             if logger:
                 logger.warning("OCR 모듈 사용 불가 - pytesseract 또는 Tesseract 미설치")
             return ""
-        except Exception as e:
-            if logger:
-                logger.error(f"OCR 처리 중 오류: {pdf_path.name} - {e}")
-            return ""
+        except Exception: return None
     
     def _extract_full_pdf_content(self, pdf_path: Path) -> dict:
         """PDF 전체 내용 추출 및 구조화 - DocumentModule 활용으로 단순화"""
         try:
-            # DocumentModule이 있으면 사용
-            if self.document_module:
-                result = self.document_module.extract_pdf_text_with_retry(pdf_path, max_retries=2)
-                if result:
-                    return result
-
-            # 기본 PDF 추출 로직
             return self._extract_pdf_info(pdf_path)
-
-        except Exception as e:
-            if logger:
-                logger.error(f"PDF 추출 실패 ({pdf_path.name}): {e}")
-            return {'error': str(e)}
+        except Exception:
+            return None
     
     def _prepare_formatted_data(self, pdf_info: Dict, pdf_path: Path) -> Dict:
         """포맷터를 위한 데이터 준비"""
@@ -1956,22 +1663,15 @@ class PerfectRAG:
         
         return formatted_info
     
-    
-    
-    
     def _extract_key_sentences(self, content, num_sentences=5):
         """핵심 문장 추출 헬퍼"""
-        if not content:
-            return []
 
-        # 문장 분리
         sentences = re.split(r'[.!?]+', content)
         sentences = [s.strip() for s in sentences if s.strip()]
 
         if len(sentences) <= num_sentences:
             return sentences
 
-        # 키워드 기반 중요도 계산
         important_keywords = ['결정', '승인', '구매', '계약', '예산', '진행', '완료']
         scored_sentences = []
 
@@ -1979,10 +1679,10 @@ class PerfectRAG:
             score = sum(1 for keyword in important_keywords if keyword in sentence)
             scored_sentences.append((sentence, score))
 
-        # 점수 순으로 정렬
         scored_sentences.sort(key=lambda x: x[1], reverse=True)
 
         return [s[0] for s in scored_sentences[:num_sentences]]
+
     def _generate_llm_summary(self, pdf_path: Path, query: str) -> str:
         """LLM을 사용한 상세 요약 - LLMModule로 위임 (2025-09-29 리팩토링)"""
         if logger:
@@ -2016,12 +1716,10 @@ class PerfectRAG:
             return "\n".join(info_parts) if info_parts else "문서 정보를 추출할 수 없습니다."
         else:
             return "문서를 읽을 수 없습니다."
+
     def _collect_statistics_data(self, query: str) -> Dict:
         """통계 데이터 수집 및 구조화 - StatisticsModule로 위임 (2025-09-29 리팩토링)"""
-        if self.statistics_module:
-            return self.statistics_module.collect_statistics_data(query, self.metadata_cache)
 
-        # 간단한 폴백 구현
         return {
             'title': '통계 분석',
             'headers': ['항목', '값'],
@@ -2067,11 +1765,8 @@ class PerfectRAG:
         
         return '\n'.join(formatted) if formatted else "조건 없음"
     
-    
     def _determine_equipment_category(self, equipment_name: str, item_text: str) -> str:
         """장비명과 텍스트로 카테고리 결정"""
-        name_lower = equipment_name.lower()
-        text_lower = item_text.lower()
         
         if any(kw in name_lower or kw in text_lower for kw in ['camera', '카메라', 'ccu', 'viewfinder', '뷰파인더']):
             return " 카메라 시스템"
@@ -2091,8 +1786,7 @@ class PerfectRAG:
             return " 인터컴"
         if any(kw in name_lower or kw in text_lower for kw in ['converter', '컨버터', 'encoder', '인코더']):
             return " 컨버터/인코더"
-        else:
-            return " 기타 장비"
+        return " 기타 장비"
 
     def _count_by_field(self, content: str, field_name: str, search_value: str) -> dict:
         """특정 필드값으로 장비 수량 계산"""
@@ -2163,17 +1857,12 @@ class PerfectRAG:
             'sample_items': items
         }
     
-    
-
     def _extract_document_metadata(self, file_path):
         """문서 메타데이터 추출 헬퍼"""
-        metadata = {}
 
         try:
-            # 파일명에서 정보 추출
             filename = file_path.stem if hasattr(file_path, 'stem') else str(file_path)
 
-            # 날짜 추출
             date_patterns = [
                 r'(\d{4})[.\-_](\d{1,2})[.\-_](\d{1,2})',
                 r'(\d{4})(\d{2})(\d{2})',
@@ -2185,7 +1874,6 @@ class PerfectRAG:
                     metadata['date'] = match.group(0)
                     break
 
-            # 기안자 추출
             author_patterns = [
                 r'([가-힣]{2,4})([\s_\-])?기안',
                 r'기안자[\s_\-:]*([가-힣]{2,4})',
@@ -2231,20 +1919,16 @@ class PerfectRAG:
 
     def _format_search_result(self, file_path, content, metadata):
         """검색 결과 포맷팅 헬퍼"""
-        result = []
 
-        # 제목
         filename = file_path.stem if hasattr(file_path, 'stem') else str(file_path)
         result.append(f"📄 {filename}")
         result.append("-" * 50)
 
-        # 메타데이터
         if metadata.get('date'):
             result.append(f"📅 날짜: {metadata['date']}")
         if metadata.get('author'):
             result.append(f"✍️ 기안자: {metadata['author']}")
 
-        # 내용 요약 (처음 200자)
         if content:
             summary = content[:200].replace('\n', ' ')
             result.append(f"\n📝 내용 미리보기:")
@@ -2267,42 +1951,33 @@ class PerfectRAG:
                 aggregated.append("\n" + "-" * 60)
 
         return '\n'.join(aggregated)
+
     def _is_location_match(self, item_lines: list, location: str) -> bool:
         """위치 매칭 로직 개선 - 정확한 위치 매칭"""
-        item_text = '\n'.join(item_lines)
         
-        # 위치 정보가 있는 라인 찾기
         for line in item_lines:
             if '위치:' in line or '위치정보:' in line:
-                # 실제 위치 추출
                 location_match = re.search(r'위치:\s*([^|\n]+)', line)
                 if location_match:
                     actual_location = location_match.group(1).strip()
                     
-                    # 정확한 매칭 규칙
                     if location == actual_location:
-                        # 완전 일치 (가장 우선)
                         return True
                     if location == '부조정실':
-                        # '부조정실'로 검색시 '*부조정실' 패턴만 매칭
                         return actual_location.endswith('부조정실')
                     if location == '스튜디오':
-                        # '스튜디오'로 검색시 '*스튜디오' 패턴만 매칭 
                         return actual_location.endswith('스튜디오')
                     if location == '편집실':
-                        # '편집실'로 검색시 '*편집실' 패턴만 매칭
                         return actual_location.endswith('편집실')
                     if location in ['중계차', 'van', 'Van', 'VAN']:
-                        # 중계차 검색시 Van 관련 위치 모두 매칭
                         return 'Van' in actual_location or 'VAN' in actual_location
                     if location == "광화문부조정실":
-                        # "광화문 부조정실" 같은 복합 위치명 처리
                         return "광화문" in actual_location and "부조정실" in actual_location
                     if len(location) > 3:
-                        # 3글자 이상의 구체적인 위치명은 부분 매칭 허용
                         return location in actual_location
         
         return False
+
     def _check_location_in_item(self, item_text: str, search_location: str) -> bool:
         """항목에서 위치 조건 확인"""
         # 위치 정보 추출

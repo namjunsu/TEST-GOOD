@@ -1,0 +1,18 @@
+batch:
+  batch_size: 4
+  enable_batching: true
+  timeout_ms: 100
+cache:
+  cache_ttl_seconds: 3600
+  enable_prompt_cache: true
+context:
+  chunk_size: 500
+  max_chunks: 5
+  overlap: 50
+  relevance_threshold: 0.7
+prompts:
+  max_context_tokens: 2000
+  max_response_tokens: 500
+  temperature: 0.7
+  top_p: 0.9
+  use_optimized: true

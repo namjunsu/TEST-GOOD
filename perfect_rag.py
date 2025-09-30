@@ -55,7 +55,7 @@ except ImportError:
 
 from rag_system.qwen_llm import QwenLLM
 from rag_system.llm_singleton import LLMSingleton
-from metadata_db import MetadataDB
+from modules.metadata_db import MetadataDB
 
 try:
     from everything_like_search import EverythingLikeSearch

@@ -1001,9 +1001,7 @@ class PerfectRAG:
         return info
 
     def _search_by_content(self, query: str) -> List[Dict[str, Any]]:
-        """🔥 NEW: Everything-like 초고속 파일 검색"""
-
-        # SearchModule 사용 (2025-09-29 리팩토링)
+        """검색 모듈로 위임된 검색 함수"""
         if self.search_module:
             try:
                 results = self.search_module.search_by_content(query, top_k=20)
@@ -1012,193 +1010,13 @@ class PerfectRAG:
                 return results
             except Exception as e:
                 if logger:
-                    logger.error(f"SearchModule failed: {e}, falling back to embedded search")
+                    logger.error(f"SearchModule failed: {e}")
+                return []
 
-        # Everything-like 검색 사용 가능한 경우 (폴백)
-        if self.everything_search:
-            try:
-                # 초고속 SQLite 검색
-                search_results = self.everything_search.search(query, limit=20)
-
-                results = []
-                for doc in search_results:
-                    # 검색 결과를 기존 형식으로 변환
-                    result = {
-                        'filename': doc['filename'],
-                        'path': doc['path'],
-                        'date': doc.get('date', ''),
-                        'year': doc.get('year', ''),
-                        'category': doc.get('category', '기타'),
-                        'keywords': doc.get('keywords', ''),
-                        'score': 1.0,  # Everything 검색은 관련도 점수가 없으므로 기본값
-                        'source': 'everything_search'
-                    }
-
-                    # 메타데이터 추출 (2025-09-29 추가)
-                    if self.metadata_extractor:
-                        try:
-                            # PDF 파일인 경우 첫 페이지 텍스트 추출
-                            if doc['path'].endswith('.pdf'):
-                                with pdfplumber.open(doc['path']) as pdf:
-                                    text = pdf.pages[0].extract_text() if pdf.pages else ""
-
-                                # 메타데이터 추출
-                                metadata = self.metadata_extractor.extract_all(
-                                    text[:1000] if text else "",  # 첫 1000자만
-                                    doc['filename']
-                                )
-
-                                # 요약 정보를 결과에 추가
-                                result['metadata_info'] = metadata.get('summary', {})
-
-                                # 주요 필드 직접 추가 (호환성 유지)
-                                if metadata['summary'].get('date'):
-                                    result['extracted_date'] = metadata['summary']['date']
-                                if metadata['summary'].get('amount'):
-                                    result['extracted_amount'] = metadata['summary']['amount']
-                                if metadata['summary'].get('department'):
-                                    result['extracted_dept'] = metadata['summary']['department']
-                                if metadata['summary'].get('doc_type'):
-                                    result['extracted_type'] = metadata['summary']['doc_type']
-
-                        except Exception as e:
-                            # 메타데이터 추출 실패해도 검색은 계속
-                            if logger:
-                                logger.debug(f"Metadata extraction failed for {doc['filename']}: {e}")
-
-                    results.append(result)
-
-                if logger:
-                    logger.info(f"Everything search found {len(results)} documents for query: {query}")
-
-                return results
-
-            except Exception as e:
-                if logger:
-                    logger.error(f"Everything search failed: {e}, falling back to legacy search")
-                # 실패 시 기존 검색으로 폴백
-
-        # 기존 검색 로직 (Everything 사용 불가 시)
-        file_scores = {}  # filename -> result dict
-        query_lower = query.lower()
-        keywords = [kw.lower() for kw in query.split() if len(kw) > 1]
-
-        # 모든 PDF 파일 검색
-        pdf_files = list(self.docs_dir.rglob("*.pdf"))
-
+        # SearchModule이 없으면 빈 결과 반환
         if logger:
-            logger.info(f"내용 검색 시작: {len(pdf_files)}개 PDF, 키워드: {keywords}")
-
-        # 먼저 파일명 검색 (빠름)
-        for pdf_path in pdf_files:
-            filename_lower = pdf_path.name.lower()
-            score = 0
-            matched_keywords = []
-
-            # 파일명에 전체 쿼리가 포함되면 최고 점수
-            if query_lower in filename_lower:
-                score = 100
-                matched_keywords = [query]
-            # 파일명에 각 키워드가 포함되면 점수 부여
-            else:
-                # 핵심 키워드 찾기 (관련, 문서 제외)
-                important_keywords = [kw for kw in keywords if kw not in ['관련', '문서', '찾아', '내용']]
-
-                # 모든 중요 키워드가 파일명에 있는지 확인
-                if important_keywords:
-                    all_important_match = all(kw in filename_lower for kw in important_keywords)
-
-                    for kw in keywords:
-                        if kw in filename_lower:
-                            # 중요 키워드는 높은 점수
-                            if kw in important_keywords:
-                                score += 50 if all_important_match else 30
-                            else:
-                                score += 10  # 관련, 문서 등은 낮은 점수
-                            matched_keywords.append(kw)
-
-            if score > 0:
-                file_scores[pdf_path.name] = {
-                    'path': pdf_path,
-                    'filename': pdf_path.name,
-                    'score': score,
-                    'matched_keywords': matched_keywords,
-                    'context': f"파일명 매칭: {pdf_path.name}"
-                }
-
-        # 내용 검색 (느림, 일부만)
-        for pdf_path in pdf_files[:50]:  # 상위 50개만
-            try:
-                # 캐시 확인
-                cache_key = str(pdf_path)
-                if cache_key in self.pdf_text_cache:
-                    text = self.pdf_text_cache[cache_key].get('text', '')
-                else:
-                    # PDF 텍스트 추출
-                    with pdfplumber.open(pdf_path) as pdf:
-                        text = ""
-                        for page_num, page in enumerate(pdf.pages[:5]):  # 처음 5페이지만
-                            page_text = page.extract_text()
-                            if page_text:
-                                text += page_text + "\n"
-
-                        # OCR 필요 시
-                        if not text.strip():
-                            text = self._try_ocr_extraction(pdf_path)
-                            if not text:
-                                continue
-
-                    # 캐시 저장
-                    self.pdf_text_cache[cache_key] = {'text': text, 'timestamp': time.time()}
-
-                # 키워드 매칭 점수 계산
-                text_lower = text.lower()
-                matched_keywords = [kw for kw in keywords if kw in text_lower]
-
-                if matched_keywords:
-                    # 점수 계산: 매칭된 키워드 수 + 근접도
-                    content_score = len(matched_keywords) * 10
-
-                    # 키워드가 가까이 있으면 보너스
-                    for i in range(len(matched_keywords) - 1):
-                        if abs(text_lower.find(matched_keywords[i]) - text_lower.find(matched_keywords[i+1])) < 200:
-                            content_score += 5
-
-                    # 컨텍스트 추출 (키워드 주변 200자)
-                    context = self._extract_context(text, matched_keywords[0], 200)
-
-                    # 기존 파일명 점수와 내용 점수 중 높은 것 사용
-                    if pdf_path.name in file_scores:
-                        # 이미 파일명으로 매칭된 경우, 더 높은 점수 유지
-                        if content_score > file_scores[pdf_path.name]['score']:
-                            file_scores[pdf_path.name]['score'] = content_score
-                            file_scores[pdf_path.name]['context'] = context
-                            file_scores[pdf_path.name]['matched_keywords'].extend(matched_keywords)
-                    else:
-                        # 새로운 파일 추가
-                        file_scores[pdf_path.name] = {
-                            'path': pdf_path,
-                            'filename': pdf_path.name,
-                            'score': content_score,
-                            'matched_keywords': matched_keywords,
-                            'context': context
-                        }
-
-            except Exception as e:
-                if logger:
-                    logger.warning(f"PDF 내용 검색 실패 {pdf_path.name}: {e}")
-                continue
-
-        # 딕셔너리를 리스트로 변환하고 점수 기준 정렬
-        results = list(file_scores.values())
-        results.sort(key=lambda x: x['score'], reverse=True)
-
-        if logger and results:
-            logger.info(f"내용 검색 결과: {len(results)}개 문서 찾음")
-            for r in results[:3]:
-                logger.info(f"  - {r['filename']}: 점수 {r['score']}, 매칭 {r['matched_keywords']}")
-
-        return results[:10]  # 상위 10개 반환
+            logger.warning("SearchModule not available")
+        return []
 
     def _extract_context(self, text: str, keyword: str, window: int = 200) -> str:
         """키워드 주변 컨텍스트 추출"""
@@ -1612,8 +1430,6 @@ class PerfectRAG:
         
         return enhanced
     
-    def _create_detailed_summary_prompt(self, query: str, context: str, filename: str) -> str:
-        """상세 요약 전용 프롬프트 - 통일된 포맷"""
 
     def _safe_pdf_extract(self, pdf_path, max_retries=3):
         """안전한 PDF 추출 with 재시도"""
@@ -1680,110 +1496,29 @@ class PerfectRAG:
             self.executor.shutdown(wait=True)
             logger.info("병렬 처리 리소스 정리 완료")
 
-    def _create_ultra_detailed_prompt(self, query: str, context: str, filename: str) -> str:
-        """초상세 답변 전용 프롬프트"""
-        return f"""
-[초상세 분석 모드] - 모든 세부사항 포함
-
+    
+    
+    def _create_prompt(self, query: str, context: str, filename: str, prompt_type: str = 'default') -> str:
+        """통합 프롬프트 생성 함수"""
+        if prompt_type == 'detailed':
+            return f"""
 문서: {filename}
 요청: {query}
 
- **최대한 상세하게 답변하세요**:
-
-1. 질문과 관련된 모든 정보를 찾아서 제공
-2. 문서의 앞뒤 문맥까지 포함하여 설명
-3. 구체적인 수치, 날짜, 이름, 모델명 등 모두 명시
-4. 관련 배경 정보도 함께 제공
-5. 문서에 암시된 내용도 해석하여 설명
-
-문서 전체 내용:
+문서 내용을 분석하여 상세히 답변하세요:
 {context}
 
-답변 규칙:
- 최소 500자 이상 상세 답변
- 모든 관련 정보 나열
- 표나 리스트로 정리
- 중요 정보는 **굵게** 표시
- 문서의 모든 관련 부분 인용
+중요 정보는 **굵게** 표시하고, 관련 내용을 모두 포함하세요.
 """
-    
-    def _create_itemized_list_prompt(self, query: str, context: str, filename: str) -> str:
-        """품목 리스트 전용 프롬프트"""
-        return f"""
-[품목/항목 상세 분석 모드]
-
+        else:  # default
+            return f"""
 문서: {filename}
-
-문서에 있는 모든 품목/항목을 완전하게 추출하세요:
-
- **추출 형식**:
-1. 품목명/모델명
-   - 제조사: 
-   - 모델번호:
-   - 수량:
-   - 단가:
-   - 금액:
-   - 용도:
-   - 특징:
-   - 기타사항:
-
-2. (다음 품목...)
+질문: {query}
 
 문서 내용:
 {context}
 
-질문: {query}
-
-중요: 
-- 문서에 나온 모든 품목을 빠짐없이
-- 각 품목의 모든 정보를 상세히
-- 순서대로 번호를 매겨서 정리
-"""
-    
-    def _create_document_specific_prompt(self, query: str, context: str, filename: str) -> str:
-        """특정 문서 전용 프롬프트 생성 - 통일된 포맷"""
-        return f"""
-[문서 전용 정밀 분석 모드] 
-
- 분석 대상 문서: {filename}
-
-이 문서만을 분석하여 아래 형식으로 답변하세요.
- [문서 제목]
-
- **기본 정보**
-• 기안자: [문서에서 찾은 기안자명]
-• 날짜: [문서 날짜]
-• 문서 종류: [기안서/검토서/보고서 등]
-
- **주요 내용**
-[질문과 관련된 핵심 내용을 구조화하여 표시]
-• [주요 사항 1]
-• [주요 사항 2]
-• [세부 내용들...]
-
- **비용 정보** (비용 관련 내용이 있는 경우)
-• 총액: [금액]
-• 세부 내역:
-  - [품목1]: [금액]
-  - [품목2]: [금액]
-
- **검토 의견** (검토 의견이 있는 경우)
-• [검토사항 1]
-• [검토사항 2]
-• 결론: [최종 의견]
-
- 출처: {filename}
-
- **문서 전체 내용**:
-{context}
-
- **사용자 질문**: {query}
-
-️ 주의사항:
-- 위 형식을 반드시 따를 것
-- 이 문서에 없는 내용은 추측하지 말 것
-- 문서의 정확한 표현 사용
-- 가능한 한 많은 세부사항 포함
+위 문서를 분석하여 질문에 답변하세요.
 """
     
     def _get_enhanced_cache_key(self, query: str, mode: str) -> str:
@@ -1841,42 +1576,30 @@ class PerfectRAG:
 
         return hash_key
 
-    def answer_with_logging(self, query: str, mode: str = 'auto') -> str:
-        """로깅이 통합된 answer 메서드 (캐싱 포함)"""
-        # 향상된 캐시 키 생성
+    
+    def answer(self, query: str, mode: str = 'auto') -> str:
+        """답변 생성 메서드"""
+        # 캐시 키 생성
         cache_key = self._get_enhanced_cache_key(query, mode)
-        
+
         # 캐시 확인
         if cache_key in self.answer_cache:
             cached_response, cached_time = self.answer_cache[cache_key]
-            # TTL 확인 (기본 1시간)
             if time.time() - cached_time < self.cache_ttl:
-                print(f" 캐시 히트! (키: {cache_key[:8]}...)")
-                # LRU 업데이트 (최근 사용으로 이동)
                 self.answer_cache.move_to_end(cache_key)
                 return cached_response
             else:
-                # 만료된 캐시 제거
                 del self.answer_cache[cache_key]
-        
-        # 실제 답변 생성 (_answer_internal에서 모든 로깅 처리)
-        start_time = time.time()
+
+        # 실제 답변 생성
         response = self._answer_internal(query, mode)
-        generation_time = time.time() - start_time
-        
+
         # 캐시 저장
         self.answer_cache[cache_key] = (response, time.time())
-        
-        # 캐시 크기 제한 (LRU 방식)
         if len(self.answer_cache) > self.max_cache_size:
-            # 가장 오래된 항목 제거
             self.answer_cache.popitem(last=False)
-        
+
         return response
-    
-    def answer(self, query: str, mode: str = 'auto') -> str:
-        """로깅이 통합된 답변 생성"""
-        return self.answer_with_logging(query, mode)
     
     def clear_cache(self):
         """캐시 초기화"""
@@ -2092,6 +1815,10 @@ class PerfectRAG:
             return response
     
     def _get_detail_only_prompt(self, query: str, context: str, filename: str) -> str:
+        # _create_prompt으로 위임
+        return self._create_prompt(query, context, filename, 'detailed')
+
+    def _placeholder1(self):
         """기본 정보 제외한 상세 내용만 생성하는 프롬프트"""
         return f"""
 다음 문서에서 핵심 내용을 추출하세요. 

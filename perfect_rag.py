@@ -127,6 +127,14 @@ except ImportError:
     if logger:
         logger.warning("StatisticsModule not available - using embedded statistics")
 
+try:
+    from intent_module import IntentModule
+    INTENT_MODULE_AVAILABLE = True
+except ImportError:
+    INTENT_MODULE_AVAILABLE = False
+    if logger:
+        logger.warning("IntentModule not available - using embedded intent analysis")
+
 
 
 import logging
@@ -351,6 +359,18 @@ class PerfectRAG:
                 if logger:
                     logger.error(f"❌ StatisticsModule 초기화 실패: {e}")
                 self.statistics_module = None
+
+        # IntentModule 초기화 (2025-09-30 리팩토링)
+        self.intent_module = None
+        if INTENT_MODULE_AVAILABLE:
+            try:
+                self.intent_module = IntentModule(llm_module=self.llm_module)
+                if logger:
+                    logger.info("✅ IntentModule 초기화 성공")
+            except Exception as e:
+                if logger:
+                    logger.error(f"❌ IntentModule 초기화 실패: {e}")
+                self.intent_module = None
 
         # Everything-like 초고속 검색 시스템 초기화 (SearchModule이 없을 때만)
         self.everything_search = None
@@ -1626,9 +1646,6 @@ class PerfectRAG:
 
         return response
 
-    def _classify_search_intent(self, query: str) -> str:
-        """검색 의도 분류 - 항상 document 모드 반환"""
-        return 'document'  # Asset 모드 제거, 항상 문서 검색
 
     def answer_from_specific_document(self, query: str, filename: str) -> str:
         """특정 문서에 대해서만 답변 생성 (문서 전용 모드) - 초상세 버전
@@ -2101,7 +2118,10 @@ class PerfectRAG:
             # 검색 의도 분류
             if mode == 'auto':
                 with TimerContext(chat_logger, "classify_intent") if chat_logger else nullcontext():
-                    mode = self._classify_search_intent(query)
+                    if self.intent_module:
+                        mode = self.intent_module.classify_search_intent(query)
+                    else:
+                        mode = self._classify_search_intent(query)
                 print(f" 검색 모드: {mode}")
             
             self.search_mode = mode
@@ -2761,230 +2781,8 @@ class PerfectRAG:
         
         return formatted_info
     
-    def _analyze_user_intent(self, query: str) -> Dict[str, Any]:
-        """사용자 질문 의도를 자연스럽게 분석"""
-        query_lower = query.lower()
-        
-        intent = {
-            'type': 'general',
-            'needs_detail': False,
-            'wants_comparison': False,
-            'wants_recommendation': False,
-            'is_urgent': False,
-            'tone': 'informative',
-            'context_keywords': [],
-            'response_style': 'conversational'
-        }
-        
-        # 의도 파악
-        if any(word in query_lower for word in ['요약', '정리', '알려', '설명']):
-            intent['type'] = 'summary'
-            intent['needs_detail'] = True
-        if any(word in query_lower for word in ['비교', '차이', '어떤게 나은', '뭐가 좋']):
-            intent['type'] = 'comparison'
-            intent['wants_comparison'] = True
-            intent['wants_recommendation'] = True
-        if any(word in query_lower for word in ['추천', '권장', '어떻게', '방법']):
-            intent['type'] = 'recommendation'
-            intent['wants_recommendation'] = True
-        if any(word in query_lower for word in ['긴급', '빨리', '급해', '바로']):
-            intent['type'] = 'urgent'
-            intent['is_urgent'] = True
-            intent['tone'] = 'direct'
-        if any(word in query_lower for word in ['얼마', '비용', '가격', '금액']):
-            intent['type'] = 'cost'
-            intent['needs_detail'] = True
-        if any(word in query_lower for word in ['문제', '고장', '수리', '장애']):
-            intent['type'] = 'problem'
-            intent['wants_recommendation'] = True
-        
-        # 컨텍스트 키워드 추출
-        important_words = ['DVR', '중계차', '카메라', '삼각대', '방송', '장비', '구매', '수리', '교체', '업그레이드']
-        intent['context_keywords'] = [word for word in important_words if word.lower() in query_lower]
-        
-        # 응답 스타일 결정
-        if '?' in query:
-            intent['response_style'] = 'explanatory'
-        if any(word in query_lower for word in ['해줘', '부탁', '좀']):
-            intent['response_style'] = 'helpful'
-        
-        return intent
     
-    def _generate_conversational_response(self, context: str, query: str, intent: Dict[str, Any],
-                                         pdf_info: Dict[str, Any] = None) -> str:
-        """자연스럽고 대화형 응답 생성"""
-
-        # LLMModule을 사용하여 응답 생성
-        if self.llm_module:
-            try:
-                response = self.llm_module.generate_conversational_response(
-                    context=context[:3000],  # 컨텍스트 제한
-                    query=query,
-                    intent=intent
-                )
-
-                # 추가 컨텍스트나 추천 사항 자연스럽게 추가
-                if intent.get('wants_recommendation') and '추천' not in response:
-                    response += "\n\n참고로, 이와 관련해서 추가로 검토하시면 좋을 사항들도 있습니다. 필요하시면 말씀해 주세요."
-
-                return response
-            except Exception as e:
-                logger.error(f"LLMModule 응답 생성 오류: {e}")
-                return self._generate_fallback_response(context, query, intent)
-
-        # LLMModule이 없으면 기존 방식 사용
-        # LLM에게 자연스러운 대화형 응답을 요청하는 프롬프트
-        system_prompt = """당신은 친절하고 유능한 AI 어시스턴트입니다.
-사용자의 질문 의도를 정확히 파악하여 도움이 되는 답변을 제공합니다.
-
-중요 원칙:
-1. 자연스럽고 대화하듯 답변하세요
-2. 템플릿이나 정형화된 형식을 사용하지 마세요
-3. 사용자가 실제로 필요로 하는 정보를 제공하세요
-4. 추가로 도움이 될 만한 정보가 있다면 자연스럽게 제안하세요
-5. 의사결정에 도움이 되는 인사이트를 제공하세요"""
-        
-        # 의도에 따른 프롬프트 조정
-        if intent['type'] == 'summary':
-            user_prompt = f"""다음 문서를 읽고 사용자 질문에 자연스럽게 답변해주세요.
-
-문서 정보:
-{context}
-
-사용자 질문: {query}
-
-답변 방식:
-- 핵심 내용을 먼저 간단히 설명
-- 중요한 세부사항을 자연스럽게 이어서 설명
-- 사용자가 추가로 알면 좋을 정보 제안
-- 딱딱한 리스트 형식이 아닌 자연스러운 문장으로 연결"""
-        
-        if intent['type'] == 'comparison':
-            user_prompt = f"""다음 정보를 바탕으로 비교 분석을 제공해주세요.
-
-정보:
-{context}
-
-사용자 질문: {query}
-
-답변 방식:
-- 비교 대상들의 주요 차이점을 먼저 설명
-- 각각의 장단점을 실용적 관점에서 설명
-- 상황에 따른 추천 제공
-- "이런 경우엔 A가 좋고, 저런 경우엔 B가 낫다"는 식으로 설명"""
-        
-        if intent['type'] == 'recommendation':
-            user_prompt = f"""다음 정보를 바탕으로 실용적인 추천을 제공해주세요.
-
-정보:
-{context}
-
-사용자 질문: {query}
-
-답변 방식:
-- 추천 사항을 명확하게 제시
-- 추천 이유를 논리적으로 설명
-- 고려사항이나 주의점도 함께 언급
-- 대안이 있다면 간단히 소개"""
-        
-        if intent['type'] == 'cost':
-            user_prompt = f"""다음 정보에서 비용 관련 내용을 찾아 설명해주세요.
-
-정보:
-{context}
-
-사용자 질문: {query}
-
-답변 방식:
-- 구체적인 금액을 먼저 제시
-- 비용 구성이나 내역 설명
-- 비용 대비 가치나 효과 언급
-- 예산 관련 조언이 있다면 추가"""
-        
-        if intent['is_urgent']:
-            user_prompt = f"""다음 정보를 바탕으로 빠르고 명확한 답변을 제공해주세요.
-
-정보:
-{context}
-
-사용자 질문: {query}
-
-답변 방식:
-- 핵심 정보를 바로 제시
-- 실행 가능한 조치 사항 제공
-- 추가 확인이 필요한 사항 명시"""
-        
-        else:
-            user_prompt = f"""다음 정보를 바탕으로 사용자에게 도움이 되는 답변을 제공해주세요.
-
-정보:
-{context}
-
-사용자 질문: {query}
-
-답변 방식:
-- 질문에 대한 직접적인 답변
-- 관련된 추가 정보 제공
-- 궁금할 만한 다른 사항 언급
-- 자연스럽고 친근한 톤 유지"""
-        
-        # LLM 호출
-        if self.llm:
-            try:
-                # 대화형 응답 생성
-                context_chunks = [{
-                    'content': context,
-                    'source': pdf_info.get('제목', 'document') if pdf_info else 'document',
-                    'score': 1.0
-                }]
-                
-                # 대화형 응답 메서드 호출
-                response = self.llm.generate_conversational_response(query, context_chunks)
-                
-                if response and hasattr(response, 'answer'):
-                    answer = response.answer
-                else:
-                    answer = str(response)
-                
-                # 추가 컨텍스트나 추천 사항 자연스럽게 추가
-                if intent['wants_recommendation'] and '추천' not in answer:
-                    answer += "\n\n참고로, 이와 관련해서 추가로 검토하시면 좋을 사항들도 있습니다. 필요하시면 말씀해 주세요."
-                
-                return answer
-                
-            except Exception as e:
-                print(f"LLM 응답 생성 오류: {e}")
-                # 폴백: 기본 응답 생성
-                return self._generate_fallback_response(context, query, intent)
-        
-        return self._generate_fallback_response(context, query, intent)
     
-    def _generate_fallback_response(self, context: str, query: str, intent: Dict[str, Any]) -> str:
-        """LLM 실패 시 폴백 응답 생성"""
-        
-        # 컨텍스트에서 핵심 정보 추출
-        lines = context.split('\n')
-        key_info = []
-        
-        for line in lines:
-            if any(keyword in line for keyword in ['금액', '비용', '원', '제목', '기안', '날짜']):
-                key_info.append(line.strip())
-        
-        response = f"문서를 확인한 결과, "
-        
-        if intent['type'] == 'summary':
-            response += f"요청하신 내용은 다음과 같습니다. "
-            if key_info:
-                response += ' '.join(key_info[:3])
-        if intent['type'] == 'cost':
-            cost_info = [line for line in key_info if '원' in line or '금액' in line]
-            if cost_info:
-                response += f"비용 관련 정보입니다. {cost_info[0]}"
-        else:
-            if key_info:
-                response += f"관련 정보를 찾았습니다. {key_info[0]}"
-        
-        return response
     
 
 
@@ -3018,7 +2816,10 @@ class PerfectRAG:
         """LLM을 사용한 상세 요약 - 대화형 스타일"""
         logger.info("LLM 요약 생성 시작")
         # 사용자 의도 분석
-        intent = self._analyze_user_intent(query)
+        if self.intent_module:
+            intent = self.intent_module.analyze_user_intent(query)
+        else:
+            intent = self._analyze_user_intent(query)
 
         # 변수 초기화 (스코프 문제 방지)
         basic_summary = ""

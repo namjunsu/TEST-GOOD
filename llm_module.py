@@ -193,11 +193,9 @@ class LLMModule:
 
         try:
             # LLM 응답 생성
-            response = self.llm.generate(
-                system_prompt=self.prompts['conversational_system'],
-                user_prompt=user_prompt,
-                temperature=temperature,
-                max_tokens=max_tokens
+            response = self.llm.generate_response(
+                question=query,
+                context_chunks=[{'content': context, 'title': 'Context', 'filename': ''}]
             )
 
             # 응답 후처리
@@ -227,11 +225,9 @@ class LLMModule:
                 content=text[:2000]
             )
 
-            response = self.llm.generate(
-                system_prompt="당신은 문서 요약 전문가입니다.",
-                user_prompt=user_prompt,
-                temperature=0.5,
-                max_tokens=500
+            response = self.llm.generate_response(
+                question=user_prompt,
+                context_chunks=[{'content': text[:2000], 'title': title or '문서', 'filename': ''}]
             )
 
             return self._format_response(response)

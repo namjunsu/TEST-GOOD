@@ -12,6 +12,7 @@ from functools import partial
 import re
 import warnings
 import logging
+import gc
 import pdfplumber
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
@@ -1349,6 +1350,7 @@ class PerfectRAG:
 
     def answer(self, query: str, mode: str = 'auto') -> str:
         """답변 생성 메서드"""
+        cache_key = self._get_enhanced_cache_key(query, mode)
 
         if cache_key in self.answer_cache:
             cached_response, cached_time = self.answer_cache[cache_key]

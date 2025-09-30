@@ -127,9 +127,6 @@ except ImportError:
     if logger:
         logger.warning("StatisticsModule not available - using embedded statistics")
 
-# 새로운 모듈 import (제거됨 - 백업 폴더로 이동)
-# from pdf_parallel_processor import PDFParallelProcessor
-# from error_handler import RAGErrorHandler, ErrorRecovery, DetailedError, safe_execute
 
 
 import logging
@@ -270,10 +267,7 @@ class PerfectRAG:
         self.answer_cache = OrderedDict()  # 답변 캐시 (LRU)
         self.pdf_text_cache = OrderedDict()  # PDF 텍스트 추출 캐시 (성능 최적화)
 
-        # PDF 병렬 처리기 초기화 (제거됨 - 백업 폴더로 이동)
-        # self.pdf_processor = PDFParallelProcessor(config_manager=cfg if USE_YAML_CONFIG else None)
-        # self.error_handler = RAGErrorHandler()
-        # self.error_recovery = ErrorRecovery()
+        # PDF 처리 - 기존 방식 사용
         self.pdf_processor = None
         self.error_handler = None
         self.error_recovery = None
@@ -420,11 +414,6 @@ class PerfectRAG:
         # 실제 파일은 모두 year_* 폴더에 있음
         # category_folders = ['category_purchase', 'category_repair', 'category_review',
         #                   'category_disposal', 'category_consumables']
-        # for folder in category_folders:
-        #     cat_folder = self.docs_dir / folder
-        #     if cat_folder.exists():
-        #         self.pdf_files.extend(list(cat_folder.glob('*.pdf')))
-        #         self.txt_files.extend(list(cat_folder.glob('*.txt')))
 
         # 특별 폴더 (자산 관련 폴더 제거)
         special_folders = ['recent', 'archive']
@@ -575,55 +564,6 @@ class PerfectRAG:
             logger.error(f"PDF 메타데이터 추출 오류 {pdf_path.name}: {e}")
             return None
 
-    def _manage_cache(self, cache_dict, key, value):
-        """캐시 크기 관리 - LRU 방식"""
-        # CacheModule을 사용하여 캐시 관리
-        if self.cache_module:
-            self.cache_module.manage_cache(cache_dict, key, value)
-            return
-
-        # CacheModule이 없으면 기존 방식 사용
-        if key in cache_dict:
-            # 기존 항목을 끝으로 이동 (가장 최근 사용)
-            cache_dict.move_to_end(key)
-        else:
-            # 새 항목 추가
-            if len(cache_dict) >= self.max_cache_size:
-                # 가장 오래된 항목 제거
-                cache_dict.popitem(last=False)
-            cache_dict[key] = (value, time.time())  # 값과 타임스탬프 저장
-    
-    def _get_from_cache(self, cache_dict, key):
-        """캐시에서 가져오기 (TTL 체크 및 타임스탬프 갱신)"""
-        # CacheModule을 사용하여 캐시 조회
-        if self.cache_module:
-            return self.cache_module.get_from_cache(cache_dict, key)
-
-        # CacheModule이 없으면 기존 방식 사용
-        if key in cache_dict:
-            cache_value = cache_dict[key]
-            current_time = time.time()
-
-            # 튀플 형식 (value, timestamp) 체크
-            if isinstance(cache_value, tuple) and len(cache_value) == 2:
-                value, timestamp = cache_value
-
-                if current_time - timestamp < self.cache_ttl:
-                    # LRU: 사용한 항목을 끝으로 이동
-                    cache_dict.move_to_end(key)
-                    # 타임스탬프 갱신 (사용 시간 연장)
-                    cache_dict[key] = (value, current_time)
-                    return value
-                else:
-                    # TTL 만료 - 삭제
-                    del cache_dict[key]
-                    return None
-            else:
-                # 이전 형식 호환 (튀플 아닌 경우)
-                cache_dict.move_to_end(key)
-                return cache_value
-
-        return None
     
     def _parse_pdf_result(self, result: Dict) -> Dict:
         """병렬 처리 결과를 기존 형식으로 변환"""
@@ -1585,7 +1525,12 @@ class PerfectRAG:
             
             # text 필드에서 주요 내용 추출 (개선된 요약 시스템)
             if 'text' in info:
-                summary = self._generate_smart_summary(info['text'], file_path)
+                # LLMModule을 사용하여 요약 생성
+                if self.llm_module:
+                    summary = self.llm_module.generate_smart_summary(info['text'], str(file_path.name))
+                else:
+                    # 폴백: 기존 방식 사용
+                    summary = self._generate_smart_summary(info['text'], file_path)
                 result += summary
             
             if '금액' in info and info['금액'] != '정보 없음':
@@ -1599,111 +1544,6 @@ class PerfectRAG:
         
         return result
 
-    def _generate_smart_summary(self, text: str, file_path: Path) -> str:
-        """문서 내용에서 의미 있는 요약 생성"""
-
-        # 텍스트 전처리
-        text = text[:3000]  # 처음 3000자만 사용
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
-
-        summary_parts = []
-
-        # 1. 주요 키워드 추출 (장비명, 금액, 업체 등)
-        equipment_keywords = []
-        financial_keywords = []
-        company_keywords = []
-
-        # 장비명 패턴 (영문 대문자 + 숫자 조합)
-        equipment_pattern = r'\b[A-Z][A-Za-z0-9\-]{2,20}\b'
-        equipment_matches = re.findall(equipment_pattern, text)
-        for match in equipment_matches:
-            if len(match) >= 3 and not match.isdigit():
-                equipment_keywords.append(match)
-
-        # 금액 정보
-        amount_pattern = r'(\d{1,3}(?:,\d{3})*)\s*(?:원|만원|억)'
-        amount_matches = re.findall(amount_pattern, text)
-        if amount_matches:
-            financial_keywords.extend([f"{amt}원" for amt in amount_matches[:3]])
-
-        # 업체명 (주식회사, (주), 법인명 등)
-        company_pattern = r'(?:주식회사\s*|㈜\s*|\(주\)\s*)?([가-힣A-Za-z]{2,20})(?:\s*주식회사|\s*㈜|\s*\(주\))?'
-        company_matches = re.findall(company_pattern, text)
-        for match in company_matches:
-            if len(match) >= 2 and match not in ['기안자', '부서', '날짜', '시행']:
-                company_keywords.append(match)
-
-        # 2. 문서 유형별 핵심 정보 추출
-        file_name = file_path.name.lower()
-
-        if '구매' in file_name or '구입' in file_name:
-            # 구매 문서
-            purchase_info = []
-            if equipment_keywords:
-                purchase_info.append(f"구매 장비: {', '.join(set(equipment_keywords[:3]))}")
-            if financial_keywords:
-                purchase_info.append(f"예상 비용: {', '.join(financial_keywords[:2])}")
-            if company_keywords:
-                purchase_info.append(f"관련 업체: {', '.join(set(company_keywords[:2]))}")
-
-            if purchase_info:
-                summary_parts.append(" " + " | ".join(purchase_info))
-
-        if '수리' in file_name or '보수' in file_name:
-            # 수리 문서
-            repair_info = []
-            if equipment_keywords:
-                repair_info.append(f"수리 대상: {', '.join(set(equipment_keywords[:3]))}")
-            if financial_keywords:
-                repair_info.append(f"수리 비용: {', '.join(financial_keywords[:2])}")
-
-            if repair_info:
-                summary_parts.append(" " + " | ".join(repair_info))
-
-        if '폐기' in file_name:
-            # 폐기 문서
-            disposal_info = []
-            if equipment_keywords:
-                disposal_info.append(f"폐기 장비: {', '.join(set(equipment_keywords[:3]))}")
-
-            if disposal_info:
-                summary_parts.append("️ " + " | ".join(disposal_info))
-
-        # 3. 일반적인 핵심 문장 추출
-        important_lines = []
-        priority_keywords = [
-            '목적', '개요', '주요내용', '검토결과', '결론', '의견',
-            '승인', '반려', '보완', '추진', '계획', '일정',
-            '1.', '2.', '3.', '①', '②', '③', '◦', '▶'
-        ]
-
-        for line in lines[:30]:  # 처음 30줄 검토
-            if len(line) > 15:  # 의미 있는 길이의 문장만
-                # 우선순위 키워드가 포함된 라인
-                for keyword in priority_keywords:
-                    if keyword in line:
-                        cleaned_line = line.replace(keyword, '').strip()
-                        if len(cleaned_line) > 10:
-                            important_lines.append(f"• {cleaned_line[:80]}{'...' if len(cleaned_line) > 80 else ''}")
-                        break
-
-        # 중요한 라인이 없으면 처음 몇 라인 사용
-        if not important_lines:
-            for line in lines[:5]:
-                if len(line) > 20 and not line.isdigit():
-                    important_lines.append(f"• {line[:80]}{'...' if len(line) > 80 else ''}")
-                    if len(important_lines) >= 3:
-                        break
-
-        # 최종 요약 조합
-        result = ""
-        if summary_parts:
-            result += "\n".join(summary_parts) + "\n\n"
-
-        if important_lines:
-            result += "\n".join(important_lines[:4])  # 최대 4줄
-
-        return result if result else "• 문서 내용 분석 중..."
 
     def _remove_duplicate_documents(self, documents: list) -> list:
         """중복 문서 제거 (파일명 기준)"""
@@ -1766,7 +1606,12 @@ class PerfectRAG:
                 try:
                     file_path = Path(doc['path'])
                     if file_path.exists():
-                        summary = self._generate_smart_summary("", file_path)
+                        # LLMModule을 사용하여 요약 생성
+                        if self.llm_module:
+                            summary = self.llm_module.generate_smart_summary("", str(file_path.name))
+                        else:
+                            # 폴백: 기존 방식 사용
+                            summary = self._generate_smart_summary("", file_path)
                         if summary and summary != "• 문서 내용 분석 중...":
                             response += f"   {summary}\n"
                 except Exception:
@@ -1959,98 +1804,6 @@ class PerfectRAG:
         """소멸자 - 리소스 정리"""
         self.cleanup_executor()
 
-    def _parallel_search_pdfs(self, pdf_files, query, top_k=5):
-        """병렬 PDF 검색 - 성능 최적화"""
-        logger.info(f"병렬 검색 시작: {len(pdf_files)}개 PDF, {self.MAX_WORKERS}개 워커")
-
-        results = []
-        futures = []
-
-        # 검색 함수 정의
-        def search_single_pdf(pdf_path):
-            try:
-                # 캐시 확인
-                cache_key = f"{pdf_path}:{query}"
-                if cache_key in self.documents_cache:
-                    return self.documents_cache[cache_key]['data']
-
-                # PDF 내용 추출
-                content = self._safe_pdf_extract(pdf_path, max_retries=1)
-                if not content:
-                    return None
-
-                # 관련성 점수 계산
-                keywords = query.split()
-                score = self._score_document_relevance(content, keywords)
-
-                # 메타데이터 추출
-                metadata = self._extract_document_metadata(pdf_path)
-
-                result = {
-                    'path': pdf_path,
-                    'score': score,
-                    'content': content[:500],  # 미리보기용
-                    'metadata': metadata
-                }
-
-                # 캐시에 저장
-                self._add_to_cache(self.documents_cache, cache_key, result, self.MAX_CACHE_SIZE)
-
-                return result
-
-            except Exception as e:
-                logger.error(f"PDF 검색 오류 {pdf_path}: {e}")
-                return None
-
-        # 병렬 실행
-        with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
-            # 모든 PDF에 대해 비동기 작업 제출
-            future_to_pdf = {
-                executor.submit(search_single_pdf, pdf): pdf
-                for pdf in pdf_files
-            }
-
-            # 완료된 작업부터 처리
-            for future in as_completed(future_to_pdf):
-                pdf = future_to_pdf[future]
-                try:
-                    result = future.result(timeout=10)  # 10초 타임아웃
-                    if result and result['score'] > 0:
-                        results.append(result)
-                        logger.debug(f"검색 완료: {pdf.name}, 점수: {result['score']:.2f}")
-                except Exception as e:
-                    logger.error(f"검색 실패 {pdf}: {e}")
-
-        # 점수 순으로 정렬
-        results.sort(key=lambda x: x['score'], reverse=True)
-
-        logger.info(f"병렬 검색 완료: {len(results)}개 결과")
-        return results[:top_k]
-
-    def _parallel_extract_metadata(self, files):
-        """병렬 메타데이터 추출"""
-        logger.info(f"병렬 메타데이터 추출: {len(files)}개 파일")
-
-        def extract_single(file_path):
-            try:
-                return self._extract_document_metadata(file_path)
-            except Exception as e:
-                logger.error(f"메타데이터 추출 실패 {file_path}: {e}")
-                return {}
-
-        with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
-            futures = [executor.submit(extract_single, f) for f in files]
-            results = []
-
-            for future in as_completed(futures):
-                try:
-                    metadata = future.result(timeout=5)
-                    if metadata:
-                        results.append(metadata)
-                except Exception as e:
-                    logger.error(f"메타데이터 추출 오류: {e}")
-
-        return results
 
     def _batch_process_documents(self, documents, process_func, batch_size=10):
         """배치 문서 처리 - 메모리 효율성"""
@@ -2421,7 +2174,23 @@ class PerfectRAG:
                             if doc_path.exists():
                                 print(f"📄 선택된 문서: {doc_path.name}")
                                 # LLM을 사용하여 문서 내용 분석 및 답변 생성
-                                response = self._generate_llm_summary(doc_path, query)
+                                if self.llm_module:
+                                    # LLMModule을 사용하여 문서 요약 생성
+                                    try:
+                                        # 문서 내용 읽기
+                                        if self.document_module:
+                                            doc_info = self.document_module.extract_pdf_text(doc_path)
+                                            content = doc_info.get('text', '')
+                                        else:
+                                            content = self._extract_full_pdf_content(doc_path).get('text', '')
+
+                                        response = self.llm_module.generate_smart_summary(content, str(doc_path.name))
+                                    except Exception as e:
+                                        logger.error(f"LLMModule 요약 생성 오류: {e}")
+                                        response = self._generate_llm_summary(doc_path, query)
+                                else:
+                                    # 폴백: 기존 방식 사용
+                                    response = self._generate_llm_summary(doc_path, query)
                             else:
                                 response = "❌ 관련 문서를 찾을 수 없습니다. 더 구체적으로 질문해주세요."
                         else:
@@ -2435,7 +2204,23 @@ class PerfectRAG:
                         else:
                             print(f"📄 선택된 문서: {doc_path.name}")
                             # LLM을 사용하여 문서 내용 분석 및 답변 생성
-                            response = self._generate_llm_summary(doc_path, query)
+                            if self.llm_module:
+                                # LLMModule을 사용하여 문서 요약 생성
+                                try:
+                                    # 문서 내용 읽기
+                                    if self.document_module:
+                                        doc_info = self.document_module.extract_pdf_text(doc_path)
+                                        content = doc_info.get('text', '')
+                                    else:
+                                        content = self._extract_full_pdf_content(doc_path).get('text', '')
+
+                                    response = self.llm_module.generate_smart_summary(content, str(doc_path.name))
+                                except Exception as e:
+                                    logger.error(f"LLMModule 요약 생성 오류: {e}")
+                                    response = self._generate_llm_summary(doc_path, query)
+                            else:
+                                # 폴백: 기존 방식 사용
+                                response = self._generate_llm_summary(doc_path, query)
             else:
                 # Document 모드가 아닌 경우 (발생하지 않아야 함)
                 response = "❌ 문서 검색 중 오류가 발생했습니다."
@@ -3202,19 +2987,6 @@ class PerfectRAG:
         return response
     
 
-    def _prepare_llm_context(self, content, max_length=2000):
-        """LLM 컨텍스트 준비 헬퍼"""
-        if not content:
-            return ""
-
-        # 내용이 너무 길면 요약
-        if len(content) > max_length:
-            # 처음과 끝 부분 추출
-            start = content[:max_length//2]
-            end = content[-(max_length//2):]
-            content = f"{start}\n\n... [중략] ...\n\n{end}"
-
-        return content
 
     def _extract_key_sentences(self, content, num_sentences=5):
         """핵심 문장 추출 헬퍼"""
@@ -3241,19 +3013,6 @@ class PerfectRAG:
 
         return [s[0] for s in scored_sentences[:num_sentences]]
 
-    def _format_llm_response(self, raw_response):
-        """LLM 응답 포맷팅 헬퍼"""
-        if not raw_response:
-            return "응답 생성 실패"
-
-        # 불필요한 공백 제거
-        formatted = re.sub(r'\n{3,}', '\n\n', raw_response)
-        formatted = formatted.strip()
-
-        # 마크다운 스타일 개선
-        formatted = re.sub(r'^#', '##', formatted, flags=re.MULTILINE)
-
-        return formatted
 
     def _generate_llm_summary(self, pdf_path: Path, query: str) -> str:
         """LLM을 사용한 상세 요약 - 대화형 스타일"""
@@ -5174,52 +4933,5 @@ def main():
 
         # 크기 제한 확인
         self._manage_cache_size(cache_dict, max_size, str(type(cache_dict)))
-
-    def clear_old_cache(self):
-        """오래된 캐시 항목 제거"""
-        current_time = time.time()
-
-        # 각 캐시 순회하며 오래된 항목 제거
-        for cache_name, cache_dict in [
-            ('documents', self.documents_cache),
-            ('metadata', self.metadata_cache),
-            ('answer', self.answer_cache),
-            ('pdf_text', self.pdf_text_cache)
-        ]:
-            if not hasattr(self, cache_name + '_cache'):
-                continue
-
-            items_to_remove = []
-            for key, value in cache_dict.items():
-                if isinstance(value, dict) and 'timestamp' in value:
-                    if current_time - value['timestamp'] > self.CACHE_TTL:
-                        items_to_remove.append(key)
-
-            for key in items_to_remove:
-                del cache_dict[key]
-
-            if items_to_remove:
-                print(f"  🗑️ {cache_name}_cache에서 {len(items_to_remove)}개 만료 항목 제거")
-
-    def get_cache_stats(self):
-        """캐시 통계 반환"""
-        stats = {
-            'documents_cache': len(self.documents_cache),
-            'metadata_cache': len(self.metadata_cache),
-            'answer_cache': len(self.answer_cache) if hasattr(self, 'answer_cache') else 0,
-            'pdf_text_cache': len(self.pdf_text_cache) if hasattr(self, 'pdf_text_cache') else 0,
-        }
-
-        # 메모리 사용량 추정 (대략적)
-        import sys
-        total_size = 0
-        for cache_dict in [self.documents_cache, self.metadata_cache,
-                          getattr(self, 'answer_cache', {}),
-                          getattr(self, 'pdf_text_cache', {})]:
-            total_size += sys.getsizeof(cache_dict)
-
-        stats['estimated_memory_mb'] = total_size / (1024 * 1024)
-
-        return stats
 if __name__ == "__main__":
     main()

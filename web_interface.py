@@ -1366,12 +1366,19 @@ def main():
                         key="year_select"
                     )
 
-                    # 선택된 연도 추출
-                    selected_year = int(selected_year_str.split("년")[0])
-                    filtered_df = df[df['year'] == selected_year]
+                    # 선택된 연도 추출 (연도없음 처리)
+                    if selected_year_str == "연도없음":
+                        selected_year = 0
+                        filtered_df = df[df['year'] == 0]
+                    else:
+                        selected_year = int(selected_year_str.split("년")[0])
+                        filtered_df = df[df['year'] == selected_year]
 
                     # 선택된 연도 정보
-                    st.info(f"{selected_year}년 문서 {len(filtered_df)}개")
+                    if selected_year == 0:
+                        st.info(f"연도 정보 없는 문서 {len(filtered_df)}개")
+                    else:
+                        st.info(f"{selected_year}년 문서 {len(filtered_df)}개")
 
                     # 연도별 탭에서 문서 리스트 표시
                     display_document_list(filtered_df, df)

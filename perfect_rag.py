@@ -275,6 +275,31 @@ class PerfectRAG:
         self.answer_cache = OrderedDict()  # 답변 캐시 (LRU)
         self.pdf_text_cache = OrderedDict()  # PDF 텍스트 추출 캐시 (성능 최적화)
 
+    def _manage_cache_size(self, cache_dict, max_size, cache_name="cache"):
+        """캐시 크기 관리 - LRU 방식으로 오래된 항목 제거"""
+        if len(cache_dict) > max_size:
+            # 가장 오래된 항목들 제거 (FIFO)
+            items_to_remove = len(cache_dict) - max_size
+            for _ in range(items_to_remove):
+                removed = cache_dict.popitem(last=False)  # 가장 오래된 항목 제거
+            if logger:
+                logger.debug(f"캐시 정리: {cache_name}에서 {items_to_remove}개 항목 제거")
+
+    def _add_to_cache(self, cache_dict, key, value, max_size):
+        """캐시에 항목 추가 with 크기 제한"""
+        # 기존 항목이면 삭제 후 다시 추가 (LRU를 위해)
+        if key in cache_dict:
+            del cache_dict[key]
+
+        # 새 항목 추가
+        cache_dict[key] = {
+            'data': value,
+            'timestamp': time.time()
+        }
+
+        # 크기 제한 확인
+        self._manage_cache_size(cache_dict, max_size, str(type(cache_dict)))
+
         # PDF 처리 - 기존 방식 사용
         self.pdf_processor = None
         self.error_handler = None
@@ -448,7 +473,8 @@ class PerfectRAG:
         self.txt_files = list(set(self.txt_files))
         self.all_files = self.pdf_files + self.txt_files
 
-        print(f" {len(self.pdf_files)}개 PDF, {len(self.txt_files)}개 TXT 문서 발견")
+        if logger:
+            logger.info(f"{len(self.pdf_files)}개 PDF, {len(self.txt_files)}개 TXT 문서 발견")
 
         # 자산 데이터 로드 (metadata_db 초기화 포함)
 
@@ -473,18 +499,22 @@ class PerfectRAG:
         # LLMModule이 없으면 기존 방식 사용
         if self.llm is None:
             if not LLMSingleton.is_loaded():
-                print(" LLM 모델 최초 로딩 중...")
+                if logger:
+                    logger.info("LLM 모델 로딩 중...")
             else:
-                print("️ LLM 모델 재사용")
+                if logger:
+                    logger.info("LLM 모델 재사용")
 
             try:
                 start = time.time()
                 self.llm = LLMSingleton.get_instance(model_path=self.model_path)
                 elapsed = time.time() - start
                 if elapsed > 1.0:  # 1초 이상 걸린 경우만 표시
-                    print(f" LLM 로드 완료 ({elapsed:.1f}초)")
+                    if logger:
+                        logger.info(f"LLM 로드 완료 ({elapsed:.1f}초)")
             except LLMException as e:
-                print(f"️ LLM 로드 실패: {e}")
+                if logger:
+                    logger.error(f"LLM 로드 실패: {e}")
     
     def _build_metadata_index(self):
         """모든 PDF의 메타데이터를 추출하여 DB에 저장"""
@@ -608,7 +638,8 @@ class PerfectRAG:
 
         # pdf_processor가 없으면 순차 처리로 폴백
         if self.pdf_processor is None:
-            print("️ 병렬 처리기 미활성화 - 순차 처리 모드")
+            if logger:
+                logger.info("병렬 처리기 미활성화 - 순차 처리 모드")
 
             # ThreadPoolExecutor로 간단한 병렬 처리 (CPU 코어 수 기반 최적화)
             optimal_workers = min(os.cpu_count() or 4, 12, max(4, batch_size))
@@ -673,20 +704,24 @@ class PerfectRAG:
                 import pickle
                 with open(cache_file, 'rb') as f:
                     self.metadata_cache = pickle.load(f)
-                print(f"✅ 캐시 로드 완료: {len(self.metadata_cache)}개 문서")
+                if logger:
+                    logger.info(f"캐시 로드 완료: {len(self.metadata_cache)}개 문서")
                 return  # 캐시가 있으면 재구축 불필요
             except Exception as e:
-                print(f"⚠️ 캐시 로드 실패, 재구축: {e}")
+                if logger:
+                    logger.warning(f"캐시 로드 실패, 재구축: {e}")
 
         logger.info("메타데이터 캐시 구축 시작")
-        print(" 문서 메타데이터 구축 중...")
+        if logger:
+            logger.info("문서 메타데이터 구축 중...")
 
         # 병렬 처리 설정 확인
         use_parallel = USE_YAML_CONFIG and cfg.get('parallel_processing.enabled', True)
 
         # 병렬 처리 활성화 여부와 관계없이 process_pdfs_in_batch 사용 (내부에서 처리)
         if self.pdf_files and len(self.pdf_files) > 10:  # 10개 이상일 때만 병렬 처리
-            print(f" {len(self.pdf_files)}개 PDF 처리 시작 (병렬 모드)...")
+            if logger:
+                logger.info(f"{len(self.pdf_files)}개 PDF 처리 시작 (병렬 모드)")
             pdf_results = self.process_pdfs_in_batch(self.pdf_files, batch_size=10)
 
             # 병렬 처리 결과를 메타데이터 캐시에 저장
@@ -758,16 +793,19 @@ class PerfectRAG:
                 'is_pdf': filename.endswith('.pdf')  # PDF 파일 여부 추가
             }
 
-        print(f" {len(self.metadata_cache)}개 문서 메타데이터 구축 완료")
+        if logger:
+            logger.info(f"{len(self.metadata_cache)}개 문서 메타데이터 구축 완료")
 
         # 캐시 저장
         try:
             import pickle
             with open(cache_file, 'wb') as f:
                 pickle.dump(self.metadata_cache, f)
-            print(f"✅ 캐시 저장 완료: {cache_file}")
+            if logger:
+                logger.info(f"캐시 저장 완료: {cache_file}")
         except Exception as e:
-            print(f"⚠️ 캐시 저장 실패: {e}")
+            if logger:
+                logger.warning(f"캐시 저장 실패: {e}")
     
     def _extract_txt_info(self, txt_path: Path) -> Dict:
         """TXT 파일에서 정보 동적 추출"""
@@ -1205,217 +1243,32 @@ class PerfectRAG:
         return f"...{context}..."
 
     def find_best_document(self, query: str) -> Optional[Path]:
-        """질문에 가장 적합한 문서 찾기 - 동적 매칭 + 내용 검색"""
+        """질문에 가장 적합한 문서 찾기 - SearchModule로 위임 또는 간단한 폴백"""
 
-        # 내용 검색 기능 통합
-        if not hasattr(self, 'content_searcher'):
-            from content_search import ContentSearcher
-            self.content_searcher = ContentSearcher(self.docs_dir)
+        # SearchModule이 있으면 위임
+        if self.search_module:
+            try:
+                result = self.search_module.find_best_document(query)
+                if result:
+                    return Path(result)
+            except Exception as e:
+                if logger:
+                    logger.error(f"SearchModule 문서 검색 실패: {e}, 폴백 사용")
 
-        # 🔥 NEW: 실제 PDF 내용 기반 검색 추가
+        # 폴백: 간단한 검색 로직
         content_based_results = self._search_by_content(query)
-
-        # 내용 검색 결과가 있으면 우선 사용
         if content_based_results and content_based_results[0]['score'] > 20:
             best_result = content_based_results[0]
-            if logger:
-                logger.info(f"✅ 내용 검색으로 문서 찾음: {best_result['filename']} (점수: {best_result['score']})")
-                logger.info(f"   매칭 키워드: {best_result['matched_keywords']}")
             return best_result['path']
 
-        query_lower = query.lower()
-
-        # PDF 문서 우선 처리 키워드 확장
-        pdf_priority_keywords = [
-            '수리', '보수', '내용', '요약', '검토서', '기술검토',
-            '교체', '구매', '폐기', '소모품', '기안', '검토',
-            '어떤', '무엇', '뭐', '뭘로', '어디서', '누가'
-        ]
-
-        # 문서 검색 후보 초기화 - 딕셔너리로 변경하여 중복 관리
-        candidates = {}  # path -> (score, filename)
-        
-        # 기존 로직 계속
-        # 질문 정규화 및 토큰화
-        query_tokens = set(query_lower.split())
-        
-        # 연도와 월 추출
-        year_match = re.search(r'(20\d{2})', query)
-        query_year = year_match.group(1) if year_match else None
-        
-        # 월 추출 (1월, 01월, 1-월 등 다양한 형식)
-        month_match = re.search(r'(\d{1,2})\s*월', query)
-        query_month = None
-        if month_match:
-            query_month = int(month_match.group(1))
-        
+        # 기본 파일명 매칭 폴백
         for cache_key, metadata in self.metadata_cache.items():
-            score = 0
-            filename = metadata.get('filename', cache_key)
-            filename_lower = filename.lower()
-            
-            # 1. 연도와 월 매칭 (연도가 지정된 경우에만)
-            if query_year:
-                if metadata['year'] == query_year:
-                    score += 20
-
-                    # 월도 지정된 경우 월까지 체크
-                    if query_month:
-                        # 파일명에서 월 추출 (YYYY-MM-DD 형식)
-                        file_month_match = re.search(r'\d{4}-(\d{2})-\d{2}', filename)
-                        if file_month_match:
-                            file_month = int(file_month_match.group(1))
-                            if file_month == query_month:
-                                score += 30  # 월까지 일치하면 높은 점수
-                            else:
-                                continue  # 월이 다르면 제외
-                else:
-                    continue  # 연도가 다르면 제외
-            # 연도가 지정되지 않은 경우는 모든 문서를 대상으로 계속 진행
-            
-            # 2. 특정 장비/장소명 정확 매칭 (매우 높은 가중치)
-            # 동적 키워드 매칭 - 하드코딩 없이 자동으로
-            # 질문의 단어들을 추출
-            query_words = re.findall(r'[가-힣]+|[A-Za-z]+|[0-9]+', query_lower)
-            filename_words = re.findall(r'[가-힣]+|[A-Za-z]+|[0-9]+', filename_lower)
-            
-            # 공통 단어 찾기 (2글자 이상)
-            for q_word in query_words:
-                if len(q_word) >= 2:
-                    for f_word in filename_words:
-                        if len(f_word) >= 2:
-                            # 완전 일치 (가장 높은 점수)
-                            if q_word == f_word:
-                                # 단어 길이에 따라 가중치 부여
-                                weight = len(q_word) * 5  # 2 -> 5로 증가
-                                score += weight
-                            # 유사도 검사 (오타 처리) - 완전 일치가 아닌 경우만
-                            elif self._calculate_similarity(q_word, f_word) >= 0.85:  # 0.8 -> 0.85로 상향
-                                # 85% 이상 유사하면 매칭으로 간주
-                                weight = len(q_word) * 1.5
-                                score += weight
-                            # 부분 일치 (긴 단어일 경우)
-                            if len(q_word) >= 3 and len(f_word) >= 3:
-                                if q_word in f_word or f_word in q_word:
-                                    weight = min(len(q_word), len(f_word))
-                                    score += weight
-            
-            # 3. 키워드 매칭 (메타데이터)
-            for keyword in metadata['keywords']:
-                if keyword.lower() in query_lower:
-                    score += 5
-            
-            # 4. 토큰 기반 유사도 (단어 겹침)
-            filename_tokens = set(filename_lower.replace('_', ' ').replace('-', ' ').split())
-            common_tokens = query_tokens & filename_tokens
-            score += len(common_tokens) * 2
-            
-            # 5. 부분 문자열 매칭
-            # 질문의 주요 단어가 파일명에 포함되는지
-            important_words = [w for w in query_lower.split() if len(w) > 2]
-            for word in important_words:
-                if word in filename_lower:
-                    score += 3
-            
-            # 6. 문서 타입별 특별 처리
-            # "검토서", "요청의 건" 등 문서 타입 매칭
-            doc_types = ['검토서', '요청의 건', '기술검토서', '구매검토의 건', '보수건']
-            for doc_type in doc_types:
-                if doc_type in query and doc_type in filename:
-                    score += 5
-
-            if score > 0:
-                candidates[metadata['path']] = (score, filename)
-
-        # 내용 검색 추가 (파일명 매칭과 함께)
-        try:
-            # PDF 파일 리스트 준비
-            pdf_files = [p for p in self.pdf_files if p.suffix.lower() == '.pdf']
-
-            if pdf_files:
-                logger.info(f"내용 검색 시작: {len(pdf_files)}개 PDF 대상")
-                # 성능을 위해 최대 30개 파일만 내용 검색 (더 정확한 파일명 매칭이 우선)
-                content_results = self.content_searcher.search_by_content(query, pdf_files, top_k=10, max_files=30)
-
-                # 내용 검색 결과를 점수에 반영
-                for result in content_results:
-                    pdf_path = result['path']
-                    content_score = result['score']
-
-                    if pdf_path in candidates:
-                        # 이미 파일명 매칭 점수가 있는 경우, 가중 평균
-                        old_score, filename = candidates[pdf_path]
-                        # 파일명 점수 60%, 내용 점수 40%
-                        new_score = old_score * 0.6 + content_score * 0.4
-                        candidates[pdf_path] = (new_score, filename)
-                    else:
-                        # 파일명 매칭되지 않은 경우, 내용 점수만 사용 (0.8 가중치)
-                        candidates[pdf_path] = (content_score * 0.8, pdf_path.name)
-
-                logger.info(f"내용 검색 완료: {len(content_results)}개 매칭")
-        except Exception as e:
-            logger.warning(f"내용 검색 중 오류 (무시하고 계속): {e}")
-
-        # Phase 1.2: 메타데이터 DB 검색 추가
-        if self.metadata_db:
-            try:
-                # 연도로 검색
-                if query_year:
-                    db_results = self.metadata_db.search_by_year(query_year)
-                    for doc in db_results[:10]:  # 최대 10개
-                        doc_path = Path(doc['path'])
-                        if doc_path.exists():
-                            if doc_path in candidates:
-                                # 이미 있으면 점수 보정
-                                old_score, filename = candidates[doc_path]
-                                candidates[doc_path] = (old_score + 5, filename)
-                            else:
-                                # 새로 추가 (DB 검색 기반)
-                                candidates[doc_path] = (10, doc['filename'])
-
-                # 기안자로 검색
-                drafter_patterns = [r'([가-힣]{2,4})(?:가|의|에서|이)\s*(?:작성|기안)']
-                for pattern in drafter_patterns:
-                    match = re.search(pattern, query)
-                    if match:
-                        drafter_name = match.group(1)
-                        db_results = self.metadata_db.search_by_text(drafter_name)
-                        for doc in db_results[:5]:
-                            doc_path = Path(doc['path'])
-                            if doc_path.exists():
-                                if doc_path in candidates:
-                                    old_score, filename = candidates[doc_path]
-                                    candidates[doc_path] = (old_score + 10, filename)
-                                else:
-                                    candidates[doc_path] = (15, doc['filename'])
-
-                logger.info("✅ 메타데이터 DB 검색 완료")
-            except Exception as e:
-                logger.warning(f"메타데이터 DB 검색 중 오류: {e}")
-
-        # 딕셔너리를 리스트로 변환하고 점수순 정렬
-        sorted_candidates = sorted(
-            [(score, path, filename) for path, (score, filename) in candidates.items()],
-            reverse=True
-        )
-
-        # 디버깅 출력 (상위 3개)
-        if sorted_candidates:
-            logger.info("상위 3개 후보 문서:")
-            for score, path, filename in sorted_candidates[:3]:
-                logger.info(f"  - {filename}: {score:.2f}점")
-
-            top_score = sorted_candidates[0][0]
-            # 동점자가 있는지 확인
-            same_score = [c for c in sorted_candidates if c[0] == top_score]
-            if len(same_score) > 1:
-                # 동점일 때는 파일명 길이가 짧은 것 우선
-                same_score.sort(key=lambda x: len(x[2]))
-                return same_score[0][1]
-            return sorted_candidates[0][1]
+            filename_lower = metadata.get('filename', cache_key).lower()
+            if any(word in filename_lower for word in query.lower().split() if len(word) > 1):
+                return Path(metadata.get('path', self.docs_dir / cache_key))
 
         return None
-
+        
     def _calculate_similarity(self, str1: str, str2: str) -> float:
         """두 문자열의 유사도 계산 (0~1)
         레벤슈타인 거리 기반 + 한글 자모 분해 비교
@@ -1654,7 +1507,8 @@ class PerfectRAG:
             query: 사용자 질문
             filename: 특정 문서 파일명
         """
-        print(f" 문서 전용 모드: {filename}")
+        if logger:
+            logger.info(f"문서 전용 모드: {filename}")
         
         # 메타데이터에서 해당 문서 찾기
         doc_metadata = self._find_metadata_by_filename(filename)
@@ -2813,609 +2667,52 @@ class PerfectRAG:
 
 
     def _generate_llm_summary(self, pdf_path: Path, query: str) -> str:
-        """LLM을 사용한 상세 요약 - 대화형 스타일"""
-        logger.info("LLM 요약 생성 시작")
-        # 사용자 의도 분석
-        if self.intent_module:
-            intent = self.intent_module.analyze_user_intent(query)
+        """LLM을 사용한 상세 요약 - LLMModule로 위임 (2025-09-29 리팩토링)"""
+        if logger:
+            logger.info("LLM 요약 생성 시작")
+
+        # LLMModule이 있으면 위임
+        if self.llm_module:
+            try:
+                # PDF 내용 추출
+                pdf_info = self._extract_full_pdf_content(pdf_path)
+                content = pdf_info.get('text', '') if pdf_info and 'error' not in pdf_info else ''
+
+                # LLMModule을 사용하여 스마트 요약 생성
+                return self.llm_module.generate_smart_summary(content, str(pdf_path.name), query)
+            except Exception as e:
+                if logger:
+                    logger.error(f"LLMModule 요약 생성 실패: {e}, 폴백 사용")
+
+        # 간단한 폴백 구현
+        pdf_info = self._extract_full_pdf_content(pdf_path)
+        if pdf_info and 'error' not in pdf_info:
+            # 기본 정보 추출
+            info_parts = []
+            if '제목' in pdf_info:
+                info_parts.append(f"제목: {pdf_info['제목']}")
+            if '기안자' in pdf_info:
+                info_parts.append(f"기안자: {pdf_info['기안자']}")
+            if '금액' in pdf_info:
+                info_parts.append(f"금액: {pdf_info['금액']}")
+
+            return "\n".join(info_parts) if info_parts else "문서 정보를 추출할 수 없습니다."
         else:
-            intent = self._analyze_user_intent(query)
-
-        # 변수 초기화 (스코프 문제 방지)
-        basic_summary = ""
-        summary = []
-
-        # PDF 파일인 경우 먼저 구조화된 정보 추출 시도
-        if pdf_path.suffix.lower() == '.pdf':
-            pdf_info = self._extract_full_pdf_content(pdf_path)
-            
-            # 대화형 응답 생성을 위한 컨텍스트 준비
-            context_parts = []
-
-            # 요약이나 내용 관련 질문인 경우
-            if pdf_info and 'error' not in pdf_info:
-                # 컨텍스트 구성 - 자연스러운 문장으로
-                if '제목' in pdf_info:
-                    context_parts.append(f"제목: {pdf_info['제목']}")
-                if '기안자' in pdf_info:
-                    context_parts.append(f"기안자: {pdf_info['기안자']}")
-                if '기안일자' in pdf_info:
-                    context_parts.append(f"작성일: {pdf_info['기안일자']}")
-                if '기안부서' in pdf_info:
-                    context_parts.append(f"담당부서: {pdf_info['기안부서']}")
-                
-                # 개요
-                if '개요' in pdf_info:
-                    overview = pdf_info['개요'].replace('\n', ' ').strip()
-                    if len(overview) > 300:
-                        overview = overview[:300] + "..."
-                    context_parts.append(f"\n개요: {overview}")
-                
-                # 장애 내용
-                if '장애내용' in pdf_info and pdf_info['장애내용']:
-                    장애_text = pdf_info['장애내용'].replace('\n', ' ').strip()
-                    if len(장애_text) > 300:
-                        장애_text = 장애_text[:300] + "..."
-                    context_parts.append(f"\n장애 내용: {장애_text}")
-                
-                # 세부 항목 (새로 추가)
-                if '세부항목' in pdf_info and pdf_info['세부항목']:
-                    summary.append(f"\n **세부 장애/수리 내역**")
-                    
-                    # 중계차 내외관
-                    중계차_items = [item for item in pdf_info['세부항목'] if '도어' in item.get('항목', '') or '발전기' in item.get('항목', '')]
-                    if 중계차_items:
-                        summary.append("\n**[중계차 내외관]**")
-                        for item in 중계차_items:
-                            summary.append(f"• {item['항목']}: {item['내용']}")
-                    
-                    # 방송 시스템
-                    방송_items = [item for item in pdf_info['세부항목'] if '비디오' in item.get('항목', '') or '오디오' in item.get('항목', '')]
-                    if 방송_items:
-                        summary.append("\n**[방송 시스템]**")
-                        for item in 방송_items:
-                            summary.append(f"• {item['항목']}: {item['내용']}")
-                    
-                    # 지미집 등 기타 항목
-                    기타_items = [item for item in pdf_info['세부항목'] if 'Tilt' in item.get('항목', '') or 'Control' in item.get('항목', '')]
-                    if 기타_items:
-                        for item in 기타_items:
-                            summary.append(f"• {item['항목']}: {item['내용']}")
-                
-                # 비용 내역 (개선)
-                if '비용내역' in pdf_info and pdf_info['비용내역']:
-                    summary.append(f"\n **비용 내역**")
-                    if '내외관보수' in pdf_info['비용내역']:
-                        summary.append(f"• 중계차 내외관 보수: {pdf_info['비용내역']['내외관보수']}")
-                    if '방송시스템' in pdf_info['비용내역']:
-                        summary.append(f"• 방송 시스템 보수: {pdf_info['비용내역']['방송시스템']}")
-                    if '총합계' in pdf_info['비용내역']:
-                        summary.append(f"• **총 비용: {pdf_info['비용내역']['총합계']}**")
-                # 금액 정보 (기존 호환성 유지)
-                if '금액정보' in pdf_info and pdf_info['금액정보']:
-                    summary.append(f"\n **주요 금액**")
-                    # 금액 정렬 및 상위 표시
-                    amounts = []
-                    for amt in pdf_info['금액정보']:
-                        try:
-                            amt_int = int(amt.replace(',', ''))
-                            if amt_int > 1000000:  # 100만원 이상만
-                                amounts.append((amt, amt_int))
-                        except (ValueError, AttributeError):
-                            pass  # 금액 변환 실패시 무시
-                    amounts.sort(key=lambda x: x[1], reverse=True)
-                    for amt, _ in amounts[:3]:
-                        summary.append(f"• {amt}원")
-                
-                # 검토 의견 (개선된 정리)
-                if '검토의견' in pdf_info and pdf_info['검토의견']:
-                    summary.append(f"\n **검토 의견**")
-                    opinion = pdf_info['검토의견']
-                    
-                    # DVR 관련 검토인 경우
-                    if 'DVR' in opinion or ('1안' in opinion and '2안' in opinion):
-                        # 1안 추출 및 정리
-                        if '1안' in opinion:
-                            안1_text = re.search(r'1안[^2]*(?=2안|$)', opinion, re.DOTALL)
-                            if 안1_text:
-                                안1_clean = re.sub(r'[\d]+\.\s*[\d]+\.\s*[\d]+.*?(?=\n)', '', 안1_text.group(0))
-                                안1_clean = re.sub(r'\[페이지 \d+\]', '', 안1_clean)
-                                안1_clean = ' '.join(안1_clean.split())
-                                # HD-SDI 확인 또는 1안 관련 내용이 있으면 표시
-                                if 'HD-SDI' in 안1_clean or 'HD급' in 안1_clean or '화질 향상' in 안1_clean or '1안' in 안1_clean:
-                                    summary.append("\n** 1안: HD-SDI 입력 모델**")
-                                    summary.append("• 화질 향상으로 영상 검수 용이")
-                                    summary.append("• HD급 녹화, 다양한 입력 지원")
-                                    summary.append("• 추가 비용 발생 (컨버터 등)")
-                        
-                        # 2안 추출 및 정리
-                        if '2안' in opinion:
-                            안2_text = re.search(r'2안[^종합]*(?=종합|$)', opinion, re.DOTALL)
-                            if 안2_text:
-                                안2_clean = re.sub(r'[\d]+\.\s*[\d]+\.\s*[\d]+.*?(?=\n)', '', 안2_text.group(0))
-                                안2_clean = re.sub(r'\[페이지 \d+\]', '', 안2_clean)
-                                if 'CVBS' in 안2_clean or '기존' in 안2_clean:
-                                    summary.append("\n** 2안: 기존 동일 모델**")
-                                    summary.append("• 현재 시스템과 호환성 높음")
-                                    summary.append("• 낮은 비용, 설치 용이")
-                                    summary.append("• SD급 화질로 개선 효과 없음")
-                        
-                        # 종합 의견
-                        if '종합' in opinion or '결론' in opinion:
-                            summary.append("\n** 최종 추천**")
-                            if '1안' in opinion and ('유리' in opinion or '적절' in opinion or '추천' in opinion):
-                                summary.append("• **1안 채택 권장** - 장기적 운영 및 화질 개선 필요")
-                            if '2안' in opinion and ('유리' in opinion or '적절' in opinion):
-                                summary.append("• **2안 채택 권장** - 비용 절감 우선")
-                    
-                    # 중계차 관련인 경우
-                    if '중계차 임대' in opinion:
-                        summary.append("• 중계차 임대: 급작스런 특보 상황 시 대응 어려움")
-                        if '중계차 제작' in opinion:
-                            summary.append("• 신규 제작: 25-30억원 과도한 비용, 4K 송출 일정 불확실")
-                        if '보수하여' in opinion:
-                            summary.append("• **결론: 현 중계차 보수로 시스템 안정성 확보가 적절**")
-                    else:
-                        # 일반 검토 의견 (기존 방식)
-                        if len(opinion) > 500:
-                            opinion = opinion[:500] + "..."
-                        summary.append(opinion)
-                
-                # 주요 내용 (전체 텍스트에서 추출) - 기존 코드 유지
-                if '전체텍스트' in pdf_info:
-                    full_text = pdf_info['전체텍스트']
-                    
-                    # 도입 연도 찾기
-                    if '도입' in query or '언제' in query:
-                        도입_match = re.search(r'도입\s*년도\s*[:：]?\s*(\d{4})', full_text)
-                        if 도입_match:
-                            summary.append(f"\n **도입 연도**: {도입_match.group(1)}년")
-                
-                # 업체 정보
-                if '업체' in pdf_info:
-                    summary.append(f"\n **관련 업체**: {pdf_info['업체']}")
-            
-            # 기본 정보를 보관 (if 블록 밖으로 이동)
-            basic_summary = '\n'.join(summary) if summary else ""
-            
-            # 대화형 응답이 필요한 경우 바로 처리
-            if '요약' in query or '내용' in query or '설명' in query:
-                # 컨텍스트 구성
-                context_text = ""
-                if pdf_info and 'error' not in pdf_info:
-                    # 자연스러운 문장으로 컨텍스트 구성
-                    context_parts = []
-                    if '제목' in pdf_info:
-                        context_parts.append(f"문서 제목: {pdf_info['제목']}")
-                    if '기안자' in pdf_info:
-                        context_parts.append(f"작성자: {pdf_info['기안자']}")
-                    if '기안일자' in pdf_info:
-                        context_parts.append(f"작성일: {pdf_info['기안일자']}")
-                    if '개요' in pdf_info:
-                        context_parts.append(f"\n개요: {pdf_info['개요']}")
-                    if '금액정보' in pdf_info:
-                        amounts = pdf_info['금액정보']
-                        if amounts:
-                            # 가장 큰 금액만 주요 금액으로 표시
-                            main_amount = amounts[0] if amounts else None
-                            if main_amount:
-                                # 금액 컨텍스트가 있으면 함께 표시
-                                if '금액컨텍스트' in pdf_info and pdf_info['금액컨텍스트']:
-                                    context_info = pdf_info['금액컨텍스트'][0].get('context', '')
-                                    # 총액, 합계 등의 키워드가 있으면 명시
-                                    if '총액' in context_info or '합계' in context_info:
-                                        context_parts.append(f"\n총 금액: {main_amount}원")
-                                    else:
-                                        context_parts.append(f"\n금액: {main_amount}원")
-                                else:
-                                    context_parts.append(f"\n금액: {main_amount}원")
-                    if '검토의견' in pdf_info:
-                        context_parts.append(f"\n검토 의견: {pdf_info['검토의견'][:500]}")
-                    
-                    context_text = "\n".join(context_parts)
-                
-                # LLM 로드
-                if self.llm is None:
-                    if not LLMSingleton.is_loaded():
-                        print(" LLM 모델 로딩 중...")
-                    self.llm = LLMSingleton.get_instance(model_path=self.model_path)
-                
-                # 대화형 응답 생성 - 전체 텍스트 포함
-                if self.llm and context_text:
-                    # 전체 텍스트도 포함 (중요 정보 누락 방지)
-                    if '전체텍스트' in pdf_info and pdf_info['전체텍스트']:
-                        full_context = f"{context_text}\n\n[전체 문서 내용]\n{pdf_info['전체텍스트'][:3000]}"
-                    else:
-                        full_context = context_text
-                    
-                    context_chunks = [{
-                        'content': full_context,
-                        'source': pdf_path.name,
-                        'score': 1.0
-                    }]
-                    
-                    response = self.llm.generate_conversational_response(query, context_chunks)
-                    
-                    if response and hasattr(response, 'answer'):
-                        answer = response.answer
-                    else:
-                        answer = str(response)
-                    
-                    # 출처를 자연스럽게 추가
-                    if pdf_path.name not in answer:
-                        answer += f"\n\n(참고: {pdf_path.name})"
-                    
-                    return answer
-            
-            # 대화형이 아닌 경우 기존 방식으로 처리
-        
-        # LLM 로드 (필요시) - 싱글톤 사용
-        if self.llm is None:
-            if not LLMSingleton.is_loaded():
-                print(" LLM 모델 로딩 중...")
-            self.llm = LLMSingleton.get_instance(model_path=self.model_path)
-        
-        # 파일 형식에 따라 텍스트 읽기
-        try:
-            text = ""
-            
-            # TXT 파일인 경우
-            if pdf_path.suffix.lower() == '.txt':
-                with open(pdf_path, 'r', encoding='utf-8') as f:
-                    text = f.read()
-            # PDF 파일인 경우
-            else:
-                with pdfplumber.open(pdf_path) as pdf:
-                    for page in pdf.pages:
-                        page_text = page.extract_text()
-                        if page_text:
-                            text += page_text + "\n"
-                
-                # pdfplumber 실패시 OCR 시도
-                if not text:
-                    try:
-                        from rag_system.enhanced_ocr_processor import EnhancedOCRProcessor
-                        ocr = EnhancedOCRProcessor()
-                        text, _ = ocr.extract_text_with_ocr(str(pdf_path))
-                    except PDFExtractionException as e:
-                        pass
-            
-            if not text:
-                return " 문서 내용을 읽을 수 없습니다"
-            
-            # 간단하고 명확한 프롬프트
-            # 기술관리팀 실무 최적화 프롬프트
-            # 텍스트 길이 제한 증가 (5000 -> 15000)
-            max_text_length = 15000  # 15,000자로 증가
-            
-            # 기본 정보가 이미 추출되었는지 확인하여 프롬프트 조정
-            if 'basic_summary' in locals():
-                # 중복 방지를 위한 수정된 프롬프트
-                prompt = self._get_detail_only_prompt(query, text[:max_text_length], pdf_path.name)
-            else:
-                prompt = self._get_optimized_prompt(query, text[:max_text_length], pdf_path.name)
-            
-            # LLM 호출 - 대화형 응답 우선
-            context_chunks = [{'content': text[:max_text_length], 'metadata': {'source': pdf_path.name}, 'score': 1.0}]
-            
-            # 요약/내용 요청인 경우 대화형 응답
-            if '요약' in query or '내용' in query or '설명' in query:
-                response = self.llm.generate_conversational_response(query, context_chunks)
-            else:
-                # 기존 방식
-                response = self.llm.generate_response(prompt, context_chunks)
-            
-            answer = response.answer if hasattr(response, 'answer') else str(response)
-            
-            # 대화형 응답인 경우 출처만 자연스럽게 추가
-            if '요약' in query or '내용' in query or '설명' in query:
-                # 출처가 이미 포함되어 있지 않으면 추가
-                if pdf_path.name not in answer:
-                    answer += f"\n\n(참고 문서: {pdf_path.name})"
-                return answer
-            else:
-                # 기존 방식 (템플릿 형식)
-                if 'basic_summary' in locals() and basic_summary:
-                    combined_answer = f"{basic_summary}\n\n **상세 내용**\n{answer}"
-                    return f"{combined_answer}\n\n 출처: {pdf_path.name}"
-                else:
-                    return f"{answer}\n\n 출처: {pdf_path.name}"
-            
-        except Exception as e:
-            return f" 요약 생성 실패: {e}"
-    
+            return "문서를 읽을 수 없습니다."
     def _collect_statistics_data(self, query: str) -> Dict:
         """통계 데이터 수집 및 구조화 - StatisticsModule로 위임 (2025-09-29 리팩토링)"""
         if self.statistics_module:
             return self.statistics_module.collect_statistics_data(query, self.metadata_cache)
 
-        # 기존 로직 유지 (폴백)
-        stats_data = {
-            'title': '',
-            'headers': [],
-            'table_data': [],
-            '총계': '',
-            '분석': {},
-            '추천': []
+        # 간단한 폴백 구현
+        return {
+            'title': '통계 분석',
+            'headers': ['항목', '값'],
+            'table_data': [['총 문서 수', str(len(self.metadata_cache))]],
+            '총계': f'총 {len(self.metadata_cache)}개 문서',
+            '분석': {'note': 'StatisticsModule 필요'},
+            '추천': ['StatisticsModule을 로드하여 상세 통계를 확인하세요.']
         }
-        
-        # 연도 추출
-        year_match = re.search(r'(20\d{2})', query)
-        target_year = year_match.group(1) if year_match else None
-        
-        if "연도별" in query and "구매" in query:
-            stats_data['title'] = "연도별 구매 현황"
-            stats_data['headers'] = ['연도', '건수', '총 금액', '주요 품목']
-            
-            yearly_data = {}
-            for filename, metadata in self.metadata_cache.items():
-                if '구매' in filename or '구입' in filename:
-                    year = metadata['year']
-                    if year not in yearly_data:
-                        yearly_data[year] = {'count': 0, 'total': 0, 'items': []}
-                    
-                    yearly_data[year]['count'] += 1
-                    # 금액 추출 로직
-                    pdf_path = self.docs_dir / filename
-                    info = self._extract_pdf_info(pdf_path)
-                    if info.get('금액'):
-                        amount = self._parse_amount(info['금액'])
-                        yearly_data[year]['total'] += amount
-                    if info.get('품목'):
-                        yearly_data[year]['items'].append(info['품목'])
-            
-            # 테이블 데이터 생성
-            total_amount = 0
-            for year in sorted(yearly_data.keys()):
-                data = yearly_data[year]
-                total_amount += data['total']
-                items_str = ', '.join(data['items'][:2])  # 상위 2개만
-                if len(data['items']) > 2:
-                    items_str += f" 외 {len(data['items'])-2}건"
-                
-                stats_data['table_data'].append([
-                    year,
-                    f"{data['count']}건",
-                    f"{data['total']:,}원",
-                    items_str
-                ])
-            
-            stats_data['총계'] = f"{total_amount:,}원"
-            stats_data['분석']['평균 연간 구매액'] = f"{total_amount // len(yearly_data):,}원"
-            stats_data['추천'].append("구매 집중 시기를 파악하여 예산 계획 수립")
-            
-        if target_year:
-            # 특정 연도 전체 통계
-            stats_data['title'] = f"{target_year}년 전체 현황"
-            stats_data['headers'] = ['구분', '건수', '총 금액', '비율']
-            
-            categories = {'구매': 0, '수리': 0, '폐기': 0, '기타': 0}
-            amounts = {'구매': 0, '수리': 0, '폐기': 0, '기타': 0}
-            
-            for filename, metadata in self.metadata_cache.items():
-                if metadata['year'] == target_year:
-                    # 카테고리 분류
-                    if '구매' in filename or '구입' in filename:
-                        cat = '구매'
-                    if '수리' in filename or '보수' in filename:
-                        cat = '수리'
-                    if '폐기' in filename:
-                        cat = '폐기'
-                    else:
-                        cat = '기타'
-                    
-                    categories[cat] += 1
-                    
-                    # 금액 추출
-                    pdf_path = self.docs_dir / filename
-                    info = self._extract_pdf_info(pdf_path)
-                    if info.get('금액'):
-                        amounts[cat] += self._parse_amount(info['금액'])
-            
-            # 총계 계산
-            total_docs = sum(categories.values())
-            total_amount = sum(amounts.values())
-            
-            # 테이블 데이터 생성
-            for cat in ['구매', '수리', '폐기', '기타']:
-                if categories[cat] > 0:
-                    ratio = (categories[cat] / total_docs * 100) if total_docs > 0 else 0
-                    stats_data['table_data'].append([
-                        cat,
-                        f"{categories[cat]}건",
-                        f"{amounts[cat]:,}원",
-                        f"{ratio:.1f}%"
-                    ])
-            
-            stats_data['총계'] = f"문서 {total_docs}건, 금액 {total_amount:,}원"
-            stats_data['분석']['구매 비중'] = f"{amounts['구매']/total_amount*100:.1f}%" if total_amount > 0 else "0%"
-            stats_data['분석']['수리 비중'] = f"{amounts['수리']/total_amount*100:.1f}%" if total_amount > 0 else "0%"
-        
-        return stats_data
-    
-    def _generate_statistics_report(self, query: str) -> str:
-        """전체 문서에 대한 통계 보고서 생성 - 구조화된 포맷"""
-        try:
-            # StatisticsModule 사용 (2025-09-29 리팩토링)
-            if self.statistics_module:
-                # 통계 타입 파악 및 생성
-                if "연도별" in query and "구매" in query:
-                    return self.statistics_module.generate_yearly_purchase_report(
-                        query, self.metadata_cache
-                    )
-                elif "기안자별" in query:
-                    return self.statistics_module.generate_drafter_report(
-                        query, self.metadata_cache
-                    )
-                elif "월별" in query and "수리" in query:
-                    return self.statistics_module.generate_monthly_repair_report(
-                        query, self.metadata_cache
-                    )
-                else:
-                    # 일반 통계 보고서
-                    return self.statistics_module.generate_general_statistics_report(
-                        query, self.metadata_cache
-                    )
-
-            # formatter 사용 가능 시 구조화된 포맷 적용 (폴백)
-            if self.formatter:
-                stats_data = self._collect_statistics_data(query)
-                return self.formatter.format_statistics_response(stats_data, query)
-
-            # 기존 방식 (모듈/formatter 없을 때)
-            # 통계 타입 파악 - 이제 statistics_module에서 처리
-            if ("연도별" in query and "구매" in query) or "기안자별" in query or ("월별" in query and "수리" in query):
-                return "⚠️ 통계 모듈이 필요합니다. statistics_module을 로드해주세요."
-            
-            # 기본: 특정 연도 전체 통계
-            year_match = re.search(r'(20\d{2})', query)
-            target_year = year_match.group(1) if year_match else None
-            
-            # 통계 데이터 수집
-            stats = {
-                '구매': [],
-                '수리': [],
-                '폐기': [],
-                '소모품': [],
-                '기타': []
-            }
-            
-            drafters = {}  # 기안자별 통계
-            monthly = {}  # 월별 통계
-            total_amount = 0
-            doc_count = 0
-            
-            for filename, metadata in self.metadata_cache.items():
-                # 연도 필터링
-                if target_year and metadata['year'] != target_year:
-                    continue
-                
-                doc_count += 1
-                pdf_path = self.docs_dir / filename
-                info = self._extract_pdf_info(pdf_path)
-                
-                # 카테고리 분류
-                category = '기타'
-                if '구매' in filename:
-                    category = '구매'
-                if '수리' in filename or '보수' in filename:
-                    category = '수리'
-                if '폐기' in filename:
-                    category = '폐기'
-                if '소모품' in filename:
-                    category = '소모품'
-                
-                # 통계에 추가
-                doc_info = {
-                    'filename': filename,
-                    'date': info.get('날짜', ''),
-                    'drafter': info.get('기안자', '미상'),
-                    'amount': info.get('금액', ''),
-                    'title': info.get('제목', filename.replace('.pdf', ''))
-                }
-                
-                stats[category].append(doc_info)
-                
-                # 기안자별 통계
-                drafter = doc_info['drafter']
-                if drafter not in drafters:
-                    drafters[drafter] = 0
-                drafters[drafter] += 1
-                
-                # 월별 통계 (날짜가 있는 경우)
-                if doc_info['date']:
-                    month_match = re.search(r'-(\d{2})-', doc_info['date'])
-                    if month_match:
-                        month = month_match.group(1)
-                        if month not in monthly:
-                            monthly[month] = 0
-                        monthly[month] += 1
-                
-                # 금액 합계
-                if doc_info['amount']:
-                    amount_num = re.search(r'(\d+(?:,\d+)*)', doc_info['amount'])
-                    if amount_num:
-                        try:
-                            total_amount += int(amount_num.group(1).replace(',', ''))
-                        except (ValueError, AttributeError):
-                            pass  # 금액 변환 실패시 무시
-            
-            # 보고서 생성
-            report = []
-            
-            if target_year:
-                report.append(f" {target_year}년 기술관리팀 문서 통계 보고서")
-            else:
-                report.append(" 전체 기간 기술관리팀 문서 통계 보고서")
-            
-            report.append("=" * 50)
-            report.append("")
-            
-            # 전체 요약
-            report.append("###  전체 요약")
-            report.append(f"• 총 문서 수: {doc_count}개")
-            if total_amount > 0:
-                report.append(f"• 총 금액: {total_amount:,}원")
-            report.append("")
-            
-            # 카테고리별 통계
-            report.append("###  카테고리별 현황")
-            report.append("")
-            
-            for category, docs in stats.items():
-                if docs:
-                    count = len(docs)
-                    ratio = (count / doc_count * 100) if doc_count > 0 else 0
-                    report.append(f"• **{category}**: {count}건 ({ratio:.1f}%)")
-            report.append("")
-            
-            # 기안자별 통계
-            if drafters:
-                report.append("###  기안자별 현황")
-                report.append("")
-                
-                for drafter, count in sorted(drafters.items(), key=lambda x: x[1], reverse=True):
-                    if drafter and drafter != '미상':
-                        report.append(f"• **{drafter}**: {count}건")
-                
-                report.append("")
-            
-            # 월별 통계 (연도 지정시)
-            if target_year and monthly:
-                report.append("###  월별 현황")
-                report.append("")
-                
-                for month in sorted(monthly.keys()):
-                    count = monthly[month]
-                    report.append(f"• **{int(month)}월**: {count}건")
-                
-                report.append("")
-            
-            # 주요 문서 리스트
-            report.append("###  주요 문서 목록")
-            for category, docs in stats.items():
-                if docs:
-                    report.append(f"\n▶ {category} ({len(docs)}건)")
-                    for doc in docs[:3]:  # 각 카테고리별 최대 3개
-                        date = doc['date'][:10] if doc['date'] else '날짜없음'
-                        drafter = doc['drafter'] if doc['drafter'] != '미상' else ''
-                        amount = f" - {doc['amount']}" if doc['amount'] else ""
-                        
-                        title = doc['title'][:30] + "..." if len(doc['title']) > 30 else doc['title']
-                        report.append(f"  • [{date}] {title}")
-                        if drafter or amount:
-                            report.append(f"    {drafter}{amount}")
-            
-            return "\n".join(report)
-            
-        except Exception as e:
-            return f" 통계 보고서 생성 실패: {e}"
-    
-    # REMOVED: _generate_yearly_purchase_report method - now handled by statistics_module
-    
-    # REMOVED: _generate_drafter_report method - now handled by statistics_module
-    
-    # REMOVED: _generate_monthly_repair_report method - now handled by statistics_module
     
     def _format_conditions(self, conditions: dict) -> str:
         """검색 조건을 읽기 쉽게 포맷팅"""
@@ -3848,338 +3145,6 @@ class PerfectRAG:
 
         return '\n'.join(aggregated)
 
-    def _search_multiple_documents(self, query: str) -> str:
-        """여러 문서 검색 및 리스트 반환"""
-        try:
-            # 질문에서 키워드 추출
-            query_lower = query.lower()
-            
-            # 매칭된 문서들 수집
-            matched_docs = []
-            
-            for cache_key, metadata in self.metadata_cache.items():
-                # TXT 파일은 제외 (PDF만 처리)
-                if metadata.get('is_txt', False):
-                    continue
-
-                filename = metadata.get('filename', cache_key)
-                score = 0
-                filename_lower = filename.lower()
-                
-                # 키워드 매칭
-                keywords_in_query = []
-
-                # 동적 키워드 추출 (하드코딩 제거)
-                query_words = re.findall(r'[가-힣]+|[A-Za-z]+', query_lower)
-                file_words = re.findall(r'[가-힣]+|[A-Za-z]+', filename_lower)
-
-                # 불용어 제외
-                stopwords = ['의', '및', '건', '검토서', '관련', '문서', '찾아', '줘', '있어', '어떤', '기안서']
-
-                # 기안자 검색 처리 (메타데이터 DB 활용)
-                if '기안자' in query_lower:
-                    # "최새름 기안자" 또는 "기안자 최새름" 형태 추출
-                    drafter_match = re.search(r'([가-힣]{2,4})\s*기안자|기안자\s*([가-힣]{2,4})', query)
-                    if drafter_match:
-                        search_drafter = drafter_match.group(1) or drafter_match.group(2)
-                        if search_drafter and metadata.get('is_pdf'):
-                            found_drafter = False
-
-                            # 1. 메타데이터 DB에서 먼저 확인
-                            if self.metadata_db:
-                                db_info = self.metadata_db.get_document(filename)
-                                if db_info and db_info.get('drafter'):
-                                    if search_drafter in db_info['drafter']:
-                                        score += 50
-                                        found_drafter = True
-
-                            # 2. DB에 없으면 PDF에서 직접 추출 시도
-                            if not found_drafter and metadata.get('drafter') is None:
-                                try:
-                                    # 간단한 텍스트 추출만 시도 (빠른 처리)
-                                    import pdfplumber
-                                    with pdfplumber.open(metadata['path']) as pdf:
-                                        if pdf.pages:
-                                            # 첫 페이지만 빠르게 확인
-                                            text = pdf.pages[0].extract_text() or ""
-                                            if len(text) > 50:  # 텍스트 PDF인 경우
-                                                # 기안자 패턴 검색
-                                                patterns = [
-                                                    r'기안자[\s:：]*([가-힣]{2,4})',
-                                                    r'작성자[\s:：]*([가-힣]{2,4})',
-                                                ]
-                                                for pattern in patterns:
-                                                    match = re.search(pattern, text)
-                                                    if match:
-                                                        drafter = match.group(1).strip()
-                                                        # DB에 저장
-                                                        if self.metadata_db:
-                                                            self.metadata_db.update_document(filename, drafter=drafter)
-                                                        if search_drafter in drafter:
-                                                            score += 50
-                                                            found_drafter = True
-                                                        break
-                                except Exception as e:
-                                    pass
-
-                        # 기안자 검색인데 매칭 안되면 건너뜀
-                        if score < 50:
-                            continue
-
-                # 장비명 특별 가중치 (DVR, CCU 등) - 정확한 매칭만
-                equipment_names = ['dvr', 'ccu', '카메라', '렌즈', '모니터', '스위처', '마이크', '믹서', '삼각대', '중계차']
-                for equipment in equipment_names:
-                    if equipment in query_lower:
-                        # DVR 검색시 DVR만 찾기 (단어 경계 체크)
-                        if equipment == 'dvr':
-                            # DVR이 정확히 있는지 확인 (D-tap, VR 등 제외)
-                            if re.search(r'\bDVR\b', filename, re.IGNORECASE):
-                                score += 20  # DVR 완전 매칭
-                            if 'dvr' in filename_lower and 'd-tap' not in filename_lower and 'vr' not in filename_lower:
-                                score += 15
-                        else:
-                            # 다른 장비명은 기존 방식
-                            if equipment in filename_lower:
-                                score += 15
-
-                        # 키워드 체크
-                        if any(equipment == kw.lower() for kw in metadata.get('keywords', [])):
-                            score += 8
-                
-                for word in query_words:
-                    if len(word) >= 2 and word not in stopwords:
-                        keywords_in_query.append(word)
-                        # 파일명에 해당 단어가 있으면 점수 부여
-                        if word in file_words:
-                            # 단어 길이에 비례한 점수
-                            score += len(word) * 2
-                        # 부분 매칭 - DVR 같은 짧은 단어는 제외
-                        if len(word) >= 4:  # 4글자 이상만 부분 매칭
-                            for f_word in file_words:
-                                # 전체 포함이 아닌 부분 일치만
-                                if len(f_word) >= 4 and (word in f_word or f_word in word):
-                                    score += len(word) // 2  # 부분 매칭은 점수 절반
-                
-                # 메타데이터 키워드 매칭
-                for keyword in metadata['keywords']:
-                    if keyword.lower() in query_lower:
-                        score += 3
-                
-                # 연도와 월 매칭
-                year_match = re.search(r'(20\d{2})', query)
-                month_match = re.search(r'(\d{1,2})\s*월', query)
-                
-                if year_match:
-                    query_year = year_match.group(1)
-                    if metadata['year'] == query_year:
-                        score += 5
-                        
-                        # 월도 지정된 경우
-                        if month_match:
-                            query_month = int(month_match.group(1))
-                            file_month_match = re.search(r'\d{4}-(\d{2})-\d{2}', filename)
-                            if file_month_match:
-                                file_month = int(file_month_match.group(1))
-                                if file_month == query_month:
-                                    score += 10  # 월까지 일치하면 높은 점수
-                                else:
-                                    score = 0  # 월이 다르면 제외
-                                    continue
-                    else:
-                        # 연도가 다르면 제외
-                        continue  # 연도가 다르면 무조건 제외
-                
-                # 최소 점수 기준 설정 (너무 많은 문서 방지)
-                # 기안자 검색시 점수가 있으면 포함
-                has_equipment = False  # 변수를 먼저 초기화
-
-                if '기안자' in query_lower:
-                    MIN_SCORE = 1 if score > 0 else 999  # 기안자 검색은 점수 있으면 포함
-                elif re.search(r'20\d{2}년', query):
-                    MIN_SCORE = 2  # 년도 검색은 낮은 기준
-                else:
-                    MIN_SCORE = 3  # 기본 최소 3점 이상만 포함
-
-                # 장비명 검색시 적절한 기준 적용
-                for equipment in equipment_names:
-                    if equipment in query_lower:
-                        has_equipment = True
-                        # DVR의 경우 특별 처리
-                        if equipment == 'dvr':
-                            if 'DVR' in filename or ('dvr' in filename_lower and 'd-tap' not in filename_lower and 'vr' not in filename_lower):
-                                MIN_SCORE = 0  # DVR이 정확히 있으면 포함
-                            else:
-                                MIN_SCORE = 10  # DVR 검색인데 DVR이 없으면 높은 기준
-                        else:
-                            # 다른 장비명
-                            if equipment in filename_lower:
-                                MIN_SCORE = 0
-                            else:
-                                MIN_SCORE = max(3, MIN_SCORE)
-                        break
-                
-                if score >= MIN_SCORE:
-                    # metadata의 path 사용
-                    pdf_path = metadata.get('path')
-                    if isinstance(pdf_path, str):
-                        pdf_path = Path(pdf_path)
-                    if not pdf_path:
-                        pdf_path = self.docs_dir / filename
-
-                    info = self._extract_pdf_info(pdf_path)
-                    matched_docs.append({
-                        'filename': filename,
-                        'score': score,
-                        'info': info,
-                        'year': metadata['year'],
-                        'cache_key': cache_key  # 파일 경로 정보 추가
-                    })
-            
-            # 중복 제거 및 최적화
-            unique_docs = {}
-            for doc in matched_docs:
-                filename = doc['filename']
-                if filename not in unique_docs:
-                    unique_docs[filename] = doc
-                else:
-                    # 더 높은 점수를 가진 문서를 유지
-                    if doc['score'] > unique_docs[filename]['score']:
-                        unique_docs[filename] = doc
-                    # 같은 점수면 year_ 폴더 우선
-                    if doc['score'] == unique_docs[filename]['score'] and 'year_' in doc.get('cache_key', ''):
-                        unique_docs[filename] = doc
-
-            matched_docs = list(unique_docs.values())
-
-            # 점수 순으로 정렬
-            matched_docs.sort(key=lambda x: x['score'], reverse=True)
-
-            # 결과 제한 (성능 최적화)
-            # 장비 검색은 20개까지, 일반 검색은 15개까지
-            max_results = 20 if has_equipment else 15
-            if len(matched_docs) > max_results:
-                matched_docs = matched_docs[:max_results]
-            
-            if not matched_docs:
-                return " 관련 문서를 찾을 수 없습니다."
-            
-            # 결과 포맷팅 (통합형 UI)
-            report = []
-            report.append(f"##  '{query}' 검색 결과")
-            report.append(f"**총 {len(matched_docs)}개 문서 발견**\n")
-            report.append("---\n")
-            
-            # 연도별로 그룹화 (중복 제거는 이미 위에서 완료)
-            docs_by_year = {}
-
-            for doc in matched_docs:
-                year = doc['year']
-                if year not in docs_by_year:
-                    docs_by_year[year] = []
-                docs_by_year[year].append(doc)
-            
-            # 연도별로 표시
-            for year in sorted(docs_by_year.keys(), reverse=True):
-                report.append(f"###  {year}년 ({len(docs_by_year[year])}개)\n")
-                
-                for doc in docs_by_year[year]:
-                    info = doc['info']
-                    filename = doc['filename']
-                    relative_path = doc.get('cache_key', filename)  # 캐시 키가 상대 경로
-                    
-                    # 카테고리 판단 및 이모지
-                    if '구매' in filename:
-                        category = "구매요청"
-                        emoji = ""
-                    if '수리' in filename or '보수' in filename:
-                        category = "수리/보수"
-                        emoji = ""
-                    if '폐기' in filename:
-                        category = "폐기처리"
-                        emoji = "️"
-                    if '검토' in filename:
-                        category = "검토보고서"
-                        emoji = ""
-                    else:
-                        category = "기타"
-                        emoji = ""
-                    
-                    # 제목 추출 (날짜 제외)
-                    title_parts = filename.replace('.pdf', '').split('_', 1)
-                    title = title_parts[1] if len(title_parts) > 1 else title_parts[0]
-                    
-                    # 기본 정보
-                    drafter = info.get('기안자', '')
-                    date = info.get('날짜', '')
-                    amount = info.get('금액', '')
-                    
-                    # 개요 생성 - metadata_cache에서 실제 텍스트 활용
-                    summary = ""
-
-                    # metadata에서 실제 텍스트 가져오기
-                    cached_metadata = None
-                    for ck, md in self.metadata_cache.items():
-                        if md.get('filename') == filename:
-                            cached_metadata = md
-                            break
-
-                    if cached_metadata and cached_metadata.get('text'):
-                        # 캐시된 텍스트에서 주요 내용 추출
-                        text = cached_metadata['text'][:500]  # 처음 500자
-
-                        # 주요 정보 추출
-                        if '목적' in text:
-                            purpose_match = re.search(r'목적[:\s]+([^\n]+)', text)
-                            if purpose_match:
-                                summary = purpose_match.group(1).strip()
-                        if '내용' in text:
-                            content_match = re.search(r'내용[:\s]+([^\n]+)', text)
-                            if content_match:
-                                summary = content_match.group(1).strip()
-                        if '사유' in text:
-                            reason_match = re.search(r'사유[:\s]+([^\n]+)', text)
-                            if reason_match:
-                                summary = reason_match.group(1).strip()
-
-                    # 텍스트가 없거나 추출 실패시 기본값
-                    if not summary:
-                        if '구매' in filename:
-                            summary = "장비 구매 요청"
-                        if '수리' in filename or '보수' in filename:
-                            summary = "장비 수리/보수 건"
-                        if '폐기' in filename:
-                            summary = "노후 장비 폐기 처리"
-                        if '교체' in filename:
-                            summary = "노후 장비 교체 검토"
-                        if '검토' in filename:
-                            summary = "기술 검토 보고서"
-                        else:
-                            summary = "기술관리팀 업무 문서"
-                    
-                    # 카드 UI 형태로 출력
-                    report.append(f"#### {emoji} **{title}**")
-                    report.append(f"**[{category}]** | {date if date else '날짜 미상'}")
-                    
-                    # 상세 정보
-                    if drafter:
-                        report.append(f"- **기안자**: {drafter}")
-                    if amount:
-                        report.append(f"- **금액**: {amount}")
-                    if summary:
-                        report.append(f"- **개요**: {summary}")
-                    
-                    # 파일 경로 정보 포함 (web_interface에서 처리할 수 있도록)
-                    # 특별한 마커 사용: @@PDF_PREVIEW@@
-                    file_path_str = str(relative_path) if relative_path else filename
-                    report.append(f"- **파일**: [{file_path_str}] @@PDF_PREVIEW@@{file_path_str}@@")
-                    report.append("")  # 간격
-                
-                report.append("---\n")
-            
-            return "\n".join(report)
-            
-        except Exception as e:
-            return f" 문서 검색 실패: {e}"
 
     def _search_and_analyze_by_content(self, query: str) -> str:
         """특정 내용이 언급된 경우 관련 문서들을 모두 찾아서 분석
@@ -4672,67 +3637,3 @@ class PerfectRAG:
             return search_location in actual_location
         
         return False
-
-
-def main():
-    """메인 실행 함수"""
-    print("=" * 60)
-    print(" Perfect RAG - 정확한 문서 검색 시스템")
-    print("=" * 60)
-    
-    # 시스템 초기화
-    rag = PerfectRAG()
-    
-    # 테스트 질문들
-    test_queries = [
-        "2024 채널에이 중계차 노후 보수건 기안자 누구?",
-        "뷰파인더 소모품 케이블 구매 날짜 언제?",
-        "티비로직 월모니터 고장 수리 금액 얼마?",
-        "2021년 짐벌카메라 구매 기안자 누구?",
-        "스튜디오 모니터 교체 검토서 내용 요약",
-    ]
-    
-    print("\n 테스트 시작")
-    print("=" * 60)
-    
-    for i, query in enumerate(test_queries, 1):
-        print(f"\n질문 {i}: {query}")
-        print("-" * 40)
-        answer = rag.answer(query)
-        print(answer)
-        print("-" * 40)
-        
-        # 자동 진행 (input 제거)
-    
-    print("\n" + "=" * 60)
-    print(" 테스트 완료!")
-    print("=" * 60)
-
-
-
-
-    def _manage_cache_size(self, cache_dict, max_size, cache_name="cache"):
-        """캐시 크기 관리 - LRU 방식으로 오래된 항목 제거"""
-        if len(cache_dict) > max_size:
-            # 가장 오래된 항목들 제거 (FIFO)
-            items_to_remove = len(cache_dict) - max_size
-            for _ in range(items_to_remove):
-                removed = cache_dict.popitem(last=False)  # 가장 오래된 항목 제거
-            print(f"  🗑️ {cache_name}에서 {items_to_remove}개 항목 제거 (현재 크기: {len(cache_dict)})")
-
-    def _add_to_cache(self, cache_dict, key, value, max_size):
-        """캐시에 항목 추가 with 크기 제한"""
-        # 기존 항목이면 삭제 후 다시 추가 (LRU를 위해)
-        if key in cache_dict:
-            del cache_dict[key]
-
-        # 새 항목 추가
-        cache_dict[key] = {
-            'data': value,
-            'timestamp': time.time()
-        }
-
-        # 크기 제한 확인
-        self._manage_cache_size(cache_dict, max_size, str(type(cache_dict)))
-if __name__ == "__main__":
-    main()

@@ -77,13 +77,18 @@ class HybridChatRAG:
             start_time = time.time()
             # QwenLLM은 generate_response 메서드 사용
             response = self.llm.generate_response(prompt, [])
-            if hasattr(response, 'content'):
+
+            # RAGResponse 객체에서 텍스트 추출
+            if hasattr(response, 'answer'):
+                response_text = response.answer
+            elif hasattr(response, 'content'):
                 response_text = response.content
             else:
                 response_text = str(response)
+
             response_time = time.time() - start_time
 
-            # 4. 대화 기록 저장
+            # 4. 대화 기록 저장 (텍스트만 저장)
             self.conversation_history.append({
                 'query': query,
                 'response': response_text,

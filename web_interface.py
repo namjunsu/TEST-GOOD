@@ -1522,7 +1522,12 @@ def main():
             # 응답 표시
             st.markdown("---")
             st.markdown("### 💬 AI 응답")
-            st.markdown(response)
+
+            # RAGResponse 객체 처리
+            if hasattr(response, 'answer'):
+                st.markdown(response.answer)
+            else:
+                st.markdown(str(response))
     elif submit_btn:
         st.warning("질문을 입력해주세요!")
 
@@ -1540,11 +1545,22 @@ def main():
                 st.rerun()
 
             # 최근 대화부터 표시
+            import time as time_module
             for i, conv in enumerate(reversed(history[-5:])):  # 최근 5개만
                 with st.expander(f"💬 대화 {len(history)-i}", expanded=(i==0)):
                     st.markdown(f"**Q:** {conv['query']}")
-                    st.markdown(f"**A:** {conv['response'][:500]}{'...' if len(conv['response']) > 500 else ''}")
-                    st.caption(f"시간: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(conv['timestamp']))}")
+
+                    # 응답 처리 (RAGResponse 객체일 수 있음)
+                    response_text = conv['response']
+                    if hasattr(response_text, 'answer'):
+                        response_text = response_text.answer
+                    elif isinstance(response_text, str):
+                        response_text = response_text
+                    else:
+                        response_text = str(response_text)
+
+                    st.markdown(f"**A:** {response_text[:500]}{'...' if len(response_text) > 500 else ''}")
+                    st.caption(f"시간: {time_module.strftime('%Y-%m-%d %H:%M:%S', time_module.localtime(conv['timestamp']))}")
 
     st.markdown("---")
 

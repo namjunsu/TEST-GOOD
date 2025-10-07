@@ -74,7 +74,7 @@ except ImportError:
         logger.warning("MetadataExtractor not available, metadata extraction disabled")
 
 try:
-    from search_module import SearchModule
+    from modules.search_module import SearchModule
     SEARCH_MODULE_AVAILABLE = True
 except ImportError:
     SEARCH_MODULE_AVAILABLE = False
@@ -380,6 +380,15 @@ class PerfectRAG:
                 self.pdf_files.extend(list(year_folder.glob('*.pdf')))
                 self.txt_files.extend(list(year_folder.glob('*.txt')))
 
+        # 카테고리 폴더들 추가 스캔
+        category_folders = ['category_purchase', 'category_repair', 'category_consumables', 'category_review', 'category_disposal']
+        for folder in category_folders:
+            category_folder = self.docs_dir / folder
+            if category_folder.exists():
+                self.pdf_files.extend(list(category_folder.glob('*.pdf')))
+                self.txt_files.extend(list(category_folder.glob('*.txt')))
+
+        # 기타 특수 폴더들
         special_folders = ['recent', 'archive']
         for folder in special_folders:
             special_folder = self.docs_dir / folder
@@ -579,15 +588,19 @@ class PerfectRAG:
                     # 메모리 최적화
                     if i % (batch_size * 5) == 0:
                         gc.collect()
-            for i in range(0, len(pdf_paths), batch_size):
-                batch = pdf_paths[i:i + batch_size]
 
-                batch_results = self.pdf_processor.process_multiple_pdfs(batch)
-                all_results.update(batch_results)
+            return all_results
 
-                # 메모리 관리
-                if len(self.pdf_processor.extraction_cache) > 50:
-                    self.pdf_processor.clear_cache()
+        # pdf_processor가 있는 경우 - 병렬 처리 모드
+        for i in range(0, len(pdf_paths), batch_size):
+            batch = pdf_paths[i:i + batch_size]
+
+            batch_results = self.pdf_processor.process_multiple_pdfs(batch)
+            all_results.update(batch_results)
+
+            # 메모리 관리
+            if len(self.pdf_processor.extraction_cache) > 50:
+                self.pdf_processor.clear_cache()
 
         return all_results
 
@@ -2002,5 +2015,24 @@ class PerfectRAG:
             return 'Van' in actual_location or 'VAN' in actual_location or '중계차' in actual_location
         if len(search_location) > 3:
             return search_location in actual_location
-        
+
         return False
+
+    def _classify_search_intent(self, query: str) -> str:
+        """검색 의도 분류"""
+        query_lower = query.lower()
+
+        # 문서 검색 키워드
+        if any(word in query_lower for word in ['문서', '파일', '찾아', '있어', '보여', '검색']):
+            return 'document'
+
+        # 분석 요청 키워드
+        if any(word in query_lower for word in ['분석', '요약', '내용', '설명', '무엇', '어떤']):
+            return 'analysis'
+
+        # 목록 요청 키워드
+        if any(word in query_lower for word in ['목록', '리스트', '몇 개', '개수', '전체']):
+            return 'list'
+
+        # 기본값
+        return 'document'

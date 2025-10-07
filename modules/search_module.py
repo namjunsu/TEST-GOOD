@@ -18,8 +18,8 @@ import pdfplumber
 
 # 검색 관련 모듈들
 from everything_like_search import EverythingLikeSearch
-from metadata_extractor import MetadataExtractor
-from metadata_db import MetadataDB
+from modules.metadata_extractor import MetadataExtractor
+from modules.metadata_db import MetadataDB
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +64,53 @@ class SearchModule:
         self.search_cache = {}
         self.cache_ttl = 3600  # 1시간
 
+    def search_by_drafter(self, drafter_name: str, top_k: int = 20) -> List[Dict[str, Any]]:
+        """
+        기안자별 문서 검색 - department 필드에서 정확히 일치하는 문서만 반환
+
+        Args:
+            drafter_name: 기안자 이름
+            top_k: 반환할 최대 문서 수
+
+        Returns:
+            기안자가 작성한 문서 리스트
+        """
+        if self.everything_search:
+            try:
+                # 직접 SQL 쿼리로 department 필드에서 정확한 기안자 검색
+                import sqlite3
+                conn = sqlite3.connect('everything_index.db')
+                cursor = conn.cursor()
+
+                cursor.execute("""
+                    SELECT * FROM files
+                    WHERE department LIKE ?
+                    ORDER BY year DESC, month DESC
+                    LIMIT ?
+                """, (f'%{drafter_name}%', top_k))
+
+                results = []
+                for row in cursor.fetchall():
+                    results.append({
+                        'filename': row[1],
+                        'path': row[2],
+                        'score': 2.0,  # 높은 점수 (정확한 매칭)
+                        'date': row[4],
+                        'category': row[7],
+                        'department': row[8],
+                        'keywords': row[9]
+                    })
+
+                conn.close()
+                logger.info(f"Found {len(results)} documents by drafter: {drafter_name}")
+                return results
+
+            except Exception as e:
+                logger.error(f"Drafter search failed: {e}")
+                return []
+
+        return []
+
     def search_by_content(self, query: str, top_k: int = 20) -> List[Dict[str, Any]]:
         """
         내용 기반 문서 검색 - Everything-like 초고속 검색 사용
@@ -89,7 +136,8 @@ class SearchModule:
                         'score': doc.get('score', 1.0),
                         'date': doc.get('date', ''),
                         'category': doc.get('category', ''),
-                        'keywords': doc.get('keywords', '')
+                        'keywords': doc.get('keywords', ''),
+                        'department': doc.get('department', '')  # 기안자 정보 포함
                     }
 
                     # 메타데이터 추가

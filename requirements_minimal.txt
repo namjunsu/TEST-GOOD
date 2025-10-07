@@ -1,6 +1,0 @@
-# 최소 필수 패키지만
-streamlit
-pdfplumber
-python-dotenv
-numpy
-pandas

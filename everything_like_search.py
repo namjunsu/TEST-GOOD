@@ -34,6 +34,17 @@ class EverythingLikeSearch:
         self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
         cursor = self.conn.cursor()
 
+        # 기존 테이블이 있는지 확인하고 content 컬럼 추가
+        cursor.execute("PRAGMA table_info(files)")
+        columns = [col[1] for col in cursor.fetchall()]
+        has_content = 'content' in columns
+
+        if not has_content and columns:  # 테이블은 있지만 content 컬럼이 없음
+            print("🔄 데이터베이스 업그레이드: content 컬럼 추가 중...")
+            cursor.execute("ALTER TABLE files ADD COLUMN content TEXT")
+            self.conn.commit()
+            print("✅ content 컬럼 추가 완료")
+
         # 파일 인덱스 테이블
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS files (
@@ -47,6 +58,7 @@ class EverythingLikeSearch:
                 category TEXT,
                 department TEXT,
                 keywords TEXT,
+                content TEXT,
                 created_at TIMESTAMP,
                 UNIQUE(path)
             )
@@ -58,6 +70,7 @@ class EverythingLikeSearch:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_year ON files(year)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_category ON files(category)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_keywords ON files(keywords)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_content ON files(content)")
 
         self.conn.commit()
 
@@ -71,15 +84,26 @@ class EverythingLikeSearch:
         # 기존 데이터 삭제
         cursor.execute("DELETE FROM files")
 
+        # Zone.Identifier 파일 자동 정리 (윈도우 다운로드 흔적)
+        zone_files = list(self.docs_dir.rglob("*Zone.Identifier*"))
+        if zone_files:
+            print(f"🧹 {len(zone_files)}개 Zone.Identifier 파일 자동 정리 중...")
+            for zone_file in zone_files:
+                try:
+                    zone_file.unlink()
+                except Exception as e:
+                    logger.warning(f"Zone.Identifier 삭제 실패: {zone_file}: {e}")
+            print("✅ Zone.Identifier 파일 정리 완료")
+
         # 모든 PDF 파일 수집
         pdf_files = list(self.docs_dir.rglob("*.pdf"))
 
-        # 중복 제거
-        seen_names = set()
+        # 중복 제거 (경로까지 고려)
+        seen_paths = set()
         unique_files = []
         for pdf in pdf_files:
-            if pdf.name not in seen_names:
-                seen_names.add(pdf.name)
+            if str(pdf) not in seen_paths:
+                seen_paths.add(str(pdf))
                 unique_files.append(pdf)
 
         print(f"📁 {len(unique_files)}개 파일 인덱싱 중...")
@@ -105,11 +129,14 @@ class EverythingLikeSearch:
                 # 키워드 추출
                 keywords = self._extract_keywords(filename)
 
+                # 문서 내용 추출 (텍스트가 있는 경우만)
+                content = self._extract_text_content(pdf_path)
+
                 # DB에 저장
                 cursor.execute("""
                     INSERT OR REPLACE INTO files
-                    (filename, path, size, date, year, month, category, department, keywords, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (filename, path, size, date, year, month, category, department, keywords, content, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     filename,
                     str(pdf_path),
@@ -120,6 +147,7 @@ class EverythingLikeSearch:
                     category,
                     department,
                     keywords,
+                    content,
                     datetime.now()
                 ))
 
@@ -179,6 +207,33 @@ class EverythingLikeSearch:
         keywords = [word for word in korean_words if len(word) >= 2]
         return ' '.join(keywords)
 
+    def _extract_text_content(self, pdf_path: Path) -> str:
+        """PDF에서 텍스트 내용 추출 (첫 3페이지만, 최대 5000자)"""
+        try:
+            text = ""
+            with pdfplumber.open(pdf_path) as pdf:
+                # 첫 3페이지만 처리 (인덱싱 속도를 위해)
+                for page in pdf.pages[:3]:
+                    page_text = page.extract_text()
+                    if page_text:
+                        text += page_text + " "
+                        # 5000자 제한 (DB 크기 관리)
+                        if len(text) >= 5000:
+                            break
+
+            # 텍스트 정리 (불필요한 공백 제거)
+            text = ' '.join(text.split())
+
+            # 텍스트가 너무 짧으면 빈 문자열 반환 (스캔 문서 등)
+            if len(text.strip()) < 50:
+                return ""
+
+            return text[:5000]  # 최대 5000자로 제한
+
+        except Exception as e:
+            logger.debug(f"텍스트 추출 실패: {pdf_path.name}: {e}")
+            return ""
+
     def search(self, query: str, limit: int = 20) -> List[Dict]:
         """초고속 검색 (Everything처럼)"""
         cursor = self.conn.cursor()
@@ -224,8 +279,8 @@ class EverythingLikeSearch:
         params = []
         for keyword in keywords:
             search_term = f'%{keyword}%'
-            conditions.append("(filename LIKE ? OR keywords LIKE ? OR category LIKE ? OR department LIKE ?)")
-            params.extend([search_term, search_term, search_term, search_term])
+            conditions.append("(filename LIKE ? OR keywords LIKE ? OR category LIKE ? OR department LIKE ? OR content LIKE ?)")
+            params.extend([search_term, search_term, search_term, search_term, search_term])
 
         # SQL 쿼리 구성
         sql = f"""
@@ -251,7 +306,8 @@ class EverythingLikeSearch:
                 'month': row[6],
                 'category': row[7],
                 'department': row[8],
-                'keywords': row[9]
+                'keywords': row[9],
+                'content': row[10]
             })
 
         return results

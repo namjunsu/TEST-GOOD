@@ -1486,8 +1486,6 @@ def main():
         """)
     
     # ===== 메인 화면: AI 채팅 =====
-    st.markdown("# 🤖 AI 문서 상담")
-
     # HybridChatRAG 초기화 (세션 상태로 관리)
     if 'hybrid_chat_rag' not in st.session_state:
         with st.spinner("AI 채팅 시스템 초기화 중..."):

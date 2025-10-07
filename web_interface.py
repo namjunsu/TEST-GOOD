@@ -1487,7 +1487,6 @@ def main():
     
     # ===== 메인 화면: AI 채팅 =====
     st.markdown("# 🤖 AI 문서 상담")
-    st.info("💡 문서를 바탕으로 AI와 대화할 수 있습니다. 질문을 입력하세요!")
 
     # HybridChatRAG 초기화 (세션 상태로 관리)
     if 'hybrid_chat_rag' not in st.session_state:
@@ -1548,17 +1547,6 @@ def main():
                     st.markdown(f"**Q:** {conv['query']}")
                     st.markdown(f"**A:** {conv['response'][:500]}{'...' if len(conv['response']) > 500 else ''}")
                     st.caption(f"시간: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(conv['timestamp']))}")
-
-    # 사용 팁
-    with st.expander("💡 사용 팁"):
-        st.markdown("""
-        - **빠른 검색**: 0.02초 만에 패턴 매칭으로 빠른 검색
-        - **AI 채팅**: 15초 정도 소요되지만 더 자연스러운 대화 및 분석
-        - **예시 질문**:
-          - "남준수 기안자의 문서 특징은?"
-          - "2024년 구매 문서들을 요약해줘"
-          - "영상장비 수리 관련 문서들을 분석해줘"
-        """)
 
     st.markdown("---")
 

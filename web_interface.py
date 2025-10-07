@@ -1402,7 +1402,7 @@ def main():
                 st.caption(f"전체 {len(df)}개 문서")
 
             # 탭 구성
-            tab1, tab2, tab3 = st.tabs(["검색", "연도별", "🤖 AI 채팅"])
+            tab1, tab2 = st.tabs(["📁 문서 검색", "📅 연도별"])
 
             with tab1:
                 # 검색창
@@ -1468,81 +1468,6 @@ def main():
                 else:
                     st.info("문서가 없습니다")
 
-            with tab3:
-                # AI 채팅 기능
-                st.markdown("### 🤖 AI 문서 상담")
-                st.info("문서를 바탕으로 AI와 대화할 수 있습니다. 질문을 입력하세요!")
-
-                # HybridChatRAG 초기화 (세션 상태로 관리)
-                if 'hybrid_chat_rag' not in st.session_state:
-                    with st.spinner("AI 채팅 시스템 초기화 중..."):
-                        st.session_state.hybrid_chat_rag = HybridChatRAG()
-
-                # 채팅 입력
-                chat_input = st.text_input(
-                    "AI에게 문서에 대해 질문하세요:",
-                    placeholder="예: 남준수가 작성한 문서들의 특징을 분석해줘",
-                    key="chat_input"
-                )
-
-                # 검색 모드 선택
-                col1, col2 = st.columns(2)
-                with col1:
-                    search_mode = st.radio(
-                        "응답 모드:",
-                        ["🔍 빠른 검색", "🤖 AI 채팅"],
-                        key="search_mode"
-                    )
-
-                with col2:
-                    if st.button("✨ 질문하기", type="primary", use_container_width=True):
-                        if chat_input:
-                            with st.spinner("AI가 답변을 생성하는 중..."):
-                                if search_mode == "🔍 빠른 검색":
-                                    # 기존 QuickFixRAG 사용
-                                    response = st.session_state.hybrid_chat_rag.search_only(chat_input)
-                                else:
-                                    # AI 채팅 사용
-                                    response = st.session_state.hybrid_chat_rag.chat_with_documents(chat_input)
-
-                                # 응답 표시
-                                st.markdown("### 💬 AI 응답")
-                                st.markdown(response)
-                        else:
-                            st.warning("질문을 입력해주세요!")
-
-                # 대화 기록 표시
-                if hasattr(st.session_state.get('hybrid_chat_rag'), 'conversation_history'):
-                    history = st.session_state.hybrid_chat_rag.get_conversation_history()
-                    if history:
-                        st.markdown("---")
-                        st.markdown("### 📝 대화 기록")
-
-                        # 기록 초기화 버튼
-                        if st.button("🗑️ 대화 기록 초기화", key="clear_history"):
-                            st.session_state.hybrid_chat_rag.clear_conversation()
-                            st.success("대화 기록이 초기화되었습니다!")
-                            st.rerun()
-
-                        # 최근 대화부터 표시
-                        for i, conv in enumerate(reversed(history[-5:])):  # 최근 5개만
-                            with st.expander(f"💬 대화 {len(history)-i}", expanded=(i==0)):
-                                st.markdown(f"**Q:** {conv['query']}")
-                                st.markdown(f"**A:** {conv['response'][:500]}{'...' if len(conv['response']) > 500 else ''}")
-                                st.caption(f"시간: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(conv['timestamp']))}")
-
-                # 사용 팁
-                st.markdown("---")
-                st.markdown("### 💡 사용 팁")
-                st.markdown("""
-                - **빠른 검색**: 0.02초 만에 패턴 매칭으로 빠른 검색
-                - **AI 채팅**: 15초 정도 소요되지만 더 자연스러운 대화 및 분석
-                - **예시 질문**:
-                  - "남준수 기안자의 문서 특징은?"
-                  - "2024년 구매 문서들을 요약해줘"
-                  - "영상장비 수리 관련 문서들을 분석해줘"
-                """)
-
         # CSS 스타일 적용
         apply_sidebar_styles()
         
@@ -1560,6 +1485,83 @@ def main():
         **기간**: {year_range}
         """)
     
+    # ===== 메인 화면: AI 채팅 =====
+    st.markdown("# 🤖 AI 문서 상담")
+    st.info("💡 문서를 바탕으로 AI와 대화할 수 있습니다. 질문을 입력하세요!")
+
+    # HybridChatRAG 초기화 (세션 상태로 관리)
+    if 'hybrid_chat_rag' not in st.session_state:
+        with st.spinner("AI 채팅 시스템 초기화 중..."):
+            st.session_state.hybrid_chat_rag = HybridChatRAG()
+
+    # 채팅 입력
+    chat_input = st.text_input(
+        "AI에게 문서에 대해 질문하세요:",
+        placeholder="예: 남준수가 작성한 문서들의 특징을 분석해줘",
+        key="chat_input"
+    )
+
+    # 검색 모드 선택 및 버튼
+    col1, col2, col3 = st.columns([2, 2, 1])
+    with col1:
+        search_mode = st.radio(
+            "응답 모드:",
+            ["🔍 빠른 검색", "🤖 AI 채팅"],
+            key="search_mode",
+            horizontal=True
+        )
+
+    with col3:
+        submit_btn = st.button("✨ 질문하기", type="primary", use_container_width=True)
+
+    # 질문 처리
+    if submit_btn and chat_input:
+        with st.spinner("AI가 답변을 생성하는 중..."):
+            if search_mode == "🔍 빠른 검색":
+                response = st.session_state.hybrid_chat_rag.search_only(chat_input)
+            else:
+                response = st.session_state.hybrid_chat_rag.chat_with_documents(chat_input)
+
+            # 응답 표시
+            st.markdown("---")
+            st.markdown("### 💬 AI 응답")
+            st.markdown(response)
+    elif submit_btn:
+        st.warning("질문을 입력해주세요!")
+
+    # 대화 기록 표시
+    if hasattr(st.session_state.get('hybrid_chat_rag'), 'conversation_history'):
+        history = st.session_state.hybrid_chat_rag.get_conversation_history()
+        if history:
+            st.markdown("---")
+            st.markdown("### 📝 대화 기록")
+
+            # 기록 초기화 버튼
+            if st.button("🗑️ 대화 기록 초기화", key="clear_history"):
+                st.session_state.hybrid_chat_rag.clear_conversation()
+                st.success("대화 기록이 초기화되었습니다!")
+                st.rerun()
+
+            # 최근 대화부터 표시
+            for i, conv in enumerate(reversed(history[-5:])):  # 최근 5개만
+                with st.expander(f"💬 대화 {len(history)-i}", expanded=(i==0)):
+                    st.markdown(f"**Q:** {conv['query']}")
+                    st.markdown(f"**A:** {conv['response'][:500]}{'...' if len(conv['response']) > 500 else ''}")
+                    st.caption(f"시간: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(conv['timestamp']))}")
+
+    # 사용 팁
+    with st.expander("💡 사용 팁"):
+        st.markdown("""
+        - **빠른 검색**: 0.02초 만에 패턴 매칭으로 빠른 검색
+        - **AI 채팅**: 15초 정도 소요되지만 더 자연스러운 대화 및 분석
+        - **예시 질문**:
+          - "남준수 기안자의 문서 특징은?"
+          - "2024년 구매 문서들을 요약해줘"
+          - "영상장비 수리 관련 문서들을 분석해줘"
+        """)
+
+    st.markdown("---")
+
     # 선택된 문서 미리보기 (사이드바에서 선택시)
     if 'selected_doc' in st.session_state and st.session_state.get('show_doc_preview', False):
         doc = st.session_state.selected_doc

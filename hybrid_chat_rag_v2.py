@@ -196,8 +196,8 @@ class UnifiedRAG:
 검색된 문서:
 """
 
-        # 문서 내용 추가
-        for i, doc in enumerate(documents[:3], 1):
+        # 문서 내용 추가 (최대 1문서만, 길이 제한)
+        for i, doc in enumerate(documents[:1], 1):  # 1개만
             filename = doc.get('filename', '알수없음')
             prompt += f"\n[문서 {i}: {filename}]\n"
 
@@ -206,9 +206,9 @@ class UnifiedRAG:
             if doc.get('drafter'):
                 prompt += f"기안자: {doc['drafter']}\n"
 
-            # 문서 내용
+            # 문서 내용 (최대 1200자로 제한)
             if doc.get('content'):
-                content = doc['content'][:2000]  # 최대 2000자
+                content = doc['content'][:1200]  # 2000 → 1200자
                 prompt += f"\n실제 내용:\n{content}\n"
 
             prompt += "\n---\n"

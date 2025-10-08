@@ -121,28 +121,44 @@ class HybridChatRAG:
 
     def _build_chat_prompt(self, query: str, documents: List[Dict], use_context: bool) -> str:
         """대화용 프롬프트 구성"""
-        prompt = """당신은 방송국 문서 관리 AI 어시스턴트입니다. 검색된 문서를 바탕으로 정확하고 도움이 되는 답변을 제공해주세요.
+        prompt = """당신은 방송국 기술관리팀의 문서 분석 AI입니다.
+검색된 문서 내용을 바탕으로 실무에 도움이 되는 구체적인 답변을 제공하세요.
 
 검색된 문서:
 """
 
-        # 문서 정보 추가
-        for i, doc in enumerate(documents[:3], 1):  # 최대 3개만
-            prompt += f"\n{i}. {doc.get('filename', '제목없음')}"
+        # 문서 내용 추가 (파일명 + 실제 내용)
+        for i, doc in enumerate(documents[:3], 1):  # 최대 3개
+            prompt += f"\n[문서 {i}]\n"
+            prompt += f"파일명: {doc.get('filename', '제목없음')}\n"
             if doc.get('date'):
-                prompt += f" ({doc['date']})"
-            if doc.get('department'):
-                prompt += f" - 기안자: {doc['department']}"
+                prompt += f"날짜: {doc['date']}\n"
+            if doc.get('drafter'):
+                prompt += f"기안자: {doc['drafter']}\n"
+
+            # 📌 핵심: 문서 내용 추가
+            if doc.get('content'):
+                # 내용이 너무 길면 앞부분만 (2000자)
+                content = doc['content'][:2000]
+                prompt += f"내용:\n{content}\n"
+
+            prompt += "\n---\n"
 
         # 대화 컨텍스트 추가
         if use_context and self.conversation_history:
-            prompt += "\n\n이전 대화:"
+            prompt += "\n이전 대화:\n"
             for hist in self.conversation_history[-2:]:  # 최근 2개만
-                prompt += f"\nQ: {hist['query']}"
-                prompt += f"\nA: {hist['response'][:100]}..."  # 100자만
+                prompt += f"Q: {hist['query']}\n"
+                prompt += f"A: {hist['response'][:150]}...\n"
 
-        prompt += f"\n\n사용자 질문: {query}"
-        prompt += "\n\n답변 (한국어로, 간결하고 정확하게):"
+        prompt += f"\n사용자 질문: {query}\n\n"
+        prompt += """답변 요구사항:
+- 문서 내용을 바탕으로 구체적으로 답변
+- 금액, 업체명, 장비명 등 실무 정보 포함
+- 필요시 요약 표 형식 사용
+- 한국어로 명확하게 작성
+
+답변:"""
 
         return prompt
 

@@ -206,9 +206,20 @@ class UnifiedRAG:
             if doc.get('drafter'):
                 prompt += f"기안자: {doc['drafter']}\n"
 
-            # 문서 내용 (최대 1200자로 제한)
+            # 문서 내용 (최대 1500자로 제한, 금액 정보 우선)
             if doc.get('content'):
-                content = doc['content'][:1200]  # 2000 → 1200자
+                full_content = doc['content']
+
+                # 금액 정보 포함 확인 및 우선 추출 (원, 합계, 견적 등)
+                cost_keywords = ['원', '합계', '금액', '견적', '수리비', '비용']
+                has_cost_info = any(kw in full_content for kw in cost_keywords)
+
+                if has_cost_info and len(full_content) > 1200:
+                    # 금액 정보가 있고 긴 문서면 1500자까지
+                    content = full_content[:1500]
+                else:
+                    content = full_content[:1200]
+
                 prompt += f"\n실제 내용:\n{content}\n"
 
             prompt += "\n---\n"

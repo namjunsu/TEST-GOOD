@@ -160,11 +160,16 @@ class SearchModule:
                                             break
 
                                     # pdfplumber 실패시 OCR 캐시 시도
-                                    if len(full_text.strip()) < 200:
+                                    # 1) 텍스트가 너무 짧거나
+                                    # 2) 헤더/푸터만 있고 실제 내용이 없는 경우
+                                    text_lines = [line for line in full_text.split('\n') if line.strip()]
+                                    is_mostly_headers = len(text_lines) < 10 or full_text.count('gw.channela-mt.com') > 2
+
+                                    if len(full_text.strip()) < 500 or is_mostly_headers:
                                         ocr_text = self._get_ocr_text(pdf_path)
-                                        if ocr_text:
+                                        if ocr_text and len(ocr_text) > len(full_text):
                                             full_text = ocr_text
-                                            logger.debug(f"OCR 캐시 사용: {pdf_path.name}")
+                                            logger.info(f"📷 OCR 캐시 사용: {pdf_path.name} ({len(ocr_text)}자)")
 
                                     result['content'] = full_text[:5000]  # AI 분석용 전체 내용
 

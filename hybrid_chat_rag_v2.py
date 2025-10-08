@@ -41,11 +41,18 @@ class UnifiedRAG:
         # 질문 분석
         needs_ai = self._needs_ai_analysis(query)
 
+        # 디버깅 정보
+        print(f"\n🔍 질문: {query}")
+        print(f"📊 AI 분석 필요: {needs_ai}")
+        print(f"🤖 LLM 사용 가능: {LLM_AVAILABLE}")
+
         if needs_ai and LLM_AVAILABLE:
             # AI 분석 필요
+            print("✅ AI 분석 모드 선택")
             return self._ai_answer(query)
         else:
             # 빠른 검색으로 충분
+            print("⚡ 빠른 검색 모드 선택")
             return self._quick_answer(query)
 
     def _needs_ai_analysis(self, query: str) -> bool:

@@ -1487,10 +1487,11 @@ def main():
     
     # ===== 메인 화면: AI 채팅 =====
     # UnifiedRAG 초기화 (자동 모드)
-    # 강제 재초기화 (구버전 제거)
+    # 강제 재초기화 (모든 구버전 제거)
     if 'hybrid_chat_rag' in st.session_state:
         del st.session_state.hybrid_chat_rag
 
+    # 최초 1회만 초기화
     if 'unified_rag' not in st.session_state:
         with st.spinner("🔄 통합 시스템 초기화 중..."):
             st.session_state.unified_rag = UnifiedRAG()

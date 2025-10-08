@@ -1491,6 +1491,17 @@ def main():
     if 'hybrid_chat_rag' in st.session_state:
         del st.session_state.hybrid_chat_rag
 
+    # OCR 캐시 업데이트 체크 (파일 수정 시간)
+    import os
+    ocr_cache_path = "docs/.ocr_cache.json"
+    if os.path.exists(ocr_cache_path):
+        ocr_cache_mtime = os.path.getmtime(ocr_cache_path)
+        if 'ocr_cache_mtime' not in st.session_state or st.session_state.ocr_cache_mtime != ocr_cache_mtime:
+            # OCR 캐시가 업데이트됨 - 강제 재초기화
+            if 'unified_rag' in st.session_state:
+                del st.session_state.unified_rag
+            st.session_state.ocr_cache_mtime = ocr_cache_mtime
+
     # 최초 1회만 초기화
     if 'unified_rag' not in st.session_state:
         with st.spinner("🔄 통합 시스템 초기화 중..."):

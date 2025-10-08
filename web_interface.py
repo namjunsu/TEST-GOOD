@@ -27,7 +27,7 @@ sys.path.insert(0, str(project_root))
 
 import config
 from perfect_rag import PerfectRAG
-from hybrid_chat_rag import HybridChatRAG
+from hybrid_chat_rag_v2 import UnifiedRAG
 
 # 페이지 설정
 st.set_page_config(
@@ -1486,61 +1486,45 @@ def main():
         """)
     
     # ===== 메인 화면: AI 채팅 =====
-    # HybridChatRAG 초기화 (세션 상태로 관리)
-    if 'hybrid_chat_rag' not in st.session_state:
-        with st.spinner("AI 채팅 시스템 초기화 중..."):
-            st.session_state.hybrid_chat_rag = HybridChatRAG()
+    # UnifiedRAG 초기화 (자동 모드)
+    if 'unified_rag' not in st.session_state:
+        with st.spinner("시스템 초기화 중..."):
+            st.session_state.unified_rag = UnifiedRAG()
 
     # 채팅 입력
-    chat_input = st.text_input(
-        "AI에게 문서에 대해 질문하세요:",
-        placeholder="예: 남준수가 작성한 문서들의 특징을 분석해줘",
-        key="chat_input"
-    )
-
-    # 검색 모드 선택 및 버튼
-    col1, col2, col3 = st.columns([2, 2, 1])
+    col1, col2 = st.columns([5, 1])
     with col1:
-        search_mode = st.radio(
-            "응답 모드:",
-            ["🔍 빠른 검색", "🤖 AI 채팅"],
-            key="search_mode",
-            horizontal=True
+        chat_input = st.text_input(
+            "질문",
+            placeholder="예: 중계차 보수건 내용 요약해줘",
+            label_visibility="collapsed",
+            key="chat_input"
         )
-
-    with col3:
-        submit_btn = st.button("✨ 질문하기", type="primary", use_container_width=True)
+    with col2:
+        submit_btn = st.button("🔍 검색", type="primary", use_container_width=True)
 
     # 질문 처리
     if submit_btn and chat_input:
-        with st.spinner("AI가 답변을 생성하는 중..."):
-            if search_mode == "🔍 빠른 검색":
-                response = st.session_state.hybrid_chat_rag.search_only(chat_input)
-            else:
-                response = st.session_state.hybrid_chat_rag.chat_with_documents(chat_input)
+        with st.spinner("답변 생성 중..."):
+            # 통합 답변 (자동으로 빠른/AI 선택)
+            response = st.session_state.unified_rag.answer(chat_input)
 
             # 응답 표시
             st.markdown("---")
-            st.markdown("### 💬 AI 응답")
-
-            # RAGResponse 객체 처리
-            if hasattr(response, 'answer'):
-                st.markdown(response.answer)
-            else:
-                st.markdown(str(response))
+            st.markdown(response)
     elif submit_btn:
         st.warning("질문을 입력해주세요!")
 
     # 대화 기록 표시
-    if hasattr(st.session_state.get('hybrid_chat_rag'), 'conversation_history'):
-        history = st.session_state.hybrid_chat_rag.get_conversation_history()
+    if hasattr(st.session_state.get('unified_rag'), 'conversation_history'):
+        history = st.session_state.unified_rag.get_conversation_history()
         if history:
             st.markdown("---")
             st.markdown("### 📝 대화 기록")
 
             # 기록 초기화 버튼
             if st.button("🗑️ 대화 기록 초기화", key="clear_history"):
-                st.session_state.hybrid_chat_rag.clear_conversation()
+                st.session_state.unified_rag.clear_conversation()
                 st.success("대화 기록이 초기화되었습니다!")
                 st.rerun()
 

@@ -53,31 +53,35 @@ class UnifiedRAG:
 
         # AI가 필요한 키워드
         ai_keywords = [
+            # 분석/설명
             '요약', '분석', '비교', '설명', '왜', '어떻게',
             '특징', '차이', '공통점', '패턴', '추천',
-            '이유', '원인', '결과', '영향', '관계'
+            '이유', '원인', '결과', '영향', '관계',
+            # 내용 요청
+            '내용', '알려', '말해', '정리', '상세', '자세',
+            '구체적', '전체', '모든', '다', '전부'
         ]
 
-        # 간단한 검색 키워드
+        # 간단한 검색 키워드 (우선순위 높음)
         simple_keywords = [
             '찾아', '보여', '검색', '있어', '목록', '리스트',
-            '몇 개', '개수', '언제', '누가', '어디'
+            '몇 개', '개수', '언제', '누가', '어디', '어느'
         ]
 
         query_lower = query.lower()
 
-        # AI 키워드가 있으면 True
-        for keyword in ai_keywords:
-            if keyword in query_lower:
-                return True
-
-        # 간단한 키워드만 있으면 False
+        # 간단한 키워드가 있으면 빠른 검색 (우선)
         for keyword in simple_keywords:
             if keyword in query_lower:
                 return False
 
-        # 애매하면 질문 길이로 판단 (30자 이상 = AI)
-        return len(query) > 30
+        # AI 키워드가 있으면 AI 분석
+        for keyword in ai_keywords:
+            if keyword in query_lower:
+                return True
+
+        # 애매하면 질문 길이로 판단 (25자 이상 = AI)
+        return len(query) > 25
 
     def _quick_answer(self, query: str) -> str:
         """빠른 검색 답변"""

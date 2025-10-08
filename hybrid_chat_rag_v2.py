@@ -186,17 +186,20 @@ class UnifiedRAG:
             return []
 
     def _build_prompt(self, query: str, documents: List[Dict]) -> str:
-        """AI용 프롬프트 생성"""
+        """AI용 프롬프트 생성 (인용 강제)"""
         prompt = """당신은 방송국 기술관리팀의 문서 분석 AI입니다.
-검색된 문서를 바탕으로 실무에 도움이 되는 구체적인 답변을 제공하세요.
+검색된 문서의 실제 내용만을 바탕으로 정확한 답변을 제공하세요.
+
+⚠️ 중요: 반드시 [파일명.pdf] 형식으로 출처를 명시하세요.
+문서에 없는 내용은 절대 만들지 마세요.
 
 검색된 문서:
 """
 
         # 문서 내용 추가
         for i, doc in enumerate(documents[:3], 1):
-            prompt += f"\n[문서 {i}]\n"
-            prompt += f"파일: {doc.get('filename', '알수없음')}\n"
+            filename = doc.get('filename', '알수없음')
+            prompt += f"\n[문서 {i}: {filename}]\n"
 
             if doc.get('date'):
                 prompt += f"날짜: {doc['date']}\n"
@@ -206,23 +209,22 @@ class UnifiedRAG:
             # 문서 내용
             if doc.get('content'):
                 content = doc['content'][:2000]  # 최대 2000자
-                prompt += f"내용:\n{content}\n"
+                prompt += f"\n실제 내용:\n{content}\n"
 
             prompt += "\n---\n"
 
-        # 이전 대화
-        if self.conversation_history:
-            prompt += "\n이전 대화:\n"
-            for hist in self.conversation_history[-2:]:
-                prompt += f"Q: {hist['query']}\n"
-                prompt += f"A: {hist['response'][:100]}...\n"
-
         prompt += f"\n질문: {query}\n\n"
         prompt += """답변 요구사항:
-- 문서 내용을 바탕으로 구체적 답변
-- 금액, 업체명, 장비명 등 실무 정보 포함
-- 표 형식으로 정리 (필요시)
-- 명확하고 간결하게
+1. **반드시 문서의 실제 내용만 사용** (추측 금지)
+2. **출처 인용 필수**: [파일명.pdf] 형식으로 명시
+3. **실무 정보 포함**: 금액, 업체명, 장비명, 모델명, 날짜 등
+4. **표 형식 정리** (필요시)
+5. 문서에 정보가 없으면 "문서에 해당 정보 없음" 명시
+
+답변 예시:
+[2025-07-17_미러클랩_카메라_삼각대_기술검토서.pdf]에 따르면...
+- 장비: Leofoto LVC-253C (820,000원)
+- 목적: Miller DS20 삼각대 파손으로 대체품 검토
 
 답변:"""
 

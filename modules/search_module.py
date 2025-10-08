@@ -140,16 +140,25 @@ class SearchModule:
                         'department': doc.get('department', '')  # 기안자 정보 포함
                     }
 
-                    # 메타데이터 추가
-                    if self.metadata_extractor and doc['path']:
+                    # 문서 전체 텍스트 및 메타데이터 추가
+                    if doc['path']:
                         try:
-                            # PDF 첫 페이지에서 텍스트 추출
                             pdf_path = Path(doc['path'])
                             if pdf_path.exists() and pdf_path.suffix.lower() == '.pdf':
                                 with pdfplumber.open(pdf_path) as pdf:
-                                    if pdf.pages:
+                                    # 전체 페이지 텍스트 추출 (최대 5000자)
+                                    full_text = ""
+                                    for page in pdf.pages[:5]:  # 최대 5페이지
+                                        page_text = page.extract_text() or ""
+                                        full_text += page_text + "\n\n"
+                                        if len(full_text) > 5000:
+                                            break
+
+                                    result['content'] = full_text[:5000]  # AI 분석용 전체 내용
+
+                                    # 메타데이터 추출 (첫 페이지 기준)
+                                    if self.metadata_extractor and pdf.pages:
                                         first_page_text = pdf.pages[0].extract_text() or ""
-                                        # 메타데이터 추출
                                         metadata = self.metadata_extractor.extract_all(
                                             first_page_text[:2000],
                                             doc['filename']
@@ -165,8 +174,11 @@ class SearchModule:
                                             result['extracted_dept'] = summary['department']
                                         if summary.get('doc_type'):
                                             result['extracted_type'] = summary['doc_type']
+                                        if summary.get('drafter'):
+                                            result['drafter'] = summary['drafter']
                         except Exception as e:
-                            logger.debug(f"메타데이터 추출 실패: {e}")
+                            logger.debug(f"텍스트/메타데이터 추출 실패: {e}")
+                            result['content'] = ""  # 실패시 빈 문자열
 
                     results.append(result)
 

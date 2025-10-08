@@ -11,6 +11,7 @@ import os
 import re
 import time
 import logging
+import json
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -63,6 +64,10 @@ class SearchModule:
         # 캐시
         self.search_cache = {}
         self.cache_ttl = 3600  # 1시간
+
+        # OCR 캐시 로드
+        self.ocr_cache = {}
+        self._load_ocr_cache()
 
     def search_by_drafter(self, drafter_name: str, top_k: int = 20) -> List[Dict[str, Any]]:
         """
@@ -153,6 +158,13 @@ class SearchModule:
                                         full_text += page_text + "\n\n"
                                         if len(full_text) > 5000:
                                             break
+
+                                    # pdfplumber 실패시 OCR 캐시 시도
+                                    if len(full_text.strip()) < 200:
+                                        ocr_text = self._get_ocr_text(pdf_path)
+                                        if ocr_text:
+                                            full_text = ocr_text
+                                            logger.debug(f"OCR 캐시 사용: {pdf_path.name}")
 
                                     result['content'] = full_text[:5000]  # AI 분석용 전체 내용
 
@@ -317,6 +329,39 @@ class SearchModule:
             stats['indexed_documents'] = self.metadata_db.get_document_count()
 
         return stats
+
+    # OCR 캐시 관련 메서드
+    def _load_ocr_cache(self):
+        """OCR 캐시 로드"""
+        ocr_cache_path = self.docs_dir / ".ocr_cache.json"
+        if ocr_cache_path.exists():
+            try:
+                with open(ocr_cache_path, 'r', encoding='utf-8') as f:
+                    self.ocr_cache = json.load(f)
+                logger.info(f"✅ OCR 캐시 로드 완료: {len(self.ocr_cache)}개 문서")
+            except Exception as e:
+                logger.warning(f"OCR 캐시 로드 실패: {e}")
+                self.ocr_cache = {}
+        else:
+            logger.debug("OCR 캐시 파일 없음")
+
+    def _get_ocr_text(self, pdf_path: Path) -> str:
+        """PDF에서 OCR 텍스트 가져오기 (캐시 우선)"""
+        try:
+            # 파일 해시 계산
+            import hashlib
+            with open(pdf_path, 'rb') as f:
+                file_hash = hashlib.md5(f.read()).hexdigest()
+
+            # 캐시에서 찾기
+            if file_hash in self.ocr_cache:
+                cached_data = self.ocr_cache[file_hash]
+                return cached_data.get('text', '')
+
+            return ""
+        except Exception as e:
+            logger.debug(f"OCR 텍스트 가져오기 실패: {e}")
+            return ""
 
     # 유틸리티 메서드들
     def _extract_date_from_filename(self, filename: str) -> Optional[str]:

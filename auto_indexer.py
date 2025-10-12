@@ -270,10 +270,14 @@ class AutoIndexer:
         pdf_files = []
         txt_files = []
 
-        # docs 폴더의 모든 하위 폴더 검색 (category_* 폴더 포함)
+        # docs 폴더의 모든 하위 폴더 검색 (심볼릭 링크 제외)
         if self.docs_dir.exists():
-            pdf_files = list(self.docs_dir.rglob("*.pdf"))
-            txt_files = list(self.docs_dir.rglob("*.txt"))
+            all_pdfs = list(self.docs_dir.rglob("*.pdf"))
+            all_txts = list(self.docs_dir.rglob("*.txt"))
+
+            # 심볼릭 링크 제외 (실제 파일만)
+            pdf_files = [f for f in all_pdfs if not f.is_symlink()]
+            txt_files = [f for f in all_txts if not f.is_symlink()]
 
         return {
             'total_files': len(pdf_files) + len(txt_files),

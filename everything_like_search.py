@@ -98,13 +98,18 @@ class EverythingLikeSearch:
         # 모든 PDF 파일 수집
         pdf_files = list(self.docs_dir.rglob("*.pdf"))
 
-        # 중복 제거 (경로까지 고려)
-        seen_paths = set()
+        # 중복 제거 (심볼릭 링크 실제 경로 기준)
+        seen_real_paths = set()
         unique_files = []
         for pdf in pdf_files:
-            if str(pdf) not in seen_paths:
-                seen_paths.add(str(pdf))
-                unique_files.append(pdf)
+            # 심볼릭 링크면 실제 경로 확인
+            real_path = pdf.resolve() if pdf.is_symlink() else pdf
+            real_path_str = str(real_path)
+
+            if real_path_str not in seen_real_paths:
+                seen_real_paths.add(real_path_str)
+                # 실제 파일 경로 사용 (심볼릭 링크 제외)
+                unique_files.append(real_path)
 
         print(f"📁 {len(unique_files)}개 파일 인덱싱 중...")
 

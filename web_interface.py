@@ -1522,13 +1522,17 @@ def main():
 
     # 질문 처리
     if submit_btn and chat_input:
-        with st.spinner("답변 생성 중..."):
+        # 진행 상황 표시
+        with st.spinner("🔍 질문 분석 중..."):
+            time.sleep(0.1)  # UI 업데이트 대기
+
+        with st.spinner("📚 문서 검색 및 분석 중... (빠른 검색: 1초 / AI 분석: 30-60초)"):
             # 통합 답변 (자동으로 빠른/AI 선택)
             response = st.session_state.unified_rag.answer(chat_input)
 
-            # 응답 표시
-            st.markdown("---")
-            st.markdown(response)
+        # 응답 표시
+        st.markdown("---")
+        st.markdown(response)
     elif submit_btn:
         st.warning("질문을 입력해주세요!")
 

@@ -154,8 +154,11 @@ class QuickFixRAG:
 
             # LLM 로드 확인
             if not self.unified_rag._ensure_llm_loaded():
-                print("⚠️ LLM을 사용할 수 없습니다. 키워드 추출로 대체합니다.")
-                return self._summarize_document(full_text, filename)
+                fallback_msg = "⚠️ **AI 분석을 사용할 수 없습니다**\n\n"
+                fallback_msg += "키워드 기반 추출 결과를 보여드립니다.\n"
+                fallback_msg += "더 정확한 분석을 위해서는 시스템 관리자에게 문의하세요.\n\n"
+                fallback_msg += "---\n\n"
+                return fallback_msg + self._summarize_document(full_text, filename)
 
             # 스마트 텍스트 추출 (중요 정보 우선)
             content = self._extract_important_content(full_text, query)
@@ -191,17 +194,27 @@ class QuickFixRAG:
                 answer = str(response)
 
             if answer and len(answer) > 50:
-                return f"🤖 **AI 분석 결과**\n\n{answer}\n\n---\n📄 출처: {filename}"
+                # 정보 추출 품질 표시
+                quality_note = "\n\n💡 **참고사항**\n"
+                quality_note += "- AI가 문서의 주요 내용을 분석했습니다\n"
+                quality_note += "- 표나 복잡한 레이아웃은 일부 누락될 수 있습니다\n"
+                quality_note += "- 정확한 확인이 필요한 경우 원본 PDF를 함께 참조하세요\n"
+
+                return f"🤖 **AI 분석 결과**\n\n{answer}\n\n---\n📄 출처: {filename}{quality_note}"
             else:
                 # LLM 실패시 폴백
-                return self._summarize_document(full_text, filename)
+                fallback_msg = "⚠️ **AI 분석이 불완전합니다**\n\n"
+                fallback_msg += "키워드 기반 추출 결과로 대체합니다.\n\n---\n\n"
+                return fallback_msg + self._summarize_document(full_text, filename)
 
         except Exception as e:
-            print(f"⚠️ LLM 오류: {e}")
             import traceback
             traceback.print_exc()
-            # 오류시 키워드 기반 폴백
-            return self._summarize_document(full_text, filename)
+            # 오류시 키워드 기반 폴백 (사용자에게 알림)
+            error_msg = f"❌ **AI 분석 중 오류 발생**\n\n"
+            error_msg += f"오류 내용: {str(e)[:100]}\n\n"
+            error_msg += "키워드 기반 추출 결과로 대체합니다.\n\n---\n\n"
+            return error_msg + self._summarize_document(full_text, filename)
 
     def _extract_important_content(self, full_text: str, query: str) -> str:
         """중요 정보를 우선적으로 추출 (표, 금액, 모델명 등)"""

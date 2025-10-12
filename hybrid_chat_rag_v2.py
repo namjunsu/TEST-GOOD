@@ -185,8 +185,48 @@ class UnifiedRAG:
             print(f"❌ 검색 실패: {e}")
             return []
 
+    def _classify_query_complexity(self, query: str) -> str:
+        """질문 복잡도 분류: simple(단순), complex(복잡)"""
+        # 단순 질문 패턴
+        simple_patterns = [
+            '금액', '가격', '비용', '얼마',
+            '언제', '날짜', '일자',
+            '누가', '기안자', '담당자',
+            '어디', '장소', '위치',
+            '무엇', '장비', '제품'
+        ]
+
+        # 복잡한 질문 패턴
+        complex_patterns = [
+            '왜', '이유', '원인',
+            '어떻게', '방법',
+            '적절', '타당', '평가',
+            '비교', '차이',
+            '분석', '검토',
+            '문제', '해결',
+            '상세', '자세'
+        ]
+
+        query_lower = query.lower()
+
+        # 복잡한 질문 우선 체크
+        if any(pattern in query_lower for pattern in complex_patterns):
+            return 'complex'
+
+        # 단순 질문 체크
+        if any(pattern in query_lower for pattern in simple_patterns):
+            return 'simple'
+
+        # 기본값: 중간 복잡도로 처리 (complex로 분류)
+        return 'complex'
+
     def _build_prompt(self, query: str, documents: List[Dict]) -> str:
-        """AI용 프롬프트 생성 (Chain-of-Thought 방식으로 품질 향상)"""
+        """AI용 프롬프트 생성 (적응형 CoT - 질문에 따라 자동 선택)"""
+
+        # 질문 복잡도 분류
+        query_type = self._classify_query_complexity(query)
+
+        # 기본 프롬프트
         prompt = """당신은 방송국 기술관리팀의 문서 분석 전문 AI입니다.
 주어진 문서를 꼼꼼히 분석하여 정확하고 상세한 답변을 제공하세요.
 
@@ -236,7 +276,22 @@ class UnifiedRAG:
             prompt += "\n---\n"
 
         prompt += f"\n사용자 질문: {query}\n\n"
-        prompt += """답변 작성 단계 (Chain-of-Thought):
+
+        # 적응형 프롬프트: 질문 유형에 따라 다른 지시사항
+        if query_type == 'simple':
+            # 단순 질문: 빠르고 직접적인 답변
+            prompt += """답변 요구사항:
+1. **간결하게**: 질문에 대한 직접적인 답변만
+2. **출처 명시**: [파일명.pdf] 형식으로 표시
+3. **핵심 정보**: 금액/날짜/이름 등 정확히 전달
+
+답변 형식:
+[파일명.pdf]에 따르면, [답변]
+
+답변:"""
+        else:
+            # 복잡한 질문: Chain-of-Thought로 체계적 분석
+            prompt += """답변 작성 단계 (Chain-of-Thought):
 1. **문서 분석**: 질문과 관련된 핵심 정보 파악
 2. **정보 추출**: 날짜, 금액, 장비명, 업체명 등 구체적 데이터 수집
 3. **구조화**: 표가 있다면 표 형식으로, 목록이면 목록으로 정리

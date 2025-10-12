@@ -151,11 +151,21 @@ class SearchModule:
                             pdf_path = Path(doc['path'])
                             if pdf_path.exists() and pdf_path.suffix.lower() == '.pdf':
                                 with pdfplumber.open(pdf_path) as pdf:
-                                    # 전체 페이지 텍스트 추출 (최대 5000자)
+                                    # 전체 페이지 텍스트 및 표 추출 (최대 5000자)
                                     full_text = ""
                                     for page in pdf.pages[:5]:  # 최대 5페이지
+                                        # 일반 텍스트 추출
                                         page_text = page.extract_text() or ""
                                         full_text += page_text + "\n\n"
+
+                                        # 표 추출 및 마크다운 형식 변환
+                                        tables = page.extract_tables()
+                                        if tables:
+                                            for table in tables:
+                                                table_md = self._format_table_as_markdown(table)
+                                                if table_md:
+                                                    full_text += "\n📊 **표 데이터**\n" + table_md + "\n\n"
+
                                         if len(full_text) > 5000:
                                             break
 
@@ -334,6 +344,29 @@ class SearchModule:
             stats['indexed_documents'] = self.metadata_db.get_document_count()
 
         return stats
+
+    # 표 형식 변환 메서드
+    def _format_table_as_markdown(self, table):
+        """표를 마크다운 형식으로 변환"""
+        if not table or not table[0]:
+            return ""
+
+        lines = []
+
+        # 헤더 (첫 번째 행)
+        header = " | ".join([str(cell or '').strip() for cell in table[0]])
+        lines.append(header)
+
+        # 구분선
+        separator = " | ".join(["---"] * len(table[0]))
+        lines.append(separator)
+
+        # 데이터 행
+        for row in table[1:]:
+            row_text = " | ".join([str(cell or '').strip() for cell in row])
+            lines.append(row_text)
+
+        return "\n".join(lines)
 
     # OCR 캐시 관련 메서드
     def _load_ocr_cache(self):

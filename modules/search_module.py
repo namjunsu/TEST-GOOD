@@ -166,7 +166,8 @@ class SearchModule:
                                                 if table_md:
                                                     full_text += "\n📊 **표 데이터**\n" + table_md + "\n\n"
 
-                                        if len(full_text) > 5000:
+                                        # 적응형 페이지 제한: 문서 길이에 따라 조절
+                                        if len(full_text) > 15000:  # 충분한 내용 확보
                                             break
 
                                     # pdfplumber 실패시 OCR 캐시 시도
@@ -181,7 +182,8 @@ class SearchModule:
                                             full_text = ocr_text
                                             logger.info(f"📷 OCR 캐시 사용: {pdf_path.name} ({len(ocr_text)}자)")
 
-                                    result['content'] = full_text[:5000]  # AI 분석용 전체 내용
+                                    # 적응형 컨텍스트 전달 (문서 길이에 따라 자동 조절)
+                                    result['content'] = full_text  # 전체 내용 저장 (길이 제한 없음)
 
                                     # 메타데이터 추출 (첫 페이지 기준)
                                     if self.metadata_extractor and pdf.pages:

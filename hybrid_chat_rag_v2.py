@@ -186,18 +186,21 @@ class UnifiedRAG:
             return []
 
     def _build_prompt(self, query: str, documents: List[Dict]) -> str:
-        """AI용 프롬프트 생성 (인용 강제)"""
-        prompt = """당신은 방송국 기술관리팀의 문서 분석 AI입니다.
-검색된 문서의 실제 내용만을 바탕으로 정확한 답변을 제공하세요.
+        """AI용 프롬프트 생성 (Chain-of-Thought 방식으로 품질 향상)"""
+        prompt = """당신은 방송국 기술관리팀의 문서 분석 전문 AI입니다.
+주어진 문서를 꼼꼼히 분석하여 정확하고 상세한 답변을 제공하세요.
 
-⚠️ 중요: 반드시 [파일명.pdf] 형식으로 출처를 명시하세요.
-문서에 없는 내용은 절대 만들지 마세요.
+⚠️ 중요 원칙:
+- 문서의 실제 내용만 사용 (추측/상상 절대 금지)
+- 모든 정보는 반드시 [파일명.pdf] 형식으로 출처 명시
+- 표, 금액, 날짜, 장비명 등 세부사항을 정확히 전달
+- 불확실한 정보는 "문서에 명시되지 않음"으로 표시
 
 검색된 문서:
 """
 
-        # 문서 내용 추가 (최대 1문서만, 길이 제한)
-        for i, doc in enumerate(documents[:1], 1):  # 1개만
+        # 문서 내용 추가 (전체 내용 사용 - 품질 우선)
+        for i, doc in enumerate(documents[:1], 1):
             filename = doc.get('filename', '알수없음')
             prompt += f"\n[문서 {i}: {filename}]\n"
 
@@ -206,31 +209,45 @@ class UnifiedRAG:
             if doc.get('drafter'):
                 prompt += f"기안자: {doc['drafter']}\n"
 
-            # 문서 내용 (최대 1500자로 제한, 금액 정보 우선)
+            # 적응형 컨텍스트: 질문과 문서 특성에 따라 길이 자동 조절
             if doc.get('content'):
                 full_content = doc['content']
 
-                # 금액 정보 포함 확인 및 우선 추출 (원, 합계, 견적 등)
-                cost_keywords = ['원', '합계', '금액', '견적', '수리비', '비용']
-                has_cost_info = any(kw in full_content for kw in cost_keywords)
+                # 질문 복잡도 분석
+                detail_keywords = ['상세', '자세히', '전체', '모두', '전부', '내용', '표', '목록']
+                simple_keywords = ['언제', '누가', '어디', '금액', '가격', '날짜']
 
-                if has_cost_info and len(full_content) > 1200:
-                    # 금액 정보가 있고 긴 문서면 1500자까지
-                    content = full_content[:1500]
+                is_detail_query = any(kw in query for kw in detail_keywords)
+                is_simple_query = any(kw in query for kw in simple_keywords) and not is_detail_query
+
+                # 적응형 컨텍스트 길이 결정
+                if is_simple_query and len(full_content) > 5000:
+                    # 간단한 질문: 핵심만 추출 (5000자)
+                    content = full_content[:5000]
+                    prompt += f"\n실제 내용 (요약):\n{content}\n"
+                elif len(full_content) < 5000:
+                    # 짧은 문서: 전체 사용
+                    prompt += f"\n실제 내용:\n{full_content}\n"
                 else:
-                    content = full_content[:1200]
-
-                prompt += f"\n실제 내용:\n{content}\n"
+                    # 상세 질문 또는 중간 길이: 최대 12000자
+                    content = full_content[:12000]
+                    prompt += f"\n실제 내용:\n{content}\n"
 
             prompt += "\n---\n"
 
-        prompt += f"\n질문: {query}\n\n"
-        prompt += """답변 요구사항:
-1. **반드시 문서의 실제 내용만 사용** (추측 금지)
-2. **출처 인용 필수**: [파일명.pdf] 형식으로 명시
-3. **실무 정보 포함**: 금액, 업체명, 장비명, 모델명, 날짜 등
-4. **표 형식 정리** (필요시)
-5. 문서에 정보가 없으면 "문서에 해당 정보 없음" 명시
+        prompt += f"\n사용자 질문: {query}\n\n"
+        prompt += """답변 작성 단계 (Chain-of-Thought):
+1. **문서 분석**: 질문과 관련된 핵심 정보 파악
+2. **정보 추출**: 날짜, 금액, 장비명, 업체명 등 구체적 데이터 수집
+3. **구조화**: 표가 있다면 표 형식으로, 목록이면 목록으로 정리
+4. **검증**: 모든 정보가 문서에 실제 존재하는지 확인
+5. **작성**: 출처를 명시하며 명확하고 완전한 답변 작성
+
+답변 형식:
+[파일명.pdf]에 따르면...
+- 핵심 정보 1
+- 핵심 정보 2
+- 세부 사항 (표/금액/날짜 포함)
 
 답변 예시:
 [2025-07-17_미러클랩_카메라_삼각대_기술검토서.pdf]에 따르면...

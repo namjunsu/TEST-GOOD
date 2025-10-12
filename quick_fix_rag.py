@@ -157,18 +157,26 @@ class QuickFixRAG:
                 print("⚠️ LLM을 사용할 수 없습니다. 키워드 추출로 대체합니다.")
                 return self._summarize_document(full_text, filename)
 
+            # 스마트 텍스트 추출 (중요 정보 우선)
+            content = self._extract_important_content(full_text, query)
+
             # LLM 프롬프트 구성
             prompt = f"""다음은 "{filename}" 문서의 내용입니다.
 
 문서 내용:
-{full_text[:2500]}
+{content}
 
 질문: {query}
 
 위 문서의 내용만을 바탕으로 질문에 답변해주세요.
-- 문서에 없는 내용은 추측하지 마세요
-- 핵심 정보를 빠짐없이 포함하세요
-- 표나 목록이 있다면 구조화해서 보여주세요
+반드시 다음을 포함하세요:
+- 장비/제품명과 모델명 (있다면 전부)
+- 수량 정보 (몇 개, 몇 대 등)
+- 금액 정보 (있다면)
+- 날짜 정보
+- 표나 목록 형태의 데이터는 구조화해서 표시
+
+문서에 없는 내용은 절대 추측하지 마세요.
 """
 
             # LLM 호출 (generate_response 메서드 사용)
@@ -194,6 +202,49 @@ class QuickFixRAG:
             traceback.print_exc()
             # 오류시 키워드 기반 폴백
             return self._summarize_document(full_text, filename)
+
+    def _extract_important_content(self, full_text: str, query: str) -> str:
+        """중요 정보를 우선적으로 추출 (표, 금액, 모델명 등)"""
+        import re
+
+        # 기본: 처음부터 일정 길이
+        base_length = 2000
+        content = full_text[:base_length]
+
+        # 추가 정보 찾기
+        important_patterns = [
+            (r'\d{1,3}(?:,\d{3})+', '금액'),  # 1,234,567
+            (r'[A-Z]{2,}\d+[a-z]*\d+\.\d+[A-Z]*', '모델명'),  # HJ22ex7.6B
+            (r'CAM#?\d+', '카메라번호'),  # CAM#1
+            (r'합계|총|계|Total', '합계'),
+            (r'\d+개|\d+대|\d+건', '수량'),
+        ]
+
+        # 중요 정보가 포함된 섹션 찾기
+        important_sections = []
+        lines = full_text.split('\n')
+
+        for i, line in enumerate(lines):
+            # 중요 패턴 매칭
+            for pattern, label in important_patterns:
+                if re.search(pattern, line):
+                    # 앞뒤 5줄씩 포함
+                    start = max(0, i - 5)
+                    end = min(len(lines), i + 6)
+                    section = '\n'.join(lines[start:end])
+                    if section not in important_sections:
+                        important_sections.append(section)
+                    break
+
+        # 중요 섹션이 있으면 앞에 추가
+        if important_sections:
+            additional = '\n\n[중요 정보]\n' + '\n---\n'.join(important_sections[:3])
+            # 기본 내용 + 중요 섹션 = 최대 4000자
+            max_additional = 4000 - len(content)
+            if max_additional > 0:
+                content += additional[:max_additional]
+
+        return content[:4000]  # 최대 4000자
 
     def _summarize_document(self, text: str, filename: str) -> str:
         """문서 요약 (처음 2000자)"""

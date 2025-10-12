@@ -12,6 +12,7 @@ class QuickFixRAG:
 
     def __init__(self):
         self.rag = PerfectRAG()
+        self.unified_rag = None  # 지연 로딩 (필요할 때만)
 
     def answer(self, query: str) -> str:
         """검색 결과만 반환 (LLM 답변 생성 제외)"""
@@ -96,12 +97,13 @@ class QuickFixRAG:
 
         return answer
 
-    def answer_from_specific_document(self, query: str, filename: str) -> str:
+    def answer_from_specific_document(self, query: str, filename: str, use_llm: bool = True) -> str:
         """특정 문서에 대해서만 답변 생성 (문서 전용 모드)
 
         Args:
             query: 사용자 질문
             filename: 특정 문서 파일명
+            use_llm: True면 AI 분석, False면 키워드 추출만
         """
         try:
             # 1. 파일명으로 문서 검색
@@ -125,18 +127,73 @@ class QuickFixRAG:
             if not full_text.strip():
                 return f"❌ PDF에서 텍스트를 추출할 수 없습니다: {filename}"
 
-            # 3. 질문에 따라 답변 생성
-            if any(word in query for word in ['요약', '정리', '개요', '내용']):
-                return self._summarize_document(full_text, filename)
-            elif any(word in query for word in ['비용', '금액', '가격', '원']):
-                return self._extract_cost_info(full_text, filename)
-            elif any(word in query for word in ['장비', '모델', '제품']):
-                return self._extract_equipment_info(full_text, filename)
+            # 3. LLM 사용 여부에 따라 답변 생성
+            if use_llm:
+                return self._llm_answer(query, full_text, filename)
             else:
-                return self._keyword_search(full_text, query, filename)
+                # 폴백: 키워드 기반 추출
+                if any(word in query for word in ['요약', '정리', '개요', '내용']):
+                    return self._summarize_document(full_text, filename)
+                elif any(word in query for word in ['비용', '금액', '가격', '원']):
+                    return self._extract_cost_info(full_text, filename)
+                elif any(word in query for word in ['장비', '모델', '제품']):
+                    return self._extract_equipment_info(full_text, filename)
+                else:
+                    return self._keyword_search(full_text, query, filename)
 
         except Exception as e:
             return f"❌ 오류 발생: {e}"
+
+    def _llm_answer(self, query: str, full_text: str, filename: str) -> str:
+        """LLM을 사용한 문서 분석 (UnifiedRAG 활용)"""
+        try:
+            # UnifiedRAG 지연 로딩
+            if self.unified_rag is None:
+                from hybrid_chat_rag_v2 import UnifiedRAG
+                self.unified_rag = UnifiedRAG()
+
+            # LLM 로드 확인
+            if not self.unified_rag._ensure_llm_loaded():
+                print("⚠️ LLM을 사용할 수 없습니다. 키워드 추출로 대체합니다.")
+                return self._summarize_document(full_text, filename)
+
+            # LLM 프롬프트 구성
+            prompt = f"""다음은 "{filename}" 문서의 내용입니다.
+
+문서 내용:
+{full_text[:2500]}
+
+질문: {query}
+
+위 문서의 내용만을 바탕으로 질문에 답변해주세요.
+- 문서에 없는 내용은 추측하지 마세요
+- 핵심 정보를 빠짐없이 포함하세요
+- 표나 목록이 있다면 구조화해서 보여주세요
+"""
+
+            # LLM 호출 (generate_response 메서드 사용)
+            response = self.unified_rag.llm.generate_response(prompt, [])
+
+            # 응답 텍스트 추출
+            if hasattr(response, 'answer'):
+                answer = response.answer
+            elif hasattr(response, 'content'):
+                answer = response.content
+            else:
+                answer = str(response)
+
+            if answer and len(answer) > 50:
+                return f"🤖 **AI 분석 결과**\n\n{answer}\n\n---\n📄 출처: {filename}"
+            else:
+                # LLM 실패시 폴백
+                return self._summarize_document(full_text, filename)
+
+        except Exception as e:
+            print(f"⚠️ LLM 오류: {e}")
+            import traceback
+            traceback.print_exc()
+            # 오류시 키워드 기반 폴백
+            return self._summarize_document(full_text, filename)
 
     def _summarize_document(self, text: str, filename: str) -> str:
         """문서 요약 (처음 2000자)"""

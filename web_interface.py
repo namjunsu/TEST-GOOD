@@ -686,7 +686,7 @@ def display_document_list(filtered_df, df, prefix="doc"):
                 st.caption("표시할 문서가 없습니다.")
 
 @st.cache_data
-def load_documents(_rag_instance, version="v3.1"):  # Fast DB loading with drafter info
+def load_documents(_rag_instance, version="v3.2"):  # Fast DB loading with improved drafter extraction
     """초고속 문서 메타데이터 로드 - 두 DB에서 조인 조회"""
     print("🚀 초고속 문서 로드 시작 (DB 직접 조회)")
 
@@ -749,16 +749,23 @@ def load_documents(_rag_instance, version="v3.1"):  # Fast DB loading with draft
             # 1순위: metadata.db
             if filename in metadata_drafters:
                 drafter = metadata_drafters[filename]
-            # 2순위: 파일명에서 추출 (날짜_기안자_제목 형식)
+            # 2순위: 파일명에서 추출
+            # 형식1: 날짜_부서_이름_제목 (예: 2015-10-29_방송기술팀_박혜훈_음향장비_구매_기안서.pdf)
+            # 형식2: 날짜_이름_제목 (예: 2020-01-01_남준수_구매요청.pdf)
             elif '_' in filename:
                 parts = filename.split('_')
-                if len(parts) >= 2:
-                    # 두 번째 부분이 한글 이름일 가능성 체크
-                    potential_name = parts[1]
-                    if potential_name and len(potential_name) <= 10 and not any(char.isdigit() for char in potential_name):
-                        # 부서명이 아닌 경우에만 기안자로 인식
-                        if potential_name not in ['영상', '카메라', '조명', '중계', 'DVR', '스튜디오', '송출', '구매', '수리', '교체', '검토', '폐기']:
-                            drafter = potential_name
+                # 여러 위치에서 이름 찾기 시도
+                for idx in [1, 2]:  # 2번째, 3번째 부분 체크
+                    if len(parts) > idx:
+                        potential_name = parts[idx]
+                        # 한글 이름 패턴 체크 (2-4글자, 숫자 없음)
+                        if potential_name and 2 <= len(potential_name) <= 4 and not any(char.isdigit() for char in potential_name):
+                            # 부서명/카테고리가 아닌 경우에만 기안자로 인식
+                            excluded = ['영상', '카메라', '조명', '중계', 'DVR', '스튜디오', '송출', '구매', '수리', '교체', '검토', '폐기',
+                                       '방송기술팀', '영상취재팀', '영상제작팀', '기술관리팀', '명상제작팀', '그래픽디자인파트']
+                            if not any(exc in potential_name for exc in excluded):
+                                drafter = potential_name
+                                break
             # 3순위: department (부서명)
             if drafter == "미확인" and department:
                 if department not in ['영상', '카메라', '조명', '중계', 'DVR', '스튜디오', '송출']:

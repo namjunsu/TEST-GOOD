@@ -99,6 +99,13 @@ class MetadataExtractor:
                 }
             },
 
+            # 기안자 (문서 작성자)
+            'drafter': [
+                (r'기안자[\s]*:?[\s]*([가-힣]{2,4})', 'drafter'),
+                (r'작성자[\s]*:?[\s]*([가-힣]{2,4})', 'drafter'),
+                (r'기안[\s]*:?[\s]*([가-힣]{2,4})', 'drafter'),
+            ],
+
             # 담당자/연락처
             'contacts': [
                 (r'담당자?[\s]*:?[\s]*([가-힣]{2,4})', 'name'),
@@ -165,6 +172,7 @@ class MetadataExtractor:
             'amounts': self._extract_amounts(text),
             'department': self._extract_department(combined_text),
             'doc_type': self._extract_doc_type(combined_text),
+            'drafter': self._extract_drafter(text),
             'contacts': self._extract_contacts(text),
             'equipment': self._extract_equipment(text),
             'projects': self._extract_projects(text),
@@ -325,6 +333,17 @@ class MetadataExtractor:
 
         return None
 
+    def _extract_drafter(self, text: str) -> Optional[str]:
+        """기안자 정보 추출"""
+        for pattern, drafter_type in self.patterns['drafter']:
+            match = re.search(pattern, text)
+            if match:
+                drafter = match.group(1)
+                # 2-4자 한글 이름만 허용
+                if drafter and 2 <= len(drafter) <= 4:
+                    return drafter
+        return None
+
     def _extract_contacts(self, text: str) -> Dict[str, List[str]]:
         """연락처 정보 추출"""
         contacts = {
@@ -441,6 +460,10 @@ class MetadataExtractor:
         # 문서 유형
         if metadata['doc_type']:
             summary['doc_type'] = metadata['doc_type']
+
+        # 기안자
+        if metadata['drafter']:
+            summary['drafter'] = metadata['drafter']
 
         # 담당자
         if metadata['contacts']['names']:

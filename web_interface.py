@@ -686,7 +686,7 @@ def display_document_list(filtered_df, df, prefix="doc"):
                 st.caption("표시할 문서가 없습니다.")
 
 @st.cache_data
-def load_documents(_rag_instance, version="v3.2"):  # Fast DB loading with improved drafter extraction
+def load_documents(_rag_instance, version="v3.3"):  # Fast DB loading with PDF content-based drafter extraction
     """초고속 문서 메타데이터 로드 - 두 DB에서 조인 조회"""
     print("🚀 초고속 문서 로드 시작 (DB 직접 조회)")
 

@@ -176,10 +176,10 @@ class UnifiedRAG:
             drafter_match = re.search(r'기안자\s*([가-힣]+)', query)
             if drafter_match:
                 drafter = drafter_match.group(1)
-                return self.search_rag.rag.search_module.search_by_drafter(drafter, top_k=5)
+                return self.search_rag.search_module.search_by_drafter(drafter, top_k=5)
 
             # 일반 검색
-            return self.search_rag.rag.search_module.search_by_content(query, top_k=5)
+            return self.search_rag.search_module.search_by_content(query, top_k=5)
 
         except Exception as e:
             print(f"❌ 검색 실패: {e}")

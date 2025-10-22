@@ -47,6 +47,18 @@ bash start_ai_chat.sh
 - **[네트워크_접속_가이드.md](네트워크_접속_가이드.md)** - 다른 PC/모바일 접속
 - **[문제해결.md](문제해결.md)** - 트러블슈팅
 
+### 시스템 요구사항 (Ubuntu/WSL2)
+
+OCR 기능 사용을 위한 추가 패키지:
+```bash
+sudo apt-get update
+sudo apt-get install -y tesseract-ocr tesseract-ocr-kor poppler-utils
+```
+
+- **tesseract-ocr**: OCR 엔진 (스캔 PDF 텍스트 인식)
+- **tesseract-ocr-kor**: 한국어 언어 데이터
+- **poppler-utils**: PDF → 이미지 변환
+
 ---
 
 ## 🎯 주요 기능
@@ -126,11 +138,13 @@ python3 rebuild_metadata.py
 
 ### ✅ 완료된 개선사항
 
-1. **기안자 검색 수정** (2025-10-22)
+1. **기안자 검색 수정 + OCR 지원** (2025-10-22)
    - PDF 내용에서 기안자 정보 추출
-   - metadata.db에 315개 문서 기안자 정보 저장
+   - metadata.db에 **327개** 문서 기안자 정보 저장
    - "남준수" 등 기안자 이름으로 검색 가능
    - PyMuPDF 설치 및 PDF 미리보기 오류 수정
+   - **OCR 지원**: 스캔 PDF (163개) 텍스트 인식
+   - 2014-2017년 문서에서 추가 8개 기안자 추출
 
 2. **GPU 가속** (2025-10-22)
    - RTX 4060 활성화 → AI 답변 10배 속도 향상

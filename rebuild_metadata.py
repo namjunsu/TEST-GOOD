@@ -108,10 +108,20 @@ def rebuild_metadata_db():
             # PDF 텍스트 추출 (OCR 포함)
             text = extract_text_from_pdf(pdf_path, max_pages=3, ocr_processor=ocr)
 
-            # 스캔 문서 여부 확인
-            if len(text.strip()) > 100 and '--- 페이지' in text:
-                stats['ocr_used'] += 1
-                stats['scanned_docs'] += 1
+            # OCR 텍스트 정리 (따옴표 제거)
+            # OCR 결과가 '-'기'-'안'-'자'-' 형식일 경우 정리
+            if "'-'" in text:
+                text = text.replace("'-'", "").replace("'", "")
+
+            # 스캔 문서 여부 확인 (OCR 사용 여부)
+            # 텍스트 길이가 짧았다가 OCR 후 길어진 경우 or '--- 페이지' 구분자가 있는 경우
+            if ocr:
+                # 스캔 문서 감지 체크
+                is_scanned, confidence = ocr.is_scanned_pdf(str(pdf_path))
+                if is_scanned:
+                    stats['scanned_docs'] += 1
+                    if len(text.strip()) > 100:  # OCR로 텍스트가 추출된 경우
+                        stats['ocr_used'] += 1
 
             # 메타데이터 추출
             metadata_extracted = extractor.extract_all(text, filename)

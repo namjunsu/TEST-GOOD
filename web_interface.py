@@ -26,7 +26,6 @@ project_root = Path(__file__).parent.absolute()
 sys.path.insert(0, str(project_root))
 
 import config
-from perfect_rag import PerfectRAG
 from hybrid_chat_rag_v2 import UnifiedRAG
 
 # 페이지 설정
@@ -1254,7 +1253,7 @@ def main():
     with col2:
         # 로고 이미지 표시 (흰색 버전)
         if Path('channel_a_logo_inverted.png').exists():
-            st.image('channel_a_logo_inverted.png', width="stretch")
+            st.image('channel_a_logo_inverted.png', use_container_width=True)
         elif Path('channel_a_logo.png').exists():
             st.image('channel_a_logo.png', use_container_width=True)
         
@@ -1309,9 +1308,8 @@ def main():
             # 프로그레스 바
             progress_bar = st.progress(0)
             status_text = st.empty()
-            
+
             # 단계별 로딩 표시
-            import time
             status_text.text("📋 문서 메타데이터 로드 중...")
             progress_bar.progress(25)
             time.sleep(0.5)
@@ -1550,7 +1548,6 @@ def main():
                 st.rerun()
 
             # 최근 대화부터 표시
-            import time as time_module
             for i, conv in enumerate(reversed(history[-5:])):  # 최근 5개만
                 with st.expander(f"💬 대화 {len(history)-i}", expanded=(i==0)):
                     st.markdown(f"**Q:** {conv['query']}")
@@ -1565,7 +1562,7 @@ def main():
                         response_text = str(response_text)
 
                     st.markdown(f"**A:** {response_text[:500]}{'...' if len(response_text) > 500 else ''}")
-                    st.caption(f"시간: {time_module.strftime('%Y-%m-%d %H:%M:%S', time_module.localtime(conv['timestamp']))}")
+                    st.caption(f"시간: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(conv['timestamp']))}")
 
     st.markdown("---")
 

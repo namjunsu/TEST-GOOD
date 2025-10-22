@@ -1,0 +1,9 @@
+# PDF 파일을 바이너리로 처리
+*.pdf binary
+*.db binary
+*.bin binary
+*.safetensors binary
+*.gguf binary
+*.png binary
+*.jpg binary
+*.jpeg binary

@@ -26,7 +26,9 @@ class EverythingLikeSearch:
         self.docs_dir = Path("docs")
         self.db_path = Path("everything_index.db")
         self.conn = None
+        self.ocr_cache = {}
         self.setup_database()
+        self._load_ocr_cache()
 
     def setup_database(self):
         """SQLite DB 설정 - 초고속 검색을 위해"""
@@ -229,8 +231,12 @@ class EverythingLikeSearch:
             # 텍스트 정리 (불필요한 공백 제거)
             text = ' '.join(text.split())
 
-            # 텍스트가 너무 짧으면 빈 문자열 반환 (스캔 문서 등)
+            # 텍스트가 너무 짧으면 OCR 캐시 시도 (스캔 문서 등)
             if len(text.strip()) < 50:
+                ocr_text = self._get_ocr_from_cache(pdf_path)
+                if ocr_text:
+                    logger.info(f"📷 OCR 캐시 사용 (인덱싱): {pdf_path.name} ({len(ocr_text)}자)")
+                    return ocr_text[:5000]
                 return ""
 
             return text[:5000]  # 최대 5000자로 제한
@@ -376,6 +382,36 @@ class EverythingLikeSearch:
 """
 
         return summary
+
+    def _load_ocr_cache(self):
+        """OCR 캐시 로드"""
+        ocr_cache_path = self.docs_dir / ".ocr_cache.json"
+        if ocr_cache_path.exists():
+            try:
+                with open(ocr_cache_path, 'r', encoding='utf-8') as f:
+                    self.ocr_cache = json.load(f)
+                logger.info(f"✅ OCR 캐시 로드 완료: {len(self.ocr_cache)}개 문서")
+            except Exception as e:
+                logger.warning(f"OCR 캐시 로드 실패: {e}")
+                self.ocr_cache = {}
+        else:
+            logger.debug("OCR 캐시 파일 없음")
+
+    def _get_ocr_from_cache(self, pdf_path: Path) -> str:
+        """OCR 캐시에서 텍스트 가져오기"""
+        try:
+            import hashlib
+            with open(pdf_path, 'rb') as f:
+                file_hash = hashlib.md5(f.read()).hexdigest()
+
+            if file_hash in self.ocr_cache:
+                cached_data = self.ocr_cache[file_hash]
+                return cached_data.get('text', '')
+
+            return ""
+        except Exception as e:
+            logger.debug(f"OCR 캐시 읽기 실패: {e}")
+            return ""
 
 
 class FastDocumentRAG:

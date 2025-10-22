@@ -246,7 +246,7 @@ class EverythingLikeSearch:
             return ""
 
     def search(self, query: str, limit: int = 20) -> List[Dict]:
-        """초고속 검색 (Everything처럼)"""
+        """초고속 검색 (Everything처럼) - 가중치 적용"""
         cursor = self.conn.cursor()
 
         # 쿼리 전처리 - "dvr관련" 같은 경우 분리
@@ -264,11 +264,16 @@ class EverythingLikeSearch:
             # 원래 쿼리에서 한국어 날짜를 표준 형식으로 변경
             query_processed = re.sub(korean_date_pattern, standard_date, query_processed)
 
-        # 쿼리에서 주요 키워드 추출 (불필요한 단어 제거)
-        skip_words = ['관련', '문서', '찾아', '찾아줘', '검색', '알려', '알려줘', '보여', '보여줘', '의', '건', '내용', '대해', '대한', '문서들']
+        # 쿼리에서 주요 키워드 추출 (불필요한 단어 제거 강화)
+        skip_words = [
+            '관련', '문서', '찾아', '찾아줘', '검색', '알려', '알려줘',
+            '보여', '보여줘', '의', '건', '내용', '대해', '대한', '문서들',
+            '자료', '좀', '뭐', '뭔지', '어떻게', '이', '그', '저',
+            '요', '줘', '주세요', '해줘', '해주세요'
+        ]
         keywords = []
         for word in query_processed.split():
-            if word and word not in skip_words and len(word) >= 1:  # 1글자도 허용 (예: 'A' 같은 채널명)
+            if word and word not in skip_words and len(word) >= 2:  # 2글자 이상만 (불필요한 단어 제거)
                 keywords.append(word)
 
         # 키워드가 없으면 원본 쿼리 사용
@@ -285,20 +290,32 @@ class EverythingLikeSearch:
                 processed_keywords.append(kw)
         keywords = processed_keywords
 
-        # 각 키워드에 대해 OR 조건으로 검색
-        conditions = []
+        # 가중치 기반 점수 계산 SQL
+        # 파일명(5점) > 부서(3점) > 카테고리(2점) > 키워드(2점) > 내용(1점)
+        score_parts = []
         params = []
+
         for keyword in keywords:
             search_term = f'%{keyword}%'
-            conditions.append("(filename LIKE ? OR keywords LIKE ? OR category LIKE ? OR department LIKE ? OR content LIKE ?)")
-            params.extend([search_term, search_term, search_term, search_term, search_term])
+            score_part = """(
+                CASE WHEN filename LIKE ? THEN 5 ELSE 0 END +
+                CASE WHEN department LIKE ? THEN 3 ELSE 0 END +
+                CASE WHEN category LIKE ? THEN 2 ELSE 0 END +
+                CASE WHEN keywords LIKE ? THEN 2 ELSE 0 END +
+                CASE WHEN content LIKE ? THEN 1 ELSE 0 END
+            )"""
+            score_parts.append(score_part)
+            params.extend([search_term] * 5)
 
-        # SQL 쿼리 구성
+        # SQL 쿼리 구성 (점수 기반 정렬)
         sql = f"""
-            SELECT * FROM files
-            WHERE {' OR '.join(conditions)}
+            SELECT *, ({' + '.join(score_parts)}) as relevance_score
+            FROM files
+            WHERE relevance_score > 0
             ORDER BY
-                year DESC, month DESC
+                relevance_score DESC,
+                year DESC,
+                month DESC
             LIMIT ?
         """
         params.append(limit)
@@ -318,7 +335,8 @@ class EverythingLikeSearch:
                 'category': row[7],
                 'department': row[8],
                 'keywords': row[9],
-                'content': row[10]
+                'content': row[10],
+                'score': row[12]  # relevance_score (row[11]은 created_at)
             })
 
         return results

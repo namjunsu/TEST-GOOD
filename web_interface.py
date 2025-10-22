@@ -219,6 +219,63 @@ st.markdown("""
         color: white;
     }
 
+    /* ChatGPT 스타일 말풍선 */
+    .chat-message {
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: flex-start;
+        animation: fadeIn 0.3s ease-in;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .chat-message.user {
+        justify-content: flex-end;
+    }
+
+    .chat-message.assistant {
+        justify-content: flex-start;
+    }
+
+    .chat-bubble {
+        max-width: 75%;
+        padding: 1rem 1.2rem;
+        border-radius: 18px;
+        word-wrap: break-word;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .chat-bubble.user {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-bottom-right-radius: 4px;
+    }
+
+    .chat-bubble.assistant {
+        background: #f7f7f8;
+        color: #374151;
+        border-bottom-left-radius: 4px;
+        border: 1px solid #e5e7eb;
+    }
+
+    .chat-timestamp {
+        font-size: 0.75rem;
+        color: #9ca3af;
+        margin-top: 0.3rem;
+    }
+
+    .chat-sources {
+        margin-top: 0.8rem;
+        padding: 0.8rem;
+        background: #fffbeb;
+        border-left: 3px solid #f59e0b;
+        border-radius: 6px;
+        font-size: 0.85rem;
+    }
+
     /* 질문 입력창과 버튼 정렬 - 핵심 수정 */
     .stForm {
         background: transparent !important;
@@ -1584,18 +1641,36 @@ def main():
             # 통합 답변 (자동으로 빠른/AI 선택)
             response = st.session_state.unified_rag.answer(chat_input)
 
-        # 응답 표시
-        st.markdown("---")
-        st.markdown(response)
+        # 사용자 질문 표시 (말풍선)
+        current_time = datetime.now().strftime('%H:%M')
+        st.markdown(f"""
+        <div class="chat-message user">
+            <div class="chat-bubble user">
+                {chat_input}
+                <div class="chat-timestamp">{current_time}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # AI 응답 표시 (말풍선)
+        st.markdown(f"""
+        <div class="chat-message assistant">
+            <div class="chat-bubble assistant">
+                {response}
+                <div class="chat-timestamp">{current_time}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
     elif submit_btn:
         st.warning("질문을 입력해주세요!")
 
-    # 대화 기록 표시
+    # 대화 기록 표시 (말풍선 스타일)
     if hasattr(st.session_state.get('unified_rag'), 'conversation_history'):
         history = st.session_state.unified_rag.get_conversation_history()
         if history:
             st.markdown("---")
-            st.markdown("### 📝 대화 기록")
+            st.markdown("### 💬 대화 기록")
 
             # 기록 초기화 버튼
             if st.button("🗑️ 대화 기록 초기화", key="clear_history"):
@@ -1603,22 +1678,37 @@ def main():
                 st.success("대화 기록이 초기화되었습니다!")
                 st.rerun()
 
-            # 최근 대화부터 표시
-            for i, conv in enumerate(reversed(history[-5:])):  # 최근 5개만
-                with st.expander(f"💬 대화 {len(history)-i}", expanded=(i==0)):
-                    st.markdown(f"**Q:** {conv['query']}")
+            # 대화 기록을 말풍선으로 표시
+            for conv in reversed(history[-10:]):  # 최근 10개
+                conv_time = time.strftime('%H:%M', time.localtime(conv['timestamp']))
 
-                    # 응답 처리 (RAGResponse 객체일 수 있음)
-                    response_text = conv['response']
-                    if hasattr(response_text, 'answer'):
-                        response_text = response_text.answer
-                    elif isinstance(response_text, str):
-                        response_text = response_text
-                    else:
-                        response_text = str(response_text)
+                # 사용자 질문
+                st.markdown(f"""
+                <div class="chat-message user">
+                    <div class="chat-bubble user">
+                        {conv['query']}
+                        <div class="chat-timestamp">{conv_time}</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
-                    st.markdown(f"**A:** {response_text[:500]}{'...' if len(response_text) > 500 else ''}")
-                    st.caption(f"시간: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(conv['timestamp']))}")
+                # AI 응답
+                response_text = conv['response']
+                if hasattr(response_text, 'answer'):
+                    response_text = response_text.answer
+                elif isinstance(response_text, str):
+                    response_text = response_text
+                else:
+                    response_text = str(response_text)
+
+                st.markdown(f"""
+                <div class="chat-message assistant">
+                    <div class="chat-bubble assistant">
+                        {response_text}
+                        <div class="chat-timestamp">{conv_time}</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
     st.markdown("---")
 

@@ -1,0 +1,64 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# 환경
+.env.local
+.env.development
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 로그
+*.log
+logs/
+.pids/
+
+# 캐시 (이미지에 포함하지 않음, 실행 시 생성)
+ocr_cache/
+*.pyc
+
+# 임시 파일
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# 백업 파일
+*.bak
+*.backup
+*.tar.gz
+AI-CHAT_backup_*
+
+# 문서 (볼륨으로 마운트하므로 이미지에 포함 안 함)
+# docs/
+
+# 데이터베이스 (볼륨으로 마운트)
+# *.db
+
+# 모델 파일 (볼륨으로 마운트)
+# *.gguf
+
+# 사용하지 않는 파일
+unused_files/
+test_*.py
+*.md
+!README.md
+!DOCKER_사용법.md

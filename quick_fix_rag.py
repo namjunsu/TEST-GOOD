@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """
-빠른 수정: LLM 없이 검색만 하는 RAG
-문제 해결용 임시 솔루션
+빠른 수정: LLM 없이 검색만 하는 RAG (SearchModule 직접 사용)
+perfect_rag.py 의존성 제거 버전
 """
 
-from perfect_rag import PerfectRAG
+from modules.search_module import SearchModule
 import time
+import re
 
 class QuickFixRAG:
     """LLM 답변 생성 문제 우회용 RAG"""
 
     def __init__(self):
-        self.rag = PerfectRAG()
+        self.search_module = SearchModule()  # 직접 사용 (0.012초 vs 2.2초)
         self.unified_rag = None  # 지연 로딩 (필요할 때만)
 
     def answer(self, query: str) -> str:
@@ -19,18 +20,17 @@ class QuickFixRAG:
 
         try:
             # 1. 기안자 검색인지 확인
-            import re
             drafter_match = re.search(r'기안자\s*([가-힣]+)', query)
             if drafter_match:
                 drafter_name = drafter_match.group(1)
                 # 전체 개수 확인을 위해 많은 수로 검색
-                search_results = self.rag.search_module.search_by_drafter(drafter_name, top_k=200)
+                search_results = self.search_module.search_by_drafter(drafter_name, top_k=200)
                 if search_results:
                     # 기안자로 작성된 문서 우선 표시
                     return self._format_drafter_results(query, drafter_name, search_results)
 
             # 2. 일반 검색
-            search_results = self.rag.search_module.search_by_content(query, top_k=5)
+            search_results = self.search_module.search_by_content(query, top_k=5)
 
             if not search_results:
                 return "❌ 관련 문서를 찾을 수 없습니다."
@@ -48,402 +48,82 @@ class QuickFixRAG:
 
                 # 기안자 정보 우선 표시 (department 필드에 저장됨)
                 drafter = doc.get('department', '')
-                if drafter and drafter not in ['영상', '카메라', '조명', '중계', 'DVR', '스튜디오', '송출']:
+                if drafter and drafter != '미상':
                     answer += f"   - 기안자: {drafter}\n"
-                elif doc.get('extracted_dept'):
-                    answer += f"   - 부서: {doc['extracted_dept']}\n"
 
-                answer += "\n"
+                # 내용 미리보기
+                content_preview = (doc.get('content', '')[:200] + "..."
+                                   if len(doc.get('content', '')) > 200
+                                   else doc.get('content', ''))
+                answer += f"   - 내용: {content_preview}\n\n"
 
             return answer
 
         except Exception as e:
-            return f"❌ 검색 중 오류 발생: {e}"
+            return f"❌ 오류: {str(e)}"
 
-    def _format_drafter_results(self, query: str, drafter_name: str, search_results) -> str:
-        """기안자별 검색 결과 포매팅"""
-        total_count = len(search_results)
-        answer = f"**{query}** 검색 결과\n\n"
-        answer += f"📝 **{drafter_name}** 기안자가 작성한 문서: **{total_count}개** (최신순)\n\n"
+    def _format_drafter_results(self, query: str, drafter_name: str, search_results: list) -> str:
+        """기안자 검색 결과 포매팅"""
+        answer = f"**기안자: {drafter_name}** 검색 결과\n\n"
+        answer += f"총 {len(search_results)}개 문서 발견\n\n"
 
-        # 처음 15개만 상세히 표시
-        display_count = min(15, total_count)
+        # 날짜별로 정렬 (최신순)
+        sorted_results = sorted(search_results,
+                                key=lambda x: x.get('date', ''),
+                                reverse=True)
 
-        for i, doc in enumerate(search_results[:display_count], 1):
+        for i, doc in enumerate(sorted_results[:20], 1):  # 상위 20개만
             answer += f"**{i}. {doc['filename']}**\n"
             if doc.get('date'):
                 answer += f"   - 날짜: {doc['date']}\n"
             if doc.get('category'):
                 answer += f"   - 카테고리: {doc['category']}\n"
-            answer += f"   - 기안자: {doc.get('department', '')}\n"
-            answer += "\n"
 
-        # 나머지가 있으면 요약 정보 추가
-        if total_count > display_count:
-            remaining = total_count - display_count
-            answer += f"📋 **추가 {remaining}개 문서**가 더 있습니다.\n\n"
+            # 내용 미리보기
+            content_preview = (doc.get('content', '')[:150] + "..."
+                               if len(doc.get('content', '')) > 150
+                               else doc.get('content', ''))
+            answer += f"   - 내용: {content_preview}\n\n"
 
-            # 연도별 통계
-            year_stats = {}
-            for doc in search_results:
-                if doc.get('date'):
-                    year = doc['date'][:4]
-                    year_stats[year] = year_stats.get(year, 0) + 1
-
-            if year_stats:
-                answer += "📊 **연도별 분포:**\n"
-                for year in sorted(year_stats.keys(), reverse=True):
-                    answer += f"   - {year}년: {year_stats[year]}개\n"
+        if len(search_results) > 20:
+            answer += f"\n*(총 {len(search_results)}개 중 상위 20개 표시)*\n"
 
         return answer
 
-    def answer_from_specific_document(self, query: str, filename: str, use_llm: bool = True) -> str:
-        """특정 문서에 대해서만 답변 생성 (문서 전용 모드)
+    def get_unified_rag(self):
+        """UnifiedRAG 지연 로딩 (필요할 때만)"""
+        if self.unified_rag is None:
+            from hybrid_chat_rag_v2 import UnifiedRAG
+            self.unified_rag = UnifiedRAG()
+        return self.unified_rag
 
-        Args:
-            query: 사용자 질문
-            filename: 특정 문서 파일명
-            use_llm: True면 AI 분석, False면 키워드 추출만
-        """
-        try:
-            # 1. 파일명으로 문서 검색
-            from pathlib import Path
-            docs_dir = Path("docs")
 
-            # 모든 하위 폴더에서 파일 찾기
-            pdf_path = None
-            for year_dir in docs_dir.glob("year_*"):
-                potential_path = year_dir / filename
-                if potential_path.exists():
-                    pdf_path = potential_path
-                    break
+if __name__ == "__main__":
+    # 빠른 테스트
+    print("🚀 QuickFixRAG v2 (SearchModule 직접 사용)")
+    print("=" * 60)
 
-            if not pdf_path or not pdf_path.exists():
-                return f"❌ 문서를 찾을 수 없습니다: {filename}"
-
-            # 2. PDF 내용 추출 (OCR 캐시 우선)
-            full_text = self._get_pdf_content(pdf_path)
-
-            if not full_text.strip():
-                return f"❌ PDF에서 텍스트를 추출할 수 없습니다: {filename}"
-
-            # 3. LLM 사용 여부에 따라 답변 생성
-            if use_llm:
-                return self._llm_answer(query, full_text, filename)
-            else:
-                # 폴백: 키워드 기반 추출
-                if any(word in query for word in ['요약', '정리', '개요', '내용']):
-                    return self._summarize_document(full_text, filename)
-                elif any(word in query for word in ['비용', '금액', '가격', '원']):
-                    return self._extract_cost_info(full_text, filename)
-                elif any(word in query for word in ['장비', '모델', '제품']):
-                    return self._extract_equipment_info(full_text, filename)
-                else:
-                    return self._keyword_search(full_text, query, filename)
-
-        except Exception as e:
-            return f"❌ 오류 발생: {e}"
-
-    def _llm_answer(self, query: str, full_text: str, filename: str) -> str:
-        """LLM을 사용한 문서 분석 (UnifiedRAG 활용)"""
-        try:
-            # UnifiedRAG 지연 로딩
-            if self.unified_rag is None:
-                from hybrid_chat_rag_v2 import UnifiedRAG
-                self.unified_rag = UnifiedRAG()
-
-            # LLM 로드 확인
-            if not self.unified_rag._ensure_llm_loaded():
-                fallback_msg = "⚠️ **AI 분석을 사용할 수 없습니다**\n\n"
-                fallback_msg += "키워드 기반 추출 결과를 보여드립니다.\n"
-                fallback_msg += "더 정확한 분석을 위해서는 시스템 관리자에게 문의하세요.\n\n"
-                fallback_msg += "---\n\n"
-                return fallback_msg + self._summarize_document(full_text, filename)
-
-            # 스마트 텍스트 추출 (중요 정보 우선)
-            content = self._extract_important_content(full_text, query)
-
-            # LLM 프롬프트 구성
-            prompt = f"""다음은 "{filename}" 문서의 내용입니다.
-
-문서 내용:
-{content}
-
-질문: {query}
-
-위 문서의 내용만을 바탕으로 질문에 답변해주세요.
-반드시 다음을 포함하세요:
-- 장비/제품명과 모델명 (있다면 전부)
-- 수량 정보 (몇 개, 몇 대 등)
-- 금액 정보 (있다면)
-- 날짜 정보
-- 표나 목록 형태의 데이터는 구조화해서 표시
-
-문서에 없는 내용은 절대 추측하지 마세요.
-"""
-
-            # LLM 호출 (generate_response 메서드 사용)
-            response = self.unified_rag.llm.generate_response(prompt, [])
-
-            # 응답 텍스트 추출
-            if hasattr(response, 'answer'):
-                answer = response.answer
-            elif hasattr(response, 'content'):
-                answer = response.content
-            else:
-                answer = str(response)
-
-            if answer and len(answer) > 50:
-                # 정보 추출 품질 표시
-                quality_note = "\n\n💡 **참고사항**\n"
-                quality_note += "- AI가 문서의 주요 내용을 분석했습니다\n"
-                quality_note += "- 표나 복잡한 레이아웃은 일부 누락될 수 있습니다\n"
-                quality_note += "- 정확한 확인이 필요한 경우 원본 PDF를 함께 참조하세요\n"
-
-                return f"🤖 **AI 분석 결과**\n\n{answer}\n\n---\n📄 출처: {filename}{quality_note}"
-            else:
-                # LLM 실패시 폴백
-                fallback_msg = "⚠️ **AI 분석이 불완전합니다**\n\n"
-                fallback_msg += "키워드 기반 추출 결과로 대체합니다.\n\n---\n\n"
-                return fallback_msg + self._summarize_document(full_text, filename)
-
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            # 오류시 키워드 기반 폴백 (사용자에게 알림)
-            error_msg = f"❌ **AI 분석 중 오류 발생**\n\n"
-            error_msg += f"오류 내용: {str(e)[:100]}\n\n"
-            error_msg += "키워드 기반 추출 결과로 대체합니다.\n\n---\n\n"
-            return error_msg + self._summarize_document(full_text, filename)
-
-    def _extract_important_content(self, full_text: str, query: str) -> str:
-        """중요 정보를 우선적으로 추출 (표, 금액, 모델명 등)"""
-        import re
-
-        # 기본: 처음부터 일정 길이
-        base_length = 2000
-        content = full_text[:base_length]
-
-        # 추가 정보 찾기
-        important_patterns = [
-            (r'\d{1,3}(?:,\d{3})+', '금액'),  # 1,234,567
-            (r'[A-Z]{2,}\d+[a-z]*\d+\.\d+[A-Z]*', '모델명'),  # HJ22ex7.6B
-            (r'CAM#?\d+', '카메라번호'),  # CAM#1
-            (r'합계|총|계|Total', '합계'),
-            (r'\d+개|\d+대|\d+건', '수량'),
-        ]
-
-        # 중요 정보가 포함된 섹션 찾기
-        important_sections = []
-        lines = full_text.split('\n')
-
-        for i, line in enumerate(lines):
-            # 중요 패턴 매칭
-            for pattern, label in important_patterns:
-                if re.search(pattern, line):
-                    # 앞뒤 5줄씩 포함
-                    start = max(0, i - 5)
-                    end = min(len(lines), i + 6)
-                    section = '\n'.join(lines[start:end])
-                    if section not in important_sections:
-                        important_sections.append(section)
-                    break
-
-        # 중요 섹션이 있으면 앞에 추가
-        if important_sections:
-            additional = '\n\n[중요 정보]\n' + '\n---\n'.join(important_sections[:3])
-            # 기본 내용 + 중요 섹션 = 최대 4000자
-            max_additional = 4000 - len(content)
-            if max_additional > 0:
-                content += additional[:max_additional]
-
-        return content[:4000]  # 최대 4000자
-
-    def _summarize_document(self, text: str, filename: str) -> str:
-        """문서 요약 (처음 2000자)"""
-        preview = text[:2000]
-        lines = [line.strip() for line in preview.split('\n') if line.strip()]
-
-        answer = f"📄 **{filename}** 문서 요약\n\n"
-        answer += '\n'.join(lines[:30])
-
-        if len(text) > 2000:
-            answer += f"\n\n... (총 {len(text)}자 중 일부)\n"
-
-        return answer
-
-    def _extract_cost_info(self, text: str, filename: str) -> str:
-        """비용 정보 추출"""
-        import re
-
-        answer = f"💰 **{filename}** 비용 정보\n\n"
-
-        # 금액 패턴 찾기 (쉼표 포함 숫자, "원" 선택적)
-        cost_patterns = [
-            r'(\d{1,3}(?:,\d{3})+)\s*원',  # 1,234,567원
-            r'(\d+)\s*원',                   # 123원
-            r'합계[:\s]*(\d{1,3}(?:,\d{3})+)',  # 합계: 1,234,567
-            r'총[액비용][:\s]*(\d{1,3}(?:,\d{3})+)',  # 총액: 1,234,567
-            r'(?:비용|금액|가격)[:\s]*(\d{1,3}(?:,\d{3})+)',  # 비용: 1,234,567
-            r'\n(\d{1,3}(?:,\d{3})+)\n',    # 줄바꿈으로 둘러싸인 금액
-        ]
-
-        found_costs = []
-        for pattern in cost_patterns:
-            matches = re.finditer(pattern, text)
-            for match in matches:
-                cost = match.group(1)
-                # 주변 텍스트 추출
-                start = max(0, match.start() - 50)
-                end = min(len(text), match.end() + 50)
-                context = text[start:end].strip()
-                found_costs.append((cost, context))
-
-        if found_costs:
-            # 중복 제거
-            seen = set()
-            for cost, context in found_costs:
-                if cost not in seen:
-                    answer += f"• **{cost}원**\n"
-                    answer += f"  ({context})\n\n"
-                    seen.add(cost)
-        else:
-            answer += "❌ 금액 정보를 찾을 수 없습니다.\n"
-
-        return answer
-
-    def _extract_equipment_info(self, text: str, filename: str) -> str:
-        """장비 정보 추출"""
-        import re
-
-        answer = f"🔧 **{filename}** 장비 정보\n\n"
-
-        # 장비 관련 키워드 패턴
-        equipment_patterns = [
-            r'([A-Z0-9]+(?:ex|EX)[0-9.]+[A-Z]*)',  # HJ22ex7.6B 같은 모델명
-            r'(CAM#?\d+)',  # CAM#1, CAM1
-            r'카메라\s*([가-힣\s]+)',
-            r'모델[:\s]*([A-Z0-9-]+)',
-        ]
-
-        found_equipment = []
-        for pattern in equipment_patterns:
-            matches = re.finditer(pattern, text)
-            for match in matches:
-                equipment = match.group(1).strip()
-                if len(equipment) > 2:
-                    # 주변 텍스트
-                    start = max(0, match.start() - 50)
-                    end = min(len(text), match.end() + 50)
-                    context = text[start:end].strip()
-                    found_equipment.append((equipment, context))
-
-        if found_equipment:
-            seen = set()
-            for equip, context in found_equipment:
-                if equip not in seen and len(equip) > 2:
-                    answer += f"• **{equip}**\n"
-                    answer += f"  ({context[:100]}...)\n\n"
-                    seen.add(equip)
-        else:
-            answer += "❌ 장비 정보를 찾을 수 없습니다.\n"
-
-        return answer
-
-    def _keyword_search(self, text: str, query: str, filename: str) -> str:
-        """키워드 기반 검색"""
-        import re
-
-        answer = f"🔍 **{filename}** 검색 결과\n\n"
-
-        # 질문에서 키워드 추출
-        keywords = re.findall(r'[가-힣]{2,}|[A-Za-z]{3,}|\d+', query)
-
-        # 키워드가 포함된 줄 찾기
-        lines = text.split('\n')
-        relevant_sections = []
-
-        for i, line in enumerate(lines):
-            if any(keyword in line for keyword in keywords):
-                # 앞뒤 2줄씩 포함
-                start = max(0, i - 2)
-                end = min(len(lines), i + 3)
-                section = '\n'.join(lines[start:end])
-                if section.strip() and section not in relevant_sections:
-                    relevant_sections.append(section.strip())
-
-        if relevant_sections:
-            answer += '\n\n---\n\n'.join(relevant_sections[:5])
-        else:
-            answer += f"❌ '{query}'에 대한 정보를 찾을 수 없습니다.\n"
-            answer += "\n📄 문서 미리보기 (처음 500자):\n\n"
-            answer += text[:500]
-
-        return answer
-
-    def _get_pdf_content(self, pdf_path) -> str:
-        """PDF 내용 추출 (OCR 캐시 우선)"""
-        import pdfplumber
-        import json
-        import hashlib
-        from pathlib import Path
-
-        # 1. pdfplumber로 추출 시도
-        full_text = ""
-        try:
-            with pdfplumber.open(pdf_path) as pdf:
-                for page in pdf.pages:
-                    text = page.extract_text()
-                    if text:
-                        full_text += text + "\n"
-        except Exception as e:
-            print(f"pdfplumber 추출 실패: {e}")
-
-        # 2. OCR 캐시 확인
-        ocr_cache_path = Path("docs/.ocr_cache.json")
-        if ocr_cache_path.exists():
-            try:
-                with open(ocr_cache_path, 'r', encoding='utf-8') as f:
-                    ocr_cache = json.load(f)
-
-                # 파일 해시 계산
-                with open(pdf_path, 'rb') as f:
-                    file_hash = hashlib.md5(f.read()).hexdigest()
-
-                # OCR 캐시에서 찾기
-                if file_hash in ocr_cache:
-                    ocr_text = ocr_cache[file_hash].get('text', '')
-                    # OCR 텍스트가 더 길면 사용
-                    if len(ocr_text) > len(full_text):
-                        print(f"✅ OCR 캐시 사용: {pdf_path.name} ({len(ocr_text)}자)")
-                        return ocr_text
-            except Exception as e:
-                print(f"OCR 캐시 로드 실패: {e}")
-
-        return full_text
-
-def main():
-    """테스트"""
-    print("🚀 빠른 수정 RAG 테스트")
-
+    start = time.time()
     rag = QuickFixRAG()
+    init_time = time.time() - start
 
+    print(f"⏱️  초기화 시간: {init_time:.4f}초")
+    print()
+
+    # 테스트 쿼리
     test_queries = [
-        "기안자 남준수 문서 찾아줘",
-        "DVR 관련 문서",
-        "카메라 수리 비용"
+        "카메라 수리",
+        "기안자 박선희"
     ]
 
     for query in test_queries:
-        print(f"\n📌 {query}")
-        print("-" * 50)
+        print(f"\n📝 질문: {query}")
+        print("-" * 60)
 
         start = time.time()
-        response = rag.answer(query)
+        answer = rag.answer(query)
         elapsed = time.time() - start
 
-        print(response)
-        print(f"⏱️ 응답 시간: {elapsed:.2f}초")
-
-if __name__ == "__main__":
-    main()
+        print(answer)
+        print(f"\n⏱️  응답 시간: {elapsed:.4f}초")
+        print("=" * 60)

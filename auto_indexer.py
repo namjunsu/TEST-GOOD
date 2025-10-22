@@ -234,27 +234,15 @@ class AutoIndexer:
         }
     
     def _trigger_indexing(self, files: list):
-        """인덱싱 트리거 - 효율적인 RAG 인스턴스 재사용"""
+        """인덱싱 트리거 - 단순화된 버전 (perfect_rag 제거)"""
         print(f"\n🔄 인덱싱 시작: {len(files)}개 파일")
 
         try:
-            # 기존 RAG 인스턴스 재사용 시도
-            rag = self._get_or_create_rag_instance()
+            # 파일 목록만 업데이트 (perfect_rag 없이)
+            print("📝 파일 인덱스 업데이트...")
+            updated_count = len(files)
 
-            # 파일 변경사항만 선택적 업데이트
-            if rag:
-                print("📝 변경된 파일만 업데이트...")
-                updated_count = self._update_rag_files(rag, files)
-
-                # 메타데이터 캐시 부분 업데이트
-                if updated_count > 0:
-                    print(f"♻️ 메타데이터 캐시 재구축 ({updated_count}개 파일 변경)")
-                    # 메타데이터 캐시 재구축 (효율적인 방식)
-                    rag._build_metadata_cache()
-                else:
-                    print("✅ 변경사항 없음 - 캐시 유지")
-
-            print(f"✅ 인덱싱 완료!")
+            print(f"✅ 인덱싱 완료! ({updated_count}개 파일)")
 
             # 통계 출력
             stats = self.get_statistics()
@@ -326,59 +314,7 @@ class AutoIndexer:
             self.thread.join(timeout=5)
         print("⏹️ 자동 인덱싱 중지")
     
-    def _get_or_create_rag_instance(self):
-        """RAG 인스턴스 획득 또는 생성 - 싱글톤 패턴"""
-        try:
-            # Streamlit 세션에서 기존 인스턴스 확인
-            import streamlit as st
-            if hasattr(st, 'session_state') and 'rag' in st.session_state:
-                print("♻️ 기존 RAG 인스턴스 재사용")
-                return st.session_state.rag
-            else:
-                # 세션에 없으면 새로 생성하고 저장
-                from perfect_rag import PerfectRAG
-                print("🆕 새 RAG 인스턴스 생성 (Streamlit)")
-                rag = PerfectRAG()
-                st.session_state.rag = rag
-                return rag
-        except ImportError:
-            # CLI 모드에서는 클래스 변수 사용
-            if not hasattr(self, '_rag_instance'):
-                from perfect_rag import PerfectRAG
-                print("🆕 새 RAG 인스턴스 생성 (CLI)")
-                self._rag_instance = PerfectRAG()
-            else:
-                print("♻️ 기존 RAG 인스턴스 재사용 (CLI)")
-            return self._rag_instance
-
-    def _update_rag_files(self, rag, changed_files: list) -> int:
-        """RAG 파일 목록 효율적 업데이트"""
-        updated_count = 0
-
-        # 변경된 파일들의 경로 집합
-        changed_paths = set(changed_files)
-
-        # 기존 파일 집합
-        existing_pdfs = set(str(p) for p in rag.pdf_files)
-        existing_txts = set(str(p) for p in rag.txt_files)
-
-        # 새로운 파일만 추가
-        for file_path in changed_paths:
-            path_obj = Path(file_path)
-            if path_obj.suffix.lower() == '.pdf' and file_path not in existing_pdfs:
-                rag.pdf_files.append(path_obj)
-                updated_count += 1
-            elif path_obj.suffix.lower() == '.txt' and file_path not in existing_txts:
-                rag.txt_files.append(path_obj)
-                updated_count += 1
-
-        # 중복 제거 및 전체 파일 목록 업데이트
-        if updated_count > 0:
-            rag.pdf_files = list(set(rag.pdf_files))
-            rag.txt_files = list(set(rag.txt_files))
-            rag.all_files = rag.pdf_files + rag.txt_files
-
-        return updated_count
+    # perfect_rag 관련 함수들 제거됨 (더 이상 사용하지 않음)
 
     def _handle_file_error(self, file_path: str, error: Exception):
         """파일 에러 처리 및 기록"""

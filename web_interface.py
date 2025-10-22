@@ -393,27 +393,30 @@ def show_pdf_preview(file_path, height=700):
                 # 총 페이지 수 확인
                 pdf_document = fitz.open(str(file_path))
                 total_pages = pdf_document.page_count
-                
+
                 # 세션 상태로 페이지 번호 관리
                 if f'page_{file_path}' not in st.session_state:
                     st.session_state[f'page_{file_path}'] = 1
-                
+
                 current_page = st.session_state[f'page_{file_path}']
-                
-                # 페이지 선택 UI
-                col1, col2, col3 = st.columns([1, 3, 1])
-                with col2:
-                    new_page = st.slider(
-                        "📄 페이지 이동",
-                        min_value=1,
-                        max_value=total_pages,
-                        value=current_page,
-                        key=f"slider_{file_path}",
-                        help="슬라이더를 움직여 페이지를 이동하세요"
-                    )
-                    if new_page != current_page:
-                        st.session_state[f'page_{file_path}'] = new_page
-                        st.rerun()
+
+                # 페이지 선택 UI (1페이지 이상일 때만 슬라이더 표시)
+                if total_pages > 1:
+                    col1, col2, col3 = st.columns([1, 3, 1])
+                    with col2:
+                        new_page = st.slider(
+                            "📄 페이지 이동",
+                            min_value=1,
+                            max_value=total_pages,
+                            value=current_page,
+                            key=f"slider_{file_path}",
+                            help="슬라이더를 움직여 페이지를 이동하세요"
+                        )
+                        if new_page != current_page:
+                            st.session_state[f'page_{file_path}'] = new_page
+                            st.rerun()
+                else:
+                    current_page = 1
                 
                 # 현재 페이지를 고품질 이미지로 렌더링
                 page = pdf_document[current_page - 1]
@@ -476,16 +479,19 @@ def show_pdf_preview(file_path, height=700):
             import pdfplumber
             with pdfplumber.open(file_path) as pdf:
                 total_pages = len(pdf.pages)
-                
-                # 페이지 선택
-                page_num = st.slider(
-                    "📄 페이지 선택",
-                    min_value=1,
-                    max_value=total_pages,
-                    value=1,
-                    key=f"text_page_{file_path}"
-                )
-                
+
+                # 페이지 선택 (1페이지면 슬라이더 없이 표시)
+                if total_pages > 1:
+                    page_num = st.slider(
+                        "📄 페이지 선택",
+                        min_value=1,
+                        max_value=total_pages,
+                        value=1,
+                        key=f"text_page_{file_path}"
+                    )
+                else:
+                    page_num = 1
+
                 st.markdown(f"**페이지 {page_num} / {total_pages}**")
                 
                 page = pdf.pages[page_num - 1]

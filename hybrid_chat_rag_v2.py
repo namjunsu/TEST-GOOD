@@ -228,21 +228,23 @@ class UnifiedRAG:
 
         # 기본 프롬프트
         prompt = """당신은 방송국 기술관리팀의 문서 분석 전문 AI입니다.
-주어진 문서를 꼼꼼히 분석하여 정확하고 상세한 답변을 제공하세요.
+주어진 여러 문서 중 질문에 가장 적합한 문서를 선택하여 정확하고 상세한 답변을 제공하세요.
 
 ⚠️ 중요 원칙:
+- 여러 문서가 제공되면 관련도 점수와 내용을 보고 가장 적합한 문서 선택
 - 문서의 실제 내용만 사용 (추측/상상 절대 금지)
 - 모든 정보는 반드시 [파일명.pdf] 형식으로 출처 명시
 - 표, 금액, 날짜, 장비명 등 세부사항을 정확히 전달
 - 불확실한 정보는 "문서에 명시되지 않음"으로 표시
 
-검색된 문서:
+검색된 문서 (관련도 순):
 """
 
-        # 문서 내용 추가 (전체 내용 사용 - 품질 우선)
-        for i, doc in enumerate(documents[:1], 1):
+        # 문서 내용 추가 (Top-3 문서 전달 - AI가 선택)
+        for i, doc in enumerate(documents[:3], 1):
             filename = doc.get('filename', '알수없음')
-            prompt += f"\n[문서 {i}: {filename}]\n"
+            score = doc.get('score', 0)
+            prompt += f"\n[문서 {i}: {filename}] (관련도: {score}점)\n"
 
             if doc.get('date'):
                 prompt += f"날짜: {doc['date']}\n"
@@ -260,18 +262,20 @@ class UnifiedRAG:
                 is_detail_query = any(kw in query for kw in detail_keywords)
                 is_simple_query = any(kw in query for kw in simple_keywords) and not is_detail_query
 
-                # 적응형 컨텍스트 길이 결정
-                if is_simple_query and len(full_content) > 5000:
-                    # 간단한 질문: 핵심만 추출 (5000자)
-                    content = full_content[:5000]
+                # Top-3 전달 시 각 문서는 짧게 (토큰 절약)
+                if is_simple_query and len(full_content) > 3000:
+                    # 간단한 질문: 핵심만 추출 (3000자)
+                    content = full_content[:3000]
                     prompt += f"\n실제 내용 (요약):\n{content}\n"
-                elif len(full_content) < 5000:
+                elif len(full_content) < 3000:
                     # 짧은 문서: 전체 사용
                     prompt += f"\n실제 내용:\n{full_content}\n"
                 else:
-                    # 상세 질문 또는 중간 길이: 최대 12000자
-                    content = full_content[:12000]
+                    # 상세 질문: 최대 5000자 (기존 12000에서 축소)
+                    content = full_content[:5000]
                     prompt += f"\n실제 내용:\n{content}\n"
+            else:
+                prompt += "\n(문서 내용 없음 - 스캔 문서)\n"
 
             prompt += "\n---\n"
 

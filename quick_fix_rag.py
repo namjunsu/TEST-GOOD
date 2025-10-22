@@ -90,6 +90,54 @@ class QuickFixRAG:
 
         return answer
 
+    def answer_from_specific_document(self, query: str, filename: str) -> str:
+        """특정 문서에 대한 질문 답변 (문서 내용 요약)"""
+        try:
+            # 1. 문서 찾기
+            from pathlib import Path
+            import pdfplumber
+
+            # docs 폴더에서 파일 찾기
+            docs_dir = Path("docs")
+            pdf_files = list(docs_dir.rglob(filename))
+
+            if not pdf_files:
+                return f"❌ 문서를 찾을 수 없습니다: {filename}"
+
+            pdf_path = pdf_files[0]
+
+            # 2. PDF 텍스트 추출
+            text = ""
+            try:
+                with pdfplumber.open(pdf_path) as pdf:
+                    for page in pdf.pages[:5]:  # 처음 5페이지만
+                        text += page.extract_text() or ""
+            except Exception as e:
+                return f"❌ PDF 읽기 실패: {str(e)}"
+
+            if not text.strip():
+                return "❌ 문서에서 텍스트를 추출할 수 없습니다."
+
+            # 3. 간단한 요약 생성 (LLM 없이)
+            lines = [line.strip() for line in text.split('\n') if line.strip()]
+
+            answer = f"**📄 {filename}**\n\n"
+            answer += "**문서 내용:**\n\n"
+
+            # 처음 20줄 또는 500자
+            preview_lines = lines[:20]
+            preview = '\n'.join(preview_lines)
+            if len(preview) > 500:
+                preview = preview[:500] + "..."
+
+            answer += preview
+            answer += f"\n\n*(총 {len(text)} 글자, {len(lines)} 줄)*"
+
+            return answer
+
+        except Exception as e:
+            return f"❌ 오류: {str(e)}"
+
     def get_unified_rag(self):
         """UnifiedRAG 지연 로딩 (필요할 때만)"""
         if self.unified_rag is None:

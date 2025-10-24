@@ -27,7 +27,7 @@ sys.path.insert(0, str(project_root))
 
 import config
 from hybrid_chat_rag_v2 import UnifiedRAG
-from utils.css_loader import load_css  # CSS 로더 임포트
+from utils.css_loader import load_all_css  # CSS 로더 임포트
 from components.pdf_viewer import show_pdf_preview  # PDF 뷰어 컴포넌트
 
 # 페이지 설정
@@ -38,109 +38,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS 스타일 적용 (외부 파일에서 로드)
-load_css("static/css/main.css")
+# CSS 스타일 적용 (외부 파일에서 로드: main.css + sidebar.css)
+load_all_css()
 
 
-def apply_sidebar_styles():
-    """사이드바 스타일 적용"""
-    st.markdown("""
-    <style>
-    /* 강제 라이트 모드 스타일 */
-    .stApp[data-theme="light"] [data-testid="stSidebar"] .stButton > button,
-    [data-testid="stAppViewContainer"][data-theme="light"] [data-testid="stSidebar"] .stButton > button {
-        color: #000000 !important;
-        opacity: 1 !important;
-    }
-
-    .stApp[data-theme="light"] [data-testid="stSidebar"] .stButton > button:hover,
-    [data-testid="stAppViewContainer"][data-theme="light"] [data-testid="stSidebar"] .stButton > button:hover {
-        background: rgba(0, 0, 0, 0.05) !important;
-        color: #000000 !important;
-    }
-
-    .stApp[data-theme="light"] .year-divider,
-    [data-testid="stAppViewContainer"][data-theme="light"] .year-divider {
-        color: #000000 !important;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.15) !important;
-    }
-
-    /* 강제 다크 모드 스타일 */
-    .stApp[data-theme="dark"] [data-testid="stSidebar"] .stButton > button,
-    [data-testid="stAppViewContainer"][data-theme="dark"] [data-testid="stSidebar"] .stButton > button {
-        color: #FFFFFF !important;
-        opacity: 1 !important;
-    }
-
-    .stApp[data-theme="dark"] [data-testid="stSidebar"] .stButton > button:hover,
-    [data-testid="stAppViewContainer"][data-theme="dark"] [data-testid="stSidebar"] .stButton > button:hover {
-        background: rgba(255, 255, 255, 0.1) !important;
-        color: #FFFFFF !important;
-    }
-
-    .stApp[data-theme="dark"] .year-divider,
-    [data-testid="stAppViewContainer"][data-theme="dark"] .year-divider {
-        color: #FFFFFF !important;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
-    }
-
-    /* 공통 버튼 스타일 */
-    [data-testid="stSidebar"] .stButton > button {
-        padding: 3px 10px !important;
-        font-size: 13px !important;
-        line-height: 22px !important;
-        min-height: 26px !important;
-        margin: 2px 0 !important;
-        border: none !important;
-        background: transparent !important;
-        text-align: left !important;
-        justify-content: flex-start !important;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif !important;
-        font-weight: 400 !important;
-        transition: all 0.15s ease !important;
-        width: 100% !important;
-        white-space: nowrap !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-    }
-
-    /* 연도 구분선 공통 스타일 */
-    .year-divider {
-        font-size: 12px;
-        font-weight: 700;
-        padding: 6px 0 3px;
-        margin: 12px 0 6px;
-        letter-spacing: 0.5px;
-    }
-
-    /* 사이드바 전체 스타일 */
-    [data-testid="stSidebar"] {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif !important;
-    }
-
-    /* 탭 스타일 개선 */
-    [data-testid="stSidebar"] .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-    }
-
-    [data-testid="stSidebar"] .stTabs [data-baseweb="tab"] {
-        padding: 8px 16px;
-        font-size: 14px;
-        font-weight: 500;
-    }
-
-    /* 검색창 스타일 */
-    [data-testid="stSidebar"] input[type="text"] {
-        font-size: 13px !important;
-        padding: 8px 12px !important;
-    }
-
-    /* SelectBox 스타일 */
-    [data-testid="stSidebar"] [data-baseweb="select"] {
-        font-size: 13px !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
 
 def display_document_list(filtered_df, df, prefix="doc"):
     """문서 리스트를 표시하는 헬퍼 함수"""
@@ -753,8 +654,7 @@ def main():
                 else:
                     st.info("문서가 없습니다")
 
-        # CSS 스타일 적용
-        apply_sidebar_styles()
+        # CSS 스타일은 페이지 시작 시 로드됨 (load_all_css)
         
         # 시스템 정보
         st.markdown("---")

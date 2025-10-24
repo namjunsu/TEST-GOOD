@@ -42,20 +42,27 @@
 
 ### 진행 단계
 
-#### Step 1: apply_sidebar_styles() CSS 분리 (진행중)
-**현재 위치**: web_interface.py:45
-**문제**: 100줄 CSS가 Python 함수에 인라인
-**목표**: static/css/sidebar.css로 분리
-**예상 시간**: 15분
-**예상 감소**: ~100줄
+#### Step 1: apply_sidebar_styles() CSS 분리 ✅ (완료)
+**실제 소요 시간**: 15분
+**실제 감소**: 100줄
+**Git Commit**: a50cdbe
 
-**작업 계획**:
-1. [ ] apply_sidebar_styles() 함수 전체 읽기
-2. [ ] CSS 내용 추출 → static/css/sidebar.css
-3. [ ] main.css에 import 추가 또는 별도 로드
-4. [ ] 함수 삭제 또는 단순화
-5. [ ] 구문 검사
-6. [ ] Git commit
+**완료 작업**:
+1. [✅] apply_sidebar_styles() 함수 전체 읽기
+2. [✅] CSS 내용 추출 → static/css/sidebar.css (110줄)
+3. [✅] load_all_css() 함수 추가
+4. [✅] 함수 완전 삭제 (99줄)
+5. [✅] 구문 검사 통과
+6. [✅] Git commit 완료
+
+**검증 결과**:
+```
+✅ 파일 구조 테스트 통과
+✅ Import 테스트 통과
+✅ 구문 검사 통과
+✅ CSS 로더 기능 테스트 통과
+✅ 파일 크기: 970줄 → 870줄 (-100줄)
+```
 
 ---
 

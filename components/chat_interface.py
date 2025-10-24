@@ -25,7 +25,7 @@ def render_chat_interface(unified_rag_instance: Any) -> None:
             st.markdown(message["content"])
 
     # 채팅 입력창 (하단 고정)
-    if prompt := st.chat_input("💬 무엇을 도와드릴까요? (예: 중계차 보수건 내용 요약해줘)"):
+    if prompt := st.chat_input("무엇을 도와드릴까요?"):
         # 사용자 메시지 추가
         st.session_state.messages.append({"role": "user", "content": prompt})
 

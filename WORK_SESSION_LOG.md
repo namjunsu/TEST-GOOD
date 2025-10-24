@@ -204,6 +204,42 @@ Section 8: 문서 미리보기 패널 (625-742줄)     → 118줄 [분리 대상
 
 ---
 
+**✅ Step 3-4 완료: 문서 미리보기 컴포넌트 분리**
+
+**실제 소요 시간**: 15분
+**실제 감소**: 115줄 (504 → 389줄)
+
+**완료 작업**:
+1. [✅] components/document_preview.py 생성 (138줄)
+   - render_document_preview() 메인 함수
+   - 문서 메타데이터 헤더 UI
+   - 다운로드 및 닫기 버튼
+   - 문서 질문하기 탭 (answer_from_specific_document)
+   - PDF 미리보기 탭 (show/hide 컨트롤, 높이 조절)
+   - 상세한 에러 처리 (FileNotFoundError, PermissionError, MemoryError)
+   - 전체 타입 힌트 적용
+2. [✅] components/__init__.py 업데이트
+   - render_document_preview export 추가
+3. [✅] web_interface.py 수정
+   - document_preview import 추가
+   - 문서 미리보기 코드 제거 (115줄) → 컴포넌트 호출 2줄로 교체
+4. [✅] 구문 검사 통과 (양쪽 파일)
+5. [✅] Import 테스트 통과
+
+**검증 결과**:
+```
+✅ document_preview.py 구문 검사 통과
+✅ web_interface.py 구문 검사 통과
+✅ document_preview import 성공
+✅ 파일 크기: 504줄 → 389줄 (-115줄, 22.8%)
+🎉 목표 초과 달성: 원본 1,639줄 → 389줄 (76% 감소!)
+```
+
+**생성 파일**:
+- components/document_preview.py (138줄)
+
+---
+
 ---
 
 #### Step 4: 나머지 개선

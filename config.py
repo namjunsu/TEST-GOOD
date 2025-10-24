@@ -106,7 +106,7 @@ REPEAT_PENALTY = max(1.0, min(2.0, get_env_float('REPEAT_PENALTY', 1.15)))  # 1.
 
 # GPU 최적화 설정 (NVIDIA RTX PRO 4000 - 16GB VRAM)
 # 🔥 메모리 최적화 설정 (14GB → 8GB 목표)
-N_THREADS = max(1, min(32, get_env_int('N_THREADS', 20)))  # Intel Ultra 9 24코어 활용 (24-4=20)
+N_THREADS = max(1, min(32, get_env_int('N_THREADS', 4)))  # GPU 사용 시 CPU 스레드 최소화 (20→4로 변경)
 N_CTX = max(512, min(32768, get_env_int('N_CTX', 16384)))  # 컨텍스트 확장으로 더 많은 문서 처리
 N_BATCH = max(1, min(2048, get_env_int('N_BATCH', 1024)))  # 배치 크기 증가로 처리 속도 향상
 USE_MLOCK = get_env_bool('USE_MLOCK', False)

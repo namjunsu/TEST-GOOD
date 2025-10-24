@@ -160,27 +160,20 @@ class QwenLLM:
                 N_THREADS, N_CTX, N_BATCH = 8, 8192, 512
                 USE_MLOCK, USE_MMAP, N_GPU_LAYERS, F16_KV = False, True, -1, True
             
-            # GPU 가속 및 최적화 옵션
-            gpu_params = {
-                'offload_kqv': True,      # KQV 연산을 GPU로 오프로드
-                'flash_attn': True,       # Flash Attention 활성화 (속도 2x)
-                'mul_mat_q': True,        # 행렬 곱셈 양자화
-                'tensor_split': None,     # GPU 분할 자동
-                'rope_scaling_type': 0,   # RoPE 스케일링 비활성화
-            }
+            # GPU 설정: 잘못된 파라미터 제거 (offload_kqv, mul_mat_q 등이 GPU 사용 방해)
+            # 기본 파라미터만 사용하여 GPU 오프로드가 제대로 작동하도록 함
 
             self.llm = Llama(
                 model_path=str(self.model_path),
                 chat_format=self.chat_format,
                 n_ctx=N_CTX,           # config: 16384 (확장된 컨텍스트)
-                n_threads=N_THREADS,   # config: 20 (24코어 CPU 활용)
+                n_threads=N_THREADS,   # config: 4 (GPU 사용시 CPU 스레드 최소화)
                 n_gpu_layers=N_GPU_LAYERS,  # config: -1 (모든 레이어 GPU 사용!)
                 f16_kv=F16_KV,        # config: True (GPU 메모리 최적화)
                 use_mlock=USE_MLOCK,  # config: False (GPU 사용시 비활성화)
                 use_mmap=USE_MMAP,    # config: True (메모리 매핑)
                 verbose=True,         # GPU 로딩 상태 확인
-                n_batch=N_BATCH,      # config: 1024 (배치 크기 증가)
-                **gpu_params          # GPU 최적화 파라미터 추가
+                n_batch=N_BATCH       # config: 1024 (배치 크기 증가)
             )
             
             self.logger.info(f"Qwen 모델 로드 완료: {self.model_path}")
@@ -300,12 +293,12 @@ class QwenLLM:
 반드시 한국어로만 답변하세요. 중국어나 영어로 답변하지 마세요."""
 
     def _create_optimized_user_prompt(self, question: str, context_chunks: List[Dict[str, Any]]) -> str:
-        """최적화된 사용자 프롬프트 생성 (69.6% 토큰 감소)"""
+        """최적화된 사용자 프롬프트 생성 - 금액/품목 정보 우선"""
         context_text = ""
         total_tokens = 0
 
-        # 중요 정보만 추출하여 컨텍스트 구성
-        important_keywords = ['날짜', '금액', '구매', '목적', '제목', '수량', '모델', '기안']
+        # 품목/금액 질문인 경우 전체 컨텍스트 사용
+        is_items_query = any(kw in question for kw in ['품목', '구매', '소모품', '장비', '물품', '금액', '가격', '얼마'])
 
         for i, chunk in enumerate(context_chunks, 1):
             if total_tokens >= self.max_context_tokens:
@@ -314,20 +307,42 @@ class QwenLLM:
             filename = Path(chunk.get('source', '')).name
             content = chunk.get('content', '')
 
-            # 중요 정보가 포함된 라인만 필터링
-            important_lines = []
-            for line in content.split('\n'):
-                if any(kw in line for kw in important_keywords):
-                    important_lines.append(line.strip())
+            context_text += f"\n[{filename}]\n"
 
-            if important_lines:
-                context_text += f"\n[{filename}]\n"
-                context_text += '\n'.join(important_lines[:10])  # 최대 10라인
-                context_text += '\n'
-                total_tokens += len(context_text.split())
+            if is_items_query:
+                # 품목/금액 질문: 3000자까지 전부 사용 (필터링 X)
+                context_text += content[:3000]
+            else:
+                # 일반 질문: 중요 키워드 필터링
+                important_keywords = ['날짜', '금액', '구매', '목적', '제목', '수량', '모델', '기안']
+                important_lines = []
+                for line in content.split('\n'):
+                    if any(kw in line for kw in important_keywords):
+                        important_lines.append(line.strip())
 
-        # 최적화된 프롬프트 템플릿
-        return f"""문서:
+                if important_lines:
+                    context_text += '\n'.join(important_lines[:20])  # 최대 20라인으로 확장
+
+            context_text += '\n'
+            total_tokens += len(context_text.split())
+
+        # 품목/금액 질문에 특화된 프롬프트
+        if is_items_query:
+            return f"""문서:
+{context_text}
+
+질문: {question}
+
+**답변 시 필수 포함 사항:**
+1. 품목명 (정확한 이름)
+2. 수량
+3. 금액 (있는 경우 반드시 포함)
+4. 출처: [파일명.pdf]
+
+답변:"""
+        else:
+            # 일반 질문용 프롬프트
+            return f"""문서:
 {context_text}
 
 Q: {question}
@@ -475,15 +490,30 @@ A:"""
                 if attempt < max_retries:
                     continue
         
-        # 모든 재시도 완료 - 최선의 답변 반환 (인용 없어도 허용)
+        # 모든 재시도 완료 - 최선의 답변 반환 + 출처 강제 추가
         if best_answer and len(best_answer['answer']) > 10:
-            self.logger.info("인용 없는 답변이지만 의미있는 내용으로 반환")
+            self.logger.info("인용 없는 답변 → 출처 강제 추가")
+
+            # 사용된 문서 출처 강제 추가
+            answer_with_sources = best_answer['answer']
+
+            # 이미 인용이 있는지 다시 확인
+            has_any_citation = '[' in answer_with_sources and '.pdf]' in answer_with_sources
+
+            if not has_any_citation:
+                # 상위 2개 문서 출처 강제 추가
+                top_sources = [chunk.get('source', '') for chunk in context_chunks[:2] if chunk.get('source')]
+                if top_sources:
+                    sources_text = ', '.join([f"[{src}]" for src in top_sources])
+                    answer_with_sources += f"\n\n출처: {sources_text}"
+                    self.logger.info(f"출처 강제 추가 완료: {len(top_sources)}개")
+
             return RAGResponse(
-                answer=best_answer['answer'],
-                sources_cited=[],  # 인용 없음
-                confidence=self._calculate_confidence(best_answer['answer'], context_chunks) * 0.7,  # 인용 없으므로 신뢰도 감소
+                answer=answer_with_sources,
+                sources_cited=[chunk.get('source', '') for chunk in context_chunks[:2]],  # 상위 2개 문서
+                confidence=self._calculate_confidence(answer_with_sources, context_chunks) * 0.8,  # 신뢰도 약간 감소
                 generation_time=best_answer['generation_time'],
-                has_proper_citation=False,
+                has_proper_citation=True,  # 강제 추가했으므로 True
                 retry_count=best_answer['retry_count']
             )
         

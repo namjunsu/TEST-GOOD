@@ -76,21 +76,98 @@
 
 ---
 
-#### Step 3: main() 함수 분할 (가장 중요!)
-**현재 위치**: web_interface.py:536
-**크기**: 434줄 (!!!)
+#### Step 3: main() 함수 분할 (가장 중요!) ✅ 분석 완료
+**현재 위치**: web_interface.py:313-746
+**크기**: 433줄 (!!!)
 **문제**: 한 함수에 모든 UI 로직
 **목표**: 여러 컴포넌트로 분할
 
-**분할 계획**:
-- components/chat_interface.py (~150줄)
-- components/sidebar.py (~100줄)
-- components/statistics_panel.py (~80줄)
-- components/document_card.py (~50줄)
-- main() 함수는 오케스트레이션만 (~50줄)
+**✅ Step 3-1 완료: 전체 구조 분석**
 
-**예상 시간**: 1-2시간
-**예상 감소**: ~350줄
+**main() 함수 상세 구조** (313-746줄):
+
+```
+Section 1: 헤더 & 로고 (314-332줄)          → 19줄  [main()에 유지]
+Section 2: 문서 개수 계산 (337-340줄)        → 4줄   [main()에 유지]
+Section 3: Auto Indexer 초기화 (344-348줄)  → 5줄   [main()에 유지]
+Section 4: RAG 시스템 초기화 (350-396줄)     → 47줄  [main()에 유지]
+Section 5: 사이드바 - 문서 라이브러리 (398-547줄) → 150줄 [분리 대상 🎯]
+Section 6: OCR 캐시 체크 (549-569줄)         → 21줄  [main()에 유지]
+Section 7: 채팅 인터페이스 (571-622줄)        → 52줄  [분리 대상 🎯]
+Section 8: 문서 미리보기 패널 (625-742줄)     → 118줄 [분리 대상 🎯]
+```
+
+**분할 계획 (수정):**
+1. **components/sidebar_library.py** (150줄)
+   - 문서 라이브러리 UI
+   - 검색 탭 (문서 검색 기능)
+   - 연도별 탭 (연도 필터링)
+   - 시스템 정보 표시
+
+2. **components/chat_interface.py** (52줄)
+   - 채팅 메시지 표시
+   - 채팅 입력 처리
+   - 대화 맥락 구성 (최근 3턴)
+   - UnifiedRAG 응답 생성
+
+3. **components/document_preview.py** (118줄)
+   - 문서 메타데이터 헤더
+   - 다운로드/닫기 버튼
+   - 문서 질문하기 탭 (answer_from_specific_document)
+   - PDF 미리보기 탭 (show/hide 컨트롤)
+
+4. **main() 최종** (113줄 남음)
+   - 로고/타이틀 (19줄)
+   - Auto Indexer 초기화 (5줄)
+   - RAG 초기화 + 로딩 UI (47줄)
+   - OCR 캐시 체크 (21줄)
+   - UnifiedRAG 초기화 (21줄)
+   - 컴포넌트 호출 오케스트레이션
+
+**의존성 분석:**
+- 모든 섹션이 `st.session_state` 사용
+- Sidebar → 'selected_doc' 생성 → Document Preview가 읽음
+- Chat Interface → 'unified_rag' 필요
+- Document Preview → 'rag' 필요 (구 시스템)
+
+**예상 시간**: 1.5-2시간
+**예상 감소**: ~320줄 (433 → ~113줄)
+
+**✅ Step 3-2 완료: 사이드바 컴포넌트 분리**
+
+**실제 소요 시간**: 20분
+**실제 감소**: 192줄 (746 → 554줄)
+**커밋**: (다음 단계에서 진행)
+
+**완료 작업**:
+1. [✅] components/sidebar_library.py 생성 (226줄)
+   - display_document_list() 헬퍼 함수 포함 (웹에서 제거)
+   - render_sidebar_library() 메인 함수
+   - 로고, 자동 인덱싱, 문서 라이브러리, 시스템 정보 UI
+   - 전체 타입 힌트 적용
+2. [✅] components/__init__.py 업데이트
+   - render_sidebar_library import 추가
+3. [✅] web_interface.py 수정
+   - sidebar_library import 추가
+   - display_document_list() 함수 제거 (44줄)
+   - 사이드바 코드 제거 (147줄) → 컴포넌트 호출 3줄로 교체
+4. [✅] 진단 문제 수정 (idx → _)
+5. [✅] 구문 검사 통과 (양쪽 파일)
+6. [✅] Import 테스트 통과
+
+**검증 결과**:
+```
+✅ sidebar_library.py 구문 검사 통과
+✅ web_interface.py 구문 검사 통과
+✅ sidebar_library import 성공
+✅ components 패키지 import 성공
+✅ 파일 크기: 746줄 → 554줄 (-192줄, 25.7%)
+```
+
+**생성 파일**:
+- components/sidebar_library.py (226줄)
+
+---
 
 ---
 

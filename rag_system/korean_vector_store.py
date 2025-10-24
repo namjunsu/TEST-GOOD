@@ -13,6 +13,7 @@ import pickle
 import hashlib
 from functools import lru_cache
 
+import torch
 import faiss
 from sentence_transformers import SentenceTransformer
 
@@ -25,8 +26,8 @@ except ImportError:
 DEFAULT_MODEL_NAME = "jhgan/ko-sroberta-multitask"
 DEFAULT_EMBEDDING_DIM = 768  # ko-sroberta-multitask 기본 차원
 DEFAULT_INDEX_PATH = "rag_system/db/korean_vector_index.faiss"
-DEFAULT_DEVICE = "cpu"  # GPU 사용 시 "cuda"
-MAX_BATCH_SIZE = 512  # 배치 임베딩 최대 크기
+DEFAULT_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"  # 자동 GPU 감지
+MAX_BATCH_SIZE = 1024 if torch.cuda.is_available() else 512  # GPU시 더 큰 배치
 
 # 환경변수 설정 (한 번만)
 if "TRANSFORMERS_OFFLINE" not in os.environ:

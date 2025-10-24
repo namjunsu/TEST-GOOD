@@ -4,10 +4,10 @@
 SearchModule을 확장하여 하이브리드 검색 기능 추가
 """
 
+from app.core.logging import get_logger
 import os
 import sys
 import time
-import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
@@ -18,7 +18,7 @@ sys.path.insert(0, str(project_root))
 from modules.search_module import SearchModule
 from rag_system.hybrid_search import HybridSearch
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SearchModuleHybrid(SearchModule):
@@ -46,11 +46,15 @@ class SearchModuleHybrid(SearchModule):
             logger.info("🔨 하이브리드 검색 초기화 중...")
             start = time.time()
 
+            # .env에서 가중치 읽기
+            vector_weight = float(os.getenv('SEARCH_VECTOR_WEIGHT', '0.1'))
+            bm25_weight = float(os.getenv('SEARCH_BM25_WEIGHT', '0.9'))
+
             self.hybrid_search = HybridSearch(
                 vector_index_path="rag_system/db/korean_vector_index.faiss",
                 bm25_index_path="rag_system/db/bm25_index.pkl",
-                vector_weight=0.3,  # 벡터 검색 가중치
-                bm25_weight=0.7,    # BM25 가중치 (키워드 매칭 더 중요)
+                vector_weight=vector_weight,
+                bm25_weight=bm25_weight,
                 use_reranker=False,  # 재랭킹 비활성화 (속도 우선)
                 use_query_expansion=False,  # 쿼리 확장 비활성화
                 use_document_compression=False,

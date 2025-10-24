@@ -4,13 +4,14 @@
 """
 
 import os
-import logging
 from typing import List, Dict, Any, Optional, Tuple, Set
 from pathlib import Path
 import time
 import re
 from functools import lru_cache
 import hashlib
+
+from app.core.logging import get_logger
 
 try:
     import pdfplumber
@@ -25,9 +26,10 @@ from .query_expansion import QueryExpansion
 from .document_compression import DocumentCompression
 from .multilevel_filter import MultilevelFilter
 
-# 검색 설정 상수
-DEFAULT_VECTOR_WEIGHT = 0.2
-DEFAULT_BM25_WEIGHT = 0.8
+# 검색 설정 상수 (.env에서 읽기)
+DEFAULT_VECTOR_WEIGHT = float(os.getenv('SEARCH_VECTOR_WEIGHT', '0.1'))
+DEFAULT_BM25_WEIGHT = float(os.getenv('SEARCH_BM25_WEIGHT', '0.9'))
+DEFAULT_TOP_K = int(os.getenv('SEARCH_TOP_K', '5'))
 DEFAULT_RRF_K = 20  # Reciprocal Rank Fusion 파라미터
 DEFAULT_FUSION_METHOD = "weighted_sum"  # "rrf" 또는 "weighted_sum"
 
@@ -37,7 +39,6 @@ DEFAULT_BM25_INDEX_PATH = "rag_system/db/bm25_index.pkl"
 
 # 결과 제한 상수
 MAX_SEARCH_RESULTS = 100
-DEFAULT_TOP_K = 10
 
 class HybridSearch:
     """벡터 + BM25 하이브리드 검색"""
@@ -65,8 +66,8 @@ class HybridSearch:
         self.use_multilevel_filter = use_multilevel_filter
         self.single_document_mode = single_document_mode
         self.fusion_method = fusion_method
-        
-        self.logger = logging.getLogger(__name__)
+
+        self.logger = get_logger(__name__)
         self.query_optimizer = QueryOptimizer()
 
         # 검색 캐시 (쿼리 해시 -> 결과)
@@ -540,10 +541,29 @@ class HybridSearch:
                 # 더 많은 후보 확보 (기존의 3배 → 대용량 필터링용으로 10배)
                 vector_results_large = unique_vector_results[:top_k * 10]
                 bm25_results_large = unique_bm25_results[:top_k * 10]
-                
+
+                # 스키마 정규화 (multilevel_filter 실행 전에 필수!)
+                normalized_vector = []
+                for result in vector_results_large:
+                    result_id = result.get('chunk_id') or result.get('doc_id') or result.get('id') or result.get('filename', 'unknown')
+                    normalized_vector.append({
+                        'chunk_id': result_id,
+                        'doc_id': result_id,
+                        **result
+                    })
+
+                normalized_bm25 = []
+                for result in bm25_results_large:
+                    result_id = result.get('chunk_id') or result.get('doc_id') or result.get('id') or result.get('filename', 'unknown')
+                    normalized_bm25.append({
+                        'chunk_id': result_id,
+                        'doc_id': result_id,
+                        **result
+                    })
+
                 # 스코어 정규화
-                vector_results_large = self._normalize_scores(vector_results_large, 'similarity')
-                bm25_results_large = self._normalize_scores(bm25_results_large, 'score')
+                vector_results_large = self._normalize_scores(normalized_vector, 'similarity')
+                bm25_results_large = self._normalize_scores(normalized_bm25, 'score')
                 
                 # 다단계 필터링 파이프라인 실행
                 multilevel_start = time.time()
@@ -703,19 +723,19 @@ class HybridSearch:
                 best_document_source = final_results[0].get('source', '')
                 best_document_score = final_results[0].get('score', 0.0)
                 single_doc_results = []
-                
+
                 # 점수 임계값 설정 (너무 낮은 점수 문서는 제외)
                 score_threshold = max(0.1, best_document_score * 0.7)
-                
+
                 for result in final_results:
-                    if (result.get('source', '') == best_document_source and 
+                    if (result.get('source', '') == best_document_source and
                         result.get('score', 0.0) >= score_threshold):
                         single_doc_results.append(result)
-                    
+
                     # 최대 3개 청크만 (같은 문서에서 고품질만)
                     if len(single_doc_results) >= 3:
                         break
-                
+
                 # 단일 문서에서 충분한 청크가 있을 때만 적용
                 if len(single_doc_results) >= 2:
                     final_results = single_doc_results
@@ -724,11 +744,28 @@ class HybridSearch:
                     self.logger.info(f"단일 문서 모드 취소: 충분한 청크 없음 ({len(single_doc_results)}개 < 2개)")
                     # 원래 결과 유지하되 상위 3개로 제한
                     final_results = final_results[:3]
-            
+
+            # 9. 스키마 정규화: chunk_id, doc_id, snippet, page, meta 보장
+            normalized_results = []
+            for result in final_results:
+                # ID 추출 (우선순위: chunk_id > doc_id > id > filename)
+                result_id = result.get('chunk_id') or result.get('doc_id') or result.get('id') or result.get('filename', 'unknown')
+
+                normalized = {
+                    'chunk_id': result_id,
+                    'doc_id': result_id,
+                    'snippet': result.get('snippet') or result.get('content', ''),
+                    'page': result.get('page', 0),
+                    'meta': result.get('meta') or result.get('metadata', {}),
+                    # 기존 필드 유지 (하위 호환성)
+                    **{k: v for k, v in result.items() if k not in ['chunk_id', 'doc_id', 'snippet', 'page', 'meta']}
+                }
+                normalized_results.append(normalized)
+
             total_time = time.time() - start_time
-            
+
             search_result = {
-                'fused_results': final_results,
+                'fused_results': normalized_results,
                 'search_time': total_time,
                 'timing': {
                     'expansion_time': expansion_time,
@@ -994,9 +1031,25 @@ class HybridSearch:
             for result in fused_results:
                 if result.get('filename', '').lower() != target_document.lower():
                     self.logger.warning(f"문서 필터링 실패: {result.get('filename')} != {target_document}")
-            
+
+            # 스키마 정규화 적용
+            normalized_results = []
+            for result in fused_results:
+                # ID 추출 (우선순위: chunk_id > doc_id > id > filename)
+                result_id = result.get('chunk_id') or result.get('doc_id') or result.get('id') or result.get('filename', 'unknown')
+
+                normalized = {
+                    'chunk_id': result_id,
+                    'doc_id': result_id,
+                    'snippet': result.get('snippet') or result.get('content', ''),
+                    'page': result.get('page', 0),
+                    'meta': result.get('meta') or result.get('metadata', {}),
+                    **{k: v for k, v in result.items() if k not in ['chunk_id', 'doc_id', 'snippet', 'page', 'meta']}
+                }
+                normalized_results.append(normalized)
+
             return {
-                'fused_results': fused_results,
+                'fused_results': normalized_results,
                 'vector_results': vector_results,
                 'bm25_results': bm25_results,
                 'processing_time': time.time() - start_time,
@@ -1096,12 +1149,12 @@ def test_hybrid_search():
     ]
     
     try:
-        # 하이브리드 검색 시스템 생성
+        # 하이브리드 검색 시스템 생성 (.env 설정 사용)
         hybrid = HybridSearch(
             vector_index_path="rag_system/db/test_hybrid_vector.faiss",
             bm25_index_path="rag_system/db/test_hybrid_bm25.pkl",
-            vector_weight=0.4,
-            bm25_weight=0.6
+            vector_weight=DEFAULT_VECTOR_WEIGHT,
+            bm25_weight=DEFAULT_BM25_WEIGHT
         )
         
         # 문서 추가

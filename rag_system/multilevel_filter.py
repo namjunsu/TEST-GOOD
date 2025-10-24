@@ -3,8 +3,9 @@
 대용량 문서에서 고품질 검색 결과를 위한 4단계 필터링 파이프라인
 """
 
+from app.core.logging import get_logger
+import os
 import time
-import logging
 import re
 import hashlib
 from functools import lru_cache
@@ -21,6 +22,23 @@ class FilterResult:
     metadata: Dict[str, Any]
     phase: str
     reasoning: str
+
+
+def _get_chunk_id(result: dict) -> Optional[str]:
+    """
+    스키마 호환 헬퍼: chunk_id 또는 doc_id 추출
+
+    레거시 계층에서 chunk_id를 쓰거나 신규 계층에서 doc_id를 쓰더라도
+    양쪽 키를 모두 허용하여 스키마 불일치 방지.
+
+    Args:
+        result: 검색 결과 딕셔너리
+
+    Returns:
+        chunk_id 또는 doc_id (둘 다 없으면 None)
+    """
+    return result.get("chunk_id") or result.get("doc_id")
+
 
 class QueryComplexityAnalyzer:
     """쿼리 복잡도 분석기"""
@@ -119,12 +137,12 @@ class QueryComplexityAnalyzer:
 
 class MultilevelFilter:
     """다단계 필터링 시스템"""
-    
+
     # 필터링 상수
     PHASE1_MAX_CANDIDATES = 50
     PHASE2_MAX_CANDIDATES = 20
     PHASE3_MAX_CANDIDATES = 10
-    DEFAULT_THRESHOLD = 0.3
+    DEFAULT_THRESHOLD = float(os.getenv('DEFAULT_THRESHOLD', '0.20'))  # .env에서 읽기
     
     # 점수 가중치
     VECTOR_WEIGHT = 0.5
@@ -142,7 +160,7 @@ class MultilevelFilter:
     GENERAL_WEIGHT = 1.2
     
     def __init__(self):
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self.complexity_analyzer = QueryComplexityAnalyzer()
 
         # 성능 통계
@@ -202,13 +220,17 @@ class MultilevelFilter:
         filtered_results = []
         for result in vector_results[:self.PHASE1_MAX_CANDIDATES]:
             if result.get('similarity', 0) >= threshold:
+                chunk_id = _get_chunk_id(result)
+                if chunk_id is None:
+                    self.logger.warning("Filter input lacks chunk_id/doc_id; skipping one result")
+                    continue
                 filtered_results.append(FilterResult(
-                    chunk_id=result['chunk_id'],
-                    content=result['content'],
-                    score=result['similarity'],
+                    chunk_id=chunk_id,
+                    content=result.get('content', ''),
+                    score=result.get('similarity', 0),
                     metadata=result.get('metadata', {}),
                     phase="phase1_semantic",
-                    reasoning=f"Cosine similarity: {result['similarity']:.3f} >= {threshold}"
+                    reasoning=f"Cosine similarity: {result.get('similarity', 0):.3f} >= {threshold}"
                 ))
         
         processing_time = time.time() - start_time
@@ -227,7 +249,9 @@ class MultilevelFilter:
         # BM25 결과를 딕셔너리로 변환 (빠른 검색을 위해)
         bm25_scores = {}
         for result in bm25_results:
-            bm25_scores[result['chunk_id']] = result.get('score', 0)
+            chunk_id = _get_chunk_id(result)
+            if chunk_id is not None:
+                bm25_scores[chunk_id] = result.get('score', 0)
         
         # 쿼리에서 도메인 키워드 추출
         query_keywords = self._extract_domain_keywords(query)
@@ -300,7 +324,10 @@ class MultilevelFilter:
                 final_results = []
                 for idx, reranked in enumerate(reranked_results):
                     # 원본 결과 찾기 (딕셔너리 사용)
-                    original = phase2_dict.get(reranked['chunk_id'])
+                    reranked_chunk_id = _get_chunk_id(reranked)
+                    if reranked_chunk_id is None:
+                        continue
+                    original = phase2_dict.get(reranked_chunk_id)
                     if not original:
                         continue
                     

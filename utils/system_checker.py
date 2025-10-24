@@ -147,7 +147,7 @@ class SystemChecker:
     # 선택적 패키지
     OPTIONAL_PACKAGES: Dict[str, str] = {
         'faiss': 'FAISS (CPU)',
-        'faiss-gpu': 'FAISS (GPU)',
+        # 'faiss-gpu': 'FAISS (GPU)',  # Python 3.12+는 faiss-cpu 사용 (AVX2 지원)
         'psutil': 'psutil (시스템 모니터링)',
         'packaging': 'packaging (버전 비교)',
     }

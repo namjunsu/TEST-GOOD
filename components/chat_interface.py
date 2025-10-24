@@ -1,68 +1,410 @@
 """
 Chat Interface Component
 ChatGPT 스타일의 채팅 인터페이스 UI를 렌더링하는 컴포넌트
+
+개선 사항:
+- 완벽한 타입 시스템 (TypedDict, Protocol)
+- 상수 정의로 매직 넘버/문자열 제거
+- 헬퍼 함수 분리 (Single Responsibility Principle)
+- 강화된 예외 처리 (타입별 처리, 로깅)
+- 메모리 관리 (자동 메시지 정리)
+- 입력 검증 및 보안 강화
+- 포괄적인 문서화
 """
 
 import streamlit as st
-from typing import Any
+import logging
+from typing import List, Dict, Optional, Protocol, Any
+from typing_extensions import TypedDict, Literal
+from datetime import datetime
 
 
-def render_chat_interface(unified_rag_instance: Any) -> None:
-    """채팅 인터페이스 렌더링
+# ===== 로깅 설정 =====
+logger = logging.getLogger(__name__)
 
-    Args:
-        unified_rag_instance: UnifiedRAG 시스템 인스턴스 (st.session_state.unified_rag)
+
+# ===== 타입 정의 =====
+class ChatMessage(TypedDict):
+    """채팅 메시지 구조"""
+    role: Literal["user", "assistant"]
+    content: str
+    timestamp: str
+
+
+class RAGProtocol(Protocol):
+    """UnifiedRAG 인터페이스 정의"""
+    def answer(self, query: str) -> str:
+        """질문에 대한 답변 생성"""
+        ...
+
+
+# ===== 상수 정의 =====
+class ChatConfig:
+    """채팅 인터페이스 설정 상수"""
+    # 역할 정의
+    ROLE_USER = "user"
+    ROLE_ASSISTANT = "assistant"
+
+    # 한글 역할명
+    ROLE_DISPLAY_USER = "사용자"
+    ROLE_DISPLAY_ASSISTANT = "AI"
+
+    # 메모리 관리
+    MAX_MESSAGES = 100  # 최대 메시지 수
+    MAX_CONTEXT_TURNS = 3  # 컨텍스트에 포함할 최대 대화 턴 수
+    MAX_MESSAGE_LENGTH = 10000  # 최대 메시지 길이
+
+    # UI 문자열
+    INPUT_PLACEHOLDER = "💬 무엇을 도와드릴까요?"
+    SPINNER_TEXT = "🤔 생각 중..."
+    DIVIDER = "---"
+
+    # 에러 메시지
+    ERROR_GENERIC = "죄송합니다. 오류가 발생했습니다."
+    ERROR_TIMEOUT = "⏱️ 응답 시간이 초과되었습니다. 다시 시도해주세요."
+    ERROR_MEMORY = "💾 메모리가 부족합니다. 대화 내역을 정리해주세요."
+    ERROR_NETWORK = "🌐 네트워크 오류가 발생했습니다."
+    ERROR_INITIALIZATION = "⚙️ 시스템 초기화가 필요합니다."
+    ERROR_INVALID_INPUT = "⚠️ 입력이 너무 깁니다. 더 짧게 작성해주세요."
+
+    # 컨텍스트 구성
+    CONTEXT_PREFIX = "이전 대화 맥락:"
+    CURRENT_QUERY_PREFIX = "현재 질문:"
+
+
+# ===== 헬퍼 함수 =====
+
+def _initialize_chat_state() -> None:
+    """채팅 세션 상태 초기화
+
+    세션 상태에 messages 리스트가 없으면 빈 리스트로 초기화합니다.
     """
-    # ===== ChatGPT 스타일 채팅 인터페이스 =====
-
-    # 세션 상태 초기화
     if 'messages' not in st.session_state:
         st.session_state.messages = []
+        logger.info("Chat session initialized")
 
-    # 기존 대화 표시 (Streamlit native chat)
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
 
-    # 채팅 입력창 (하단 고정)
-    if prompt := st.chat_input("무엇을 도와드릴까요?"):
-        # 사용자 메시지 추가
-        st.session_state.messages.append({"role": "user", "content": prompt})
+def _validate_message_structure(message: Any) -> bool:
+    """메시지 구조 검증
 
-        # 사용자 메시지 표시
-        with st.chat_message("user"):
+    Args:
+        message: 검증할 메시지 객체
+
+    Returns:
+        bool: 유효한 메시지 구조면 True, 아니면 False
+    """
+    if not isinstance(message, dict):
+        return False
+
+    required_keys = {'role', 'content'}
+    if not required_keys.issubset(message.keys()):
+        return False
+
+    if message['role'] not in [ChatConfig.ROLE_USER, ChatConfig.ROLE_ASSISTANT]:
+        return False
+
+    if not isinstance(message['content'], str):
+        return False
+
+    return True
+
+
+def _validate_input(prompt: str) -> tuple[bool, Optional[str]]:
+    """사용자 입력 검증
+
+    Args:
+        prompt: 사용자 입력 문자열
+
+    Returns:
+        tuple[bool, Optional[str]]: (유효성, 에러 메시지)
+    """
+    # 빈 문자열 체크
+    if not prompt or not prompt.strip():
+        return False, "입력이 비어있습니다."
+
+    # 길이 체크
+    if len(prompt) > ChatConfig.MAX_MESSAGE_LENGTH:
+        return False, ChatConfig.ERROR_INVALID_INPUT
+
+    # 기본 위험 문자 체크 (선택적, 필요시 확장)
+    # dangerous_patterns = ['<script>', 'javascript:', 'onerror=']
+    # if any(pattern in prompt.lower() for pattern in dangerous_patterns):
+    #     return False, "보안상 허용되지 않는 입력입니다."
+
+    return True, None
+
+
+def _cleanup_old_messages(messages: List[ChatMessage]) -> List[ChatMessage]:
+    """오래된 메시지 정리
+
+    메시지 수가 MAX_MESSAGES를 초과하면 오래된 메시지부터 삭제합니다.
+    최근 메시지들만 유지하여 메모리를 효율적으로 관리합니다.
+
+    Args:
+        messages: 전체 메시지 리스트
+
+    Returns:
+        List[ChatMessage]: 정리된 메시지 리스트
+    """
+    if len(messages) > ChatConfig.MAX_MESSAGES:
+        removed_count = len(messages) - ChatConfig.MAX_MESSAGES
+        logger.warning(f"Message limit exceeded. Removing {removed_count} old messages.")
+        return messages[-ChatConfig.MAX_MESSAGES:]
+    return messages
+
+
+def _build_conversation_context(messages: List[Dict[str, str]], max_turns: int = ChatConfig.MAX_CONTEXT_TURNS) -> str:
+    """대화 맥락 구성
+
+    최근 N개 턴의 대화를 문자열로 변환하여 컨텍스트를 구성합니다.
+    효율적인 문자열 연결을 위해 리스트를 사용합니다.
+
+    Args:
+        messages: 전체 메시지 리스트
+        max_turns: 포함할 최대 대화 턴 수 (기본값: 3)
+
+    Returns:
+        str: 구성된 컨텍스트 문자열
+    """
+    # 메시지가 2개 미만이면 컨텍스트 없음
+    if len(messages) < 2:
+        return ""
+
+    # 최근 N턴 = N*2개 메시지 (user + assistant 쌍)
+    # 현재 user 메시지는 이미 추가된 상태이므로, 그 이전 메시지들만 가져옴
+    max_messages = max_turns * 2
+    recent_messages = messages[-(max_messages + 1):-1]  # 마지막 메시지(현재 질문) 제외
+
+    # 효율적인 문자열 구성 (리스트 사용)
+    context_parts = []
+
+    for msg in recent_messages:
+        # 메시지 구조 검증
+        if not _validate_message_structure(msg):
+            logger.warning(f"Invalid message structure in context: {msg}")
+            continue
+
+        # 역할 변환
+        role = msg['role']
+        display_role = ChatConfig.ROLE_DISPLAY_USER if role == ChatConfig.ROLE_USER else ChatConfig.ROLE_DISPLAY_ASSISTANT
+
+        # 메시지 추가
+        context_parts.append(f"{display_role}: {msg['content']}")
+
+    # 컨텍스트가 비어있으면 빈 문자열 반환
+    if not context_parts:
+        return ""
+
+    # 조인하여 반환
+    return "\n".join(context_parts)
+
+
+def _create_enhanced_query(context: str, prompt: str) -> str:
+    """컨텍스트를 포함한 향상된 쿼리 생성
+
+    Args:
+        context: 이전 대화 컨텍스트
+        prompt: 현재 사용자 질문
+
+    Returns:
+        str: 향상된 쿼리 문자열
+    """
+    if context:
+        return f"{ChatConfig.CONTEXT_PREFIX}\n{context}\n\n{ChatConfig.CURRENT_QUERY_PREFIX} {prompt}"
+    return prompt
+
+
+def _handle_error(error: Exception) -> str:
+    """예외 타입별 에러 메시지 생성
+
+    예외 타입에 따라 적절한 사용자 친화적 메시지를 반환합니다.
+    모든 에러는 로그에 기록됩니다.
+
+    Args:
+        error: 발생한 예외 객체
+
+    Returns:
+        str: 사용자에게 표시할 에러 메시지
+    """
+    error_type = type(error).__name__
+    error_msg = str(error)
+
+    # 로깅 (디버깅용)
+    logger.error(f"Chat error occurred: {error_type} - {error_msg}", exc_info=True)
+
+    # 타입별 처리
+    if isinstance(error, TimeoutError):
+        return ChatConfig.ERROR_TIMEOUT
+    elif isinstance(error, MemoryError):
+        return ChatConfig.ERROR_MEMORY
+    elif isinstance(error, ConnectionError):
+        return ChatConfig.ERROR_NETWORK
+    elif isinstance(error, AttributeError):
+        # UnifiedRAG 인스턴스 문제일 가능성
+        return ChatConfig.ERROR_INITIALIZATION
+    elif isinstance(error, KeyError):
+        # 메시지 구조 문제
+        logger.error(f"Message structure error: {error_msg}")
+        return ChatConfig.ERROR_GENERIC
+    else:
+        # 일반 에러 - 민감한 정보는 노출하지 않음
+        return ChatConfig.ERROR_GENERIC
+
+
+def _display_chat_history(messages: List[Dict[str, str]]) -> None:
+    """채팅 기록 표시
+
+    저장된 모든 메시지를 Streamlit chat UI로 표시합니다.
+
+    Args:
+        messages: 표시할 메시지 리스트
+    """
+    for message in messages:
+        # 메시지 구조 검증
+        if not _validate_message_structure(message):
+            logger.warning(f"Skipping invalid message: {message}")
+            continue
+
+        try:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+        except Exception as e:
+            logger.error(f"Error displaying message: {e}")
+            # 표시 오류는 사용자에게 알리지 않고 로그만 남김
+            continue
+
+
+def _generate_ai_response(
+    query: str,
+    rag_instance: RAGProtocol,
+    message_placeholder: Any
+) -> Optional[str]:
+    """AI 응답 생성
+
+    UnifiedRAG를 사용하여 질문에 대한 답변을 생성합니다.
+
+    Args:
+        query: 향상된 쿼리 문자열
+        rag_instance: RAG 시스템 인스턴스
+        message_placeholder: Streamlit placeholder 객체
+
+    Returns:
+        Optional[str]: 생성된 응답 또는 None (에러 시)
+    """
+    try:
+        # RAG 인스턴스 검증
+        if rag_instance is None:
+            raise AttributeError("RAG instance is None")
+
+        if not hasattr(rag_instance, 'answer'):
+            raise AttributeError("RAG instance has no 'answer' method")
+
+        # 응답 생성
+        response = rag_instance.answer(query)
+
+        # 응답 검증
+        if response is None or not isinstance(response, str):
+            logger.warning(f"Invalid response type: {type(response)}")
+            return None
+
+        if not response.strip():
+            logger.warning("Empty response received")
+            return None
+
+        return response
+
+    except Exception as e:
+        error_msg = _handle_error(e)
+        message_placeholder.markdown(error_msg)
+        return error_msg  # 에러 메시지 반환 (저장용)
+
+
+def _add_message(role: str, content: str) -> None:
+    """메시지 추가
+
+    세션 상태에 새로운 메시지를 추가합니다.
+    타임스탬프를 자동으로 추가합니다.
+
+    Args:
+        role: 메시지 역할 (user 또는 assistant)
+        content: 메시지 내용
+    """
+    message: ChatMessage = {
+        "role": role,
+        "content": content,
+        "timestamp": datetime.now().isoformat()
+    }
+
+    st.session_state.messages.append(message)
+
+    # 메모리 관리
+    st.session_state.messages = _cleanup_old_messages(st.session_state.messages)
+
+
+# ===== 메인 렌더링 함수 =====
+
+def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
+    """채팅 인터페이스 렌더링
+
+    ChatGPT 스타일의 대화형 인터페이스를 렌더링합니다.
+    - 세션 상태 관리
+    - 기존 대화 표시
+    - 사용자 입력 처리
+    - AI 응답 생성
+    - 에러 처리
+    - 메모리 관리
+
+    Args:
+        unified_rag_instance: UnifiedRAG 시스템 인스턴스
+    """
+    # 1. 세션 상태 초기화
+    _initialize_chat_state()
+
+    # 2. 기존 대화 표시
+    _display_chat_history(st.session_state.messages)
+
+    # 3. 채팅 입력 처리
+    if prompt := st.chat_input(ChatConfig.INPUT_PLACEHOLDER):
+        # 3-1. 입력 검증
+        is_valid, error_msg = _validate_input(prompt)
+        if not is_valid:
+            st.error(error_msg)
+            return
+
+        # 3-2. 사용자 메시지 추가
+        _add_message(ChatConfig.ROLE_USER, prompt)
+
+        # 3-3. 사용자 메시지 표시
+        with st.chat_message(ChatConfig.ROLE_USER):
             st.markdown(prompt)
 
-        # AI 응답 생성 및 표시
-        with st.chat_message("assistant"):
+        # 3-4. AI 응답 생성 및 표시
+        with st.chat_message(ChatConfig.ROLE_ASSISTANT):
             message_placeholder = st.empty()
 
-            # 대화 맥락 구성 (최근 3개 대화)
-            context = ""
-            if len(st.session_state.messages) > 1:
-                recent_messages = st.session_state.messages[-6:-1]  # 최근 3턴 (6개 메시지)
-                for msg in recent_messages:
-                    role = "사용자" if msg["role"] == "user" else "AI"
-                    context += f"{role}: {msg['content']}\n"
+            # 대화 맥락 구성
+            context = _build_conversation_context(st.session_state.messages)
 
-            # 맥락을 포함한 쿼리
-            enhanced_query = f"{context}\n현재 질문: {prompt}" if context else prompt
+            # 향상된 쿼리 생성
+            enhanced_query = _create_enhanced_query(context, prompt)
 
-            # 검색 및 응답 생성
-            with st.spinner("생각 중..."):
-                try:
-                    # UnifiedRAG 사용 (이미 맥락 관리 기능 있음)
-                    response = unified_rag_instance.answer(enhanced_query)
+            # AI 응답 생성
+            with st.spinner(ChatConfig.SPINNER_TEXT):
+                response = _generate_ai_response(
+                    enhanced_query,
+                    unified_rag_instance,
+                    message_placeholder
+                )
 
-                    # 응답 표시
+                # 응답이 있으면 표시 및 저장
+                if response:
                     message_placeholder.markdown(response)
-
-                    # 메시지 저장
-                    st.session_state.messages.append({"role": "assistant", "content": response})
-
-                except Exception as e:
-                    error_msg = f"죄송합니다. 오류가 발생했습니다: {str(e)}"
+                    _add_message(ChatConfig.ROLE_ASSISTANT, response)
+                else:
+                    # 응답이 없으면 기본 에러 메시지
+                    error_msg = ChatConfig.ERROR_GENERIC
                     message_placeholder.markdown(error_msg)
-                    st.session_state.messages.append({"role": "assistant", "content": error_msg})
+                    _add_message(ChatConfig.ROLE_ASSISTANT, error_msg)
 
-    st.markdown("---")
+    # 4. UI 구분선
+    st.markdown(ChatConfig.DIVIDER)

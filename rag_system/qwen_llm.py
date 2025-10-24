@@ -23,6 +23,7 @@ DEFAULT_MAX_TOKENS = 1200
 DEFAULT_TOP_P = 0.9
 DEFAULT_TOP_K = 40
 DEFAULT_REPEAT_PENALTY = 1.1
+MAX_LLM_RETRY = int(os.getenv('MAX_LLM_RETRY', '1'))  # .env에서 읽기
 
 # 적응형 길이 설정 상수
 ADAPTIVE_LENGTH_ENABLED = True
@@ -615,14 +616,18 @@ A:"""
         
         # 구조화된 처리 실패 시 기본 모드로 폴백
         self.logger.warning("구조화된 처리 실패, 기본 모드로 폴백")
-        return self.generate_response(question_analysis.original_question, context_chunks, 
-                                    max_retries=1, enable_complex_processing=False)
+        return self.generate_response(question_analysis.original_question, context_chunks,
+                                    max_retries=MAX_LLM_RETRY, enable_complex_processing=False)
     
-    def _handle_comparison_question(self, question_analysis: Dict[str, Any], 
-                                  context_chunks: List[Dict[str, Any]], 
-                                  max_retries: int = 2) -> RAGResponse:
+    def _handle_comparison_question(self, question_analysis: Dict[str, Any],
+                                  context_chunks: List[Dict[str, Any]],
+                                  max_retries: int = None) -> RAGResponse:
         """비교 질문 특별 처리"""
-        
+
+        # .env에서 읽은 값 사용
+        if max_retries is None:
+            max_retries = MAX_LLM_RETRY
+
         # 단일 문서 모드 강화 - 가장 관련성 높은 문서만 사용
         if context_chunks:
             best_chunk = context_chunks[0]  # 최고 점수 문서

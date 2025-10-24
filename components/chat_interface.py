@@ -13,14 +13,15 @@ ChatGPT 스타일의 채팅 인터페이스 UI를 렌더링하는 컴포넌트
 """
 
 import streamlit as st
-import logging
 from typing import List, Dict, Optional, Protocol, Any
 from typing_extensions import TypedDict, Literal
 from datetime import datetime
 
+from app.core.logging import get_logger
+
 
 # ===== 로깅 설정 =====
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ===== 타입 정의 =====
@@ -32,9 +33,16 @@ class ChatMessage(TypedDict):
 
 
 class RAGProtocol(Protocol):
-    """UnifiedRAG 인터페이스 정의"""
-    def answer(self, query: str) -> str:
-        """질문에 대한 답변 생성"""
+    """RAG Pipeline 인터페이스 정의 (Evidence 포함)"""
+    def answer(self, query: str, top_k: Optional[int] = None) -> dict:
+        """질문에 대한 답변 생성
+
+        Returns:
+            dict: {
+                "text": 답변 텍스트,
+                "evidence": [{"doc_id": str, "page": int, "snippet": str, "meta": dict}, ...]
+            }
+        """
         ...
 
 
@@ -73,6 +81,59 @@ class ChatConfig:
 
 
 # ===== 헬퍼 함수 =====
+
+def _normalize_rag_response(resp: Any) -> dict:
+    """RAG 응답을 안전하게 dict로 정규화
+
+    RAG Pipeline이 반환할 수 있는 다양한 타입(객체, dict, str)을
+    통일된 dict 형식으로 변환합니다.
+
+    Args:
+        resp: RAG Pipeline의 응답 (RAGResponse 객체, dict, str 등)
+
+    Returns:
+        dict: {"text": str, "evidence": list} 형식의 정규화된 응답
+
+    Examples:
+        >>> _normalize_rag_response(RAGResponse(text="답변", evidence=[...]))
+        {"text": "답변", "evidence": [...]}
+
+        >>> _normalize_rag_response({"text": "답변", "evidence": [...]})
+        {"text": "답변", "evidence": [...]}
+
+        >>> _normalize_rag_response("직접 문자열 답변")
+        {"text": "직접 문자열 답변", "evidence": []}
+    """
+    # None 체크
+    if resp is None:
+        logger.warning("Received None response from RAG")
+        return {"text": "", "evidence": []}
+
+    # 문자열인 경우
+    if isinstance(resp, str):
+        return {"text": resp, "evidence": []}
+
+    # 객체인 경우 (RAGResponse 등)
+    if hasattr(resp, "text"):
+        text = getattr(resp, "text", "") or ""
+        # evidence, evidences 둘 다 시도
+        evidence = (
+            getattr(resp, "evidence", None) or
+            getattr(resp, "evidences", None) or
+            []
+        )
+        return {"text": str(text), "evidence": evidence}
+
+    # dict인 경우
+    if isinstance(resp, dict):
+        text = resp.get("text", "")
+        evidence = resp.get("evidence", [])
+        return {"text": str(text), "evidence": evidence}
+
+    # 그 외 알 수 없는 타입
+    logger.warning(f"Unknown response type: {type(resp)}")
+    return {"text": str(resp), "evidence": []}
+
 
 def _initialize_chat_state() -> None:
     """채팅 세션 상태 초기화
@@ -278,10 +339,11 @@ def _generate_ai_response(
     query: str,
     rag_instance: RAGProtocol,
     message_placeholder: Any
-) -> Optional[str]:
-    """AI 응답 생성
+) -> Optional[dict]:
+    """AI 응답 생성 (Evidence 포함)
 
-    UnifiedRAG를 사용하여 질문에 대한 답변을 생성합니다.
+    RAG Pipeline을 사용하여 질문에 대한 답변과 근거 문서를 생성합니다.
+    응답 타입(객체/dict/str)을 안전하게 정규화하여 처리합니다.
 
     Args:
         query: 향상된 쿼리 문자열
@@ -289,7 +351,7 @@ def _generate_ai_response(
         message_placeholder: Streamlit placeholder 객체
 
     Returns:
-        Optional[str]: 생성된 응답 또는 None (에러 시)
+        Optional[dict]: {"text": str, "evidence": []} 또는 None (에러 시)
     """
     try:
         # RAG 인스턴스 검증
@@ -299,16 +361,15 @@ def _generate_ai_response(
         if not hasattr(rag_instance, 'answer'):
             raise AttributeError("RAG instance has no 'answer' method")
 
-        # 응답 생성
-        response = rag_instance.answer(query)
+        # 응답 생성 (다양한 타입 가능: RAGResponse 객체, dict, str 등)
+        raw_response = rag_instance.answer(query)
 
-        # 응답 검증
-        if response is None or not isinstance(response, str):
-            logger.warning(f"Invalid response type: {type(response)}")
-            return None
+        # 응답 정규화: 모든 타입을 dict로 통일
+        response = _normalize_rag_response(raw_response)
 
-        if not response.strip():
-            logger.warning("Empty response received")
+        # 정규화된 응답의 text가 비어있는지 확인
+        if not response["text"].strip():
+            logger.warning("Empty response text received after normalization")
             return None
 
         return response
@@ -316,7 +377,7 @@ def _generate_ai_response(
     except Exception as e:
         error_msg = _handle_error(e)
         message_placeholder.markdown(error_msg)
-        return error_msg  # 에러 메시지 반환 (저장용)
+        return {"text": error_msg, "evidence": []}  # 에러 메시지 반환
 
 
 def _add_message(role: str, content: str) -> None:
@@ -398,8 +459,22 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
 
                 # 응답이 있으면 표시 및 저장
                 if response:
-                    message_placeholder.markdown(response)
-                    _add_message(ChatConfig.ROLE_ASSISTANT, response)
+                    # 답변 텍스트 표시
+                    message_placeholder.markdown(response["text"])
+
+                    # Evidence 표시 (별도 expander)
+                    if response.get("evidence"):
+                        with st.expander("📚 근거 문서 (Evidence)", expanded=False):
+                            for i, ev in enumerate(response["evidence"], 1):
+                                st.markdown(
+                                    f"**{i}. {ev['doc_id']}** (페이지 {ev['page']})\n\n"
+                                    f"{ev['snippet']}"
+                                )
+                                if i < len(response["evidence"]):
+                                    st.markdown("---")
+
+                    # 메시지 저장 (텍스트만)
+                    _add_message(ChatConfig.ROLE_ASSISTANT, response["text"])
                 else:
                     # 응답이 없으면 기본 에러 메시지
                     error_msg = ChatConfig.ERROR_GENERIC

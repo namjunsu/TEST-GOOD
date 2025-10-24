@@ -1,0 +1,151 @@
+/*
+ * Channel A MEDIATECH RAG System - Main Stylesheet
+ * Blue gradient theme with glassmorphism effects
+ */
+
+/* ===== Global Styles ===== */
+
+/* 전체 배경 - 파란색 그라데이션 */
+.stApp {
+    background: linear-gradient(135deg, #87CEEB 0%, #1E5FA8 100%);
+}
+
+/* 메인 컨텐츠 영역 배경 제거 */
+.main .block-container {
+    background: transparent;
+}
+
+/* ===== Sidebar Styles ===== */
+
+/* 사이드바 - 반투명 파란색 */
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, rgba(30, 95, 168, 0.3) 0%, rgba(30, 95, 168, 0.15) 100%);
+    backdrop-filter: blur(10px);
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* 사이드바 텍스트 */
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+    color: white;
+    font-weight: 700;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] span {
+    color: rgba(255, 255, 255, 0.95);
+}
+
+/* ===== Chat Area Styles ===== */
+
+/* 채팅 메시지 컨테이너 */
+.stChatMessage {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.15) 100%);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 15px;
+    padding: 1.2rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* 사용자 메시지 */
+[data-testid="stChatMessageContent"] {
+    color: white;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* 채팅 입력 영역 */
+.stChatFloatingInputContainer {
+    background: linear-gradient(135deg, rgba(30, 95, 168, 0.4) 0%, rgba(30, 95, 168, 0.3) 100%);
+    backdrop-filter: blur(15px);
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 1rem;
+    border-radius: 0;
+}
+
+/* 채팅 입력창 */
+.stChatInputContainer > div {
+    background: rgba(255, 255, 255, 0.25);
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-radius: 25px;
+    backdrop-filter: blur(10px);
+}
+
+.stChatInputContainer textarea {
+    background: transparent;
+    color: white;
+    font-size: 1rem;
+}
+
+.stChatInputContainer textarea::placeholder {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* ===== Form Elements ===== */
+
+/* 일반 텍스트 입력 */
+.stTextInput > div > div > input,
+.stTextArea > div > div > textarea {
+    background: rgba(255, 255, 255, 0.25);
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-radius: 12px;
+    padding: 12px 16px;
+    color: white;
+}
+
+.stTextInput > div > div > input::placeholder {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* 버튼 */
+.stButton > button {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.2) 100%);
+    color: white;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    border-radius: 10px;
+    padding: 0.6rem 1.5rem;
+    font-weight: 600;
+    backdrop-filter: blur(10px);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.stButton > button:hover {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.3) 100%);
+    border-color: rgba(255, 255, 255, 0.7);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(255, 255, 255, 0.3);
+}
+
+/* ===== UI Components ===== */
+
+/* Expander */
+.streamlit-expanderHeader {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.15) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 10px;
+    color: white;
+    backdrop-filter: blur(10px);
+}
+
+/* 데이터프레임, 테이블 */
+.dataframe {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 10px;
+}
+
+/* ===== Typography ===== */
+
+/* 제목, 헤더 */
+h1, h2, h3 {
+    color: white;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* 일반 텍스트 */
+p, label, span {
+    color: rgba(255, 255, 255, 0.95);
+}

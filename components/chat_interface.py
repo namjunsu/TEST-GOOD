@@ -98,6 +98,9 @@ def _normalize_rag_response(resp: Any) -> dict:
         >>> _normalize_rag_response(RAGResponse(text="답변", evidence=[...]))
         {"text": "답변", "evidence": [...]}
 
+        >>> _normalize_rag_response(RAGResponse(answer="답변", sources=[...]))
+        {"text": "답변", "evidence": [...]}
+
         >>> _normalize_rag_response({"text": "답변", "evidence": [...]})
         {"text": "답변", "evidence": [...]}
 
@@ -114,20 +117,29 @@ def _normalize_rag_response(resp: Any) -> dict:
         return {"text": resp, "evidence": []}
 
     # 객체인 경우 (RAGResponse 등)
-    if hasattr(resp, "text"):
-        text = getattr(resp, "text", "") or ""
-        # evidence, evidences 둘 다 시도
+    # text, answer 필드 모두 지원
+    if hasattr(resp, "text") or hasattr(resp, "answer"):
+        text = getattr(resp, "text", None) or getattr(resp, "answer", "")
+        # evidence, evidences, sources, sources_cited 모두 시도
         evidence = (
             getattr(resp, "evidence", None) or
             getattr(resp, "evidences", None) or
+            getattr(resp, "sources", None) or
+            getattr(resp, "sources_cited", None) or
             []
         )
         return {"text": str(text), "evidence": evidence}
 
     # dict인 경우
     if isinstance(resp, dict):
-        text = resp.get("text", "")
-        evidence = resp.get("evidence", [])
+        text = resp.get("text") or resp.get("answer", "")
+        evidence = (
+            resp.get("evidence") or
+            resp.get("evidences") or
+            resp.get("sources") or
+            resp.get("sources_cited") or
+            []
+        )
         return {"text": str(text), "evidence": evidence}
 
     # 그 외 알 수 없는 타입
@@ -466,9 +478,20 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                     if response.get("evidence"):
                         with st.expander("📚 근거 문서 (Evidence)", expanded=False):
                             for i, ev in enumerate(response["evidence"], 1):
+                                # Evidence가 dict 또는 객체일 수 있으므로 안전하게 접근
+                                if isinstance(ev, dict):
+                                    doc_id = ev.get("doc_id") or ev.get("chunk_id", "unknown")
+                                    page = ev.get("page", 1)
+                                    snippet = ev.get("snippet") or ev.get("content", "")
+                                else:
+                                    # 객체인 경우
+                                    doc_id = getattr(ev, "doc_id", None) or getattr(ev, "chunk_id", "unknown")
+                                    page = getattr(ev, "page", 1)
+                                    snippet = getattr(ev, "snippet", None) or getattr(ev, "content", "")
+
                                 st.markdown(
-                                    f"**{i}. {ev['doc_id']}** (페이지 {ev['page']})\n\n"
-                                    f"{ev['snippet']}"
+                                    f"**{i}. {doc_id}** (페이지 {page})\n\n"
+                                    f"{snippet[:300]}"  # 스니펫 길이 제한
                                 )
                                 if i < len(response["evidence"]):
                                     st.markdown("---")

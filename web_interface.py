@@ -29,6 +29,7 @@ import config
 from hybrid_chat_rag_v2 import UnifiedRAG
 from utils.css_loader import load_all_css  # CSS 로더 임포트
 from components.pdf_viewer import show_pdf_preview  # PDF 뷰어 컴포넌트
+from utils.document_loader import load_documents  # 문서 로더
 
 # 페이지 설정
 st.set_page_config(
@@ -86,131 +87,6 @@ def display_document_list(filtered_df, df, prefix="doc"):
             else:
                 st.caption("표시할 문서가 없습니다.")
 
-@st.cache_data
-def load_documents(_rag_instance, version="v3.3"):  # Fast DB loading with PDF content-based drafter extraction
-    """초고속 문서 메타데이터 로드 - 두 DB에서 조인 조회"""
-    print("🚀 초고속 문서 로드 시작 (DB 직접 조회)")
-
-    try:
-        import sqlite3
-        import pandas as pd
-        from pathlib import Path
-
-        # 메타데이터 DB에서 기안자 정보 미리 로드
-        metadata_drafters = {}
-        if Path('metadata.db').exists():
-            try:
-                meta_conn = sqlite3.connect('metadata.db')
-                meta_cursor = meta_conn.cursor()
-                meta_cursor.execute("SELECT filename, drafter FROM documents WHERE drafter IS NOT NULL AND drafter != ''")
-                for fname, drafter in meta_cursor.fetchall():
-                    if drafter and drafter.strip():
-                        metadata_drafters[fname] = drafter.strip()
-                meta_conn.close()
-                print(f"📋 metadata.db에서 {len(metadata_drafters)}개 기안자 정보 로드")
-            except Exception as e:
-                print(f"⚠️ metadata.db 로드 실패: {e}")
-
-        # everything_index.db에서 문서 목록 조회
-        conn = sqlite3.connect('everything_index.db')
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT filename, path, date, year, category, department, keywords
-            FROM files
-            ORDER BY year DESC, filename ASC
-        """)
-
-        rows = cursor.fetchall()
-        documents = []
-
-        print(f"📊 everything_index.db에서 {len(rows)}개 문서 로드됨")
-
-        for filename, path, date, year, category, department, keywords in rows:
-            # 카테고리 분류
-            if '구매' in filename:
-                doc_category = "구매"
-            elif '수리' in filename:
-                doc_category = "수리"
-            elif '교체' in filename:
-                doc_category = "교체"
-            elif '검토' in filename:
-                doc_category = "검토"
-            elif '폐기' in filename:
-                doc_category = "폐기"
-            else:
-                doc_category = category or "기타"
-
-            # 기안자 정보 우선순위:
-            # 1. metadata.db의 drafter 필드
-            # 2. 파일명에서 추출 (예: 2025-01-01_남준수_문서.pdf)
-            # 3. everything_index.db의 department (부서명이지만 없는 것보다 나음)
-            drafter = "미확인"
-
-            # 1순위: metadata.db
-            if filename in metadata_drafters:
-                drafter = metadata_drafters[filename]
-            # 2순위: 파일명에서 추출
-            # 형식1: 날짜_부서_이름_제목 (예: 2015-10-29_방송기술팀_박혜훈_음향장비_구매_기안서.pdf)
-            # 형식2: 날짜_이름_제목 (예: 2020-01-01_남준수_구매요청.pdf)
-            elif '_' in filename:
-                parts = filename.split('_')
-                # 여러 위치에서 이름 찾기 시도
-                for idx in [1, 2]:  # 2번째, 3번째 부분 체크
-                    if len(parts) > idx:
-                        potential_name = parts[idx]
-                        # 한글 이름 패턴 체크 (2-4글자, 숫자 없음)
-                        if potential_name and 2 <= len(potential_name) <= 4 and not any(char.isdigit() for char in potential_name):
-                            # 부서명/카테고리가 아닌 경우에만 기안자로 인식
-                            excluded = ['영상', '카메라', '조명', '중계', 'DVR', '스튜디오', '송출', '구매', '수리', '교체', '검토', '폐기',
-                                       '방송기술팀', '영상취재팀', '영상제작팀', '기술관리팀', '명상제작팀', '그래픽디자인파트']
-                            if not any(exc in potential_name for exc in excluded):
-                                drafter = potential_name
-                                break
-            # 3순위: department (부서명)
-            if drafter == "미확인" and department:
-                if department not in ['영상', '카메라', '조명', '중계', 'DVR', '스튜디오', '송출']:
-                    drafter = department
-
-            # 문서 정보 구성
-            documents.append({
-                'filename': filename,
-                'title': filename.replace('.pdf', '').replace('_', ' '),
-                'date': date or '날짜없음',
-                'year': year or '연도없음',
-                'category': doc_category,
-                'drafter': drafter,
-                'size': '알 수 없음',
-                'path': path,
-                'keywords': keywords or ''
-            })
-
-        conn.close()
-        print(f"✅ {len(documents)}개 문서 초고속 로드 완료!")
-
-        # DataFrame으로 변환 후 반환
-        df = pd.DataFrame(documents)
-        if not df.empty:
-            # 연도와 파일명으로 정렬
-            df = df.sort_values(['year', 'filename'], ascending=[False, True])
-
-        # 통계 출력
-        drafter_count = len(df[df['drafter'] != '미확인']) if not df.empty else 0
-        print(f"📈 기안자 통계:")
-        print(f"  - 기안자 확인: {drafter_count}개 ({drafter_count*100//max(len(documents), 1)}%)")
-        print(f"  - 기안자 미확인: {len(documents) - drafter_count}개")
-
-        # 기안자 목록 샘플 출력
-        if drafter_count > 0:
-            unique_drafters = df[df['drafter'] != '미확인']['drafter'].unique()[:10]
-            print(f"  - 기안자 샘플: {', '.join(unique_drafters)}")
-
-        return df
-
-    except Exception as e:
-        print(f"❌ 초고속 로드 실패: {e}")
-        import traceback
-        traceback.print_exc()
         return pd.DataFrame()
 
 def initialize_rag_system():

@@ -215,6 +215,12 @@ class RAGPipeline:
 
             # 3. 생성: 컨텍스트는 스니펫 집합으로 구성
             gen_start = time.perf_counter()
+
+            # CRITICAL: Inject compressed chunks into generator for proper LLM context
+            if hasattr(self.generator, "compressed_chunks"):
+                self.generator.compressed_chunks = compressed
+                logger.debug(f"Injected {len(compressed)} compressed chunks into generator")
+
             context = "\n\n".join([c.get("snippet", "") for c in compressed])
             answer = self.generator.generate(query, context, temperature)
             metrics["generate_time"] = time.perf_counter() - gen_start
@@ -417,6 +423,7 @@ class _QuickFixGenerator:
 
     def __init__(self, rag):
         self.rag = rag
+        self.compressed_chunks = None  # Store chunks for LLM
 
     def generate(self, query: str, context: str, temperature: float) -> str:
         # 재검색 금지. 컨텍스트 기반 생성으로 우선 시도.
@@ -424,20 +431,32 @@ class _QuickFixGenerator:
             # 1) QuickFixRAG에 전용 메서드가 있으면 사용
             if hasattr(self.rag, "generate_from_context"):
                 return self.rag.generate_from_context(query, context, temperature=temperature)
+
             # 2) 내부 LLM 직접 접근 경로가 있으면 사용
             if hasattr(self.rag, "llm") and hasattr(self.rag.llm, "generate_response"):
-                # context는 "\n\n"로 조인된 스니펫 문자열
-                # CRITICAL FIX: generate_response returns RAGResponse object, extract .answer
-                response = self.rag.llm.generate_response(query, context)
-                # Handle both RAGResponse object and string returns
+                # CRITICAL: generate_response expects List[Dict], not str
+                # Convert context string back to chunks format
+                if self.compressed_chunks:
+                    # Use stored compressed chunks (preferred)
+                    logger.debug(f"Using {len(self.compressed_chunks)} compressed chunks for generation")
+                    response = self.rag.llm.generate_response(query, self.compressed_chunks, max_retries=1)
+                else:
+                    # Fallback: convert context string to minimal chunks
+                    logger.warning("No compressed_chunks available, converting context string")
+                    snippets = context.split("\n\n")
+                    chunks = [{"snippet": s, "content": s} for s in snippets if s.strip()]
+                    response = self.rag.llm.generate_response(query, chunks, max_retries=1)
+
+                # Extract answer from RAGResponse object
                 if hasattr(response, "answer"):
                     return response.answer
                 return str(response)
+
             # 3) 폴백: 재검색이 포함된 answer는 최후 수단으로만
             logger.warning("generate_from_context 미지원 → 폴백(answer) 사용")
             return self.rag.answer(query, use_llm_summary=True)
         except Exception as e:
-            logger.error(f"Generation 실패: {e}")
+            logger.error(f"Generation 실패: {e}", exc_info=True)
             return f"[E_GENERATE] {str(e)}"
 
 

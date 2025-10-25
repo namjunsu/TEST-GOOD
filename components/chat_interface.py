@@ -12,6 +12,7 @@ ChatGPT 스타일의 채팅 인터페이스 UI를 렌더링하는 컴포넌트
 - 포괄적인 문서화
 """
 
+import os
 import streamlit as st
 from typing import List, Dict, Optional, Protocol, Any
 from typing_extensions import TypedDict, Literal
@@ -22,6 +23,9 @@ from app.core.logging import get_logger
 
 # ===== 로깅 설정 =====
 logger = get_logger(__name__)
+
+# 진단 모드 설정
+DIAG_RAG = os.getenv('DIAG_RAG', 'false').lower() == 'true'
 
 
 # ===== 타입 정의 =====
@@ -495,6 +499,30 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                                 )
                                 if i < len(response["evidence"]):
                                     st.markdown("---")
+
+                    # 진단 패널 (DIAG_RAG=true일 때만 표시)
+                    if DIAG_RAG and response.get("diagnostics"):
+                        diag = response["diagnostics"]
+                        with st.expander("🔍 진단 정보 (Diagnostics)", expanded=False):
+                            # 컬럼 레이아웃
+                            col1, col2, col3 = st.columns(3)
+
+                            with col1:
+                                st.metric("모드", diag.get("mode", "unknown"))
+                                st.metric("생성 경로", diag.get("generate_path", "unknown"))
+
+                            with col2:
+                                st.metric("검색 문서 수", diag.get("retrieved_k", 0))
+                                st.metric("압축 후 문서 수", diag.get("after_compress_k", 0))
+
+                            with col3:
+                                st.metric("Evidence 개수", diag.get("evidence_count", 0))
+                                injected = "Yes" if diag.get("evidence_injected") else "No"
+                                st.metric("Evidence 강제 주입", injected)
+
+                            # 상세 정보 (작은 텍스트로)
+                            st.caption(f"압축 비율: {diag.get('compression_ratio', 'N/A')}")
+                            st.caption(f"최종 사용 문서 수: {diag.get('used_k', 0)}")
 
                     # 메시지 저장 (텍스트만)
                     _add_message(ChatConfig.ROLE_ASSISTANT, response["text"])

@@ -546,6 +546,10 @@ class _QuickFixGenerator:
                 return self.rag.generate_from_context(query, context, temperature=temperature)
 
             # 2) 내부 LLM 직접 접근 경로가 있으면 사용
+            # 🔥 CRITICAL: LLM lazy loading - ensure LLM is loaded before checking
+            if hasattr(self.rag, "_ensure_llm_loaded"):
+                self.rag._ensure_llm_loaded()
+
             if hasattr(self.rag, "llm") and hasattr(self.rag.llm, "generate_response"):
                 # CRITICAL: generate_response expects List[Dict], not str
                 # Convert context string back to chunks format
@@ -640,7 +644,7 @@ class _V2RetrieverAdapter:
                 elif "content" in doc:
                     snippet = doc["content"][:500]
 
-                # Priority 2: DB 조회
+                # Priority 2: DB 조회 (app/rag/db.MetadataDB.get_content)
                 if not snippet or len(snippet) < 50:
                     content = self.db.get_content(doc_id)
                     if content and len(content) >= 50:

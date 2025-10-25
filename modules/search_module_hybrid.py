@@ -152,9 +152,9 @@ class SearchModuleHybrid(SearchModule):
             # 결과 포맷팅
             formatted_results = []
 
-            # HybridSearch는 Dict를 반환 (results 키에 실제 결과)
+            # HybridSearch는 Dict를 반환 ('fused_results' 키에 실제 결과)
             if isinstance(results, dict):
-                actual_results = results.get('results', [])
+                actual_results = results.get('fused_results', results.get('results', []))
             else:
                 actual_results = results
 

@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-RAG 인덱스 재구축 스크립트
+RAG 인덱스 재구축 스크립트 (DB-Driven)
 - BM25 인덱스 재구축
 - Vector 인덱스 재구축
-- 현재 812개 PDF 문서 기준
+- metadata.db의 ID와 text_preview를 사용하여 인덱스와 DB를 1:1 매핑
 """
 
 import sys
 import time
 import logging
+import sqlite3
 from pathlib import Path
 from typing import List, Dict
-import pdfplumber
 
 # 로깅 설정
 logging.basicConfig(
@@ -29,45 +29,59 @@ from rag_system.korean_vector_store import KoreanVectorStore
 
 
 class RAGIndexBuilder:
-    """RAG 인덱스 빌더"""
+    """RAG 인덱스 빌더 (DB-Driven)"""
 
-    def __init__(self, docs_dir: str = "docs"):
-        self.docs_dir = Path(docs_dir)
+    def __init__(self, db_path: str = "metadata.db"):
+        self.db_path = Path(db_path)
         self.bm25_store = None
         self.vector_store = None
 
     def collect_documents(self) -> List[Dict]:
-        """모든 PDF 문서 수집"""
-        logger.info(f"📂 문서 수집 중: {self.docs_dir}")
+        """metadata.db에서 문서 수집 (ID와 text_preview 사용)"""
+        logger.info(f"📂 metadata.db에서 문서 로드 중: {self.db_path}")
 
-        pdf_files = list(self.docs_dir.rglob("*.pdf"))
-        logger.info(f"📊 발견된 PDF: {len(pdf_files)}개")
+        if not self.db_path.exists():
+            logger.error(f"❌ {self.db_path} 파일이 없습니다!")
+            return []
 
         documents = []
 
-        for i, pdf_path in enumerate(pdf_files, 1):
-            if i % 100 == 0:
-                logger.info(f"진행: {i}/{len(pdf_files)}")
+        try:
+            conn = sqlite3.connect(str(self.db_path))
+            cursor = conn.cursor()
 
-            try:
-                # PDF 텍스트 추출
-                text = ""
-                with pdfplumber.open(pdf_path) as pdf:
-                    for page in pdf.pages[:10]:  # 최대 10페이지
-                        page_text = page.extract_text() or ""
-                        text += page_text + "\n"
+            # text_preview가 있는 문서만 조회 (최소 50자 이상)
+            MIN_TEXT_LEN = 50
+            cursor.execute("""
+                SELECT id, filename, path, text_preview
+                FROM documents
+                WHERE text_preview IS NOT NULL
+                  AND LENGTH(text_preview) >= ?
+                ORDER BY id ASC
+            """, (MIN_TEXT_LEN,))
 
-                if text.strip():
-                    documents.append({
-                        'filename': pdf_path.name,
-                        'path': str(pdf_path),
-                        'content': text,
-                        'id': f"doc_{i}"
-                    })
-            except Exception as e:
-                logger.warning(f"⚠️  {pdf_path.name} 처리 실패: {e}")
+            rows = cursor.fetchall()
+            logger.info(f"📊 발견된 문서: {len(rows)}개")
 
-        logger.info(f"✅ 텍스트 추출 완료: {len(documents)}개 문서")
+            for db_id, filename, path, text_preview in rows:
+                if len(documents) % 100 == 0 and len(documents) > 0:
+                    logger.info(f"진행: {len(documents)}/{len(rows)}")
+
+                # CRITICAL: Use DB's ID directly (doc_4094, doc_4095, ...)
+                documents.append({
+                    'id': f"doc_{db_id}",  # DB ID와 동일하게 매핑
+                    'filename': filename or "unknown.pdf",
+                    'path': path or "",
+                    'content': text_preview  # DB의 text_preview 사용
+                })
+
+            conn.close()
+            logger.info(f"✅ 문서 로드 완료: {len(documents)}개")
+
+        except Exception as e:
+            logger.error(f"❌ DB 조회 실패: {e}")
+            raise
+
         return documents
 
     def rebuild_bm25_index(self, documents: List[Dict]):
@@ -84,7 +98,23 @@ class RAGIndexBuilder:
             self.bm25_store._create_new_index()
 
             # 문서 텍스트와 메타데이터 분리
-            texts = [doc['content'] for doc in documents]
+            # CRITICAL: 파일명 키워드 추출하여 검색 가능하게 만들기
+            import re
+            texts = []
+            for doc in documents:
+                # 파일명에서 키워드 추출 (날짜, 확장자 제외)
+                filename = doc['filename']
+                # 날짜 패턴 제거 (2017-12-21, 2025-03-04 등)
+                filename_clean = re.sub(r'\d{4}-\d{2}-\d{2}_?', '', filename)
+                # 확장자 제거
+                filename_clean = re.sub(r'\.(pdf|PDF)$', '', filename_clean)
+                # 언더스코어를 공백으로
+                filename_keywords = filename_clean.replace('_', ' ').strip()
+
+                # 파일명 키워드 + 본문 내용
+                enhanced_text = f"[파일명: {filename_keywords}]\n\n{doc['content']}"
+                texts.append(enhanced_text)
+
             metadatas = [
                 {
                     'id': doc['id'],
@@ -121,16 +151,27 @@ class RAGIndexBuilder:
             self.vector_store.create_new_index()
 
             # 문서 텍스트와 메타데이터 분리
+            # CRITICAL: 파일명 키워드 추출하여 검색 가능하게 만들기
+            import re
             texts = []
             metadatas = []
 
             for doc in documents:
-                # 긴 문서는 첫 5000자만 사용 (메모리 절약)
-                content = doc['content']
-                if len(content) > 5000:
-                    content = content[:5000]
+                # 파일명에서 키워드 추출 (날짜, 확장자 제외)
+                filename = doc['filename']
+                filename_clean = re.sub(r'\d{4}-\d{2}-\d{2}_?', '', filename)
+                filename_clean = re.sub(r'\.(pdf|PDF)$', '', filename_clean)
+                filename_keywords = filename_clean.replace('_', ' ').strip()
 
-                texts.append(content)
+                # 파일명 키워드 + 본문 내용
+                content = doc['content']
+                enhanced_content = f"[파일명: {filename_keywords}]\n\n{content}"
+
+                # 긴 문서는 첫 5000자만 사용 (메모리 절약)
+                if len(enhanced_content) > 5000:
+                    enhanced_content = enhanced_content[:5000]
+
+                texts.append(enhanced_content)
                 metadatas.append({
                     'id': doc['id'],
                     'filename': doc['filename'],
@@ -198,17 +239,20 @@ class RAGIndexBuilder:
 
 def main():
     """메인 실행"""
-    print("🔨 RAG 인덱스 재구축 도구")
+    print("🔨 RAG 인덱스 재구축 도구 (DB-Driven)")
     print("=" * 60)
     print()
 
-    builder = RAGIndexBuilder(docs_dir="docs")
+    builder = RAGIndexBuilder(db_path="metadata.db")
 
     success = builder.build_all()
 
     if success:
         print("\n✅ 인덱스 재구축 성공!")
         print("이제 하이브리드 검색을 사용할 수 있습니다.")
+        print("\n💡 중요:")
+        print("  - 인덱스 ID가 metadata.db의 ID와 1:1 매칭됩니다")
+        print("  - Streamlit 앱을 재시작하세요")
         return 0
     else:
         print("\n❌ 인덱스 재구축 실패")

@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
 """
+from app.core.logging import get_logger
 Intent Module - 사용자 의도 분석 및 분류 시스템
 사용자의 질문 의도를 분석하고 적절한 응답 스타일을 결정합니다.
 한국어 처리를 지원하며 다양한 질문 유형을 인식합니다.
 """
 
 import re
-import logging
 from typing import Dict, List, Optional, Any
 
 # 로깅 시스템
 try:
-    from log_system import get_logger
     logger = get_logger()
 except ImportError:
-    logger = logging.getLogger(__name__)
+    logger = get_logger(__name__)
 
 # LLMModule 가져오기 (선택적)
 try:

@@ -2,8 +2,8 @@
 쿼리 최적화 및 가중치 자동 조정
 """
 
+from app.core.logging import get_logger
 import re
-import logging
 import time
 from functools import lru_cache
 from typing import List, Tuple, Dict, Any
@@ -32,7 +32,7 @@ class QueryOptimizer:
     
     def __init__(self):
         self.tokenizer = None  # 나중에 한국어 토크나이저 연결
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self._init_cleaning_patterns()
         self._compile_patterns()
 

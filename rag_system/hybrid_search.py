@@ -26,6 +26,12 @@ from .query_expansion import QueryExpansion
 from .document_compression import DocumentCompression
 from .multilevel_filter import MultilevelFilter
 
+# Helper function for environment boolean parsing
+def _env_bool(key: str, default: bool = False) -> bool:
+    """환경변수를 boolean으로 파싱"""
+    value = os.getenv(key, str(int(default)))
+    return str(value).lower() in ("1", "true", "yes", "on")
+
 # 검색 설정 상수 (.env에서 읽기)
 DEFAULT_VECTOR_WEIGHT = float(os.getenv('SEARCH_VECTOR_WEIGHT', '0.1'))
 DEFAULT_BM25_WEIGHT = float(os.getenv('SEARCH_BM25_WEIGHT', '0.9'))
@@ -53,7 +59,7 @@ class HybridSearch:
         use_reranker: bool = True,
         use_query_expansion: bool = True,
         use_document_compression: bool = True,
-        use_multilevel_filter: bool = True,
+        use_multilevel_filter: bool = False,  # 🔥 기본값 False로 변경
         single_document_mode: bool = False,
         fusion_method: str = DEFAULT_FUSION_METHOD
     ):
@@ -63,7 +69,8 @@ class HybridSearch:
         self.use_reranker = use_reranker
         self.use_query_expansion = use_query_expansion
         self.use_document_compression = use_document_compression
-        self.use_multilevel_filter = use_multilevel_filter
+        # 🔥 다단계 필터링: 기본 Off, 환경변수로만 재활성화 가능
+        self.use_multilevel_filter = _env_bool("USE_MULTILEVEL_FILTER", False)
         self.single_document_mode = single_document_mode
         self.fusion_method = fusion_method
 
@@ -103,6 +110,10 @@ class HybridSearch:
     def _init_optional_component(self, attr_name: str, use_flag: bool, component_class, component_name: str):
         """선택적 컴포넌트 초기화 헬퍼 메서드"""
         setattr(self, attr_name, None)
+        # 🔥 multilevel_filter는 self.use_multilevel_filter 값 사용 (환경변수 적용됨)
+        if attr_name == 'multilevel_filter':
+            use_flag = self.use_multilevel_filter
+
         if use_flag:
             try:
                 setattr(self, attr_name, component_class())

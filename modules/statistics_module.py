@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """
+from app.core.logging import get_logger
 통계 및 리포트 모듈 - Perfect RAG에서 분리된 통계/분석 기능
 2025-09-29 리팩토링
 
@@ -9,14 +10,13 @@
 
 import os
 import re
-import logging
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 from collections import defaultdict, Counter
 from datetime import datetime
 import json
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class StatisticsModule:

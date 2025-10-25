@@ -8,7 +8,7 @@ import os
 import re
 import json
 import time
-import sqlite3
+from app.data.metadata import db_compat as sqlite3
 import pdfplumber
 from pathlib import Path
 from datetime import datetime

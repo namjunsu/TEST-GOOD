@@ -3,7 +3,7 @@ Document Loader Module
 데이터베이스에서 문서 메타데이터를 로드하고 처리
 """
 
-import sqlite3
+from app.data.metadata import db_compat as sqlite3
 import pandas as pd
 from pathlib import Path
 from typing import Dict, List, Optional

@@ -1,0 +1,206 @@
+{
+  "timestamp": "2025-10-24 17:36:59",
+  "summary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "pass_rate": 1.0
+  },
+  "results": [
+    {
+      "name": "키워드 정확 매칭",
+      "query": "LVM-173W 교체 기안서 요약",
+      "passed": true,
+      "latency": 1.1214408590167295,
+      "checks": [
+        [
+          "Success",
+          true,
+          "응답 생성 성공"
+        ],
+        [
+          "Keywords",
+          true,
+          "키워드 3/3개 발견: ['LVM', '교체', '기안']"
+        ],
+        [
+          "Sources",
+          true,
+          "참고 문서 1개 (최소 1개)"
+        ],
+        [
+          "Latency",
+          true,
+          "지연 1.121s (최대 5.0s)"
+        ]
+      ],
+      "response": {
+        "success": true,
+        "answer_length": 1604,
+        "sources": 1,
+        "metrics": {
+          "search_time": 0.1955682169937063,
+          "compress_time": 3.1764007871970534e-05,
+          "generate_time": 0.9257692399842199,
+          "total_time": 1.1213705649715848
+        }
+      }
+    },
+    {
+      "name": "의미 기반 질의 (동의어)",
+      "query": "IDIS 3516P 저장 용량 산정",
+      "passed": true,
+      "latency": 0.5836253369925544,
+      "checks": [
+        [
+          "Success",
+          true,
+          "응답 생성 성공"
+        ],
+        [
+          "Keywords",
+          true,
+          "키워드 3/3개 발견: ['IDIS', '용량', '저장']"
+        ],
+        [
+          "Sources",
+          true,
+          "참고 문서 1개 (최소 1개)"
+        ],
+        [
+          "Latency",
+          true,
+          "지연 0.584s (최대 5.0s)"
+        ]
+      ],
+      "response": {
+        "success": true,
+        "answer_length": 1415,
+        "sources": 1,
+        "metrics": {
+          "search_time": 0.0070652730064466596,
+          "compress_time": 2.9458984499797225e-05,
+          "generate_time": 0.5764597649977077,
+          "total_time": 0.5835562260181177
+        }
+      }
+    },
+    {
+      "name": "Query Expansion - DVR 동의어",
+      "query": "DVR(녹화기) 최근 구매 문서 찾아줘. 가장 최근 1건만",
+      "passed": true,
+      "latency": 0.4965332490100991,
+      "checks": [
+        [
+          "Success",
+          true,
+          "응답 생성 성공"
+        ],
+        [
+          "Keywords",
+          true,
+          "키워드 2/6개 발견: ['녹화', '구매']"
+        ],
+        [
+          "Sources",
+          true,
+          "참고 문서 1개 (최소 1개)"
+        ],
+        [
+          "Latency",
+          true,
+          "지연 0.497s (최대 0.8s)"
+        ]
+      ],
+      "response": {
+        "success": true,
+        "answer_length": 1498,
+        "sources": 1,
+        "metrics": {
+          "search_time": 0.021505798998987302,
+          "compress_time": 3.228700370527804e-05,
+          "generate_time": 0.47492562397383153,
+          "total_time": 0.4964649430185091
+        }
+      }
+    },
+    {
+      "name": "Query Expansion - 구매 동의어",
+      "query": "카메라 구입 관련 최신 문서",
+      "passed": true,
+      "latency": 0.35366467299172655,
+      "checks": [
+        [
+          "Success",
+          true,
+          "응답 생성 성공"
+        ],
+        [
+          "Keywords",
+          true,
+          "키워드 3/3개 발견: ['카메라', '구입', '구매']"
+        ],
+        [
+          "Sources",
+          true,
+          "참고 문서 1개 (최소 1개)"
+        ],
+        [
+          "Latency",
+          true,
+          "지연 0.354s (최대 0.8s)"
+        ]
+      ],
+      "response": {
+        "success": true,
+        "answer_length": 1545,
+        "sources": 1,
+        "metrics": {
+          "search_time": 0.01741276800748892,
+          "compress_time": 3.216901677660644e-05,
+          "generate_time": 0.3361560910125263,
+          "total_time": 0.35360254798433743
+        }
+      }
+    },
+    {
+      "name": "대용량 컨텍스트 압축",
+      "query": "2018~2022 구매 기안서 중 SPG 관련 내역 비교",
+      "passed": true,
+      "latency": 1.0258692509960383,
+      "checks": [
+        [
+          "Success",
+          true,
+          "응답 생성 성공"
+        ],
+        [
+          "Keywords",
+          true,
+          "키워드 2/2개 발견: ['구매', 'SPG']"
+        ],
+        [
+          "Sources",
+          true,
+          "참고 문서 1개 (최소 1개)"
+        ],
+        [
+          "Latency",
+          true,
+          "지연 1.026s (최대 6.0s)"
+        ]
+      ],
+      "response": {
+        "success": true,
+        "answer_length": 1327,
+        "sources": 1,
+        "metrics": {
+          "search_time": 0.022797693993197754,
+          "compress_time": 3.604998346418142e-05,
+          "generate_time": 1.0029708630172536,
+          "total_time": 1.0258060700143687
+        }
+      }
+    }
+  ]
+}

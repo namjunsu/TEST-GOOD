@@ -6,9 +6,10 @@
 from modules.search_module_hybrid import SearchModuleHybrid
 import time
 import re
-import logging
 
-logger = logging.getLogger(__name__)
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 class QuickFixRAG:
     """빠른 검색 + LLM 요약 - 하이브리드 모드"""

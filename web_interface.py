@@ -26,7 +26,8 @@ project_root = Path(__file__).parent.absolute()
 sys.path.insert(0, str(project_root))
 
 import config
-from hybrid_chat_rag_v2 import UnifiedRAG
+from app.rag.pipeline import RAGPipeline  # 파사드 패턴: 단일 진입점
+from app.core.errors import ErrorCode, ERROR_MESSAGES  # 에러 코드
 from utils.css_loader import load_all_css  # CSS 로더 임포트
 from components.pdf_viewer import show_pdf_preview  # PDF 뷰어 컴포넌트
 from utils.document_loader import load_documents  # 문서 로더
@@ -47,17 +48,16 @@ load_all_css()
 
 
 def initialize_rag_system():
-    """RAG 시스템 초기화 (한 번만 실행) - UnifiedRAG 사용 (LLM 포함)"""
-    import importlib
-    import sys
+    """RAG 시스템 초기화 (한 번만 실행) - RAGPipeline 사용 (파사드 패턴)"""
+    print("🚀 RAGPipeline 초기화 중...")
+    pipeline = RAGPipeline()
 
-    # 모듈 재로드로 최신 버전 보장
-    if 'hybrid_chat_rag_v2' in sys.modules:
-        importlib.reload(sys.modules['hybrid_chat_rag_v2'])
+    # 워밍업: 인덱스 및 모델 사전 로드
+    print("⏳ 워밍업 중...")
+    pipeline.warmup()
+    print("✅ RAGPipeline 준비 완료")
 
-    from hybrid_chat_rag_v2 import UnifiedRAG
-    print("🚀 UnifiedRAG 초기화 중... (LLM 포함)")
-    return UnifiedRAG()
+    return pipeline
 
 def format_answer_with_table(answer):
     """답변에서 표 형식을 제대로 표시하도록 처리"""
@@ -373,10 +373,9 @@ def main():
                 del st.session_state.unified_rag
             st.session_state.ocr_cache_mtime = ocr_cache_mtime
 
-    # 최초 1회만 초기화
+    # 최초 1회만 초기화 (rag와 unified_rag는 동일한 인스턴스)
     if 'unified_rag' not in st.session_state:
-        with st.spinner("🔄 통합 시스템 초기화 중..."):
-            st.session_state.unified_rag = UnifiedRAG()
+        st.session_state.unified_rag = st.session_state.rag
 
     # ===== ChatGPT 스타일 채팅 인터페이스 (컴포넌트) =====
     render_chat_interface(st.session_state.unified_rag)

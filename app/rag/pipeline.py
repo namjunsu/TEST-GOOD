@@ -9,6 +9,8 @@ Example:
     >>> print(response.answer)
 """
 
+import os
+import time
 from dataclasses import dataclass, field
 from typing import Protocol, List, Optional, Dict, Any
 
@@ -16,6 +18,10 @@ from app.core.logging import get_logger
 from app.core.errors import ModelError, SearchError, ErrorCode, ERROR_MESSAGES
 
 logger = get_logger(__name__)
+
+# 진단 모드 설정
+DIAG_RAG = os.getenv('DIAG_RAG', 'false').lower() == 'true'
+DIAG_LOG_LEVEL = os.getenv('DIAG_LOG_LEVEL', 'INFO').upper()
 
 
 # ============================================================================
@@ -48,18 +54,22 @@ class RAGResponse:
         answer: 생성된 답변
         source_docs: 참고 문서 목록 (하위 호환)
         evidence_chunks: Evidence용 정규화 청크 (권장)
+        raw_results: 원본 검색 결과 (Evidence 최소 보장용)
         latency: 전체 실행 시간 (초)
         success: 성공 여부
         error: 에러 메시지 (실패 시)
         metrics: 내부 지표 (검색/압축/생성 시간 등)
+        diagnostics: 진단 정보 (DIAG_RAG=true일 때만 채워짐)
     """
     answer: str
     source_docs: List[str] = field(default_factory=list)
     evidence_chunks: List[Dict[str, Any]] = field(default_factory=list)
+    raw_results: List[Dict[str, Any]] = field(default_factory=list)
     latency: float = 0.0
     success: bool = True
     error: Optional[str] = None
     metrics: dict = field(default_factory=dict)
+    diagnostics: dict = field(default_factory=dict)  # 진단 정보
 
 
 # ============================================================================
@@ -192,6 +202,7 @@ class RAGPipeline:
 
         start_time = time.perf_counter()
         metrics = {}
+        diagnostics = {}  # 진단 정보 수집
 
         try:
             # 1. 검색: 정규화된 청크(dict) 리스트 기대
@@ -199,19 +210,36 @@ class RAGPipeline:
             results = self.retriever.search(query, top_k)
             metrics["search_time"] = time.perf_counter() - search_start
 
+            # [DIAG] 검색 결과 진단
+            if DIAG_RAG:
+                diagnostics["retrieved_k"] = len(results)
+                if DIAG_LOG_LEVEL in ['DEBUG', 'INFO']:
+                    logger.info(f"[DIAG] 검색 완료: {len(results)}개 문서 검색됨")
+
             if not results:
                 logger.warning(f"No results found for query: {query[:50]}")
+                if DIAG_RAG:
+                    diagnostics["mode"] = "no_results"
+                    diagnostics["generate_path"] = "fallback_no_context"
                 return RAGResponse(
                     answer="관련 문서가 검색되지 않았다.",
                     success=True,
                     latency=time.perf_counter() - start_time,
                     metrics=metrics,
+                    diagnostics=diagnostics,
                 )
 
             # 2. 압축: 청크 단위 유지(페이지/스니펫/메타 보존)
             compress_start = time.perf_counter()
             compressed = self.compressor.compress(results, compression_ratio)
             metrics["compress_time"] = time.perf_counter() - compress_start
+
+            # [DIAG] 압축 후 진단
+            if DIAG_RAG:
+                diagnostics["after_compress_k"] = len(compressed)
+                diagnostics["compression_ratio"] = compression_ratio
+                if DIAG_LOG_LEVEL in ['DEBUG', 'INFO']:
+                    logger.info(f"[DIAG] 압축 완료: {len(results)} → {len(compressed)}개 문서")
 
             # 3. 생성: 컨텍스트는 스니펫 집합으로 구성
             gen_start = time.perf_counter()
@@ -222,8 +250,27 @@ class RAGPipeline:
                 logger.debug(f"Injected {len(compressed)} compressed chunks into generator")
 
             context = "\n\n".join([c.get("snippet", "") for c in compressed])
+
+            # [DIAG] 생성 전 컨텍스트 스냅샷
+            if DIAG_RAG and DIAG_LOG_LEVEL == 'DEBUG':
+                for i, c in enumerate(compressed[:3], 1):  # 상위 3개만 로그
+                    logger.debug(
+                        f"[DIAG] Context[{i}]: doc_id={c.get('doc_id')}, "
+                        f"filename={c.get('filename', 'N/A')}, "
+                        f"page={c.get('page', 0)}, "
+                        f"snippet={c.get('snippet', '')[:120]}..."
+                    )
+
             answer = self.generator.generate(query, context, temperature)
             metrics["generate_time"] = time.perf_counter() - gen_start
+
+            # [DIAG] 생성 완료 진단
+            if DIAG_RAG:
+                diagnostics["mode"] = "normal"
+                diagnostics["generate_path"] = "from_context"
+                diagnostics["used_k"] = len(compressed)
+                if DIAG_LOG_LEVEL in ['DEBUG', 'INFO']:
+                    logger.info(f"[DIAG] 생성 완료: from_context 경로, {len(compressed)}개 문서 사용")
 
             total_latency = time.perf_counter() - start_time
             metrics["total_time"] = total_latency
@@ -239,9 +286,11 @@ class RAGPipeline:
                 answer=answer,
                 source_docs=[c.get("doc_id") for c in results[:3]],
                 evidence_chunks=compressed,  # UI용 근거
+                raw_results=results,  # Evidence 최소 보장용
                 latency=total_latency,
                 success=True,
                 metrics=metrics,
+                diagnostics=diagnostics,
             )
 
         except SearchError as e:
@@ -304,9 +353,35 @@ class RAGPipeline:
                 }
                 for c in (response.evidence_chunks or [])
             ]
+
+            # CRITICAL: Evidence 최소 보장 (sources_cited가 비어도 검색 결과는 표시)
+            evidence_injected = False
+            if not evidence and response.raw_results:
+                logger.info(f"Evidence empty, using raw_results[:3] as fallback")
+                evidence = [
+                    {
+                        "doc_id": r.get("doc_id") or r.get("chunk_id", "unknown"),
+                        "page": 0,  # 검색 결과는 페이지 정보 없음
+                        "snippet": r.get("snippet") or r.get("text_preview", "")[:500],
+                        "meta": {
+                            "doc_id": r.get("doc_id") or r.get("chunk_id", "unknown"),
+                            "filename": r.get("filename", ""),
+                            "page": 0,
+                        },
+                    }
+                    for r in response.raw_results[:3]
+                ]
+                evidence_injected = True
+
+            # [DIAG] Evidence 진단 정보 추가
+            if DIAG_RAG and response.diagnostics:
+                response.diagnostics["evidence_count"] = len(evidence)
+                response.diagnostics["evidence_injected"] = evidence_injected
+
             return {
                 "text": response.answer,
-                "evidence": evidence
+                "evidence": evidence,
+                "diagnostics": response.diagnostics if DIAG_RAG else {}
             }
         else:
             # 에러 발생 시 (중립 톤, 사과 표현 금지)
@@ -352,16 +427,38 @@ class RAGPipeline:
     # ========================================================================
 
     def _create_default_retriever(self) -> Retriever:
-        """기본 검색 엔진 생성 (HybridRetriever)"""
-        try:
-            from app.rag.retrievers.hybrid import HybridRetriever
-            retriever = HybridRetriever()
-            logger.info("Default HybridRetriever 생성 완료")
-            return retriever
-        except Exception as e:
-            logger.error(f"HybridRetriever 생성 실패: {e}")
-            # 폴백: 더미 구현
-            return _DummyRetriever()
+        """기본 검색 엔진 생성 (v2 또는 v1)
+
+        환경 변수 USE_V2_RETRIEVER로 제어:
+        - true: HybridRetrieverV2 사용 (신규 2-layer 아키텍처)
+        - false/없음: HybridRetriever 사용 (기존 레거시)
+        """
+        import os
+        use_v2 = os.getenv('USE_V2_RETRIEVER', 'false').lower() == 'true'
+
+        if use_v2:
+            try:
+                from app.rag.retriever_v2 import HybridRetrieverV2
+                v2_retriever = HybridRetrieverV2()
+                logger.info("✅ HybridRetrieverV2 (v2 신규 시스템) 생성 완료")
+
+                # V2 adapter: fused_results → list 변환
+                return _V2RetrieverAdapter(v2_retriever)
+            except Exception as e:
+                logger.error(f"V2 Retriever 생성 실패, v1으로 폴백: {e}")
+                # 폴백: v1 사용
+                use_v2 = False
+
+        if not use_v2:
+            try:
+                from app.rag.retrievers.hybrid import HybridRetriever
+                retriever = HybridRetriever()
+                logger.info("Default HybridRetriever (v1 레거시) 생성 완료")
+                return retriever
+            except Exception as e:
+                logger.error(f"HybridRetriever 생성 실패: {e}")
+                # 폴백: 더미 구현
+                return _DummyRetriever()
 
     def _create_default_compressor(self) -> Compressor:
         """기본 압축기 생성 (현재는 no-op)"""
@@ -458,6 +555,118 @@ class _QuickFixGenerator:
         except Exception as e:
             logger.error(f"Generation 실패: {e}", exc_info=True)
             return f"[E_GENERATE] {str(e)}"
+
+
+class _V2RetrieverAdapter:
+    """V2 Retriever Adapter
+
+    HybridRetrieverV2의 결과 형식 {"fused_results": [...]}를
+    v1 인터페이스 형식 [...] 으로 변환.
+
+    v2 results 구조:
+        {
+            "fused_results": [
+                {"id": "doc_4094", "score": 0.123, "filename": "...", ...},
+                ...
+            ]
+        }
+
+    v1 expected 구조:
+        [
+            {"doc_id": "doc_4094", "snippet": "...", "page": 1, ...},
+            ...
+        ]
+    """
+
+    def __init__(self, v2_retriever):
+        """
+        Args:
+            v2_retriever: HybridRetrieverV2 instance
+        """
+        self.v2_retriever = v2_retriever
+        self.db = v2_retriever.db  # MetadataDB for content fetching
+
+    def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        """Search using v2 retriever, convert to v1 format
+
+        Args:
+            query: Search query
+            top_k: Number of results
+
+        Returns:
+            List of dicts in v1 format with keys:
+            - doc_id: Document ID
+            - snippet: Text snippet
+            - page: Page number (default 1)
+            - score: Relevance score
+            - meta: Metadata dict
+        """
+        try:
+            # Call v2 retriever
+            v2_result = self.v2_retriever.search(query, top_k=top_k)
+            fused_results = v2_result.get("fused_results", [])
+
+            # Convert to v1 format
+            v1_results = []
+            for doc in fused_results:
+                doc_id = doc.get("id", "unknown")
+
+                # 🔥 CRITICAL: snippet 우선순위
+                # 1) 검색 결과에 직접 포함된 snippet/content
+                # 2) DB 조회 (get_content)
+                # 3) 제목/파일명 기반 폴백
+
+                snippet = ""
+
+                # Priority 1: fused_results에 이미 포함된 데이터
+                if "snippet" in doc:
+                    snippet = doc["snippet"]
+                elif "content" in doc:
+                    snippet = doc["content"][:500]
+
+                # Priority 2: DB 조회
+                if not snippet or len(snippet) < 50:
+                    content = self.db.get_content(doc_id)
+                    if content and len(content) >= 50:
+                        snippet = content[:500]
+
+                # Priority 3: 메타데이터 폴백
+                if not snippet or len(snippet) < 50:
+                    fallback_parts = []
+                    if doc.get("title"):
+                        fallback_parts.append(f"제목: {doc['title']}")
+                    if doc.get("filename"):
+                        fallback_parts.append(f"파일: {doc['filename']}")
+                    if doc.get("date"):
+                        fallback_parts.append(f"날짜: {doc['date']}")
+
+                    snippet = " | ".join(fallback_parts) if fallback_parts else f"문서 ID: {doc_id}"
+                    logger.warning(f"V2 Adapter: doc_id={doc_id} snippet 결손, 메타데이터 폴백 사용")
+
+                v1_results.append({
+                    "doc_id": doc_id,
+                    "snippet": snippet,
+                    "page": 1,  # v2에서는 page 정보 없음, 기본 1
+                    "score": doc.get("score", 0.0),
+                    "meta": {
+                        "doc_id": doc_id,
+                        "filename": doc.get("filename", ""),
+                        "title": doc.get("title", ""),
+                        "date": doc.get("date", ""),
+                        "page": 1,
+                    },
+                })
+
+            logger.info(f"V2 Adapter: {len(v1_results)} results converted")
+            return v1_results
+
+        except Exception as e:
+            logger.error(f"V2 Adapter search failed: {e}", exc_info=True)
+            return []
+
+    def warmup(self):
+        """워밍업 (v2는 필요 시 자동 로드)"""
+        logger.info("V2 Adapter warmup (no-op)")
 
 
 class _DummyGenerator:

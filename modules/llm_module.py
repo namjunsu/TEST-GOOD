@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """
+from app.core.logging import get_logger
 LLM 처리 모듈 - Perfect RAG에서 분리된 LLM 관련 기능
 2025-09-29 리팩토링
 
@@ -10,7 +11,6 @@ LLM 관련 기능을 담당합니다.
 import os
 import re
 import time
-import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 import json
@@ -23,7 +23,7 @@ try:
 except ImportError:
     LLM_AVAILABLE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class LLMModule:

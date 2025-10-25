@@ -4,15 +4,15 @@ Phase 1.2: 메타데이터 DB 구축
 SQLite를 사용한 PDF 메타데이터 관리
 """
 
-import sqlite3
+from app.core.logging import get_logger
+from app.data.metadata import db_compat as sqlite3
 import json
-import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import re
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class MetadataDB:
     """PDF 메타데이터 SQLite DB 관리"""
@@ -25,8 +25,14 @@ class MetadataDB:
 
     def init_database(self):
         """데이터베이스 초기화 및 테이블 생성"""
-        self.conn = sqlite3.connect(self.db_path)
+        self.conn = sqlite3.connect(self.db_path, timeout=5.0)
         self.conn.row_factory = sqlite3.Row  # 딕셔너리 형태로 결과 반환
+
+        # WAL 모드 설정 (동시 읽기 지원)
+        self.conn.execute("PRAGMA journal_mode=WAL;")
+        self.conn.execute("PRAGMA busy_timeout=5000;")
+        self.conn.execute("PRAGMA synchronous=NORMAL;")
+        logger.info(f"DB WAL mode enabled: {self.db_path}")
 
         # 메타데이터 테이블 생성
         self.conn.execute('''

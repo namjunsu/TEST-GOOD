@@ -370,6 +370,192 @@ class RAGPipeline:
                 }
             }
         """
+        # 🔥 CRITICAL: 기안자/날짜 검색은 QuickFixRAG에 위임 (전문 로직 보유)
+        if hasattr(self.generator, 'rag'):
+            import re
+            import sqlite3
+
+            # ✅ 확장된 쿼리에서 실제 질문 추출 (chat_interface.py 대응)
+            actual_query = query
+            if "현재 질문:" in query:
+                parts = query.split("현재 질문:")
+                if len(parts) > 1:
+                    actual_query = parts[-1].strip()
+                    logger.info(f"📝 확장 쿼리에서 추출: '{actual_query[:50]}'")
+
+            # 🔍 디버깅: 실제 pattern matching 대상 로깅
+            logger.info(f"🔍 Pattern matching 대상 쿼리: '{actual_query[:100]}'")
+
+            # ✅ P0: 파일명 직접 언급 패턴 감지
+
+            # 패턴 1: 요약 요청 - "파일명.pdf 내용 요약해줘" / "파일명.pdf 요약"
+            file_summary_pattern = r'(\S+\.pdf)\s*(이\s*)?(문서\s*)?(내용\s*)?(요약|정리)'
+            summary_match = re.search(file_summary_pattern, actual_query, re.IGNORECASE)
+
+            if summary_match:
+                filename = summary_match.group(1).strip()
+                logger.info(f"🎯 P0: 파일 요약 요청 감지 - {filename}")
+
+                # PDF 전문 로드 + 메타데이터 조회
+                try:
+                    import pdfplumber
+                    from pathlib import Path
+
+                    conn = sqlite3.connect('metadata.db')
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT path, filename, drafter, date, category, text_preview
+                        FROM documents
+                        WHERE filename LIKE ?
+                        LIMIT 1
+                    """, (f'%{filename}%',))
+
+                    result = cursor.fetchone()
+                    conn.close()
+
+                    if result:
+                        pdf_path, fname, drafter, date, category, preview = result
+                        doc_num = None  # doc_number 컬럼이 없으므로 None
+
+                        # PDF 전문 텍스트 로드
+                        full_text = preview or ""
+                        if pdf_path and Path(pdf_path).exists():
+                            try:
+                                with pdfplumber.open(pdf_path) as pdf:
+                                    pages_text = []
+                                    for page in pdf.pages[:5]:  # 최대 5페이지
+                                        page_text = page.extract_text() or ""
+                                        pages_text.append(page_text)
+                                        if len("".join(pages_text)) > 5000:
+                                            break
+                                    full_text = "\n\n".join(pages_text)
+                            except Exception as e:
+                                logger.warning(f"PDF 읽기 실패: {e}")
+
+                        # 간단한 요약 생성 (LLM 없이)
+                        answer_text = f"**📄 {fname}**\n\n"
+                        answer_text += f"**📋 문서 정보**\n"
+                        answer_text += f"- **기안자:** {drafter or '정보 없음'}\n"
+                        answer_text += f"- **날짜:** {date or '정보 없음'}\n"
+                        answer_text += f"- **카테고리:** {category or '정보 없음'}\n"
+
+                        answer_text += f"\n**📝 주요 내용**\n"
+                        # 처음 800자 미리보기
+                        content_preview = full_text[:800].strip()
+                        if content_preview:
+                            answer_text += content_preview
+                            if len(full_text) > 800:
+                                answer_text += "...\n\n*(전체 문서는 더 긴 내용을 포함합니다)*"
+                        else:
+                            answer_text += "*(문서 내용을 읽을 수 없습니다)*"
+
+                        # Evidence 구성
+                        evidence = [{
+                            "doc_id": fname,
+                            "page": 1,
+                            "snippet": full_text[:500],
+                            "meta": {"filename": fname, "drafter": drafter, "date": date, "category": category}
+                        }]
+
+                        return {
+                            "text": answer_text,
+                            "citations": [fname],
+                            "evidence": evidence,
+                            "status": {"retrieved_count": 1, "selected_count": 1, "found": True}
+                        }
+                    else:
+                        logger.warning(f"⚠️ 파일 없음: {filename}")
+
+                except Exception as e:
+                    logger.error(f"❌ 요약 생성 실패: {e}")
+                    # 오류 시 일반 검색으로 폴백
+
+            # 패턴 2: 기안자 질의 - "파일명.pdf 기안자가 누구야?"
+            # (컬럼 수정 완료: doc_number 제거)
+            file_author_pattern = r'(\S+\.pdf)\s*(기안자|작성자).*(누구|알려줘)'
+            file_match = re.search(file_author_pattern, actual_query, re.IGNORECASE)
+
+            if file_match:
+                filename = file_match.group(1).strip()
+                logger.info(f"🎯 P0: 파일명 직접 질의 감지 - {filename}")
+
+                # metadata.db에서 직접 조회
+                try:
+                    conn = sqlite3.connect('metadata.db')
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT filename, drafter, date, category
+                        FROM documents
+                        WHERE filename LIKE ?
+                        LIMIT 1
+                    """, (f'%{filename}%',))
+
+                    result = cursor.fetchone()
+                    conn.close()
+
+                    if result:
+                        fname, drafter, date, category = result
+                        doc_num = None
+                        answer_text = f"**{fname}**\n\n"
+                        answer_text += f"📌 **기안자:** {drafter or '정보 없음'}\n"
+                        answer_text += f"📅 **날짜:** {date or '정보 없음'}\n"
+                        answer_text += f"📁 **카테고리:** {category or '정보 없음'}\n"
+
+                        # Evidence 구성 (정확한 파일 1건)
+                        evidence = [{
+                            "doc_id": fname,
+                            "page": 1,
+                            "snippet": f"기안자: {drafter}, 날짜: {date}, 카테고리: {category}",
+                            "meta": {"filename": fname, "drafter": drafter, "date": date, "category": category}
+                        }]
+
+                        return {
+                            "text": answer_text,
+                            "citations": [fname],
+                            "evidence": evidence,
+                            "status": {"retrieved_count": 1, "selected_count": 1, "found": True}
+                        }
+                    else:
+                        logger.warning(f"⚠️ 파일 없음: {filename}")
+                        return {
+                            "text": f"❌ '{filename}' 파일을 찾을 수 없습니다.",
+                            "citations": [],
+                            "evidence": [],
+                            "status": {"retrieved_count": 0, "selected_count": 0, "found": False}
+                        }
+
+                except Exception as e:
+                    logger.error(f"❌ metadata 조회 실패: {e}")
+                    # 오류 시 일반 검색으로 폴백
+
+            # 기안자 검색 패턴 감지 (실제 질문에서만)
+            author_patterns = [r'([가-힣]{2,4})\s*(문서|기안서|검토서)',
+                              r'([가-힣]{2,4})가?\s*(작성한|작성안|기안한|쓴|만든)',
+                              r'(기안자|작성자|제안자)[:\s]+([가-힣]{2,4})']
+            # 날짜 검색 패턴 감지
+            year_pattern = r'(\d{4})\s*년'
+
+            is_author_query = any(re.search(p, actual_query) for p in author_patterns)
+            is_year_query = re.search(year_pattern, actual_query)
+
+            if is_author_query or is_year_query:
+                logger.info(f"🎯 특수 검색 모드 감지: author={is_author_query}, year={is_year_query}")
+                # QuickFixRAG.answer()로 직접 처리 (실제 질문 전달)
+                answer_text = self.generator.rag.answer(actual_query, use_llm_summary=False)
+
+                # 표준 응답 형식으로 변환
+                return {
+                    "text": answer_text,
+                    "citations": [],  # QuickFixRAG 응답에서 추출 어려움
+                    "evidence": [],
+                    "status": {
+                        "retrieved_count": 0,
+                        "selected_count": 0,
+                        "found": "관련 문서" not in answer_text and "없습니다" not in answer_text
+                    }
+                }
+
+        # 일반 쿼리는 기존 로직 사용
         response = self.query(query, top_k=top_k or 5)
 
         if response.success:

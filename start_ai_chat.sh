@@ -292,9 +292,9 @@ main() {
     pkill -f "uvicorn.*app.api.main" 2>/dev/null || true
     sleep 1
 
-    # FastAPI 시작 (7860 포트)
+    # FastAPI 시작 (7860 포트) - P0-3: 절대경로 사용
     API_PORT=7860
-    .venv/bin/python -m uvicorn app.api.main:app \
+    "${PROJECT_ROOT}/.venv/bin/python" -m uvicorn app.api.main:app \
         --host 0.0.0.0 \
         --port "$API_PORT" \
         --log-level info \
@@ -334,9 +334,9 @@ main() {
     # 브라우저 자동 열기 (백그라운드)
     # open_browser "http://localhost:$PORT" &
 
-    # Streamlit 실행 (포어그라운드)
+    # Streamlit 실행 (포어그라운드) - P0-3: 절대경로 사용
     log INFO "Streamlit 서버 시작..."
-    streamlit run web_interface.py \
+    "${PROJECT_ROOT}/.venv/bin/streamlit" run web_interface.py \
         --server.port "$PORT" \
         --server.address "$HOST" \
         --server.headless true \

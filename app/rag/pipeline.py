@@ -378,9 +378,20 @@ class RAGPipeline:
                 response.diagnostics["evidence_count"] = len(evidence)
                 response.diagnostics["evidence_injected"] = evidence_injected
 
+            # 🔥 CRITICAL: status.found 플래그 - UI 판정 단일 소스
+            # retrieved_count: 검색된 원본 결과 수
+            # selected_count: 실제 사용된 증거 수 (evidence)
+            # found: 검색 성공 여부 (evidence가 1개 이상이면 True)
+            status = {
+                "retrieved_count": len(response.raw_results or []),
+                "selected_count": len(evidence),
+                "found": len(evidence) > 0  # 🔴 유일한 판정 기준
+            }
+
             return {
                 "text": response.answer,
-                "evidence": evidence,
+                "evidence": evidence,  # citations와 동일한 리스트
+                "status": status,  # UI에서 이것만 확인
                 "diagnostics": response.diagnostics if DIAG_RAG else {}
             }
         else:
@@ -391,7 +402,12 @@ class RAGPipeline:
 
             return {
                 "text": error_msg,
-                "evidence": []
+                "evidence": [],
+                "status": {
+                    "retrieved_count": 0,
+                    "selected_count": 0,
+                    "found": False
+                }
             }
 
     def answer_text(self, query: str) -> str:

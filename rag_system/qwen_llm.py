@@ -231,7 +231,8 @@ class QwenLLM:
         
         for i, chunk in enumerate(context_chunks, 1):
             filename = Path(chunk.get('source', '')).name
-            content = chunk.get('content', '')
+            # 🔥 CRITICAL: Support both 'content' and 'snippet' fields
+            content = chunk.get('content') or chunk.get('snippet', '')
             score = chunk.get('score', 0.0)
             
             context_text += f"\n--- 문서 {i}: {filename} (관련도: {score:.3f}) ---\n"
@@ -306,7 +307,8 @@ class QwenLLM:
                 break
 
             filename = Path(chunk.get('source', '')).name
-            content = chunk.get('content', '')
+            # 🔥 CRITICAL: Support both 'content' and 'snippet' fields
+            content = chunk.get('content') or chunk.get('snippet', '')
 
             context_text += f"\n[{filename}]\n"
 
@@ -528,7 +530,8 @@ A:"""
             summary_parts = []
             for i, chunk in enumerate(context_chunks[:3], 1):
                 filename = chunk.get('source', '알 수 없음')
-                content_preview = (chunk.get('content', '')[:200] or '(내용 없음)')
+                # 🔥 CRITICAL: Support both 'content' and 'snippet' fields
+                content_preview = ((chunk.get('content') or chunk.get('snippet', ''))[:200] or '(내용 없음)')
                 summary_parts.append(f"{i}. {filename}\n{content_preview}...")
 
             basic_summary = f"다음 {len(context_chunks[:3])}개 문서에서 관련 정보를 찾았습니다:\n\n" + "\n\n".join(summary_parts)

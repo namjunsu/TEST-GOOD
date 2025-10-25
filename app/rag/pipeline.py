@@ -320,6 +320,37 @@ class RAGPipeline:
                 latency=time.perf_counter() - start_time,
             )
 
+    def _make_response(self, text: str, selected: List[Dict[str, Any]], retrieved: List[Dict[str, Any]]) -> dict:
+        """표준 응답 구조 생성 (citations 포함)
+
+        Args:
+            text: 생성된 답변 텍스트
+            selected: 실제 사용된 청크 리스트 (압축 후)
+            retrieved: 검색된 원본 결과 리스트
+
+        Returns:
+            표준화된 응답 dict (citations 필수)
+        """
+        citations = [{
+            "doc_id": c.get("doc_id"),
+            "title": c.get("title") or c.get("filename") or c.get("doc_id"),
+            "page": c.get("page", 1),
+            "snippet": (c.get("text") or c.get("snippet") or c.get("content") or "")[:300],
+            "preview_url": c.get("preview_url"),
+            "download_url": c.get("download_url"),
+        } for c in selected]
+
+        return {
+            "text": text,
+            "citations": citations,  # 🔴 표준 키 (필수)
+            "evidence": citations,   # 하위 호환성 (동일 데이터)
+            "status": {
+                "retrieved_count": len(retrieved),
+                "selected_count": len(selected),
+                "found": len(selected) > 0  # 🔴 유일한 판정 기준
+            }
+        }
+
     def answer(self, query: str, top_k: Optional[int] = None) -> dict:
         """답변 생성 (Evidence 포함 구조화된 응답)
 
@@ -330,14 +361,13 @@ class RAGPipeline:
         Returns:
             dict: {
                 "text": 답변 텍스트,
-                "evidence": [
-                    {
-                        "doc_id": 문서 ID,
-                        "page": 페이지 번호,
-                        "snippet": 발췌문,
-                        "meta": {"doc_id": str, "page": int, ...}
-                    }, ...
-                ]
+                "citations": 참고 문서 목록 (표준 키),
+                "evidence": 참고 문서 목록 (하위 호환),
+                "status": {
+                    "retrieved_count": int,
+                    "selected_count": int,
+                    "found": bool
+                }
             }
         """
         response = self.query(query, top_k=top_k or 5)
@@ -388,10 +418,30 @@ class RAGPipeline:
                 "found": len(evidence) > 0  # 🔴 유일한 판정 기준
             }
 
+            # 운영 표준 1행 요약 로그 (필수)
+            import re
+            author_mode = bool(re.search(r"(작성자|기안자|제안자)", query))
+            search_ms = int(response.metrics.get("search_time", 0) * 1000)
+            generate_ms = int(response.metrics.get("generate_time", 0) * 1000)
+            total_ms = int(response.latency * 1000)
+
+            logger.info(
+                f"[RAG] query=\"{query[:50]}...\" | "
+                f"retrieved={status['retrieved_count']} | "
+                f"selected={status['selected_count']} | "
+                f"found={status['found']} | "
+                f"author_mode={author_mode} | "
+                f"backfill={evidence_injected} | "
+                f"search_ms={search_ms} | "
+                f"generate_ms={generate_ms} | "
+                f"total_ms={total_ms}"
+            )
+
             return {
                 "text": response.answer,
-                "evidence": evidence,  # citations와 동일한 리스트
-                "status": status,  # UI에서 이것만 확인
+                "citations": evidence,  # 🔴 표준 키 (필수)
+                "evidence": evidence,   # 하위 호환성 (동일 데이터)
+                "status": status,       # UI에서 이것만 확인
                 "diagnostics": response.diagnostics if DIAG_RAG else {}
             }
         else:
@@ -400,9 +450,16 @@ class RAGPipeline:
             if response.error:
                 error_msg = f"{error_msg}\n\n상세: {response.error}"
 
+            # 운영 표준 로그 (에러 케이스)
+            logger.error(
+                f"[RAG] query=\"{query[:50]}...\" | "
+                f"status=ERROR | error=\"{response.error}\""
+            )
+
             return {
                 "text": error_msg,
-                "evidence": [],
+                "citations": [],  # 🔴 표준 키 (필수)
+                "evidence": [],   # 하위 호환성
                 "status": {
                     "retrieved_count": 0,
                     "selected_count": 0,

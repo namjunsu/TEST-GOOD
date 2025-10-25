@@ -18,7 +18,8 @@ Example:
 from __future__ import annotations
 
 import os
-from typing import Dict, List, Any
+import re
+from typing import Dict, List, Any, Tuple, Optional
 from collections import defaultdict
 
 from app.core.logging import get_logger
@@ -161,6 +162,45 @@ class HybridRetrieverV2:
 
         return fused
 
+    def _extract_author_query(self, query: str) -> Tuple[Optional[str], List[str]]:
+        """저자 질의 의도 추출 및 쿼리 확장
+
+        Args:
+            query: 원본 검색 쿼리
+
+        Returns:
+            (author_name, expanded_queries) tuple
+            - author_name: 추출된 저자 이름 (없으면 None)
+            - expanded_queries: 확장된 쿼리 리스트 (저자 의도가 없으면 [query])
+        """
+        # 저자 의도 패턴: "이름이/가 작성/기안/제안한 문서"
+        patterns = [
+            r"([가-힣\s]+)\s*(?:이|가)?\s*(?:작성|기안|제안)\s*(?:한|하신)?\s*(?:문서|자료|기안서)?",
+            r"(?:작성자|기안자|제안자)[\s:]*([가-힣\s]+)",
+            r"([가-힣\s]+)\s+(?:기안서|작성문서)",
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, query)
+            if match:
+                author_name = match.group(1).strip()
+                logger.info(f"저자 의도 감지: '{author_name}' (원본 쿼리: '{query}')")
+
+                # 쿼리 확장: 메타 필드 + OCR 텍스트 양쪽 매칭
+                expanded_queries = [
+                    f"{author_name}",           # 기본 이름 검색
+                    f"기안자 {author_name}",     # OCR 텍스트 내 표현
+                    f"작성자 {author_name}",
+                    f"{author_name} 기안서",
+                    f"{author_name} 문서",
+                ]
+
+                logger.info(f"쿼리 확장: {len(expanded_queries)}개 변형 생성")
+                return (author_name, expanded_queries)
+
+        # 저자 의도가 없는 일반 쿼리
+        return (None, [query])
+
     def search(
         self,
         query: str,
@@ -200,10 +240,51 @@ class HybridRetrieverV2:
         k_bm25 = k_bm25 or self.k_bm25
         k_vec = k_vec or self.k_vec
 
+        # 저자 질의 확장 (리콜 향상)
+        author_name, expanded_queries = self._extract_author_query(query)
+
         try:
-            # 1. BM25 search
-            logger.info(f"BM25 search: '{query}' (top_k={k_bm25})")
-            bm25_results = self.bm25.search(query, top_k=k_bm25)
+            # 확장 쿼리로 여러 검색 수행 후 융합 (저자 질의인 경우)
+            if author_name and len(expanded_queries) > 1:
+                logger.info(f"저자 질의 모드: {len(expanded_queries)}개 확장 쿼리로 검색")
+                all_bm25_results = []
+                all_vec_results = []
+
+                # 각 확장 쿼리로 검색
+                for i, exp_query in enumerate(expanded_queries, 1):
+                    # BM25 검색 (낮은 top_k 사용)
+                    bm25_part = self.bm25.search(exp_query, top_k=max(5, k_bm25 // len(expanded_queries)))
+                    all_bm25_results.extend(bm25_part)
+
+                    # Vector 검색 (낮은 top_k 사용)
+                    vec_part = self.vec.search(exp_query, top_k=max(5, k_vec // len(expanded_queries)))
+                    all_vec_results.extend(vec_part)
+
+                # 중복 제거 (doc_id 기준 최고 rank 유지)
+                bm25_dedup = {}
+                for r in all_bm25_results:
+                    doc_id = r['id']
+                    if doc_id not in bm25_dedup or r['rank'] < bm25_dedup[doc_id]['rank']:
+                        bm25_dedup[doc_id] = r
+
+                vec_dedup = {}
+                for r in all_vec_results:
+                    doc_id = r['id']
+                    if doc_id not in vec_dedup or r['rank'] < vec_dedup[doc_id]['rank']:
+                        vec_dedup[doc_id] = r
+
+                bm25_results = list(bm25_dedup.values())
+                vec_results = list(vec_dedup.values())
+
+                logger.info(
+                    f"확장 쿼리 검색 완료: BM25={len(bm25_results)} (중복제거 후), "
+                    f"Vec={len(vec_results)} (중복제거 후)"
+                )
+            else:
+                # 일반 검색 (저자 의도가 없는 경우)
+                # 1. BM25 search
+                logger.info(f"BM25 search: '{query}' (top_k={k_bm25})")
+                bm25_results = self.bm25.search(query, top_k=k_bm25)
 
             # [DIAG] BM25 검색 결과
             if DIAG_RAG and DIAG_LOG_LEVEL in ['DEBUG', 'INFO']:
@@ -253,6 +334,31 @@ class HybridRetrieverV2:
                     'page_count': meta.get('page_count', 0),
                     'path': meta.get('path', ''),
                 })
+
+            # 저자 매칭 부스팅 (soft filter: 완전 제거하지 않고 우선순위 상승)
+            if author_name:
+                author_match_count = 0
+                for doc in enriched_results:
+                    drafter = doc.get('drafter', '')
+                    if author_name in drafter or drafter in author_name:
+                        # 저자 매칭: 점수 2배 부스팅
+                        doc['score'] *= 2.0
+                        doc['author_match'] = True
+                        author_match_count += 1
+                        logger.debug(
+                            f"저자 매칭: {doc['id']} (drafter='{drafter}', "
+                            f"score boosted to {doc['score']:.4f})"
+                        )
+                    else:
+                        doc['author_match'] = False
+
+                # 부스팅 후 재정렬
+                enriched_results.sort(key=lambda x: x['score'], reverse=True)
+
+                logger.info(
+                    f"저자 부스팅 완료: {author_match_count}/{len(enriched_results)}개 "
+                    f"문서가 저자 '{author_name}'와 매칭됨"
+                )
 
             # [DIAG] 최종 결과 스냅샷
             if DIAG_RAG and DIAG_LOG_LEVEL == 'DEBUG' and enriched_results:

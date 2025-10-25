@@ -17,9 +17,11 @@ from functools import lru_cache
 import weakref
 
 
-# Generation 설정 상수
-DEFAULT_TEMPERATURE = 0.7
-DEFAULT_MAX_TOKENS = 1200
+# Generation 설정 상수 - L2 RAG 튜닝 (2025-10-25)
+# 일관성 향상: temperature 0.7 → 0.2
+# 효율성 향상: max_tokens 1200 → 512
+DEFAULT_TEMPERATURE = 0.2
+DEFAULT_MAX_TOKENS = 512
 DEFAULT_TOP_P = 0.9
 DEFAULT_TOP_K = 40
 DEFAULT_REPEAT_PENALTY = 1.1

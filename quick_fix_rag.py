@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-개선된 빠른 검색 RAG - LLM 요약 + 출처 인용 강제
+개선된 빠른 검색 RAG - LLM 요약 + 출처 인용 강제 + L2 리랭킹
 """
 
 from modules.search_module_hybrid import SearchModuleHybrid
+from modules.reranker import RuleBasedReranker
 import time
 import re
 
@@ -28,6 +29,14 @@ class QuickFixRAG:
             from modules.search_module import SearchModule
             self.search_module = SearchModule()
 
+        # L2 리랭커 초기화
+        try:
+            self.reranker = RuleBasedReranker()
+            logger.info("✅ RuleBasedReranker 초기화 성공")
+        except Exception as e:
+            logger.warning(f"⚠️ RuleBasedReranker 초기화 실패: {e}")
+            self.reranker = None
+
         # LLM (지연 로딩)
         self.llm = None
         self.llm_loaded = False
@@ -41,6 +50,19 @@ class QuickFixRAG:
             use_llm_summary: LLM 요약 사용 여부 (기본: True)
         """
 
+        # 메트릭 측정 시작
+        start_time = time.time()
+        metrics = {
+            'retrieval_ms': 0,
+            'rerank_ms': 0,
+            'llm_ms': 0,
+            'total_ms': 0,
+            'retrieved_k': 0,
+            'reranked_k': 0,
+            'context_tokens': 0,
+            'fallback_reason': None
+        }
+
         try:
             # 1. 기안자 및 연도 패턴 추출
             drafter_name = self._extract_author_name(query)
@@ -49,19 +71,50 @@ class QuickFixRAG:
 
             # 2. 조합 검색: 연도 + 기안자 (우선순위 최상위)
             if year and drafter_name:
+                retrieval_start = time.time()
                 logger.info(f"✅ 조합 검색 모드: {year}년 + 기안자={drafter_name}")
                 search_results = self._search_by_year_and_drafter(year, drafter_name)
+                metrics['retrieval_ms'] = int((time.time() - retrieval_start) * 1000)
+                metrics['retrieved_k'] = len(search_results)
+
+                # L2 리랭킹 적용
+                if search_results and self.reranker:
+                    rerank_start = time.time()
+                    search_results = self.reranker.rerank(query, search_results, top_k=20)
+                    metrics['rerank_ms'] = int((time.time() - rerank_start) * 1000)
+                    metrics['reranked_k'] = len(search_results)
+                    logger.info(f"🔄 리랭킹 완료: {len(search_results)}건")
+
+                metrics['total_ms'] = int((time.time() - start_time) * 1000)
+                self._log_metrics(metrics)
+
                 if search_results:
                     logger.info(f"✅ {year}년 {drafter_name} 문서 {len(search_results)}개 발견")
                     return self._format_drafter_results(query, f"{year}년 {drafter_name}", search_results)
                 else:
+                    metrics['fallback_reason'] = 'no_results'
                     logger.warning(f"⚠️  {year}년 {drafter_name} 문서 없음")
                     return f"❌ {year}년에 {drafter_name}이(가) 작성한 문서를 찾을 수 없습니다."
 
             # 3. 기안자만 검색
             if drafter_name:
+                retrieval_start = time.time()
                 logger.info(f"✅ 기안자 검색 모드: {drafter_name}")
                 search_results = self.search_module.search_by_drafter(drafter_name, top_k=200)
+                metrics['retrieval_ms'] = int((time.time() - retrieval_start) * 1000)
+                metrics['retrieved_k'] = len(search_results)
+
+                # L2 리랭킹 적용
+                if search_results and self.reranker:
+                    rerank_start = time.time()
+                    search_results = self.reranker.rerank(query, search_results, top_k=20)
+                    metrics['rerank_ms'] = int((time.time() - rerank_start) * 1000)
+                    metrics['reranked_k'] = len(search_results)
+                    logger.info(f"🔄 리랭킹 완료: {len(search_results)}건")
+
+                metrics['total_ms'] = int((time.time() - start_time) * 1000)
+                self._log_metrics(metrics)
+
                 if search_results:
                     logger.info(f"✅ 기안자 '{drafter_name}' 문서 {len(search_results)}개 발견")
                     return self._format_drafter_results(query, drafter_name, search_results)
@@ -70,24 +123,63 @@ class QuickFixRAG:
 
             # 4. 연도만 검색
             if year:
+                retrieval_start = time.time()
                 logger.info(f"✅ 연도 검색 모드: {year}년")
                 search_results = self._search_by_year(year)
+                metrics['retrieval_ms'] = int((time.time() - retrieval_start) * 1000)
+                metrics['retrieved_k'] = len(search_results)
+
+                # L2 리랭킹 적용
+                if search_results and self.reranker:
+                    rerank_start = time.time()
+                    search_results = self.reranker.rerank(query, search_results, top_k=20)
+                    metrics['rerank_ms'] = int((time.time() - rerank_start) * 1000)
+                    metrics['reranked_k'] = len(search_results)
+                    logger.info(f"🔄 리랭킹 완료: {len(search_results)}건")
+
+                metrics['total_ms'] = int((time.time() - start_time) * 1000)
+                self._log_metrics(metrics)
+
                 if search_results:
                     logger.info(f"✅ {year}년 문서 {len(search_results)}개 발견")
-                    return self._format_search_results(f"{year}년 문서", search_results[:20])
+                    return self._format_search_results(f"{year}년 문서", search_results)
 
             # 5. 일반 검색
-            search_results = self.search_module.search_by_content(query, top_k=5)
+            retrieval_start = time.time()
+            search_results = self.search_module.search_by_content(query, top_k=20)
+            metrics['retrieval_ms'] = int((time.time() - retrieval_start) * 1000)
+            metrics['retrieved_k'] = len(search_results)
+
+            # L2 리랭킹 적용
+            if search_results and self.reranker:
+                rerank_start = time.time()
+                search_results = self.reranker.rerank(query, search_results, top_k=5)
+                metrics['rerank_ms'] = int((time.time() - rerank_start) * 1000)
+                metrics['reranked_k'] = len(search_results)
+                logger.info(f"🔄 리랭킹 완료: {len(search_results)}건")
 
             if not search_results:
-                return "❌ 관련 문서를 찾을 수 없습니다."
+                metrics['fallback_reason'] = 'no_results'
+                metrics['total_ms'] = int((time.time() - start_time) * 1000)
+                self._log_metrics(metrics)
+                return self._format_no_results_message(query)
 
-            # 3. LLM 요약 사용 여부 결정
+            # 6. LLM 요약 사용 여부 결정
             if use_llm_summary and self._ensure_llm_loaded():
-                return self._answer_with_llm_summary(query, search_results)
+                llm_start = time.time()
+                result = self._answer_with_llm_summary(query, search_results)
+                metrics['llm_ms'] = int((time.time() - llm_start) * 1000)
+                metrics['context_tokens'] = sum(len(str(doc.get('content', '')).split()) for doc in search_results[:3])
+                metrics['total_ms'] = int((time.time() - start_time) * 1000)
+                self._log_metrics(metrics)
+                return result
             else:
                 # LLM 없이 검색 결과만 반환 (출처 포함)
-                return self._format_search_results(query, search_results)
+                metrics['fallback_reason'] = 'llm_disabled'
+                metrics['total_ms'] = int((time.time() - start_time) * 1000)
+                self._log_metrics(metrics)
+                fallback_msg = "💡 **LLM 비활성**: 검색 결과만 표시합니다 (요약 미제공)\n\n"
+                return fallback_msg + self._format_search_results(query, search_results)
 
         except Exception as e:
             logger.error(f"❌ 검색 오류: {e}")
@@ -133,7 +225,35 @@ class QuickFixRAG:
 
         except Exception as e:
             logger.error(f"❌ LLM 요약 실패: {e}, 검색 결과로 대체")
-            return self._format_search_results(query, search_results)
+            fallback_msg = "⚠️ **LLM 요약 실패**: 검색 결과만 표시합니다\n\n"
+            return fallback_msg + self._format_search_results(query, search_results)
+
+    def _format_no_results_message(self, query: str) -> str:
+        """검색 결과 없음 메시지 (사용자 친화적)
+
+        Args:
+            query: 검색 질의
+
+        Returns:
+            사용자 친화적 안내 메시지
+        """
+        return f"""🔍 **검색 결과 없음**
+
+**질의:** {query}
+
+**안내:**
+- 입력하신 질의와 일치하는 문서를 찾을 수 없습니다
+- 다음 방법을 시도해보세요:
+  1. 다른 키워드로 검색 (예: "2025년 문서", "방송 장비")
+  2. 파일명 직접 지정 (예: "2025-03-04_방송_영상_보존용_DVR_교체_검토의_건.pdf")
+  3. 기안자 이름으로 검색 (예: "남준수 문서", "최새름이 작성한 문서")
+  4. 연도로 검색 (예: "2024년 문서")
+
+💡 **검색 팁:**
+- 구체적인 키워드 사용
+- 여러 키워드 조합 (예: "2025년 카메라 구매")
+- 파일명이나 기안자명 정확히 지정
+"""
 
     def _is_valid_drafter_name(self, drafter: str) -> bool:
         """기안자 이름 유효성 검증 (잘못된 키워드 필터링)
@@ -389,6 +509,38 @@ class QuickFixRAG:
                 return name
 
         return None
+
+    def _log_metrics(self, metrics: dict) -> None:
+        """단계별 메트릭 로깅 (1행 요약)
+
+        Args:
+            metrics: 메트릭 딕셔너리
+        """
+        # 1행 요약 로그
+        log_parts = []
+        log_parts.append(f"total={metrics['total_ms']}ms")
+
+        if metrics['retrieval_ms'] > 0:
+            log_parts.append(f"retrieval={metrics['retrieval_ms']}ms")
+
+        if metrics['rerank_ms'] > 0:
+            log_parts.append(f"rerank={metrics['rerank_ms']}ms")
+
+        if metrics['llm_ms'] > 0:
+            log_parts.append(f"llm={metrics['llm_ms']}ms")
+
+        log_parts.append(f"retrieved={metrics['retrieved_k']}")
+
+        if metrics['reranked_k'] > 0:
+            log_parts.append(f"reranked={metrics['reranked_k']}")
+
+        if metrics['context_tokens'] > 0:
+            log_parts.append(f"tokens={metrics['context_tokens']}")
+
+        if metrics['fallback_reason']:
+            log_parts.append(f"fallback={metrics['fallback_reason']}")
+
+        logger.info(f"📊 메트릭: {' | '.join(log_parts)}")
 
     def _ensure_llm_loaded(self) -> bool:
         """LLM 로딩 (지연 로딩)"""

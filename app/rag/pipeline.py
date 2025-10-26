@@ -703,17 +703,21 @@ class RAGPipeline:
         use_v2 = os.getenv('USE_V2_RETRIEVER', 'false').lower() == 'true'
 
         if use_v2:
-            try:
-                from app.rag.retriever_v2 import HybridRetrieverV2
-                v2_retriever = HybridRetrieverV2()
-                logger.info("✅ HybridRetrieverV2 (v2 신규 시스템) 생성 완료")
-
-                # V2 adapter: fused_results → list 변환
-                return _V2RetrieverAdapter(v2_retriever)
-            except Exception as e:
-                logger.error(f"V2 Retriever 생성 실패, v1으로 폴백: {e}")
-                # 폴백: v1 사용
-                use_v2 = False
+            # V2 Retriever는 archive로 이동되었습니다 (20251026)
+            # 레거시 코드를 제거하고 v1으로 폴백합니다
+            logger.warning("⚠️ USE_V2_RETRIEVER는 더 이상 지원되지 않습니다. v1 Retriever를 사용합니다.")
+            use_v2 = False
+            # try:
+            #     from app.rag.retriever_v2 import HybridRetrieverV2
+            #     v2_retriever = HybridRetrieverV2()
+            #     logger.info("✅ HybridRetrieverV2 (v2 신규 시스템) 생성 완료")
+            #
+            #     # V2 adapter: fused_results → list 변환
+            #     return _V2RetrieverAdapter(v2_retriever)
+            # except Exception as e:
+            #     logger.error(f"V2 Retriever 생성 실패, v1으로 폴백: {e}")
+            #     # 폴백: v1 사용
+            #     use_v2 = False
 
         if not use_v2:
             try:

@@ -17,7 +17,7 @@ try:
 except:
     pass
 
-from app.data.metadata.db import MetadataDB
+from modules.metadata_db import MetadataDB
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)

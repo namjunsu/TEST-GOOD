@@ -15,7 +15,7 @@ from pdf2image import convert_from_path
 import pdfplumber
 import hashlib
 import json
-from app.data.metadata import db_compat as sqlite3
+import sqlite3
 from datetime import datetime
 import re
 

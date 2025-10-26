@@ -7,6 +7,7 @@ from modules.search_module_hybrid import SearchModuleHybrid
 from modules.reranker import RuleBasedReranker
 import time
 import re
+import sqlite3
 
 from app.core.logging import get_logger
 
@@ -64,6 +65,24 @@ class QuickFixRAG:
         }
 
         try:
+            # 🔥 P0: 파일명 직접 매칭 (최우선 순위)
+            filename_pattern = r'(\S+\.pdf)'
+            filename_match = re.search(filename_pattern, query, re.IGNORECASE)
+
+            if filename_match:
+                filename = filename_match.group(1).strip()
+                logger.info(f"🎯 P0: 파일명 직접 매칭 시도 - {filename}")
+
+                # DB에서 파일 직접 조회
+                file_result = self._search_by_exact_filename(filename)
+                if file_result:
+                    logger.info(f"✅ 파일명 매칭 성공: {filename}")
+                    metrics['retrieval_ms'] = int((time.time() - start_time) * 1000)
+                    metrics['retrieved_k'] = 1
+                    metrics['total_ms'] = int((time.time() - start_time) * 1000)
+                    self._log_metrics(metrics)
+                    return self._format_file_result(filename, file_result)
+
             # 1. 기안자 및 연도 패턴 추출
             drafter_name = self._extract_author_name(query)
             year_match = re.search(r'(\d{4})\s*년', query)
@@ -560,6 +579,81 @@ class QuickFixRAG:
         except Exception as e:
             logger.warning(f"⚠️ LLM 로드 실패 (검색 결과만 반환): {e}")
             return False
+
+    def _search_by_exact_filename(self, filename: str) -> dict:
+        """파일명으로 정확히 검색
+
+        Args:
+            filename: 파일명 (예: "2025-03-20_채널에이_중계차_카메라_노후화_장애_긴급_보수건.pdf")
+
+        Returns:
+            파일 정보 딕셔너리 (없으면 None)
+        """
+        try:
+            conn = sqlite3.connect('metadata.db')
+            cursor = conn.cursor()
+
+            # LIKE로 부분 매칭 (파일명이 포함되면 OK)
+            cursor.execute("""
+                SELECT path, filename, drafter, date, category, text_preview
+                FROM documents
+                WHERE filename LIKE ?
+                LIMIT 1
+            """, (f'%{filename}%',))
+
+            result = cursor.fetchone()
+            conn.close()
+
+            if result:
+                path, fname, drafter, date, category, text_preview = result
+                return {
+                    'path': path,
+                    'filename': fname,
+                    'drafter': drafter or '정보 없음',
+                    'date': date or '정보 없음',
+                    'category': category or '미분류',
+                    'content': text_preview or ''
+                }
+            else:
+                return None
+
+        except Exception as e:
+            logger.error(f"❌ 파일명 검색 실패: {e}")
+            return None
+
+    def _format_file_result(self, filename: str, file_result: dict) -> str:
+        """파일 검색 결과 포매팅
+
+        Args:
+            filename: 요청한 파일명
+            file_result: 파일 정보
+
+        Returns:
+            포매팅된 문자열
+        """
+        answer = f"**📄 문서:** {file_result['filename']}\n\n"
+
+        # 메타데이터
+        answer += "**📋 문서 정보**\n"
+        answer += f"- **기안자:** {file_result['drafter']}\n"
+        answer += f"- **날짜:** {file_result['date']}\n"
+        answer += f"- **카테고리:** {file_result['category']}\n\n"
+
+        # 내용 미리보기 (처음 1000자)
+        content = file_result.get('content', '')
+        if content:
+            answer += "**📝 주요 내용**\n"
+            content_preview = content[:1000].strip()
+            answer += content_preview
+
+            if len(content) > 1000:
+                answer += "...\n\n*(전체 문서는 더 긴 내용을 포함합니다)*"
+        else:
+            answer += "*(문서 내용을 읽을 수 없습니다)*"
+
+        answer += f"\n\n**📎 출처:** [{file_result['filename']}]"
+
+        return answer
 
 
 if __name__ == "__main__":

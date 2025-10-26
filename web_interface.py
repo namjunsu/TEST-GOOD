@@ -299,7 +299,7 @@ def main():
     # 현황 표시
     # 자동 인덱싱 시스템 초기화
     if 'auto_indexer' not in st.session_state:
-        from auto_indexer import AutoIndexer
+        from scripts.utils.auto_indexer import AutoIndexer
         st.session_state.auto_indexer = AutoIndexer(check_interval=60)  # 60초마다 체크
         st.session_state.auto_indexer.start_monitoring()
         print("🚀 자동 인덱싱 시스템 시작")

@@ -312,6 +312,15 @@ class QuickFixRAG:
 
     def _format_search_results(self, query: str, search_results: list) -> str:
         """검색 결과 포매팅 (출처 강제 포함)"""
+
+        # 🔧 Hotfix Gate 3: 목록 품질 후처리 (중복 제거 + 스니펫 클린)
+        from app.rag.render.list_postprocess import dedup_and_clean
+        before_count = len(search_results)
+        search_results = dedup_and_clean(search_results)
+        after_count = len(search_results)
+        if before_count != after_count:
+            logger.info(f"🔧 중복 제거: {before_count}건 → {after_count}건")
+
         total_count = len(search_results)
 
         answer = f"**{query}** 검색 결과\n\n"
@@ -329,11 +338,12 @@ class QuickFixRAG:
             if self._is_valid_drafter_name(drafter):
                 answer += f"   - 기안자: {drafter}\n"
 
-            # 내용 미리보기 (짧게)
-            content_preview = (doc.get('content', '')[:150] + "..."
-                               if len(doc.get('content', '')) > 150
-                               else doc.get('content', ''))
-            answer += f"   - 내용: {content_preview}\n"
+            # 내용 미리보기 (클린된 스니펫 사용)
+            snippet = doc.get('snippet', '')
+            snippet_preview = snippet[:150]
+            if len(snippet) > 150:
+                snippet_preview += "..."
+            answer += f"   - 내용: {snippet_preview}\n"
 
             # ✅ 출처 강제 추가
             answer += f"   - 📎 출처: [{doc['filename']}]\n\n"
@@ -342,6 +352,15 @@ class QuickFixRAG:
 
     def _format_drafter_results(self, query: str, drafter_name: str, search_results: list) -> str:
         """기안자 검색 결과 포매팅 (출처 포함)"""
+
+        # 🔧 Hotfix Gate 3: 목록 품질 후처리
+        from app.rag.render.list_postprocess import dedup_and_clean
+        before_count = len(search_results)
+        search_results = dedup_and_clean(search_results)
+        after_count = len(search_results)
+        if before_count != after_count:
+            logger.info(f"🔧 중복 제거: {before_count}건 → {after_count}건")
+
         total_count = len(search_results)
         display_count = min(100, total_count)  # 최대 100개 표시
 
@@ -360,11 +379,12 @@ class QuickFixRAG:
             if doc.get('category'):
                 answer += f"   - 카테고리: {doc['category']}\n"
 
-            # 내용 미리보기
-            content_preview = (doc.get('content', '')[:150] + "..."
-                               if len(doc.get('content', '')) > 150
-                               else doc.get('content', ''))
-            answer += f"   - 내용: {content_preview}\n"
+            # 내용 미리보기 (클린된 스니펫 사용)
+            snippet = doc.get('snippet', '')
+            snippet_preview = snippet[:150]
+            if len(snippet) > 150:
+                snippet_preview += "..."
+            answer += f"   - 내용: {snippet_preview}\n"
 
             # ✅ 출처 강제 추가
             answer += f"   - 📎 출처: [{doc['filename']}]\n\n"

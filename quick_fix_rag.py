@@ -73,15 +73,30 @@ class QuickFixRAG:
                 filename = filename_match.group(1).strip()
                 logger.info(f"🎯 P0: 파일명 직접 매칭 시도 - {filename}")
 
-                # DB에서 파일 직접 조회
-                file_result = self._search_by_exact_filename(filename)
+                # DB에서 파일 직접 조회 (3단계 매칭)
+                file_result, match_stage, candidates = self._search_by_exact_filename(filename)
+
+                # 로그 메트릭에 기록
+                metrics['filename_match'] = match_stage
+
                 if file_result:
-                    logger.info(f"✅ 파일명 매칭 성공: {filename}")
+                    logger.info(f"✅ 파일명 매칭 성공: {filename} (stage={match_stage})")
                     metrics['retrieval_ms'] = int((time.time() - start_time) * 1000)
                     metrics['retrieved_k'] = 1
+                    metrics['router_reason'] = f'filename_{match_stage}'
                     metrics['total_ms'] = int((time.time() - start_time) * 1000)
                     self._log_metrics(metrics)
                     return self._format_file_result(filename, file_result)
+
+                elif match_stage == 'like_multiple':
+                    # 다중 후보 발견 - 사용자 선택 리스트 반환
+                    logger.info(f"📋 다중 파일 후보 제공: {len(candidates)}건")
+                    metrics['retrieval_ms'] = int((time.time() - start_time) * 1000)
+                    metrics['retrieved_k'] = len(candidates)
+                    metrics['router_reason'] = 'filename_ambiguous'
+                    metrics['total_ms'] = int((time.time() - start_time) * 1000)
+                    self._log_metrics(metrics)
+                    return self._format_candidate_list(filename, candidates)
 
             # 1. 기안자 및 연도 패턴 추출
             drafter_name = self._extract_author_name(query)
@@ -539,6 +554,13 @@ class QuickFixRAG:
         log_parts = []
         log_parts.append(f"total={metrics['total_ms']}ms")
 
+        # 라우팅 정보
+        if metrics.get('router_reason'):
+            log_parts.append(f"route={metrics['router_reason']}")
+
+        if metrics.get('filename_match'):
+            log_parts.append(f"file_match={metrics['filename_match']}")
+
         if metrics['retrieval_ms'] > 0:
             log_parts.append(f"retrieval={metrics['retrieval_ms']}ms")
 
@@ -580,49 +602,126 @@ class QuickFixRAG:
             logger.warning(f"⚠️ LLM 로드 실패 (검색 결과만 반환): {e}")
             return False
 
-    def _search_by_exact_filename(self, filename: str) -> dict:
-        """파일명으로 정확히 검색
+    def _normalize_filename(self, name: str) -> str:
+        """파일명 정규화
+
+        Args:
+            name: 원본 파일명
+
+        Returns:
+            정규화된 파일명
+        """
+        import unicodedata
+        import urllib.parse
+
+        n = name.strip()
+        n = urllib.parse.unquote(n)            # %20 등 해제
+        n = unicodedata.normalize("NFKC", n)   # 전각/호환문자 통일
+        n = n.replace(" ", "_")                # 공백→언더스코어
+        n = re.sub(r'\((\d+)\)(?=\.pdf$)', '', n, flags=re.I)  # (1).pdf → .pdf
+        n = re.sub(r'_(\d+)(?=\.pdf$)', '', n, flags=re.I)     # _1.pdf → .pdf
+        n = re.sub(r'__+', '_', n)             # 다중 언더스코어 축약
+        n = n.lower()
+        return n
+
+    def _search_by_exact_filename(self, filename: str) -> tuple:
+        """파일명으로 정확히 검색 (3단계 매칭)
 
         Args:
             filename: 파일명 (예: "2025-03-20_채널에이_중계차_카메라_노후화_장애_긴급_보수건.pdf")
 
         Returns:
-            파일 정보 딕셔너리 (없으면 None)
+            (result, match_stage, candidates)
+            - result: 파일 정보 딕셔너리 (없으면 None)
+            - match_stage: 'eq' | 'norm' | 'like' | 'none'
+            - candidates: LIKE 단계에서 다중 매칭된 후보 리스트
         """
         try:
-            conn = sqlite3.connect('metadata.db')
+            conn = sqlite3.connect('metadata.db', uri=True, check_same_thread=False, timeout=3.0)
             cursor = conn.cursor()
 
-            # LIKE로 부분 매칭 (파일명이 포함되면 OK)
+            # 읽기 전용 최적화
+            cursor.execute("PRAGMA query_only=ON")
+
+            # 1단계: 정확 일치 (COLLATE NOCASE)
             cursor.execute("""
                 SELECT path, filename, drafter, date, category, text_preview
                 FROM documents
-                WHERE filename LIKE ?
+                WHERE filename = ? COLLATE NOCASE
                 LIMIT 1
-            """, (f'%{filename}%',))
+            """, (filename,))
 
             result = cursor.fetchone()
+            if result:
+                conn.close()
+                logger.info(f"✅ 파일명 매칭: eq (정확 일치)")
+                return self._build_file_result(result), 'eq', []
+
+            # 2단계: 정규화 일치
+            normalized = self._normalize_filename(filename)
+            cursor.execute("""
+                SELECT path, filename, drafter, date, category, text_preview
+                FROM documents
+                WHERE normalized_filename = ?
+                LIMIT 1
+            """, (normalized,))
+
+            result = cursor.fetchone()
+            if result:
+                conn.close()
+                logger.info(f"✅ 파일명 매칭: norm (정규화 일치)")
+                return self._build_file_result(result), 'norm', []
+
+            # 3단계: 부분 일치 (LIKE) - 최대 5건
+            cursor.execute("""
+                SELECT path, filename, drafter, date, category, text_preview
+                FROM documents
+                WHERE filename LIKE ? COLLATE NOCASE
+                LIMIT 5
+            """, (f'%{filename}%',))
+
+            results = cursor.fetchall()
             conn.close()
 
-            if result:
-                path, fname, drafter, date, category, text_preview = result
-                return {
-                    'path': path,
-                    'filename': fname,
-                    'drafter': drafter or '정보 없음',
-                    'date': date or '정보 없음',
-                    'category': category or '미분류',
-                    'content': text_preview or ''
-                }
-            else:
-                return None
+            if not results:
+                logger.warning(f"⚠️ 파일명 매칭 실패: {filename}")
+                return None, 'none', []
+
+            # 단일 매칭
+            if len(results) == 1:
+                logger.info(f"✅ 파일명 매칭: like (부분 일치, 단일)")
+                return self._build_file_result(results[0]), 'like', []
+
+            # 다중 매칭 - 후보 리스트 반환
+            logger.warning(f"⚠️ 파일명 다중 매칭: {len(results)}건")
+            candidates = [self._build_file_result(r) for r in results[:3]]
+            return None, 'like_multiple', candidates
 
         except Exception as e:
             logger.error(f"❌ 파일명 검색 실패: {e}")
-            return None
+            return None, 'error', []
+
+    def _build_file_result(self, row: tuple) -> dict:
+        """DB 결과를 파일 정보 딕셔너리로 변환
+
+        Args:
+            row: (path, filename, drafter, date, category, text_preview)
+
+        Returns:
+            파일 정보 딕셔너리
+        """
+        path, fname, drafter, date, category, text_preview = row
+        return {
+            'path': path,
+            'filename': fname,
+            'drafter': drafter or '정보 없음',
+            'date': date or '정보 없음',
+            'category': category or '미분류',
+            'content': text_preview or ''
+        }
 
     def _format_file_result(self, filename: str, file_result: dict) -> str:
-        """파일 검색 결과 포매팅
+        """파일 검색 결과 포매팅 (노이즈 제거 적용)
 
         Args:
             filename: 요청한 파일명
@@ -639,19 +738,64 @@ class QuickFixRAG:
         answer += f"- **날짜:** {file_result['date']}\n"
         answer += f"- **카테고리:** {file_result['category']}\n\n"
 
-        # 내용 미리보기 (처음 1000자)
+        # 내용 미리보기 (노이즈 제거 + 처음 1000자)
         content = file_result.get('content', '')
         if content:
-            answer += "**📝 주요 내용**\n"
-            content_preview = content[:1000].strip()
-            answer += content_preview
+            # 텍스트 클리너 적용
+            try:
+                from app.rag.preprocess.clean_text import TextCleaner
+                cleaner = TextCleaner()
+                cleaned_content, noise_counts = cleaner.clean(content)
 
-            if len(content) > 1000:
-                answer += "...\n\n*(전체 문서는 더 긴 내용을 포함합니다)*"
+                if sum(noise_counts.values()) > 0:
+                    logger.debug(f"🧹 노이즈 제거: {sum(noise_counts.values())}개")
+
+                content = cleaned_content
+            except Exception as e:
+                logger.warning(f"⚠️ 텍스트 클리닝 실패 (원문 사용): {e}")
+
+            if content.strip():
+                answer += "**📝 주요 내용**\n"
+                content_preview = content[:1000].strip()
+                answer += content_preview
+
+                if len(content) > 1000:
+                    answer += "...\n\n*(전체 문서는 더 긴 내용을 포함합니다)*"
+            else:
+                # 폴백: 메타데이터 기반 1~2줄 요약
+                answer += "**📝 요약**\n"
+                answer += f"기안자 {file_result['drafter']}가 {file_result['date']}에 작성한 "
+                answer += f"{file_result['category']} 관련 문서입니다."
         else:
-            answer += "*(문서 내용을 읽을 수 없습니다)*"
+            # 폴백: 메타데이터 기반 1~2줄 요약
+            answer += "**📝 요약**\n"
+            answer += f"기안자 {file_result['drafter']}가 {file_result['date']}에 작성한 "
+            answer += f"{file_result['category']} 관련 문서입니다."
 
         answer += f"\n\n**📎 출처:** [{file_result['filename']}]"
+
+        return answer
+
+    def _format_candidate_list(self, query_filename: str, candidates: list) -> str:
+        """다중 파일 후보 리스트 포매팅
+
+        Args:
+            query_filename: 사용자가 요청한 파일명
+            candidates: 후보 파일 리스트
+
+        Returns:
+            포매팅된 문자열
+        """
+        answer = f"**⚠️ 파일명이 모호합니다:** `{query_filename}`\n\n"
+        answer += f"**{len(candidates)}개의 유사한 파일이 발견되었습니다. 정확한 파일명을 선택해주세요:**\n\n"
+
+        for i, candidate in enumerate(candidates, 1):
+            answer += f"**{i}. {candidate['filename']}**\n"
+            answer += f"   - 기안자: {candidate['drafter']}\n"
+            answer += f"   - 날짜: {candidate['date']}\n"
+            answer += f"   - 카테고리: {candidate['category']}\n\n"
+
+        answer += "💡 **정확한 파일명을 복사하여 다시 질문해주세요.**"
 
         return answer
 

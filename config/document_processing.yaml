@@ -1,0 +1,176 @@
+# 문서 처리 설정
+# 2025-10-25 생성
+
+# A. 모드 분기 설정
+mode_routing:
+  # 질답 의도 키워드 (이 키워드가 포함되면 Q&A 모드 우선)
+  qa_intent_keywords:
+    - "요약"
+    - "핵심"
+    - "비용"
+    - "원인"
+    - "조치"
+    - "결론"
+    - "리스크"
+    - "표"
+    - "정리"
+    - "분석"
+    - "평가"
+    - "검토"
+    - "판단"
+
+  # 문서 미리보기 모드 전용 키워드 (질답 의도 없이 단순 조회)
+  preview_only_keywords:
+    - "내용 보여"
+    - "원문"
+    - "전체"
+    - "미리보기"
+
+  # 파일명 패턴
+  filename_pattern: '\S+\.pdf'
+
+# B. 텍스트 노이즈 제거 설정
+text_cleaning:
+  # 제거할 노이즈 패턴 (정규식)
+  noise_patterns:
+    # 프린트 타임스탬프
+    - pattern: '(오전|오후)\s?\d{1,2}:\d{2}'
+      description: "프린트 타임스탬프"
+
+    # 프린트뷰 URL
+    - pattern: 'approval_form_popup\.php[^\s]*'
+      description: "프린트뷰 URL"
+
+    # 그룹웨어 URL 패턴
+    - pattern: 'http[s]?://gw\.channela-mt\.com[^\s]*'
+      description: "그룹웨어 URL"
+
+    # 페이지 번호 패턴
+    - pattern: '^\s*-\s*\d+\s*-\s*$'
+      description: "페이지 번호"
+
+  # 반복 헤더/푸터 (빈도 기반, 코드에서 처리)
+  min_repeat_for_noise: 3
+
+  # 중복 라인 제거
+  deduplicate_lines: true
+  max_duplicate_threshold: 2
+
+# C. 메타 파싱 설정
+meta_parsing:
+  # 날짜 표준
+  date_priority:
+    - "기안일자"
+    - "시행일자"
+    - "작성일자"
+
+  # 카테고리 분류 규칙
+  category_rules:
+    # 우선순위 1: 문서 유형
+    document_type:
+      - keywords: ["수리", "보수", "점검"]
+        category: "수리"
+      - keywords: ["구매", "구입", "매입"]
+        category: "구매"
+      - keywords: ["교체", "대체", "변경"]
+        category: "교체"
+      - keywords: ["검토", "평가", "분석"]
+        category: "검토"
+
+    # 우선순위 2: 장비 분류
+    equipment_type:
+      - keywords: ["무선", "마이크", "UTX", "URX"]
+        category: "오디오(무선)"
+      - keywords: ["카메라", "렌즈", "촬영"]
+        category: "영상촬영"
+      - keywords: ["중계", "송출", "전송"]
+        category: "중계장비"
+      - keywords: ["모니터", "디스플레이"]
+        category: "영상표시"
+      - keywords: ["스튜디오", "조명"]
+        category: "스튜디오"
+
+  # 기본 카테고리 (분류 실패 시)
+  default_category: "미분류"
+
+# D. 표 파싱 설정
+table_parsing:
+  # 헤더 패턴 (대소문자 무시, 공백/탭/콜론 허용)
+  header_patterns:
+    - "모델명"
+    - "모델"
+    - "기종"
+    - "수리내역"
+    - "수리내용"
+    - "수리 내용"
+    - "항목"
+    - "내역"
+    - "수량"
+    - "개수"
+    - "단가"
+    - "가격"
+    - "금액"
+    - "합계"
+    - "소계"
+    - "총액"
+
+  # 숫자 정규화
+  number_normalization:
+    remove_chars: [",", "원", " ", "₩"]  # 탭 문자는 코드에서 처리
+    allow_decimal: false
+
+  # 합계 검증
+  sum_validation:
+    tolerance: 1  # ±1원 오차 허용
+    warn_on_mismatch: true
+
+  # 파싱 실패 시 폴백
+  fallback_on_error: true
+
+# E. 요약 템플릿 설정
+summary_template:
+  sections:
+    - id: "meta"
+      title: "문서 정보"
+      fields:
+        - "기안자"
+        - "부서"
+        - "문서번호"
+        - "보존기간"
+        - "기안일자"
+        - "시행일자"
+
+    - id: "summary"
+      title: "핵심 요약"
+      description: "장애 요지, 조치, 리스크"
+
+    - id: "cost"
+      title: "비용 (VAT 별도)"
+      description: "항목별 비용 및 합계"
+
+    - id: "risk"
+      title: "리스크"
+      description: "향후 우려사항 및 조치 필요"
+
+  # 출력 형식
+  output_format: "markdown"
+
+# F. 로깅 설정
+logging:
+  # 추가 로그 필드
+  fields:
+    - "mode"
+    - "router_reason"
+    - "cleaned_noise_counts"
+    - "meta_dates"
+    - "category_source"  # rule|ml|default
+    - "table_parse_status"  # success|partial|failed
+    - "sum_match"  # boolean
+
+  # 민감정보 마스킹
+  mask_sensitive: true
+  sensitive_patterns:
+    - pattern: '\d{3}-\d{3,4}-\d{4}'
+      description: "전화번호"
+    - pattern: '\d{6}-\d{7}'
+      description: "주민등록번호"

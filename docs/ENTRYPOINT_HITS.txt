@@ -1,0 +1,100 @@
+auto_indexer.py:449:    args = parser.parse_args()
+tests/test_parse_table.py:7:from app.rag.parse.parse_tables import TableParser
+tests/test_parse_table.py:133:    def test_parse_full_table(self, parser):
+tests/test_parse_table.py:146:        assert result['parse_status'] in ['success', 'partial']
+tests/test_filename_matching.py:12:from quick_fix_rag import QuickFixRAG
+tests/test_filename_matching.py:20:        """QuickFixRAG 인스턴스 생성"""
+tests/test_filename_matching.py:21:        return QuickFixRAG(use_hybrid=False)  # 빠른 테스트를 위해 hybrid 비활성화
+rag_system/hybrid_search.py:581:                filtered_results, multilevel_stats = self.multilevel_filter.process_full_pipeline(
+rag_system/multilevel_filter.py:421:    def process_full_pipeline(self, vector_results: List[Dict], 
+tests/test_clean_text.py:7:from app.rag.preprocess.clean_text import TextCleaner
+tests/test_parse_meta.py:7:from app.rag.parse.parse_meta import MetaParser
+tests/test_parse_meta.py:27:        display_date, date_detail = parser.parse_dates(metadata)
+tests/test_parse_meta.py:41:        display_date, _ = parser.parse_dates(metadata)
+tests/test_parse_meta.py:53:        _, date_detail = parser.parse_dates(metadata)
+tests/test_parse_meta.py:106:    def test_parse_full_metadata(self, parser):
+test_l2_rag.py:20:from quick_fix_rag import QuickFixRAG
+test_l2_rag.py:32:        self.rag = QuickFixRAG(use_hybrid=True)
+test_l2_rag.py:200:        # 1. pipeline.py 검증
+test_l2_rag.py:201:        pipeline_file = Path(__file__).parent / "app" / "rag" / "pipeline.py"
+test_l2_rag.py:202:        if pipeline_file.exists():
+test_l2_rag.py:203:            with open(pipeline_file, 'r', encoding='utf-8') as f:
+test_l2_rag.py:213:                    logger.error(f"검증 실패: pipeline.py에 doc_number 컬럼 참조 발견")
+test_l2_rag.py:217:            logger.info("✓ pipeline.py - doc_number 참조 없음")
+test_l2_rag.py:219:            logger.warning("⚠ pipeline.py 파일 없음 (건너뜀)")
+diagnose_rag.py:82:        from app.rag.pipeline import RAGPipeline
+diagnose_rag.py:85:        pipeline = RAGPipeline()
+diagnose_rag.py:89:        retriever = pipeline.retriever
+diagnose_rag.py:97:        return pipeline
+diagnose_rag.py:104:def test_search(pipeline):
+diagnose_rag.py:110:    if not pipeline:
+diagnose_rag.py:126:            results = pipeline.retriever.search(query, top_k=3)
+diagnose_rag.py:146:def test_full_rag(pipeline):
+diagnose_rag.py:152:    if not pipeline:
+diagnose_rag.py:162:        result = pipeline.answer(test_query, top_k=3)
+diagnose_rag.py:236:    pipeline = check_retriever()
+diagnose_rag.py:239:    test_search(pipeline)
+diagnose_rag.py:242:    test_full_rag(pipeline)
+test_author_fix.py:13:from app.rag.pipeline import RAGPipeline
+auto_index_watcher.py:229:    args = parser.parse_args()
+utils/system_checker.py:861:    args = parser.parse_args()
+web_interface_chat.py:13:from quick_fix_rag import QuickFixRAG
+web_interface_chat.py:176:            st.session_state.rag = QuickFixRAG()
+web_interface_chat.py:386:                # QuickFixRAG를 사용한 검색
+scripts/utils/auto_indexer.py:449:    args = parser.parse_args()
+scripts/utils/auto_index_watcher.py:229:    args = parser.parse_args()
+scripts/list_documents.py:201:    args = parser.parse_args()
+experiments/hybrid_chat_rag_v2.py:11:from quick_fix_rag import QuickFixRAG
+experiments/hybrid_chat_rag_v2.py:35:            self.search_rag = QuickFixRAG()
+experiments/hybrid_chat_rag_v2.py:36:            logger.info("QuickFixRAG 초기화 성공")
+experiments/hybrid_chat_rag_v2.py:38:            logger.error("QuickFixRAG 초기화 실패", exception=e)
+scripts/ingest_content.py:143:    args = parser.parse_args()
+web_interface.py:29:from app.rag.pipeline import RAGPipeline  # 파사드 패턴: 단일 진입점
+web_interface.py:53:    pipeline = RAGPipeline()
+web_interface.py:57:    pipeline.warmup()
+web_interface.py:60:    return pipeline
+scripts/bench_rag.py:123:def bench_query(pipeline, query: str, expected_docs: List[str], top_k: int = 5) -> BenchResult:
+scripts/bench_rag.py:127:        pipeline: RAG 파이프라인
+scripts/bench_rag.py:144:        response = pipeline.answer(query, top_k=top_k)
+scripts/bench_rag.py:200:        # 새 구조 (app/rag/pipeline.py)
+scripts/bench_rag.py:201:        from app.rag.pipeline import RagPipeline
+scripts/bench_rag.py:205:        pipeline = RagPipeline(cfg)
+scripts/bench_rag.py:206:        pipeline.warmup()
+scripts/bench_rag.py:207:        print("✅ app.rag.pipeline 로드 완료")
+scripts/bench_rag.py:213:            pipeline = RagPipeline()
+scripts/bench_rag.py:230:        result = bench_query(pipeline, query, expected, top_k)
+scripts/bench_rag.py:291:    args = parser.parse_args()
+scripts/run_smoke_test.py:40:def run_test(pipeline, query_info):
+scripts/run_smoke_test.py:44:        pipeline: RAGPipeline 인스턴스
+scripts/run_smoke_test.py:57:    result = pipeline.answer(query, top_k=3)
+scripts/run_smoke_test.py:109:        from app.rag.pipeline import RAGPipeline
+scripts/run_smoke_test.py:110:        pipeline = RAGPipeline()
+scripts/run_smoke_test.py:115:        pipeline.warmup()
+scripts/run_smoke_test.py:132:            result = run_test(pipeline, query_info)
+app/rag/__init__.py:4:- pipeline: RAG 파사드 (단일 진입점)
+app/rag/__init__.py:9:from app.rag.pipeline import RAGPipeline, RAGRequest, RAGResponse
+quick_fix_rag.py:16:class QuickFixRAG:
+quick_fix_rag.py:746:                from app.rag.preprocess.clean_text import TextCleaner
+quick_fix_rag.py:805:    print("🚀 QuickFixRAG v3 (LLM 요약 + 출처 강제)")
+quick_fix_rag.py:809:    rag = QuickFixRAG()
+app/rag/pipeline.py:7:    >>> pipeline = RAGPipeline()
+app/rag/pipeline.py:8:    >>> response = pipeline.query("질문", top_k=5)
+app/rag/pipeline.py:148:        >>> pipeline = RAGPipeline()
+app/rag/pipeline.py:149:        >>> response = pipeline.query("질문", top_k=5)
+app/rag/pipeline.py:375:        # 🔥 CRITICAL: 기안자/날짜 검색은 QuickFixRAG에 위임 (전문 로직 보유)
+app/rag/pipeline.py:550:                # QuickFixRAG.answer()로 직접 처리 (실제 질문 전달)
+app/rag/pipeline.py:556:                    "citations": [],  # QuickFixRAG 응답에서 추출 어려움
+app/rag/pipeline.py:680:        logger.info("Warming up RAG pipeline...")
+app/rag/pipeline.py:748:        QuickFixRAG를 래핑하여 기존 레거시 시스템과 연결합니다.
+app/rag/pipeline.py:752:            QuickFixRAG: 레거시 RAG 인스턴스
+app/rag/pipeline.py:754:        from quick_fix_rag import QuickFixRAG
+app/rag/pipeline.py:757:        logger.info("Loading legacy QuickFixRAG adapter...")
+app/rag/pipeline.py:758:        rag = QuickFixRAG(use_hybrid=True)
+app/rag/pipeline.py:785:    """QuickFixRAG 래퍼 (기존 구현 활용)"""
+app/rag/pipeline.py:794:            # 1) QuickFixRAG에 전용 메서드가 있으면 사용
+scripts/smoke_test.py:17:from app.rag.pipeline import RAGPipeline, RAGResponse
+scripts/smoke_test.py:26:        self.pipeline = None
+scripts/smoke_test.py:39:            self.pipeline = RAGPipeline()
+scripts/smoke_test.py:64:            response: RAGResponse = self.pipeline.query(query, top_k=5)
+scripts/smoke_test.py:300:   ./start_ai_chat.sh
+app/rag/preprocess/__init__.py:3:from app.rag.preprocess.clean_text import TextCleaner

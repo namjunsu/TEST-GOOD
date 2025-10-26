@@ -1,0 +1,614 @@
+[
+  {
+    "path": "tests/test_filename_matching.py",
+    "mtime": 1761465104.5639226,
+    "mtime_readable": "2025-10-26 16:51:44",
+    "size": 6650
+  },
+  {
+    "path": "quick_fix_rag.py",
+    "mtime": 1761465067.091816,
+    "mtime_readable": "2025-10-26 16:51:07",
+    "size": 33848
+  },
+  {
+    "path": "tests/test_clean_text.py",
+    "mtime": 1761464126.1268494,
+    "mtime_readable": "2025-10-26 16:35:26",
+    "size": 4049
+  },
+  {
+    "path": "tests/__init__.py",
+    "mtime": 1761464051.5886724,
+    "mtime_readable": "2025-10-26 16:34:11",
+    "size": 20
+  },
+  {
+    "path": "tests/test_parse_table.py",
+    "mtime": 1761464047.3118725,
+    "mtime_readable": "2025-10-26 16:34:07",
+    "size": 5750
+  },
+  {
+    "path": "tests/test_parse_meta.py",
+    "mtime": 1761464019.2009184,
+    "mtime_readable": "2025-10-26 16:33:39",
+    "size": 4536
+  },
+  {
+    "path": "app/rag/render/summary_templates.py",
+    "mtime": 1761463945.0408695,
+    "mtime_readable": "2025-10-26 16:32:25",
+    "size": 6634
+  },
+  {
+    "path": "app/rag/render/__init__.py",
+    "mtime": 1761463914.0216846,
+    "mtime_readable": "2025-10-26 16:31:54",
+    "size": 120
+  },
+  {
+    "path": "app/rag/parse/__init__.py",
+    "mtime": 1761463886.0063977,
+    "mtime_readable": "2025-10-26 16:31:26",
+    "size": 165
+  },
+  {
+    "path": "app/rag/parse/parse_tables.py",
+    "mtime": 1761463878.0503979,
+    "mtime_readable": "2025-10-26 16:31:18",
+    "size": 9917
+  },
+  {
+    "path": "app/rag/parse/parse_meta.py",
+    "mtime": 1761463806.3457212,
+    "mtime_readable": "2025-10-26 16:30:06",
+    "size": 7804
+  },
+  {
+    "path": "app/rag/preprocess/clean_text.py",
+    "mtime": 1761463682.7637625,
+    "mtime_readable": "2025-10-26 16:28:02",
+    "size": 8377
+  },
+  {
+    "path": "app/rag/preprocess/__init__.py",
+    "mtime": 1761463648.8332963,
+    "mtime_readable": "2025-10-26 16:27:28",
+    "size": 109
+  },
+  {
+    "path": "app/rag/pipeline.py",
+    "mtime": 1761463601.9683833,
+    "mtime_readable": "2025-10-26 16:26:41",
+    "size": 38861
+  },
+  {
+    "path": "app/rag/query_router.py",
+    "mtime": 1761463453.1265645,
+    "mtime_readable": "2025-10-26 16:24:13",
+    "size": 4827
+  },
+  {
+    "path": "test_l2_rag.py",
+    "mtime": 1761388984.2146912,
+    "mtime_readable": "2025-10-25 19:43:04",
+    "size": 10082
+  },
+  {
+    "path": "rag_system/qwen_llm.py",
+    "mtime": 1761388733.3610697,
+    "mtime_readable": "2025-10-25 19:38:53",
+    "size": 72704
+  },
+  {
+    "path": "modules/reranker.py",
+    "mtime": 1761388628.6095595,
+    "mtime_readable": "2025-10-25 19:37:08",
+    "size": 10759
+  },
+  {
+    "path": "app/api/main.py",
+    "mtime": 1761386593.5955596,
+    "mtime_readable": "2025-10-25 19:03:13",
+    "size": 3899
+  },
+  {
+    "path": "utils/session_manager.py",
+    "mtime": 1761383271.0998914,
+    "mtime_readable": "2025-10-25 18:07:51",
+    "size": 7922
+  },
+  {
+    "path": "modules/search_module.py",
+    "mtime": 1761369499.4612753,
+    "mtime_readable": "2025-10-25 14:18:19",
+    "size": 19419
+  },
+  {
+    "path": "app/rag/retriever_v2.py",
+    "mtime": 1761364499.4292579,
+    "mtime_readable": "2025-10-25 12:54:59",
+    "size": 15965
+  },
+  {
+    "path": "app/api/__init__.py",
+    "mtime": 1761364319.3332708,
+    "mtime_readable": "2025-10-25 12:51:59",
+    "size": 17
+  },
+  {
+    "path": "test_author_fix.py",
+    "mtime": 1761362067.194246,
+    "mtime_readable": "2025-10-25 12:14:27",
+    "size": 1886
+  },
+  {
+    "path": "test_final_validation.py",
+    "mtime": 1761361317.6055782,
+    "mtime_readable": "2025-10-25 12:01:57",
+    "size": 1816
+  },
+  {
+    "path": "scripts/audit_missing_content.py",
+    "mtime": 1761361269.2795897,
+    "mtime_readable": "2025-10-25 12:01:09",
+    "size": 3236
+  },
+  {
+    "path": "app/rag/retrievers/hybrid.py",
+    "mtime": 1761361267.132266,
+    "mtime_readable": "2025-10-25 12:01:07",
+    "size": 14896
+  },
+  {
+    "path": "rag_system/hybrid_search.py",
+    "mtime": 1761360732.3550408,
+    "mtime_readable": "2025-10-25 11:52:12",
+    "size": 54485
+  },
+  {
+    "path": "diagnose_rag.py",
+    "mtime": 1761360415.0570605,
+    "mtime_readable": "2025-10-25 11:46:55",
+    "size": 7277
+  },
+  {
+    "path": "components/chat_interface.py",
+    "mtime": 1761359688.988014,
+    "mtime_readable": "2025-10-25 11:34:48",
+    "size": 18675
+  },
+  {
+    "path": "scripts/rebuild_indexes_v2.py",
+    "mtime": 1761357235.8527749,
+    "mtime_readable": "2025-10-25 10:53:55",
+    "size": 7854
+  },
+  {
+    "path": "app/rag/index_vec.py",
+    "mtime": 1761312226.8770685,
+    "mtime_readable": "2025-10-24 22:23:46",
+    "size": 8493
+  },
+  {
+    "path": "app/rag/index_bm25.py",
+    "mtime": 1761312148.668743,
+    "mtime_readable": "2025-10-24 22:22:28",
+    "size": 9058
+  },
+  {
+    "path": "app/rag/db.py",
+    "mtime": 1761312086.8734577,
+    "mtime_readable": "2025-10-24 22:21:26",
+    "size": 8024
+  },
+  {
+    "path": "modules/search_module_hybrid.py",
+    "mtime": 1761310550.446293,
+    "mtime_readable": "2025-10-24 21:55:50",
+    "size": 9030
+  },
+  {
+    "path": "rebuild_rag_indexes.py",
+    "mtime": 1761309570.7024407,
+    "mtime_readable": "2025-10-24 21:39:30",
+    "size": 9037
+  },
+  {
+    "path": "scripts/smoke_test.py",
+    "mtime": 1761294999.9852273,
+    "mtime_readable": "2025-10-24 17:36:39",
+    "size": 12533
+  },
+  {
+    "path": "rag_system/multilevel_filter.py",
+    "mtime": 1761294701.2010505,
+    "mtime_readable": "2025-10-24 17:31:41",
+    "size": 17838
+  },
+  {
+    "path": "rag_system/query_expansion.py",
+    "mtime": 1761294455.577949,
+    "mtime_readable": "2025-10-24 17:27:35",
+    "size": 18599
+  },
+  {
+    "path": "scripts/run_smoke_test.py",
+    "mtime": 1761292194.4851751,
+    "mtime_readable": "2025-10-24 16:49:54",
+    "size": 7536
+  },
+  {
+    "path": "rag_system/bm25_store.py",
+    "mtime": 1761290600.273395,
+    "mtime_readable": "2025-10-24 16:23:20",
+    "size": 17105
+  },
+  {
+    "path": "scripts/ingest_content.py",
+    "mtime": 1761290009.6374223,
+    "mtime_readable": "2025-10-24 16:13:29",
+    "size": 6621
+  },
+  {
+    "path": "scripts/test_queries.py",
+    "mtime": 1761288623.8048754,
+    "mtime_readable": "2025-10-24 15:50:23",
+    "size": 2513
+  },
+  {
+    "path": "scripts/list_documents.py",
+    "mtime": 1761288544.07754,
+    "mtime_readable": "2025-10-24 15:49:04",
+    "size": 6751
+  },
+  {
+    "path": "config.py",
+    "mtime": 1761287173.9432998,
+    "mtime_readable": "2025-10-24 15:26:13",
+    "size": 30197
+  },
+  {
+    "path": "components/sidebar_library.py",
+    "mtime": 1761287119.2314572,
+    "mtime_readable": "2025-10-24 15:25:19",
+    "size": 10019
+  },
+  {
+    "path": "modules/metadata_db.py",
+    "mtime": 1761286964.9361644,
+    "mtime_readable": "2025-10-24 15:22:44",
+    "size": 11504
+  },
+  {
+    "path": "app/data/metadata/db.py",
+    "mtime": 1761286951.6626775,
+    "mtime_readable": "2025-10-24 15:22:31",
+    "size": 11222
+  },
+  {
+    "path": "modules/metadata_extractor.py",
+    "mtime": 1761284687.641832,
+    "mtime_readable": "2025-10-24 14:44:47",
+    "size": 19131
+  },
+  {
+    "path": "rag_system/query_optimizer.py",
+    "mtime": 1761284593.623049,
+    "mtime_readable": "2025-10-24 14:43:13",
+    "size": 9132
+  },
+  {
+    "path": "rag_system/korean_vector_store.py",
+    "mtime": 1761284559.6676564,
+    "mtime_readable": "2025-10-24 14:42:39",
+    "size": 17913
+  },
+  {
+    "path": "rag_system/document_compression.py",
+    "mtime": 1761284415.7006595,
+    "mtime_readable": "2025-10-24 14:40:15",
+    "size": 18357
+  },
+  {
+    "path": "rag_system/korean_reranker.py",
+    "mtime": 1761284415.6646595,
+    "mtime_readable": "2025-10-24 14:40:15",
+    "size": 15813
+  },
+  {
+    "path": "utils/system_checker.py",
+    "mtime": 1761283940.9489462,
+    "mtime_readable": "2025-10-24 14:32:20",
+    "size": 32185
+  },
+  {
+    "path": "web_interface.py",
+    "mtime": 1761283854.1083632,
+    "mtime_readable": "2025-10-24 14:30:54",
+    "size": 16120
+  },
+  {
+    "path": "everything_like_search.py",
+    "mtime": 1761283406.507353,
+    "mtime_readable": "2025-10-24 14:23:26",
+    "size": 18460
+  },
+  {
+    "path": "modules/ocr_processor.py",
+    "mtime": 1761283406.507353,
+    "mtime_readable": "2025-10-24 14:23:26",
+    "size": 10514
+  },
+  {
+    "path": "utils/document_loader.py",
+    "mtime": 1761283406.507353,
+    "mtime_readable": "2025-10-24 14:23:26",
+    "size": 9214
+  },
+  {
+    "path": "app/data/metadata/db_compat.py",
+    "mtime": 1761283339.7548697,
+    "mtime_readable": "2025-10-24 14:22:19",
+    "size": 3352
+  },
+  {
+    "path": "components/document_preview.py",
+    "mtime": 1761283239.5481672,
+    "mtime_readable": "2025-10-24 14:20:39",
+    "size": 6284
+  },
+  {
+    "path": "app/core/logging.py",
+    "mtime": 1761283236.0692914,
+    "mtime_readable": "2025-10-24 14:20:36",
+    "size": 2748
+  },
+  {
+    "path": "app/core/__init__.py",
+    "mtime": 1761283029.6081078,
+    "mtime_readable": "2025-10-24 14:17:09",
+    "size": 541
+  },
+  {
+    "path": "app/core/errors.py",
+    "mtime": 1761283029.2242274,
+    "mtime_readable": "2025-10-24 14:17:09",
+    "size": 3833
+  },
+  {
+    "path": "modules/response_formatter.py",
+    "mtime": 1761282930.5858543,
+    "mtime_readable": "2025-10-24 14:15:30",
+    "size": 33162
+  },
+  {
+    "path": "modules/document_module.py",
+    "mtime": 1761282930.5858543,
+    "mtime_readable": "2025-10-24 14:15:30",
+    "size": 13253
+  },
+  {
+    "path": "modules/statistics_module.py",
+    "mtime": 1761282930.5858543,
+    "mtime_readable": "2025-10-24 14:15:30",
+    "size": 20231
+  },
+  {
+    "path": "modules/cache_module.py",
+    "mtime": 1761282930.582038,
+    "mtime_readable": "2025-10-24 14:15:30",
+    "size": 12896
+  },
+  {
+    "path": "modules/llm_module.py",
+    "mtime": 1761282930.582038,
+    "mtime_readable": "2025-10-24 14:15:30",
+    "size": 12260
+  },
+  {
+    "path": "modules/intent_module.py",
+    "mtime": 1761282930.5782213,
+    "mtime_readable": "2025-10-24 14:15:30",
+    "size": 11609
+  },
+  {
+    "path": "app/rag/metrics.py",
+    "mtime": 1761282629.0287464,
+    "mtime_readable": "2025-10-24 14:10:29",
+    "size": 6815
+  },
+  {
+    "path": "app/indexer/__init__.py",
+    "mtime": 1761282589.7081957,
+    "mtime_readable": "2025-10-24 14:09:49",
+    "size": 189
+  },
+  {
+    "path": "app/ui/__init__.py",
+    "mtime": 1761282589.3884547,
+    "mtime_readable": "2025-10-24 14:09:49",
+    "size": 206
+  },
+  {
+    "path": "app/ops/__init__.py",
+    "mtime": 1761282589.0344558,
+    "mtime_readable": "2025-10-24 14:09:49",
+    "size": 183
+  },
+  {
+    "path": "app/data/metadata/__init__.py",
+    "mtime": 1761282588.39878,
+    "mtime_readable": "2025-10-24 14:09:48",
+    "size": 233
+  },
+  {
+    "path": "app/data/__init__.py",
+    "mtime": 1761282588.0714264,
+    "mtime_readable": "2025-10-24 14:09:48",
+    "size": 318
+  },
+  {
+    "path": "app/rag/retrievers/__init__.py",
+    "mtime": 1761282587.7250402,
+    "mtime_readable": "2025-10-24 14:09:47",
+    "size": 407
+  },
+  {
+    "path": "app/rag/__init__.py",
+    "mtime": 1761282586.8190143,
+    "mtime_readable": "2025-10-24 14:09:46",
+    "size": 319
+  },
+  {
+    "path": "app/__init__.py",
+    "mtime": 1761282358.536563,
+    "mtime_readable": "2025-10-24 14:05:58",
+    "size": 74
+  },
+  {
+    "path": "scripts/bench_rag.py",
+    "mtime": 1761282278.5126731,
+    "mtime_readable": "2025-10-24 14:04:38",
+    "size": 8425
+  },
+  {
+    "path": "test_config_improved.py",
+    "mtime": 1761281318.1822655,
+    "mtime_readable": "2025-10-24 13:48:38",
+    "size": 9254
+  },
+  {
+    "path": "test_chat_interface_improved.py",
+    "mtime": 1761278271.2558084,
+    "mtime_readable": "2025-10-24 12:57:51",
+    "size": 9275
+  },
+  {
+    "path": "components/chat_interface_before_improvement.py",
+    "mtime": 1761278137.681104,
+    "mtime_readable": "2025-10-24 12:55:37",
+    "size": 2541
+  },
+  {
+    "path": "test_refactoring_final.py",
+    "mtime": 1761272965.7116797,
+    "mtime_readable": "2025-10-24 11:29:25",
+    "size": 6819
+  },
+  {
+    "path": "components/__init__.py",
+    "mtime": 1761272819.9829426,
+    "mtime_readable": "2025-10-24 11:26:59",
+    "size": 406
+  },
+  {
+    "path": "test_current_state.py",
+    "mtime": 1761271813.0147395,
+    "mtime_readable": "2025-10-24 11:10:13",
+    "size": 4476
+  },
+  {
+    "path": "utils/css_loader.py",
+    "mtime": 1761271637.1066544,
+    "mtime_readable": "2025-10-24 11:07:17",
+    "size": 1230
+  },
+  {
+    "path": "components/pdf_viewer.py",
+    "mtime": 1761270651.7051988,
+    "mtime_readable": "2025-10-24 10:50:51",
+    "size": 16314
+  },
+  {
+    "path": "web_interface_chat.py",
+    "mtime": 1761264940.6112692,
+    "mtime_readable": "2025-10-24 09:15:40",
+    "size": 11768
+  },
+  {
+    "path": "rebuild_metadata.py",
+    "mtime": 1761264940.6112692,
+    "mtime_readable": "2025-10-24 09:15:40",
+    "size": 6720
+  },
+  {
+    "path": "test_improvements.py",
+    "mtime": 1761264940.6112692,
+    "mtime_readable": "2025-10-24 09:15:40",
+    "size": 8176
+  },
+  {
+    "path": "quick_rebuild_bm25.py",
+    "mtime": 1761264940.6112692,
+    "mtime_readable": "2025-10-24 09:15:40",
+    "size": 2508
+  },
+  {
+    "path": "auto_index_watcher.py",
+    "mtime": 1761264940.6075575,
+    "mtime_readable": "2025-10-24 09:15:40",
+    "size": 7663
+  },
+  {
+    "path": "auto_indexer.py",
+    "mtime": 1761264940.6075575,
+    "mtime_readable": "2025-10-24 09:15:40",
+    "size": 18405
+  },
+  {
+    "path": "utils/performance.py",
+    "mtime": 1761206422.4616077,
+    "mtime_readable": "2025-10-23 17:00:22",
+    "size": 7860
+  },
+  {
+    "path": "utils/error_handler.py",
+    "mtime": 1761206379.3920033,
+    "mtime_readable": "2025-10-23 16:59:39",
+    "size": 8499
+  },
+  {
+    "path": "scripts/utils/auto_index_watcher.py",
+    "mtime": 1761109125.2510428,
+    "mtime_readable": "2025-10-22 13:58:45",
+    "size": 7663
+  },
+  {
+    "path": "scripts/utils/auto_indexer.py",
+    "mtime": 1761033099.5253525,
+    "mtime_readable": "2025-10-21 16:51:39",
+    "size": 18405
+  },
+  {
+    "path": "modules/optimized_llm.py",
+    "mtime": 1759245179.086893,
+    "mtime_readable": "2025-10-01 00:12:59",
+    "size": 1019
+  },
+  {
+    "path": "rag_system/llm_singleton.py",
+    "mtime": 1758860111.5977368,
+    "mtime_readable": "2025-09-26 13:15:11",
+    "size": 3665
+  },
+  {
+    "path": "rag_system/metadata_extractor.py",
+    "mtime": 1758860111.5898232,
+    "mtime_readable": "2025-09-26 13:15:11",
+    "size": 20349
+  },
+  {
+    "path": "rag_system/enhanced_ocr_processor.py",
+    "mtime": 1758860111.4988184,
+    "mtime_readable": "2025-09-26 13:15:11",
+    "size": 13091
+  },
+  {
+    "path": "rag_system/__init__.py",
+    "mtime": 1758860111.4988184,
+    "mtime_readable": "2025-09-26 13:15:11",
+    "size": 161
+  }
+]

@@ -5,7 +5,7 @@ SQLite를 사용한 PDF 메타데이터 관리
 """
 
 from app.core.logging import get_logger
-from app.data.metadata import db_compat as sqlite3
+import sqlite3
 import json
 from pathlib import Path
 from typing import List, Dict, Any, Optional

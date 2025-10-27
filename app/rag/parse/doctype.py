@@ -165,8 +165,11 @@ class DocumentTypeClassifier:
         if not text:
             return ""
 
+        # 언더스코어를 공백으로 치환 (파일명 매칭 강화)
+        normalized = text.replace("_", " ")
+
         # 공백 정규화
-        normalized = re.sub(r"\s+", " ", text)
+        normalized = re.sub(r"\s+", " ", normalized)
 
         # 소문자 변환 (한글은 영향 없음)
         normalized = normalized.lower()

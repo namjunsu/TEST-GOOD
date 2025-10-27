@@ -130,14 +130,45 @@ class DocumentIngester:
 
             if not full_text and self.ocr_enabled:
                 logger.warning(f"pdfplumber 실패, OCR 폴백: {pdf_path.name}")
-                # OCR 폴백 (향후 구현)
-                # full_text = self._ocr_extract(pdf_path)
+                full_text = self._ocr_extract(pdf_path)
 
             return full_text, metadata
 
         except Exception as e:
             logger.error(f"PDF 추출 실패: {pdf_path.name} - {e}")
             return "", {}
+
+    def _ocr_extract(self, pdf_path: Path) -> str:
+        """OCR을 사용한 PDF 텍스트 추출"""
+        try:
+            import pytesseract
+            from pdf2image import convert_from_path
+
+            logger.info(f"OCR 추출 시작: {pdf_path.name}")
+
+            # PDF → 이미지 변환
+            images = convert_from_path(pdf_path, dpi=300)
+
+            # 각 페이지 OCR
+            text_pages = []
+            for i, image in enumerate(images, 1):
+                logger.debug(f"  페이지 {i}/{len(images)} OCR 중...")
+                text = pytesseract.image_to_string(image, lang="kor+eng")
+                if text.strip():
+                    text_pages.append(text)
+
+            full_text = "\n\n".join(text_pages)
+            logger.info(f"OCR 완료: {pdf_path.name}, {len(full_text)}자 추출")
+
+            return full_text
+
+        except ImportError as e:
+            logger.error(f"OCR 라이브러리 미설치: {e}")
+            logger.error("설치 방법: pip install pytesseract pdf2image")
+            return ""
+        except Exception as e:
+            logger.error(f"OCR 추출 실패: {pdf_path.name} - {e}")
+            return ""
 
     def _is_duplicate(
         self, file_path: Path, file_hash: str, norm_filename: str

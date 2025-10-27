@@ -141,6 +141,29 @@ summary:
 
 # 표 파싱 설정 (비용표 등)
 table_parsing:
+  # 헤더 패턴 (표 감지용 - regex)
+  header_patterns:
+    - "품명.*수량.*단가.*금액"
+    - "품목.*개수.*금액"
+    - "내역.*수량.*단가.*합계"
+    - "품명.*단가.*합계"
+    - "품목.*금액"
+    - "모델.*수량.*단가.*합계"  # 모델명 테스트용
+    - "모델.*내역.*단가"
+
+  # 숫자 정규화 설정
+  number_normalization:
+    remove_chars:
+      - ","      # 천 단위 구분자
+      - "₩"      # 원화 기호
+      - "원"     # 한글 원
+      - "won"    # 영문 원
+      - " "      # 공백
+
+  # 합계 검증 설정
+  sum_validation:
+    tolerance: 1  # ±1원 허용 (반올림 오차)
+
   # 비용표 헤더 별칭 (코퍼스 실측)
   cost_table_headers:
     item_aliases:
@@ -168,9 +191,6 @@ table_parsing:
       - "VAT"
       - "부가세"
       - "부가가치세"
-
-  # 숫자 정규화 허용 오차
-  sum_tolerance: 1  # ±1원 허용 (반올림 오차)
 
 # 텍스트 클리닝 설정 (TextCleaner용)
 text_cleaning:

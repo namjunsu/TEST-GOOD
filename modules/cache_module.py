@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """
+from app.core.logging import get_logger
 캐시 관리 모듈 - Perfect RAG에서 분리된 캐시 관련 기능
 2025-09-29 리팩토링
 
@@ -10,13 +11,12 @@
 import os
 import time
 import json
-import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple, List
 from collections import OrderedDict
 import pickle
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CacheModule:

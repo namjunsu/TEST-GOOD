@@ -7,10 +7,10 @@
 유지보수성과 가독성을 높이기 위해 생성되었습니다.
 """
 
+from app.core.logging import get_logger
 import os
 import re
 import time
-import logging
 import json
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
@@ -22,7 +22,7 @@ from everything_like_search import EverythingLikeSearch
 from modules.metadata_extractor import MetadataExtractor
 from modules.metadata_db import MetadataDB
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SearchModule:

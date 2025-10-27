@@ -1,0 +1,137 @@
+# Query Expansion Configuration
+# 동의어 및 질의 확장 규칙 설정 파일
+
+# 동의어 맵핑 (synonyms)
+# 키워드에 대한 동의어 리스트를 정의합니다.
+synonyms:
+  # DVR/녹화 관련
+  dvr:
+    - "dvr"
+    - "디브이알"
+    - "녹화기"
+    - "레코더"
+    - "nvr"
+    - "저장장치"
+    - "비디오 레코더"
+
+  # 구매 관련
+  구매:
+    - "구매"
+    - "구입"
+    - "발주"
+    - "매입"
+    - "지출"
+    - "결재"
+    - "견적"
+    - "발의"
+    - "구매요청"
+    - "구매신청"
+
+  # 수리 관련
+  수리:
+    - "수리"
+    - "보수"
+    - "정비"
+    - "수선"
+    - "고장"
+    - "점검"
+    - "유지보수"
+
+  # 카메라 관련
+  카메라:
+    - "카메라"
+    - "캠코더"
+    - "촬영기"
+    - "영상장비"
+    - "eng"
+    - "방송카메라"
+
+  # 조명 관련
+  조명:
+    - "조명"
+    - "라이트"
+    - "light"
+    - "led"
+    - "조명등"
+    - "스튜디오조명"
+
+  # 마이크 관련
+  마이크:
+    - "마이크"
+    - "mic"
+    - "무선마이크"
+    - "핀마이크"
+    - "음향장비"
+
+  # 스튜디오 관련
+  스튜디오:
+    - "스튜디오"
+    - "studio"
+    - "촬영실"
+    - "방송실"
+
+  # 장비 일반
+  장비:
+    - "장비"
+    - "equipment"
+    - "기자재"
+    - "물품"
+    - "자산"
+
+# 확장 규칙 (rules)
+# 특정 패턴에 대한 쿼리 변환 규칙
+rules:
+  # 시간 관련 질의
+  - match:
+      - "최근"
+      - "latest"
+      - "가장 최근"
+      - "언제"
+      - "최신"
+      - "recent"
+    boosts:
+      date_desc: true  # 날짜 내림차순 정렬 우선
+      time_weight: 1.5  # 시간 관련 가중치 증가
+
+  # 개수 제한 질의
+  - match:
+      - "한 건"
+      - "1건"
+      - "하나만"
+      - "첫 번째"
+    boosts:
+      top_k_override: 1
+
+  # 긴급/중요도
+  - match:
+      - "긴급"
+      - "urgent"
+      - "중요"
+      - "critical"
+    boosts:
+      priority_weight: 2.0
+
+# 형태소 패턴 (morpheme_patterns)
+# 한국어 형태소 분석 기반 확장
+morpheme_patterns:
+  # 명사+동사 결합
+  noun_verb:
+    enabled: true
+    examples:
+      - pattern: "구매했"
+        base: "구매"
+        expansions: ["구매", "구입", "발주"]
+      - pattern: "수리했"
+        base: "수리"
+        expansions: ["수리", "보수", "정비"]
+
+  # 복합명사 분해
+  compound_noun:
+    enabled: true
+    max_split: 2  # 최대 2개까지 분해
+
+# 성능 설정
+performance:
+  cache_ttl: 3600  # 캐시 유효 시간 (초)
+  hot_reload_interval: 60  # 파일 변경 감지 간격 (초)
+  max_expansions: 10  # 동의어 최대 확장 수

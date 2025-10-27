@@ -17,12 +17,15 @@ from functools import lru_cache
 import weakref
 
 
-# Generation 설정 상수
-DEFAULT_TEMPERATURE = 0.7
-DEFAULT_MAX_TOKENS = 1200
+# Generation 설정 상수 - L2 RAG 튜닝 (2025-10-25)
+# 일관성 향상: temperature 0.7 → 0.2
+# 효율성 향상: max_tokens 1200 → 512
+DEFAULT_TEMPERATURE = 0.2
+DEFAULT_MAX_TOKENS = 512
 DEFAULT_TOP_P = 0.9
 DEFAULT_TOP_K = 40
 DEFAULT_REPEAT_PENALTY = 1.1
+MAX_LLM_RETRY = int(os.getenv('MAX_LLM_RETRY', '1'))  # .env에서 읽기
 
 # 적응형 길이 설정 상수
 ADAPTIVE_LENGTH_ENABLED = True
@@ -230,7 +233,8 @@ class QwenLLM:
         
         for i, chunk in enumerate(context_chunks, 1):
             filename = Path(chunk.get('source', '')).name
-            content = chunk.get('content', '')
+            # 🔥 CRITICAL: Support both 'content' and 'snippet' fields
+            content = chunk.get('content') or chunk.get('snippet', '')
             score = chunk.get('score', 0.0)
             
             context_text += f"\n--- 문서 {i}: {filename} (관련도: {score:.3f}) ---\n"
@@ -305,7 +309,8 @@ class QwenLLM:
                 break
 
             filename = Path(chunk.get('source', '')).name
-            content = chunk.get('content', '')
+            # 🔥 CRITICAL: Support both 'content' and 'snippet' fields
+            content = chunk.get('content') or chunk.get('snippet', '')
 
             context_text += f"\n[{filename}]\n"
 
@@ -479,8 +484,7 @@ A:"""
                     retry_count += 1
                     if attempt < max_retries:
                         self.logger.warning(f"인용 없는 응답, 재시도 {attempt + 1}/{max_retries}")
-                        # 더 강한 인용 요구 메시지 추가
-                        user_prompt += f"\n\n중요: 반드시 [파일명.pdf] 형식으로 근거 문서를 인용해주세요. (재시도 {attempt + 1})"
+                        # REMOVED: 실제 filename 있을 때만 인용하므로 placeholder 불필요
                         continue
                 
             except Exception as e:
@@ -517,10 +521,41 @@ A:"""
                 retry_count=best_answer['retry_count']
             )
         
-        # 완전 실패 - 기본 오류 메시지
+        # 완전 실패 - 하지만 context_chunks가 있으면 기본 요약 제공
         generation_time = time.time() - start_time
+
+        # 🔥 CRITICAL: 검색 결과(context_chunks)가 있으면 "없음" 메시지 금지
+        if context_chunks and len(context_chunks) > 0:
+            self.logger.warning(f"LLM 생성 실패했지만 context_chunks={len(context_chunks)}개 있음 → 기본 요약 제공")
+
+            # 검색 결과를 기반으로 간단한 요약 생성
+            summary_parts = []
+            for i, chunk in enumerate(context_chunks[:3], 1):
+                filename = chunk.get('source', '알 수 없음')
+                # 🔥 CRITICAL: Support both 'content' and 'snippet' fields
+                content_preview = ((chunk.get('content') or chunk.get('snippet', ''))[:200] or '(내용 없음)')
+                summary_parts.append(f"{i}. {filename}\n{content_preview}...")
+
+            basic_summary = f"다음 {len(context_chunks[:3])}개 문서에서 관련 정보를 찾았습니다:\n\n" + "\n\n".join(summary_parts)
+
+            # 출처 추가
+            top_sources = [chunk.get('source', '') for chunk in context_chunks[:2] if chunk.get('source')]
+            if top_sources:
+                sources_text = ', '.join([f"[{src}]" for src in top_sources])
+                basic_summary += f"\n\n출처: {sources_text}"
+
+            return RAGResponse(
+                answer=basic_summary,
+                sources_cited=top_sources,
+                confidence=0.3,  # 낮은 신뢰도지만 검색 결과는 있음
+                generation_time=generation_time,
+                has_proper_citation=bool(top_sources),
+                retry_count=retry_count
+            )
+
+        # 정말로 context_chunks가 없는 경우에만 "없음" 메시지
         return RAGResponse(
-            answer="죄송합니다. 제공된 문서에서 관련 정보를 찾을 수 없어 적절한 답변을 생성할 수 없습니다.",
+            answer="검색된 관련 문서가 없습니다.",
             sources_cited=[],
             confidence=0.0,
             generation_time=generation_time,
@@ -615,14 +650,18 @@ A:"""
         
         # 구조화된 처리 실패 시 기본 모드로 폴백
         self.logger.warning("구조화된 처리 실패, 기본 모드로 폴백")
-        return self.generate_response(question_analysis.original_question, context_chunks, 
-                                    max_retries=1, enable_complex_processing=False)
+        return self.generate_response(question_analysis.original_question, context_chunks,
+                                    max_retries=MAX_LLM_RETRY, enable_complex_processing=False)
     
-    def _handle_comparison_question(self, question_analysis: Dict[str, Any], 
-                                  context_chunks: List[Dict[str, Any]], 
-                                  max_retries: int = 2) -> RAGResponse:
+    def _handle_comparison_question(self, question_analysis: Dict[str, Any],
+                                  context_chunks: List[Dict[str, Any]],
+                                  max_retries: int = None) -> RAGResponse:
         """비교 질문 특별 처리"""
-        
+
+        # .env에서 읽은 값 사용
+        if max_retries is None:
+            max_retries = MAX_LLM_RETRY
+
         # 단일 문서 모드 강화 - 가장 관련성 높은 문서만 사용
         if context_chunks:
             best_chunk = context_chunks[0]  # 최고 점수 문서

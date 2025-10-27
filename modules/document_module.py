@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """
+from app.core.logging import get_logger
 문서 처리 모듈 - Perfect RAG에서 분리된 문서 처리 기능
 2025-09-29 리팩토링
 
@@ -10,7 +11,6 @@
 import os
 import re
 import time
-import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 from collections import OrderedDict
@@ -26,7 +26,7 @@ try:
 except ImportError:
     OCR_AVAILABLE = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DocumentModule:

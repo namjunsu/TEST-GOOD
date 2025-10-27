@@ -3,13 +3,13 @@
 고급 메타데이터 추출기 - PDF에서 구조화된 정보 추출
 """
 
+from app.core.logging import get_logger
 import re
 from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime
-import logging
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MetadataExtractor:

@@ -97,7 +97,48 @@ def render_sidebar_library(rag_instance) -> None:
         if stats['last_update'] != 'Never':
             st.caption(f"마지막 체크: {stats['last_update'][:16]}")
 
-        # 수동 재인덱싱 버튼
+    st.markdown("---")
+
+    # 문서 라이브러리 요약 (DB 기반)
+    st.markdown("### 📚 문서 라이브러리")
+    try:
+        from modules.metadata_db import MetadataDB
+        db = MetadataDB()
+
+        # 총 문서 수
+        stats = db.get_statistics()
+        st.metric("총 문서", f"{stats['total_documents']}건")
+
+        # 최근 문서 (expander)
+        with st.expander("최근 10건", expanded=False):
+            # 최근 문서 조회
+            import sqlite3
+            conn = sqlite3.connect("metadata.db")
+            cursor = conn.execute("""
+                SELECT filename, title, page_count, created_at
+                FROM documents
+                ORDER BY created_at DESC
+                LIMIT 10
+            """)
+            rows = cursor.fetchall()
+            conn.close()
+
+            if rows:
+                for row in rows:
+                    filename, title, page_count, created_at = row
+                    title_short = title[:25] + "..." if len(title) > 25 else title
+                    st.caption(f"📄 {title_short}")
+                    st.caption(f"   {page_count}p · {created_at[:10]}")
+            else:
+                st.caption("문서가 없습니다")
+
+    except Exception as e:
+        st.error(f"DB 접근 실패: {e}")
+
+    st.markdown("---")
+
+    # 수동 재인덱싱 버튼
+    if 'auto_indexer' in st.session_state:
         col1, col2 = st.columns(2)
         with col1:
             if st.button("새로고침", key="refresh_index", use_container_width=True):

@@ -3,7 +3,7 @@ Document Compression (문서 압축) 모듈
 Advanced RAG 기법 중 하나로, 검색된 문서에서 중요한 정보만 추출하여 LLM 컨텍스트 효율성 향상
 """
 
-import logging
+from app.core.logging import get_logger
 import time
 import re
 import hashlib
@@ -34,7 +34,7 @@ class DocumentCompression:
     WORD_PATTERN = r'[가-힣a-zA-Z0-9]+'
     
     def __init__(self):
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
 
         # 성능 통계
         self.compression_count = 0

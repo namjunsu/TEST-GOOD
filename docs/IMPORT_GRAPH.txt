@@ -1,0 +1,566 @@
+test_l2_rag.py:13:import sys
+test_l2_rag.py:14:import time
+test_l2_rag.py:15:from pathlib import Path
+test_l2_rag.py:20:from quick_fix_rag import QuickFixRAG
+test_l2_rag.py:21:from app.core.logging import get_logger
+test_author_fix.py:4:import sys
+test_author_fix.py:13:from app.rag.pipeline import RAGPipeline
+diagnose_rag.py:7:import os
+diagnose_rag.py:8:import sys
+diagnose_rag.py:9:from pathlib import Path
+utils/performance.py:6:import time
+utils/performance.py:7:import streamlit as st
+utils/performance.py:8:from functools import wraps
+utils/performance.py:9:from typing import Dict, Any, Optional
+utils/performance.py:10:import logging
+test_refactoring_final.py:7:import sys
+test_refactoring_final.py:8:from pathlib import Path
+test_refactoring_final.py:123:import py_compile
+utils/css_loader.py:6:import streamlit as st
+utils/css_loader.py:7:from pathlib import Path
+web_interface.py:9:import streamlit as st
+web_interface.py:10:import pandas as pd
+web_interface.py:11:import time
+web_interface.py:12:from pathlib import Path
+web_interface.py:13:from datetime import datetime
+web_interface.py:14:import hashlib
+web_interface.py:15:import sys
+web_interface.py:16:import warnings
+web_interface.py:17:import re
+web_interface.py:18:from collections import defaultdict
+web_interface.py:19:import base64
+web_interface.py:28:import config
+web_interface.py:29:from app.rag.pipeline import RAGPipeline  # 파사드 패턴: 단일 진입점
+web_interface.py:30:from app.core.errors import ErrorCode, ERROR_MESSAGES  # 에러 코드
+web_interface.py:31:from utils.css_loader import load_all_css  # CSS 로더 임포트
+web_interface.py:32:from components.pdf_viewer import show_pdf_preview  # PDF 뷰어 컴포넌트
+web_interface.py:33:from utils.document_loader import load_documents  # 문서 로더
+web_interface.py:34:from components.sidebar_library import render_sidebar_library  # 사이드바 컴포넌트
+web_interface.py:35:from components.chat_interface import render_chat_interface  # 채팅 인터페이스 컴포넌트
+web_interface.py:36:from components.document_preview import render_document_preview  # 문서 미리보기 컴포넌트
+quick_rebuild_bm25.py:6:import sys
+quick_rebuild_bm25.py:7:import time
+quick_rebuild_bm25.py:8:import logging
+quick_rebuild_bm25.py:9:from pathlib import Path
+quick_rebuild_bm25.py:10:import pdfplumber
+utils/error_handler.py:6:import streamlit as st
+utils/error_handler.py:7:import logging
+utils/error_handler.py:8:from enum import Enum
+utils/error_handler.py:9:from typing import Optional
+utils/error_handler.py:10:import traceback
+utils/error_handler.py:11:from pathlib import Path
+rag_system/hybrid_search.py:6:import os
+rag_system/hybrid_search.py:7:from typing import List, Dict, Any, Optional, Tuple, Set
+rag_system/hybrid_search.py:8:from pathlib import Path
+rag_system/hybrid_search.py:9:import time
+rag_system/hybrid_search.py:10:import re
+rag_system/hybrid_search.py:11:from functools import lru_cache
+rag_system/hybrid_search.py:12:import hashlib
+rag_system/hybrid_search.py:14:from app.core.logging import get_logger
+rag_system/hybrid_search.py:21:from .korean_vector_store import KoreanVectorStore
+rag_system/hybrid_search.py:22:from .bm25_store import BM25Store
+rag_system/hybrid_search.py:23:from .query_optimizer import QueryOptimizer
+rag_system/hybrid_search.py:24:from .korean_reranker import KoreanReranker
+rag_system/hybrid_search.py:25:from .query_expansion import QueryExpansion
+rag_system/hybrid_search.py:26:from .document_compression import DocumentCompression
+rag_system/hybrid_search.py:27:from .multilevel_filter import MultilevelFilter
+scripts/utils/auto_indexer.py:6:import time
+scripts/utils/auto_indexer.py:7:import hashlib
+scripts/utils/auto_indexer.py:8:from pathlib import Path
+scripts/utils/auto_indexer.py:9:from datetime import datetime
+scripts/utils/auto_indexer.py:10:import json
+scripts/utils/auto_indexer.py:11:import threading
+scripts/utils/auto_indexer.py:12:from typing import Dict, Set
+rebuild_metadata.py:7:import sqlite3
+rebuild_metadata.py:8:from pathlib import Path
+rebuild_metadata.py:9:from pypdf import PdfReader
+rebuild_metadata.py:10:import logging
+rebuild_metadata.py:11:from modules.metadata_extractor import MetadataExtractor
+rebuild_metadata.py:12:from modules.metadata_db import MetadataDB
+rebuild_metadata.py:13:from modules.ocr_processor import OCRProcessor
+rebuild_metadata.py:14:from tqdm import tqdm
+utils/document_loader.py:6:from app.data.metadata import db_compat as sqlite3
+utils/document_loader.py:7:import pandas as pd
+utils/document_loader.py:8:from pathlib import Path
+utils/document_loader.py:9:from typing import Dict, List, Optional
+utils/document_loader.py:10:from dataclasses import dataclass
+modules/statistics_module.py:3:from app.core.logging import get_logger
+modules/statistics_module.py:11:import os
+modules/statistics_module.py:12:import re
+modules/statistics_module.py:13:from pathlib import Path
+modules/statistics_module.py:14:from typing import Dict, List, Any, Optional, Tuple
+modules/statistics_module.py:15:from collections import defaultdict, Counter
+modules/statistics_module.py:16:from datetime import datetime
+modules/statistics_module.py:17:import json
+scripts/utils/auto_index_watcher.py:10:import sys
+scripts/utils/auto_index_watcher.py:11:import time
+scripts/utils/auto_index_watcher.py:12:import logging
+scripts/utils/auto_index_watcher.py:13:from pathlib import Path
+scripts/utils/auto_index_watcher.py:14:from typing import Set
+scripts/utils/auto_index_watcher.py:15:from datetime import datetime
+scripts/utils/auto_index_watcher.py:16:import hashlib
+scripts/utils/auto_index_watcher.py:33:from rag_system.bm25_store import BM25Store
+scripts/utils/auto_index_watcher.py:34:from rag_system.korean_vector_store import KoreanVectorStore
+scripts/utils/auto_index_watcher.py:35:import pdfplumber
+rag_system/multilevel_filter.py:6:from app.core.logging import get_logger
+rag_system/multilevel_filter.py:7:import os
+rag_system/multilevel_filter.py:8:import time
+rag_system/multilevel_filter.py:9:import re
+rag_system/multilevel_filter.py:10:import hashlib
+rag_system/multilevel_filter.py:11:from functools import lru_cache
+rag_system/multilevel_filter.py:12:from typing import List, Dict, Any, Optional, Tuple
+rag_system/multilevel_filter.py:13:from dataclasses import dataclass
+rag_system/multilevel_filter.py:14:import numpy as np
+test_final_validation.py:4:import sys
+test_final_validation.py:13:from app.rag.pipeline import RAGPipeline
+utils/session_manager.py:6:import streamlit as st
+utils/session_manager.py:7:from typing import Any, Dict, Optional, List
+utils/session_manager.py:8:import json
+utils/session_manager.py:9:from pathlib import Path
+utils/session_manager.py:10:import pickle
+rag_system/document_compression.py:6:from app.core.logging import get_logger
+rag_system/document_compression.py:7:import time
+rag_system/document_compression.py:8:import re
+rag_system/document_compression.py:9:import hashlib
+rag_system/document_compression.py:10:from functools import lru_cache
+rag_system/document_compression.py:11:from typing import List, Dict, Any, Tuple
+rag_system/document_compression.py:12:from collections import Counter, defaultdict
+rag_system/document_compression.py:13:import numpy as np
+scripts/rebuild_indexes_v2.py:23:import re
+scripts/rebuild_indexes_v2.py:24:import sys
+scripts/rebuild_indexes_v2.py:25:from pathlib import Path
+scripts/rebuild_indexes_v2.py:31:from app.core.logging import get_logger
+scripts/rebuild_indexes_v2.py:32:from app.rag.db import MetadataDB
+scripts/rebuild_indexes_v2.py:33:from app.rag.index_bm25 import BM25Index
+scripts/rebuild_indexes_v2.py:34:from app.rag.index_vec import VectorIndex
+everything_like_search.py:7:import os
+everything_like_search.py:8:import re
+everything_like_search.py:9:import json
+everything_like_search.py:10:import time
+everything_like_search.py:11:from app.data.metadata import db_compat as sqlite3
+everything_like_search.py:12:import pdfplumber
+everything_like_search.py:13:from pathlib import Path
+everything_like_search.py:14:from datetime import datetime
+everything_like_search.py:15:from typing import List, Dict, Any, Optional
+everything_like_search.py:16:import logging
+modules/document_module.py:3:from app.core.logging import get_logger
+modules/document_module.py:11:import os
+modules/document_module.py:12:import re
+modules/document_module.py:13:import time
+modules/document_module.py:14:from pathlib import Path
+modules/document_module.py:15:from typing import List, Dict, Any, Optional, Tuple
+modules/document_module.py:16:from collections import OrderedDict
+modules/document_module.py:17:from concurrent.futures import ThreadPoolExecutor, as_completed
+modules/document_module.py:18:import pdfplumber
+modules/document_module.py:19:import hashlib
+modules/document_module.py:20:import json
+test_current_state.py:7:import sys
+test_current_state.py:8:from pathlib import Path
+test_current_state.py:91:import py_compile
+scripts/list_documents.py:7:import sqlite3
+scripts/list_documents.py:8:import sys
+scripts/list_documents.py:9:from pathlib import Path
+scripts/list_documents.py:10:from datetime import datetime
+rag_system/metadata_extractor.py:6:import re
+rag_system/metadata_extractor.py:7:import logging
+rag_system/metadata_extractor.py:8:import time
+rag_system/metadata_extractor.py:9:import hashlib
+rag_system/metadata_extractor.py:10:from functools import lru_cache
+rag_system/metadata_extractor.py:11:from typing import Dict, List, Optional, Any, Tuple
+rag_system/metadata_extractor.py:12:from dataclasses import dataclass, asdict
+rag_system/metadata_extractor.py:13:from pathlib import Path
+rag_system/metadata_extractor.py:14:from datetime import datetime
+scripts/ingest_content.py:6:import json
+scripts/ingest_content.py:7:import sqlite3
+scripts/ingest_content.py:8:import sys
+scripts/ingest_content.py:9:from pathlib import Path
+scripts/ingest_content.py:10:from typing import Dict, List, Tuple
+modules/response_formatter.py:3:from app.core.logging import get_logger
+modules/response_formatter.py:16:import re
+modules/response_formatter.py:17:import json
+modules/response_formatter.py:18:import html
+modules/response_formatter.py:19:import hashlib
+modules/response_formatter.py:20:from pathlib import Path
+modules/response_formatter.py:21:from typing import Dict, List, Any, Optional, Union, Callable
+modules/response_formatter.py:22:from dataclasses import dataclass, field
+modules/response_formatter.py:23:from collections import OrderedDict
+modules/response_formatter.py:24:from datetime import datetime
+modules/response_formatter.py:25:from enum import Enum
+modules/response_formatter.py:26:from functools import lru_cache
+modules/response_formatter.py:27:import warnings
+scripts/run_smoke_test.py:6:import sys
+scripts/run_smoke_test.py:7:import time
+scripts/run_smoke_test.py:8:from pathlib import Path
+modules/metadata_extractor.py:6:from app.core.logging import get_logger
+modules/metadata_extractor.py:7:import re
+modules/metadata_extractor.py:8:from typing import Dict, List, Optional, Tuple, Any
+modules/metadata_extractor.py:9:from datetime import datetime
+modules/metadata_extractor.py:10:from pathlib import Path
+scripts/bench_rag.py:16:import sys
+scripts/bench_rag.py:17:import time
+scripts/bench_rag.py:18:import json
+scripts/bench_rag.py:19:from pathlib import Path
+scripts/bench_rag.py:20:from typing import List, Dict, Any, Optional
+scripts/bench_rag.py:21:from dataclasses import dataclass, field
+scripts/bench_rag.py:22:import argparse
+rag_system/llm_singleton.py:5:import threading
+rag_system/llm_singleton.py:6:import logging
+rag_system/llm_singleton.py:7:import time
+rag_system/llm_singleton.py:8:from typing import Optional, Dict, Any
+rag_system/llm_singleton.py:9:from datetime import datetime
+rag_system/llm_singleton.py:10:from rag_system.qwen_llm import QwenLLM
+modules/search_module_hybrid.py:7:from app.core.logging import get_logger
+modules/search_module_hybrid.py:8:import os
+modules/search_module_hybrid.py:9:import sys
+modules/search_module_hybrid.py:10:import time
+modules/search_module_hybrid.py:11:from pathlib import Path
+modules/search_module_hybrid.py:12:from typing import List, Dict, Any, Optional
+modules/search_module_hybrid.py:18:from modules.search_module import SearchModule
+modules/search_module_hybrid.py:19:from rag_system.hybrid_search import HybridSearch
+auto_index_watcher.py:10:import sys
+auto_index_watcher.py:11:import time
+auto_index_watcher.py:12:import logging
+auto_index_watcher.py:13:from pathlib import Path
+auto_index_watcher.py:14:from typing import Set
+auto_index_watcher.py:15:from datetime import datetime
+auto_index_watcher.py:16:import hashlib
+auto_index_watcher.py:33:from rag_system.bm25_store import BM25Store
+auto_index_watcher.py:34:from rag_system.korean_vector_store import KoreanVectorStore
+auto_index_watcher.py:35:import pdfplumber
+scripts/audit_missing_content.py:7:import sys
+scripts/audit_missing_content.py:8:from pathlib import Path
+scripts/audit_missing_content.py:20:from app.data.metadata.db import MetadataDB
+scripts/audit_missing_content.py:21:from app.core.logging import get_logger
+quick_fix_rag.py:6:from modules.search_module_hybrid import SearchModuleHybrid
+quick_fix_rag.py:7:from modules.reranker import RuleBasedReranker
+quick_fix_rag.py:8:import time
+quick_fix_rag.py:9:import re
+quick_fix_rag.py:10:import sqlite3
+quick_fix_rag.py:12:from app.core.logging import get_logger
+modules/metadata_db.py:7:from app.core.logging import get_logger
+modules/metadata_db.py:8:from app.data.metadata import db_compat as sqlite3
+modules/metadata_db.py:9:import json
+modules/metadata_db.py:10:from pathlib import Path
+modules/metadata_db.py:11:from typing import List, Dict, Any, Optional
+modules/metadata_db.py:12:from datetime import datetime
+modules/metadata_db.py:13:import re
+test_improvements.py:7:import sys
+test_improvements.py:8:import os
+test_improvements.py:9:from pathlib import Path
+rag_system/enhanced_ocr_processor.py:6:import logging
+rag_system/enhanced_ocr_processor.py:7:import io
+rag_system/enhanced_ocr_processor.py:8:import re
+rag_system/enhanced_ocr_processor.py:9:import time
+rag_system/enhanced_ocr_processor.py:10:from concurrent.futures import ProcessPoolExecutor, as_completed
+rag_system/enhanced_ocr_processor.py:11:from typing import List, Dict, Tuple, Optional
+rag_system/enhanced_ocr_processor.py:12:from pathlib import Path
+rag_system/enhanced_ocr_processor.py:13:import json
+rag_system/enhanced_ocr_processor.py:14:import hashlib
+modules/ocr_processor.py:3:from app.core.logging import get_logger
+modules/ocr_processor.py:7:import os
+modules/ocr_processor.py:8:import tempfile
+modules/ocr_processor.py:9:from pathlib import Path
+modules/ocr_processor.py:10:from typing import Optional, List, Dict, Tuple
+modules/ocr_processor.py:11:import time
+modules/ocr_processor.py:12:from PIL import Image
+modules/ocr_processor.py:13:import pytesseract
+modules/ocr_processor.py:14:from pdf2image import convert_from_path
+modules/ocr_processor.py:15:import pdfplumber
+modules/ocr_processor.py:16:import hashlib
+modules/ocr_processor.py:17:import json
+modules/ocr_processor.py:18:from app.data.metadata import db_compat as sqlite3
+modules/ocr_processor.py:19:from datetime import datetime
+modules/ocr_processor.py:20:import re
+rag_system/korean_reranker.py:6:from app.core.logging import get_logger
+rag_system/korean_reranker.py:7:import torch
+rag_system/korean_reranker.py:8:import time
+rag_system/korean_reranker.py:9:import re
+rag_system/korean_reranker.py:10:import hashlib
+rag_system/korean_reranker.py:11:from collections import Counter
+rag_system/korean_reranker.py:12:from typing import List, Dict, Any, Tuple, Optional
+rag_system/korean_reranker.py:13:from functools import lru_cache
+rag_system/korean_reranker.py:14:from transformers import AutoTokenizer, AutoModelForSequenceClassification
+rag_system/korean_reranker.py:15:import numpy as np
+web_interface_chat.py:6:import streamlit as st
+web_interface_chat.py:7:from datetime import datetime
+web_interface_chat.py:8:from pathlib import Path
+web_interface_chat.py:9:import time
+web_interface_chat.py:10:import json
+web_interface_chat.py:13:from quick_fix_rag import QuickFixRAG
+modules/llm_module.py:3:from app.core.logging import get_logger
+modules/llm_module.py:11:import os
+modules/llm_module.py:12:import re
+modules/llm_module.py:13:import time
+modules/llm_module.py:14:from pathlib import Path
+modules/llm_module.py:15:from typing import Dict, Any, Optional, List
+modules/llm_module.py:16:import json
+components/__init__.py:6:from .pdf_viewer import PDFViewer
+components/__init__.py:7:from .sidebar_library import render_sidebar_library
+components/__init__.py:8:from .chat_interface import render_chat_interface
+components/__init__.py:9:from .document_preview import render_document_preview
+rag_system/korean_vector_store.py:6:from app.core.logging import get_logger
+rag_system/korean_vector_store.py:7:import os
+rag_system/korean_vector_store.py:8:import json
+rag_system/korean_vector_store.py:9:import numpy as np
+rag_system/korean_vector_store.py:10:from typing import List, Dict, Any, Tuple, Optional
+rag_system/korean_vector_store.py:11:from pathlib import Path
+rag_system/korean_vector_store.py:12:import pickle
+rag_system/korean_vector_store.py:13:import hashlib
+rag_system/korean_vector_store.py:14:from functools import lru_cache
+rag_system/korean_vector_store.py:16:import torch
+rag_system/korean_vector_store.py:17:import faiss
+rag_system/korean_vector_store.py:18:from sentence_transformers import SentenceTransformer
+rag_system/qwen_llm.py:7:import logging
+rag_system/qwen_llm.py:8:import re
+rag_system/qwen_llm.py:9:import time
+rag_system/qwen_llm.py:10:import gc
+rag_system/qwen_llm.py:11:import yaml
+rag_system/qwen_llm.py:12:import os
+rag_system/qwen_llm.py:13:from typing import List, Dict, Any, Optional, Tuple
+rag_system/qwen_llm.py:14:from dataclasses import dataclass
+rag_system/qwen_llm.py:15:from pathlib import Path
+rag_system/qwen_llm.py:16:from functools import lru_cache
+rag_system/qwen_llm.py:17:import weakref
+modules/search_module.py:10:from app.core.logging import get_logger
+modules/search_module.py:11:import os
+modules/search_module.py:12:import re
+modules/search_module.py:13:import time
+modules/search_module.py:14:import json
+modules/search_module.py:15:from pathlib import Path
+modules/search_module.py:16:from typing import List, Dict, Any, Optional, Tuple
+modules/search_module.py:17:from concurrent.futures import ThreadPoolExecutor, as_completed
+modules/search_module.py:18:import pdfplumber
+modules/search_module.py:21:from everything_like_search import EverythingLikeSearch
+modules/search_module.py:22:from modules.metadata_extractor import MetadataExtractor
+modules/search_module.py:23:from modules.metadata_db import MetadataDB
+rag_system/query_expansion.py:8:from app.core.logging import get_logger
+rag_system/query_expansion.py:9:import time
+rag_system/query_expansion.py:10:import hashlib
+rag_system/query_expansion.py:11:import yaml
+rag_system/query_expansion.py:12:import os
+rag_system/query_expansion.py:13:from pathlib import Path
+rag_system/query_expansion.py:14:from functools import lru_cache
+rag_system/query_expansion.py:15:from typing import List, Dict, Any, Set, Tuple, Optional
+rag_system/query_expansion.py:16:import re
+rag_system/query_expansion.py:17:from collections import defaultdict
+app/data/metadata/__init__.py:9:from app.data.metadata.db import MetadataDB
+rag_system/query_optimizer.py:5:from app.core.logging import get_logger
+rag_system/query_optimizer.py:6:import re
+rag_system/query_optimizer.py:7:import time
+rag_system/query_optimizer.py:8:from functools import lru_cache
+rag_system/query_optimizer.py:9:from typing import List, Tuple, Dict, Any
+scripts/smoke_test.py:7:import sys
+scripts/smoke_test.py:8:import time
+scripts/smoke_test.py:9:import json
+scripts/smoke_test.py:10:from pathlib import Path
+scripts/smoke_test.py:11:from typing import Dict, List, Any
+scripts/smoke_test.py:16:from app.core.logging import get_logger
+scripts/smoke_test.py:17:from app.rag.pipeline import RAGPipeline, RAGResponse
+rebuild_rag_indexes.py:9:import sys
+rebuild_rag_indexes.py:10:import time
+rebuild_rag_indexes.py:11:import logging
+rebuild_rag_indexes.py:12:import sqlite3
+rebuild_rag_indexes.py:13:from pathlib import Path
+rebuild_rag_indexes.py:14:from typing import List, Dict
+rebuild_rag_indexes.py:27:from rag_system.bm25_store import BM25Store
+rebuild_rag_indexes.py:28:from rag_system.korean_vector_store import KoreanVectorStore
+auto_indexer.py:6:import time
+auto_indexer.py:7:import hashlib
+auto_indexer.py:8:from pathlib import Path
+auto_indexer.py:9:from datetime import datetime
+auto_indexer.py:10:import json
+auto_indexer.py:11:import threading
+auto_indexer.py:12:from typing import Dict, Set
+config.py:17:import os
+config.py:18:import json
+config.py:19:import warnings
+config.py:20:import multiprocessing
+config.py:21:from pathlib import Path
+config.py:22:from typing import Any, Dict, List, Literal, Optional, Final, TypedDict, cast
+config.py:23:from dataclasses import dataclass
+rag_system/bm25_store.py:6:from app.core.logging import get_logger
+rag_system/bm25_store.py:7:import os
+rag_system/bm25_store.py:8:import json
+rag_system/bm25_store.py:9:import pickle
+rag_system/bm25_store.py:10:import re
+rag_system/bm25_store.py:11:import time
+rag_system/bm25_store.py:12:from typing import List, Dict, Any, Optional, Tuple
+rag_system/bm25_store.py:13:from pathlib import Path
+rag_system/bm25_store.py:14:from collections import defaultdict
+rag_system/bm25_store.py:15:from functools import lru_cache
+rag_system/bm25_store.py:16:import math
+test_chat_interface_improved.py:7:import sys
+test_chat_interface_improved.py:8:from pathlib import Path
+modules/reranker.py:12:import re
+modules/reranker.py:13:from datetime import datetime, timedelta
+modules/reranker.py:14:from typing import List, Dict, Any, Optional
+modules/reranker.py:15:from app.core.logging import get_logger
+modules/cache_module.py:3:from app.core.logging import get_logger
+modules/cache_module.py:11:import os
+modules/cache_module.py:12:import time
+modules/cache_module.py:13:import json
+modules/cache_module.py:14:from pathlib import Path
+modules/cache_module.py:15:from typing import Dict, Any, Optional, Tuple, List
+modules/cache_module.py:16:from collections import OrderedDict
+modules/cache_module.py:17:import pickle
+app/data/metadata/db.py:13:import sqlite3
+app/data/metadata/db.py:14:from pathlib import Path
+app/data/metadata/db.py:15:from typing import Optional, List, Dict, Any
+app/data/metadata/db.py:16:from contextlib import contextmanager
+app/data/metadata/db.py:18:from app.core.logging import get_logger
+app/data/metadata/db.py:19:from app.core.errors import DatabaseError
+app/data/metadata/db_compat.py:20:from __future__ import annotations
+app/data/metadata/db_compat.py:22:import sqlite3 as _sqlite3
+app/data/metadata/db_compat.py:23:from pathlib import Path
+app/data/metadata/db_compat.py:24:from typing import Any, Optional
+app/data/metadata/db_compat.py:26:from app.core.logging import get_logger
+modules/intent_module.py:3:from app.core.logging import get_logger
+modules/intent_module.py:9:import re
+modules/intent_module.py:10:from typing import Dict, List, Optional, Any
+components/chat_interface.py:15:import os
+components/chat_interface.py:16:import streamlit as st
+components/chat_interface.py:17:from typing import List, Dict, Optional, Protocol, Any
+components/chat_interface.py:18:from typing_extensions import TypedDict, Literal
+components/chat_interface.py:19:from datetime import datetime
+components/chat_interface.py:21:from app.core.logging import get_logger
+components/chat_interface_before_improvement.py:6:import streamlit as st
+components/chat_interface_before_improvement.py:7:from typing import Any
+experiments/hybrid_chat_rag_v2.py:8:import time
+experiments/hybrid_chat_rag_v2.py:9:import re
+experiments/hybrid_chat_rag_v2.py:10:from typing import List, Dict, Any, Optional
+experiments/hybrid_chat_rag_v2.py:11:from quick_fix_rag import QuickFixRAG
+experiments/hybrid_chat_rag_v2.py:12:from app.core.logging import get_logger
+experiments/hybrid_chat_rag_v2.py:13:from utils.error_handler import handle_errors
+test_config_improved.py:14:import os
+test_config_improved.py:15:import sys
+test_config_improved.py:16:import tempfile
+test_config_improved.py:17:import json
+test_config_improved.py:18:from pathlib import Path
+test_config_improved.py:23:import config
+test_config_improved.py:24:from config import (
+components/document_preview.py:6:import streamlit as st
+components/document_preview.py:7:import hashlib
+components/document_preview.py:8:from pathlib import Path
+components/document_preview.py:9:from typing import Any, Dict
+tests/test_clean_text.py:6:import pytest
+tests/test_clean_text.py:7:from app.rag.preprocess.clean_text import TextCleaner
+tests/test_parse_meta.py:6:import pytest
+tests/test_parse_meta.py:7:from app.rag.parse.parse_meta import MetaParser
+app/rag/index_vec.py:21:from __future__ import annotations
+app/rag/index_vec.py:23:import os
+app/rag/index_vec.py:24:import pickle
+app/rag/index_vec.py:25:import numpy as np
+app/rag/index_vec.py:26:from pathlib import Path
+app/rag/index_vec.py:27:from typing import List, Dict, Any, Optional
+app/rag/index_vec.py:29:from app.core.logging import get_logger
+app/rag/query_router.py:12:import re
+app/rag/query_router.py:13:from enum import Enum
+app/rag/query_router.py:14:from pathlib import Path
+app/rag/query_router.py:15:import yaml
+app/rag/query_router.py:16:from typing import Dict, Any
+app/rag/query_router.py:18:from app.core.logging import get_logger
+components/pdf_viewer.py:6:import streamlit as st
+components/pdf_viewer.py:7:import base64
+components/pdf_viewer.py:8:from pathlib import Path
+components/pdf_viewer.py:9:from typing import Optional, Tuple, List
+components/pdf_viewer.py:10:from dataclasses import dataclass
+components/pdf_viewer.py:11:from enum import Enum
+components/sidebar_library.py:6:import streamlit as st
+components/sidebar_library.py:7:import pandas as pd
+components/sidebar_library.py:8:from pathlib import Path
+components/sidebar_library.py:9:from typing import Optional
+utils/system_checker.py:14:import sys
+utils/system_checker.py:15:import os
+utils/system_checker.py:16:import shutil
+utils/system_checker.py:17:import platform
+utils/system_checker.py:18:import time
+utils/system_checker.py:19:import hashlib
+utils/system_checker.py:20:from pathlib import Path
+utils/system_checker.py:21:from typing import Dict, List, Tuple, Any, Optional, Callable
+utils/system_checker.py:22:from dataclasses import dataclass, field, asdict
+utils/system_checker.py:23:from concurrent.futures import ThreadPoolExecutor, as_completed
+utils/system_checker.py:24:from enum import Enum
+utils/system_checker.py:25:import json
+utils/system_checker.py:26:import pickle
+app/api/main.py:6:import sys
+app/api/main.py:7:import os
+app/api/main.py:8:import time
+app/api/main.py:9:import subprocess
+app/api/main.py:10:from datetime import datetime
+app/api/main.py:11:from fastapi import FastAPI
+app/api/main.py:12:from fastapi.middleware.cors import CORSMiddleware
+app/rag/retrievers/hybrid.py:12:from __future__ import annotations
+app/rag/retrievers/hybrid.py:14:from typing import List, Dict, Any, Optional
+app/rag/retrievers/hybrid.py:16:from app.core.logging import get_logger
+app/rag/retrievers/hybrid.py:17:from app.core.errors import SearchError, ErrorCode
+tests/test_parse_table.py:6:import pytest
+tests/test_parse_table.py:7:from app.rag.parse.parse_tables import TableParser
+app/rag/metrics.py:16:from dataclasses import dataclass
+app/rag/metrics.py:17:from typing import List, Optional
+app/rag/metrics.py:18:import statistics
+app/rag/metrics.py:20:from app.core.logging import get_logger
+app/core/__init__.py:9:from app.core.logging import get_logger
+app/core/__init__.py:10:from app.core.errors import (
+app/rag/preprocess/__init__.py:3:from app.rag.preprocess.clean_text import TextCleaner
+app/core/logging.py:12:import logging
+app/core/logging.py:13:import sys
+app/core/logging.py:14:from pathlib import Path
+app/core/logging.py:15:from logging import Logger, StreamHandler, Formatter
+app/core/logging.py:16:from logging.handlers import RotatingFileHandler
+app/core/logging.py:17:from typing import Optional
+tests/test_filename_matching.py:11:import pytest
+tests/test_filename_matching.py:12:from quick_fix_rag import QuickFixRAG
+app/rag/__init__.py:9:from app.rag.pipeline import RAGPipeline, RAGRequest, RAGResponse
+app/rag/index_bm25.py:19:from __future__ import annotations
+app/rag/index_bm25.py:21:import re
+app/rag/index_bm25.py:22:import math
+app/rag/index_bm25.py:23:import pickle
+app/rag/index_bm25.py:24:from pathlib import Path
+app/rag/index_bm25.py:25:from typing import List, Dict, Any
+app/rag/index_bm25.py:26:from collections import defaultdict
+app/rag/index_bm25.py:28:from app.core.logging import get_logger
+app/rag/db.py:14:from __future__ import annotations
+app/rag/db.py:16:import sqlite3
+app/rag/db.py:17:from pathlib import Path
+app/rag/db.py:18:from typing import Dict, Any, List, Optional
+app/rag/db.py:20:from app.core.logging import get_logger
+app/rag/db.py:21:from app.core.errors import SearchError, ErrorCode
+app/rag/retriever_v2.py:18:from __future__ import annotations
+app/rag/retriever_v2.py:20:import os
+app/rag/retriever_v2.py:21:import re
+app/rag/retriever_v2.py:22:from typing import Dict, List, Any, Tuple, Optional
+app/rag/retriever_v2.py:23:from collections import defaultdict
+app/rag/retriever_v2.py:25:from app.core.logging import get_logger
+app/rag/retriever_v2.py:26:from app.rag.db import MetadataDB
+app/rag/retriever_v2.py:27:from app.rag.index_bm25 import BM25Index
+app/rag/retriever_v2.py:28:from app.rag.index_vec import VectorIndex
+app/rag/pipeline.py:12:import os
+app/rag/pipeline.py:13:import time
+app/rag/pipeline.py:14:from dataclasses import dataclass, field
+app/rag/pipeline.py:15:from typing import Protocol, List, Optional, Dict, Any
+app/rag/pipeline.py:17:from app.core.logging import get_logger
+app/rag/pipeline.py:18:from app.core.errors import ModelError, SearchError, ErrorCode, ERROR_MESSAGES
+app/rag/pipeline.py:19:from app.rag.query_router import QueryRouter, QueryMode
+app/rag/render/__init__.py:3:from app.rag.render.summary_templates import SummaryRenderer
+app/rag/parse/__init__.py:3:from app.rag.parse.parse_meta import MetaParser
+app/rag/parse/__init__.py:4:from app.rag.parse.parse_tables import TableParser
+app/rag/preprocess/clean_text.py:8:import re
+app/rag/preprocess/clean_text.py:9:from collections import Counter
+app/rag/preprocess/clean_text.py:10:from pathlib import Path
+app/rag/preprocess/clean_text.py:11:from typing import List, Dict, Any, Tuple
+app/rag/preprocess/clean_text.py:12:import yaml
+app/rag/preprocess/clean_text.py:14:from app.core.logging import get_logger
+app/rag/parse/parse_meta.py:12:import re
+app/rag/parse/parse_meta.py:13:from pathlib import Path
+app/rag/parse/parse_meta.py:14:from typing import Dict, Any, Optional, List, Tuple
+app/rag/parse/parse_meta.py:15:import yaml
+app/rag/parse/parse_meta.py:17:from app.core.logging import get_logger
+app/rag/render/summary_templates.py:14:from pathlib import Path
+app/rag/render/summary_templates.py:15:from typing import Dict, Any, List, Optional
+app/rag/render/summary_templates.py:16:import yaml
+app/rag/render/summary_templates.py:18:from app.core.logging import get_logger
+app/rag/parse/parse_tables.py:13:import re
+app/rag/parse/parse_tables.py:14:from pathlib import Path
+app/rag/parse/parse_tables.py:15:from typing import Dict, Any, List, Optional, Tuple
+app/rag/parse/parse_tables.py:16:import yaml
+app/rag/parse/parse_tables.py:18:from app.core.logging import get_logger

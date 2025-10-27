@@ -3,9 +3,9 @@
 jhgan/ko-sroberta-multitask 모델 사용
 """
 
+from app.core.logging import get_logger
 import os
 import json
-import logging
 import numpy as np
 from typing import List, Dict, Any, Tuple, Optional
 from pathlib import Path
@@ -47,7 +47,7 @@ class KoreanVectorStore:
         self.batch_size = batch_size
         self.metadata_path = self.index_path.with_suffix('.metadata.pkl')
         
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         
         # 임베딩 모델 로드
         self.embedding_model = None

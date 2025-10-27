@@ -1,21 +1,200 @@
-[tool.pytest.ini_options]
-minversion = "6.0"
-addopts = [
-    "-ra",
-    "-q",
-    "--strict-markers",
-    "--cov=rag_modules",
-    "--cov-report=html",
-    "--cov-report=term-missing",
-    "--cov-fail-under=80"
+[project]
+name = "ai-chat"
+version = "2.0.0"
+description = "AI-CHAT RAG System with Hybrid Search"
+requires-python = ">=3.11"
+dependencies = [
+    "streamlit>=1.28.0",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "python-dotenv>=1.0.0",
 ]
-testpaths = ["tests"]
-python_files = ["test_*.py", "*_test.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
 
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.21.0",
+    "pre-commit>=3.5.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+# ============================================================================
+# Ruff Configuration (Linter + Formatter)
+# ============================================================================
+
+[tool.ruff]
+# Python 3.11+
+target-version = "py311"
+
+# 라인 길이
+line-length = 100
+
+# 제외 디렉터리
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "*.egg-info",
+    "build",
+    "dist",
+    "var",
+    "experiments",
+    "archive",
+]
+
+# 선택된 규칙
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "N",      # pep8-naming
+    "UP",     # pyupgrade
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "DTZ",    # flake8-datetimez
+    "T10",    # flake8-debugger
+    "EM",     # flake8-errmsg
+    "ISC",    # flake8-implicit-str-concat
+    "ICN",    # flake8-import-conventions
+    "PIE",    # flake8-pie
+    "PT",     # flake8-pytest-style
+    "Q",      # flake8-quotes
+    "RSE",    # flake8-raise
+    "RET",    # flake8-return
+    "SIM",    # flake8-simplify
+    "TCH",    # flake8-type-checking
+    "ARG",    # flake8-unused-arguments
+    "PTH",    # flake8-use-pathlib
+    "PD",     # pandas-vet
+    "PL",     # pylint
+    "TRY",    # tryceratops
+    "RUF",    # ruff-specific rules
+]
+
+# 무시할 규칙
+ignore = [
+    "E501",   # line-too-long (formatter가 처리)
+    "PLR0913", # too-many-arguments
+    "TRY003",  # raise-vanilla-args
+    "EM101",   # raw-string-in-exception (한글 메시지)
+    "EM102",   # f-string-in-exception (한글 메시지)
+]
+
+# 파일별 무시 규칙
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # unused-import
+"tests/*" = ["PLR2004", "S101"]  # magic-value, assert
+
+# Import 정렬 (isort 호환)
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+
+# ============================================================================
+# Mypy Configuration (Type Checker)
+# ============================================================================
+
+[tool.mypy]
+# Python 버전
+python_version = "3.11"
+
+# Strict 모드 (점진적 적용)
+strict = false
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+check_untyped_defs = true
+disallow_untyped_defs = false  # 점진적으로 true로 변경
+disallow_any_unimported = false
+disallow_any_generics = false
+disallow_subclassing_any = false
+
+# 추가 체크
+strict_equality = true
+strict_concatenate = true
+
+# 에러 형식
+show_error_codes = true
+show_column_numbers = true
+pretty = true
+
+# 제외 디렉터리
+exclude = [
+    "^experiments/",
+    "^archive/",
+    "^var/",
+]
+
+# 패키지별 설정
+[[tool.mypy.overrides]]
+module = [
+    "streamlit.*",
+    "pandas.*",
+    "numpy.*",
+    "llama_cpp.*",
+    "sentence_transformers.*",
+]
+ignore_missing_imports = true
+
+# ============================================================================
+# Pytest Configuration
+# ============================================================================
+
+[tool.pytest.ini_options]
+# 테스트 디렉터리
+testpaths = ["tests"]
+
+# 최소 커버리지
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--cov=app",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-fail-under=40",
+]
+
+# 마커 정의
 markers = [
-    "slow: marks tests as slow (deselect with '-m "not slow"')",
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
-    "unit: marks tests as unit tests"
+    "unit: marks tests as unit tests",
+]
+
+# ============================================================================
+# Coverage Configuration
+# ============================================================================
+
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/experiments/*",
+    "*/archive/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if __name__ == .__main__.:",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
 ]

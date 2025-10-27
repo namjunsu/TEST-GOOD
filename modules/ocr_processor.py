@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """
+from app.core.logging import get_logger
 OCR 처리 모듈 - 스캔된 PDF 문서를 텍스트로 변환
 """
 
@@ -7,7 +8,6 @@ import os
 import tempfile
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
-import logging
 import time
 from PIL import Image
 import pytesseract
@@ -21,7 +21,7 @@ import re
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class OCRProcessor:
     """PDF OCR 처리기"""

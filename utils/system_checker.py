@@ -44,7 +44,7 @@ sys.path.insert(0, str(project_root))
 
 # 로깅 시스템 import (우리가 만든 것)
 try:
-    from utils.logging_utils import get_unified_logger
+    from app.core.logging import get_logger as get_unified_logger
     logger = get_unified_logger("system_checker")
     LOGGING_AVAILABLE = True
 except ImportError:

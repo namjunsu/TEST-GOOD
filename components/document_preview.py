@@ -81,16 +81,16 @@ def render_document_preview(rag_instance: Any, config_module: Any) -> None:
                         answer = rag_instance.answer_from_specific_document(doc_query, doc['filename'])
                         st.markdown("---")
                         st.markdown(answer)
-                    except FileNotFoundError as e:
+                    except FileNotFoundError as _:
                         st.error(f"📁 파일을 찾을 수 없습니다: {doc['filename']}")
                         st.info("💡 파일이 이동되었거나 삭제되었을 수 있습니다. 재인덱싱을 시도해주세요")
-                    except PermissionError as e:
+                    except PermissionError as _:
                         st.error(f"🔒 파일 접근 권한이 없습니다: {doc['filename']}")
                         st.info("💡 파일이 다른 프로그램에서 사용 중이거나 권한이 제한되어 있습니다")
-                    except MemoryError as e:
+                    except MemoryError as _:
                         st.error(f"💾 메모리 부족: 너무 큰 문서를 처리하려고 합니다")
                         st.info("💡 문서를 개별로 검색하거나 시스템을 재시작해주세요")
-                    except Exception as e:
+                    except Exception as _:
                         st.error(f"❌ 예상치 못한 오류가 발생했습니다")
                         with st.expander("🔍 상세 오류 정보"):
                             st.text(f"오류 타입: {type(e).__name__}")

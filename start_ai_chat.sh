@@ -88,7 +88,13 @@ interrupt_handler() {
 # 클린업 함수
 cleanup() {
     log INFO "정리 작업 중..."
-    # 필요한 정리 작업 추가 가능
+    # FastAPI 서버 종료
+    if [ -n "${API_PID:-}" ]; then
+        log INFO "FastAPI 서버 종료 (PID: $API_PID)..."
+        kill "$API_PID" 2>/dev/null || true
+    fi
+    # uvicorn 프로세스 정리
+    pkill -f "uvicorn.*app.api.main" 2>/dev/null || true
 }
 
 # 프로세스 체크 (더 정확한 버전)
@@ -278,13 +284,47 @@ main() {
     echo ""
     setup_port_forwarding
 
-    # 6. Streamlit 실행
+    # 6. FastAPI 백엔드 시작 (백그라운드)
     echo ""
-    log INFO "AI-CHAT 시작 중..."
+    log INFO "FastAPI 백엔드 시작 중..."
+
+    # 기존 API 서버 종료
+    pkill -f "uvicorn.*app.api.main" 2>/dev/null || true
+    sleep 1
+
+    # FastAPI 시작 (7860 포트) - P0-3: 절대경로 사용
+    API_PORT=7860
+    "${PROJECT_ROOT}/.venv/bin/python" -m uvicorn app.api.main:app \
+        --host 0.0.0.0 \
+        --port "$API_PORT" \
+        --log-level info \
+        > "${PROJECT_ROOT}/logs/api_$(date +%Y%m%d_%H%M%S).log" 2>&1 &
+
+    API_PID=$!
+    export API_PID
+
+    # API 서버 시작 대기 (최대 10초)
+    for i in {1..10}; do
+        if curl -s "http://localhost:$API_PORT/_healthz" > /dev/null 2>&1; then
+            log SUCCESS "FastAPI 서버 시작 완료 (PID: $API_PID, 포트: $API_PORT)"
+            break
+        fi
+        sleep 1
+    done
+
+    if ! curl -s "http://localhost:$API_PORT/_healthz" > /dev/null 2>&1; then
+        log WARN "FastAPI 서버 헬스체크 실패 (계속 진행)"
+    fi
+
+    # 7. Streamlit UI 실행
+    echo ""
+    log INFO "Streamlit UI 시작 중..."
     echo ""
     echo "========================================="
     echo "📌 접속 주소:"
-    echo "   로컬: http://localhost:$PORT"
+    echo "   UI (Streamlit): http://localhost:$PORT"
+    echo "   API (FastAPI):  http://localhost:$API_PORT"
+    echo "   Health Check:   http://localhost:$API_PORT/_healthz"
     echo "   네트워크: 위에 표시된 주소 사용"
     echo "========================================="
     echo ""
@@ -294,9 +334,9 @@ main() {
     # 브라우저 자동 열기 (백그라운드)
     # open_browser "http://localhost:$PORT" &
 
-    # Streamlit 실행
+    # Streamlit 실행 (포어그라운드) - P0-3: 절대경로 사용
     log INFO "Streamlit 서버 시작..."
-    streamlit run web_interface.py \
+    "${PROJECT_ROOT}/.venv/bin/streamlit" run web_interface.py \
         --server.port "$PORT" \
         --server.address "$HOST" \
         --server.headless true \

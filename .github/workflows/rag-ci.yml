@@ -1,0 +1,117 @@
+name: RAG System CI
+
+on:
+  push:
+    branches: [main, feat/docs-intake-*]
+    paths:
+      - 'app/rag/**'
+      - 'scripts/ingest_from_docs.py'
+      - 'modules/metadata_db.py'
+      - 'config/document_processing.yaml'
+      - 'tests/test_*.py'
+      - '.github/workflows/rag-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/rag/**'
+      - 'scripts/ingest_from_docs.py'
+      - 'modules/metadata_db.py'
+      - 'config/document_processing.yaml'
+
+env:
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  test:
+    name: RAG 테스트 & 품질 검사
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Python 환경 설정
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+
+    - name: 의존성 설치
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements_updated.txt
+        pip install pytest pytest-cov ruff black
+
+    - name: Ruff 린팅
+      run: |
+        ruff check app/rag/ modules/metadata_db.py scripts/ingest_from_docs.py --select=E,F,W --ignore=E501
+      continue-on-error: false
+
+    - name: Black 포맷 검사
+      run: |
+        black --check app/rag/ modules/metadata_db.py scripts/ingest_from_docs.py
+      continue-on-error: false
+
+    - name: 단위 테스트 (전체)
+      run: |
+        pytest tests/ -q --tb=short --cov=app/rag --cov=modules/metadata_db --cov-report=term --cov-report=xml --cov-fail-under=40
+
+    - name: 스모크 E2E 테스트 1 - TextCleaner
+      run: |
+        python -c "
+        from app.rag.preprocess.clean_text import TextCleaner
+        cleaner = TextCleaner()
+        text = '문서 내용 오후 3:43 http://gw.channela-mt.com/test'
+        cleaned, counts = cleaner.clean(text)
+        assert 'gw.channela-mt.com' not in cleaned, 'URL 제거 실패'
+        assert '오후 3:43' not in cleaned, '타임스탬프 제거 실패'
+        print('✅ TextCleaner 스모크 테스트 통과')
+        "
+
+    - name: 스모크 E2E 테스트 2 - TableParser
+      run: |
+        python -c "
+        from app.rag.parse.parse_tables import TableParser
+        parser = TableParser()
+        text = '항목: 100,000원\n항목2: 200,000원\n합계: 300,000원'
+        items, success, _ = parser.extract_cost_table(text)
+        assert success, '비용표 추출 실패'
+        assert len(items) >= 2, '항목 수 부족'
+        claimed = parser._extract_claimed_total(text)
+        assert claimed == 300000, '합계 추출 실패'
+        print('✅ TableParser 스모크 테스트 통과')
+        "
+
+    - name: 커버리지 리포트 업로드
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        name: rag-coverage
+        fail_ci_if_error: false
+      continue-on-error: true
+
+  quality-gate:
+    name: RAG 품질 게이트
+    runs-on: ubuntu-latest
+    needs: test
+    if: always()
+
+    steps:
+    - name: 결과 확인
+      run: |
+        if [ "${{ needs.test.result }}" != "success" ]; then
+          echo "❌ RAG 테스트 실패"
+          echo "다음 항목을 확인하세요:"
+          echo "  - Ruff 린팅 에러"
+          echo "  - Black 포맷 에러"
+          echo "  - 단위 테스트 실패 (40% 커버리지 필수)"
+          echo "  - 스모크 E2E 테스트 실패"
+          exit 1
+        fi
+
+        echo "✅ RAG CI 파이프라인 통과!"
+        echo "============================================"
+        echo "  ✓ Ruff 린팅 검사"
+        echo "  ✓ Black 포맷 검사"
+        echo "  ✓ 단위 테스트 (40%+ 커버리지)"
+        echo "  ✓ 스모크 E2E 테스트 2건"
+        echo "============================================"

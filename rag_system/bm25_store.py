@@ -3,9 +3,9 @@
 kiwipiepy 기반 토크나이저 사용
 """
 
+from app.core.logging import get_logger
 import os
 import json
-import logging
 import pickle
 import re
 import time
@@ -30,7 +30,7 @@ class KoreanTokenizer:
     CACHE_SIZE = 2048  # 토큰 캐시 크기
 
     def __init__(self):
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
 
         # 패턴 컴파일
         self._compiled_token_pattern = re.compile(self.TOKEN_PATTERN)
@@ -96,7 +96,7 @@ class BM25Store:
         self.k1 = k1 if k1 is not None else self.DEFAULT_K1
         self.b = b if b is not None else self.DEFAULT_B
         
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self.tokenizer = KoreanTokenizer()
 
         # BM25 인덱스
@@ -202,24 +202,24 @@ class BM25Store:
                 for text, metadata in zip(batch_texts, batch_metadatas):
                     # 토큰화
                     tokens = self.tokenizer.tokenize(text)
-                
-                # 문서 추가
-                self.documents.append(text)
-                self.metadata.append(metadata)
-                
-                # 용어 빈도 계산
-                term_freq = defaultdict(int)
-                for token in tokens:
-                    term_freq[token] += 1
-                    self.vocab.add(token)
-                
-                self.term_freqs.append(dict(term_freq))
-                self.doc_lens.append(len(tokens))
-                
-                # 문서 빈도 업데이트
-                for token in set(tokens):
-                    self.doc_freqs[token] += 1
-            
+
+                    # 문서 추가
+                    self.documents.append(text)
+                    self.metadata.append(metadata)
+
+                    # 용어 빈도 계산
+                    term_freq = defaultdict(int)
+                    for token in tokens:
+                        term_freq[token] += 1
+                        self.vocab.add(token)
+
+                    self.term_freqs.append(dict(term_freq))
+                    self.doc_lens.append(len(tokens))
+
+                    # 문서 빈도 업데이트
+                    for token in set(tokens):
+                        self.doc_freqs[token] += 1
+
                 # 배치 로깅
                 if (batch_end - batch_start) >= 10:
                     self.logger.debug(f"BM25 인덱싱 진행: {batch_end}/{total_docs}")

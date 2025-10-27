@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """
+from app.core.logging import get_logger
 고급 응답 포맷터 시스템
 
 주요 기능:
@@ -23,7 +24,6 @@ from collections import OrderedDict
 from datetime import datetime
 from enum import Enum
 from functools import lru_cache
-import logging
 import warnings
 
 # 템플릿 캐시
@@ -396,7 +396,7 @@ class ResponseFormatter:
         self.config = config or FormatConfig()
         self.builder = ComponentBuilder(self.config)
         self.cache = OrderedDict() if self.config.cache_enabled else None
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
 
     @lru_cache(maxsize=100)
     def _get_cached_format(self, cache_key: str) -> Optional[str]:

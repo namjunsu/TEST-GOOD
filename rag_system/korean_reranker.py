@@ -3,8 +3,8 @@
 Dongjin-kr/ko-reranker 모델을 사용한 문서 재정렬
 """
 
+from app.core.logging import get_logger
 import torch
-import logging
 import time
 import re
 import hashlib
@@ -40,7 +40,7 @@ class KoreanReranker:
         self.tokenizer = None
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.batch_size = batch_size
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self.fallback_mode = fallback_mode
         
         # 오프라인 환경이므로 바로 키워드 기반 스코어링 사용

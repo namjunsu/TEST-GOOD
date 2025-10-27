@@ -9,11 +9,11 @@ import time
 import re
 from typing import List, Dict, Any, Optional
 from quick_fix_rag import QuickFixRAG
-from utils.logging_utils import get_unified_logger
+from app.core.logging import get_logger
 from utils.error_handler import handle_errors
 
 # 로거 초기화
-logger = get_unified_logger("hybrid_rag")
+logger = get_logger(__name__)
 
 try:
     from rag_system.qwen_llm import QwenLLM

@@ -14,9 +14,11 @@ ChatGPT 스타일의 채팅 인터페이스 UI를 렌더링하는 컴포넌트
 
 import os
 import streamlit as st
+import requests
 from typing import List, Dict, Optional, Protocol, Any
 from typing_extensions import TypedDict, Literal
 from datetime import datetime
+from functools import lru_cache
 
 from app.core.logging import get_logger
 
@@ -85,6 +87,113 @@ class ChatConfig:
 
 
 # ===== 헬퍼 함수 =====
+
+@lru_cache(maxsize=1)
+def _get_api_base_url() -> str:
+    """FastAPI 기준 URL을 동적으로 가져옴 (캐시 적용)
+
+    우선순위:
+    1. 환경변수 PUBLIC_API_BASE
+    2. FastAPI /api/config 엔드포인트
+    3. 기본값 (localhost:7860)
+
+    Returns:
+        str: API 기준 URL
+    """
+    # 1. 환경변수 우선
+    env_base = os.getenv("PUBLIC_API_BASE")
+    if env_base:
+        logger.info(f"Using PUBLIC_API_BASE from env: {env_base}")
+        return env_base.rstrip("/")
+
+    # 2. FastAPI에서 가져오기 시도
+    try:
+        # Streamlit이 실행 중인 경우, FastAPI는 같은 머신의 7860 포트
+        api_url = "http://localhost:7860/api/config"
+        response = requests.get(api_url, timeout=2)
+        if response.status_code == 200:
+            config = response.json()
+            base_url = config.get("base_url", "http://localhost:7860")
+            logger.info(f"Fetched API base URL from FastAPI: {base_url}")
+            return base_url
+    except Exception as e:
+        logger.warning(f"Failed to fetch API config from FastAPI: {e}")
+
+    # 3. 기본값
+    default_url = "http://localhost:7860"
+    logger.info(f"Using default API base URL: {default_url}")
+    return default_url
+
+
+def render_doc_card(
+    index: int,
+    filename: str,
+    doctype: Optional[str],
+    display_date: Optional[str],
+    drafter: Optional[str],
+    summary: str,
+    ref: Optional[str],
+    api_base_url: str,
+    show_preview_iframe: bool = False
+) -> None:
+    """문서 카드 렌더링 (고정 레이아웃)
+
+    1행: 📄 파일명
+    2행: 메타칩 (doctype · date · drafter)
+    3행: LLM 요약 (최대 2줄, 160자)
+    4행: 버튼 (미리보기 / 다운로드)
+    5행: iframe (선택적)
+
+    Args:
+        index: 카드 번호 (1부터 시작)
+        filename: 파일명
+        doctype: 문서 타입
+        display_date: 날짜
+        drafter: 기안자
+        summary: LLM 요약 (이미 160자로 제한된 상태)
+        ref: base64 인코딩된 파일 경로
+        api_base_url: API 기준 URL
+        show_preview_iframe: iframe 미리보기 표시 여부
+    """
+    # 1행: 파일명
+    st.markdown(f"**{index}. 📄 {filename}**")
+
+    # 2행: 메타칩 (존재하는 것만 표시)
+    meta_chips = []
+    if doctype:
+        meta_chips.append(f"🏷 {doctype}")
+    if display_date:
+        meta_chips.append(f"📅 {display_date}")
+    if drafter:
+        meta_chips.append(f"✍ {drafter}")
+
+    if meta_chips:
+        st.caption(" · ".join(meta_chips))
+    else:
+        st.caption("—")  # 메타 정보 없음
+
+    # 3행: 요약 (최대 2줄, 160자)
+    summary_truncated = summary[:160].strip()
+    if len(summary) > 160:
+        summary_truncated += "..."
+    st.markdown(f"{summary_truncated}")
+
+    # 4행: 버튼 (ref가 있을 때만)
+    if ref:
+        col1, col2 = st.columns([1, 1])
+        preview_url = f"{api_base_url}/files/preview?ref={ref}"
+        download_url = f"{api_base_url}/files/download?ref={ref}"
+
+        with col1:
+            st.link_button("🔎 미리보기", preview_url, use_container_width=True)
+        with col2:
+            st.link_button("⬇ 원본 다운로드", download_url, use_container_width=True)
+
+        # 5행: iframe (선택적)
+        if show_preview_iframe:
+            with st.expander("📄 문서 미리보기 (내장)", expanded=False):
+                st.components.v1.iframe(preview_url, height=520, scrolling=True)
+
 
 def _normalize_rag_response(resp: Any) -> dict:
     """RAG 응답을 안전하게 dict로 정규화
@@ -478,67 +587,66 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                     # 답변 텍스트 표시
                     message_placeholder.markdown(response["text"])
 
-                    # Evidence 표시 (미리보기/다운로드 버튼 포함)
+                    # Evidence 표시 (Top-K=5 제한, 고정 카드 레이아웃)
                     if response.get("evidence"):
-                        # 1건이면 자동 확장, 2건 이상이면 접힘
-                        auto_expand = len(response["evidence"]) == 1
+                        evidence_list = response["evidence"]
 
-                        with st.expander("📚 출처 문서", expanded=auto_expand):
-                            for i, ev in enumerate(response["evidence"], 1):
+                        # Top-K=5 제한
+                        MAX_DISPLAY = 5
+                        display_evidence = evidence_list[:MAX_DISPLAY]
+                        has_more = len(evidence_list) > MAX_DISPLAY
+
+                        # 1건이면 자동 확장, 2건 이상이면 접힘
+                        auto_expand = len(display_evidence) == 1
+
+                        # API 기준 URL 가져오기
+                        api_base_url = _get_api_base_url()
+
+                        with st.expander(f"📚 출처 문서 ({len(display_evidence)}건)", expanded=auto_expand):
+                            for i, ev in enumerate(display_evidence, 1):
                                 # Evidence가 dict 또는 객체일 수 있으므로 안전하게 접근
                                 if isinstance(ev, dict):
                                     doc_id = ev.get("doc_id") or ev.get("chunk_id", "unknown")
                                     filename = ev.get("filename", doc_id)
-                                    page = ev.get("page", 1)
-                                    snippet = ev.get("snippet") or ev.get("content", "")
-                                    ref = ev.get("ref")  # base64 인코딩된 파일 경로
+                                    snippet = ev.get("snippet") or ev.get("content", "") or ev.get("text", "")
+                                    ref = ev.get("ref")
                                     meta = ev.get("meta", {})
                                 else:
                                     # 객체인 경우
                                     doc_id = getattr(ev, "doc_id", None) or getattr(ev, "chunk_id", "unknown")
                                     filename = getattr(ev, "filename", doc_id)
-                                    page = getattr(ev, "page", 1)
-                                    snippet = getattr(ev, "snippet", None) or getattr(ev, "content", "")
+                                    snippet = getattr(ev, "snippet", None) or getattr(ev, "content", "") or getattr(ev, "text", "")
                                     ref = getattr(ev, "ref", None)
                                     meta = getattr(ev, "meta", {})
 
-                                # 문서 정보 표시
-                                st.markdown(f"**{i}. {filename}** (페이지 {page})")
+                                # 메타 데이터 추출
+                                doctype = meta.get("doctype") if isinstance(meta, dict) else None
+                                display_date = meta.get("date") or meta.get("display_date") if isinstance(meta, dict) else None
+                                drafter = meta.get("drafter") if isinstance(meta, dict) else None
 
-                                # 메타데이터 표시 (기안자, 날짜)
-                                if meta:
-                                    meta_parts = []
-                                    if meta.get("drafter"):
-                                        meta_parts.append(f"✍ {meta['drafter']}")
-                                    if meta.get("date"):
-                                        meta_parts.append(f"📅 {meta['date']}")
-                                    if meta_parts:
-                                        st.caption(" | ".join(meta_parts))
+                                # 카드 렌더링 (1건일 때만 iframe 자동 표시)
+                                render_doc_card(
+                                    index=i,
+                                    filename=filename,
+                                    doctype=doctype,
+                                    display_date=display_date,
+                                    drafter=drafter,
+                                    summary=snippet,
+                                    ref=ref,
+                                    api_base_url=api_base_url,
+                                    show_preview_iframe=(auto_expand and i == 1)
+                                )
 
-                                # 스니펫 표시
-                                st.markdown(f"{snippet[:300]}")  # 스니펫 길이 제한
-
-                                # 버튼 (ref가 있을 때만)
-                                if ref:
-                                    col1, col2 = st.columns([1, 1])
-                                    with col1:
-                                        preview_url = f"http://localhost:7860/files/preview?ref={ref}"
-                                        st.link_button("🔎 미리보기", preview_url, use_container_width=True)
-                                    with col2:
-                                        download_url = f"http://localhost:7860/files/download?ref={ref}"
-                                        st.link_button("⬇️ 원본 다운로드", download_url, use_container_width=True)
-
-                                    # 1건일 때만 iFrame 자동 렌더 (520px)
-                                    if auto_expand and i == 1:
-                                        st.markdown("---")
-                                        st.markdown("**📄 문서 미리보기**")
-                                        st.markdown(
-                                            f'<iframe src="{preview_url}" width="100%" height="520px"></iframe>',
-                                            unsafe_allow_html=True
-                                        )
-
-                                if i < len(response["evidence"]):
+                                # 구분선 (마지막 아이템 제외)
+                                if i < len(display_evidence):
                                     st.markdown("---")
+
+                            # 더 보기 버튼 (5건 초과 시)
+                            if has_more:
+                                st.markdown("---")
+                                remaining = len(evidence_list) - MAX_DISPLAY
+                                st.info(f"📄 {remaining}건의 문서가 더 있습니다. (현재 상위 {MAX_DISPLAY}건만 표시)")
+                                # 추후 "더 보기" 버튼 구현 가능
 
                     # 진단 패널 (DIAG_RAG=true일 때만 표시)
                     if DIAG_RAG and response.get("diagnostics"):

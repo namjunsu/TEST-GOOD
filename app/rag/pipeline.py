@@ -836,7 +836,7 @@ class RAGPipeline:
                     }
                 }
 
-            # 2줄 카드 형식으로 포맷팅
+            # 2줄 카드 형식으로 포맷팅 (최대 160자 요약)
             cards = []
             for doc in docs:
                 filename = doc.get("filename", "알 수 없음")
@@ -844,11 +844,11 @@ class RAGPipeline:
                 date = doc.get("display_date") or doc.get("date", "날짜 없음")
                 drafter_name = doc.get("drafter", "작성자 미상")
 
-                # 한 줄 요약: text_preview 첫 180자
+                # 한 줄 요약: text_preview 첫 160자 (UI 가독성 개선)
                 preview = doc.get("text_preview", "")
-                # 개행 제거, 공백 정리
-                preview = " ".join(preview.split())[:180]
-                if len(preview) >= 180:
+                # 개행 제거, 공백 정리, 불필요한 수식어 제거
+                preview = " ".join(preview.split())[:160].strip()
+                if len(doc.get("text_preview", "")) > 160:
                     preview += "…"
 
                 # 2줄 카드
@@ -857,17 +857,23 @@ class RAGPipeline:
 
             answer_text = "\n\n".join(cards[:10])  # 최대 10개
 
-            # Evidence 구성
+            # Evidence 구성 (snippet도 160자로 제한)
             evidence = []
             for doc in docs[:10]:
                 filename = doc.get("filename", "")
                 ref = _encode_file_ref(filename) if filename else None
 
+                # snippet도 160자로 제한 (UI 카드 레이아웃 일관성)
+                raw_snippet = doc.get("text_preview", "")
+                snippet = " ".join(raw_snippet.split())[:160].strip()
+                if len(raw_snippet) > 160:
+                    snippet += "…"
+
                 evidence.append({
                     "doc_id": filename,
                     "filename": filename,
                     "page": 1,
-                    "snippet": doc.get("text_preview", "")[:400],
+                    "snippet": snippet,
                     "ref": ref,  # 🔴 base64 인코딩된 파일 경로
                     "meta": {
                         "filename": filename,

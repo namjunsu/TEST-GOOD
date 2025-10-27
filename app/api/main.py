@@ -12,7 +12,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 
@@ -34,6 +34,39 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ===== 유틸리티 함수 =====
+
+def get_public_base_url(request: Request) -> str:
+    """동적으로 공개 기준 URL 생성 (프록시/포워딩 환경 지원)
+
+    우선순위:
+    1. 환경변수 PUBLIC_API_BASE (수동 설정)
+    2. X-Forwarded-Host / X-Forwarded-Proto 헤더 (프록시 환경)
+    3. request.url (기본)
+
+    Args:
+        request: FastAPI Request 객체
+
+    Returns:
+        str: 공개 기준 URL (예: http://192.168.0.10:7860)
+    """
+    # 1. 환경변수 우선 (WSL/특수 환경)
+    env_base = os.getenv("PUBLIC_API_BASE")
+    if env_base:
+        return env_base.rstrip("/")
+
+    # 2. 프록시 헤더 확인 (nginx, cloudflare 등)
+    forwarded_host = request.headers.get("x-forwarded-host")
+    forwarded_proto = request.headers.get("x-forwarded-proto")
+
+    if forwarded_host:
+        scheme = forwarded_proto or request.url.scheme
+        return f"{scheme}://{forwarded_host}"
+
+    # 3. 기본 request.url 사용
+    return f"{request.url.scheme}://{request.url.netloc}"
 
 
 # 파일 접근 로깅 함수
@@ -251,8 +284,28 @@ def root():
         "healthcheck": "/_healthz",
         "endpoints": {
             "preview": "/files/preview?ref=<base64>",
-            "download": "/files/download?ref=<base64>"
+            "download": "/files/download?ref=<base64>",
+            "config": "/api/config"
         }
+    }
+
+
+@app.get("/api/config")
+def get_api_config(request: Request):
+    """API 설정 반환 (Streamlit에서 동적 URL을 가져가기 위함)
+
+    Returns:
+        dict: {
+            "base_url": 공개 기준 URL,
+            "preview_endpoint": "/files/preview",
+            "download_endpoint": "/files/download"
+        }
+    """
+    base_url = get_public_base_url(request)
+    return {
+        "base_url": base_url,
+        "preview_endpoint": f"{base_url}/files/preview",
+        "download_endpoint": f"{base_url}/files/download"
     }
 
 

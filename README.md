@@ -37,6 +37,43 @@ bash start_ai_chat.sh
 
 📱 **네트워크 접속 상세**: [네트워크_접속_가이드.md](네트워크_접속_가이드.md)
 
+### WSL2 환경에서 외부 접속 설정
+
+WSL2를 사용하는 경우, Windows에서 포트 프록시를 설정해야 다른 PC/모바일에서 접속할 수 있습니다:
+
+1. **WSL IP 주소 확인** (WSL 터미널에서):
+```bash
+ip addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}'
+```
+
+2. **포트 프록시 설정** (Windows PowerShell 관리자 권한으로 실행):
+```powershell
+# FastAPI 포트 (7860)
+netsh interface portproxy add v4tov4 listenport=7860 listenaddress=0.0.0.0 connectaddress=<WSL_IP> connectport=7860
+
+# Streamlit 포트 (8501)
+netsh interface portproxy add v4tov4 listenport=8501 listenaddress=0.0.0.0 connectaddress=<WSL_IP> connectport=8501
+```
+
+3. **포트 프록시 확인**:
+```powershell
+netsh interface portproxy show all
+```
+
+4. **방화벽 규칙 추가** (필요시):
+```powershell
+New-NetFirewallRule -DisplayName "AI-CHAT FastAPI" -Direction Inbound -LocalPort 7860 -Protocol TCP -Action Allow
+New-NetFirewallRule -DisplayName "AI-CHAT Streamlit" -Direction Inbound -LocalPort 8501 -Protocol TCP -Action Allow
+```
+
+5. **포트 프록시 삭제** (설정 해제 시):
+```powershell
+netsh interface portproxy delete v4tov4 listenport=7860 listenaddress=0.0.0.0
+netsh interface portproxy delete v4tov4 listenport=8501 listenaddress=0.0.0.0
+```
+
+**참고**: WSL이 재시작되면 IP가 변경될 수 있으므로, IP 변경 시 포트 프록시를 다시 설정해야 합니다.
+
 ---
 
 ## 📦 설치 및 이전 가이드

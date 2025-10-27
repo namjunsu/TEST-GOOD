@@ -3,6 +3,23 @@
 개선된 빠른 검색 RAG - LLM 요약 + 출처 인용 강제 + L2 리랭킹
 """
 
+# --- IMPORT TRACE (toggle) ---
+import os, atexit, json, builtins
+if os.getenv("IMPORT_TRACE") == "1":
+    _orig_import = builtins.__import__
+    loaded = set()
+    def _trace_import(name, *a, **k):
+        m = _orig_import(name, *a, **k)
+        f = getattr(m, "__file__", None)
+        if f: loaded.add(f)
+        return m
+    builtins.__import__ = _trace_import
+    import pathlib
+    pathlib.Path("logs").mkdir(exist_ok=True)
+    atexit.register(lambda: open("logs/import_trace.json","w",encoding="utf-8")
+        .write(json.dumps(sorted(loaded), ensure_ascii=False, indent=2)))
+# --- /IMPORT TRACE ---
+
 from modules.search_module_hybrid import SearchModuleHybrid
 from modules.reranker import RuleBasedReranker
 import time
@@ -665,7 +682,7 @@ class QuickFixRAG:
 
             # 1단계: 정확 일치 (COLLATE NOCASE)
             cursor.execute("""
-                SELECT path, filename, drafter, date, category, text_preview
+                SELECT path, filename, drafter, date, category, text_preview, doctype, display_date, claimed_total, sum_match
                 FROM documents
                 WHERE filename = ? COLLATE NOCASE
                 LIMIT 1
@@ -680,7 +697,7 @@ class QuickFixRAG:
             # 2단계: 정규화 일치
             normalized = self._normalize_filename(filename)
             cursor.execute("""
-                SELECT path, filename, drafter, date, category, text_preview
+                SELECT path, filename, drafter, date, category, text_preview, doctype, display_date, claimed_total, sum_match
                 FROM documents
                 WHERE normalized_filename = ?
                 LIMIT 1
@@ -694,7 +711,7 @@ class QuickFixRAG:
 
             # 3단계: 부분 일치 (LIKE) - 최대 5건
             cursor.execute("""
-                SELECT path, filename, drafter, date, category, text_preview
+                SELECT path, filename, drafter, date, category, text_preview, doctype, display_date, claimed_total, sum_match
                 FROM documents
                 WHERE filename LIKE ? COLLATE NOCASE
                 LIMIT 5
@@ -725,38 +742,63 @@ class QuickFixRAG:
         """DB 결과를 파일 정보 딕셔너리로 변환
 
         Args:
-            row: (path, filename, drafter, date, category, text_preview)
+            row: (path, filename, drafter, date, category, text_preview, doctype, display_date, claimed_total, sum_match)
 
         Returns:
             파일 정보 딕셔너리
         """
-        path, fname, drafter, date, category, text_preview = row
+        path, fname, drafter, date, category, text_preview, doctype, display_date, claimed_total, sum_match = row
         return {
             'path': path,
             'filename': fname,
             'drafter': drafter or '정보 없음',
             'date': date or '정보 없음',
             'category': category or '미분류',
-            'content': text_preview or ''
+            'content': text_preview or '',
+            'doctype': doctype or 'proposal',
+            'display_date': display_date or date or '정보 없음',
+            'claimed_total': claimed_total,
+            'sum_match': sum_match
         }
 
     def _format_file_result(self, filename: str, file_result: dict) -> str:
-        """파일 검색 결과 포매팅 (노이즈 제거 적용)
+        """파일 검색 결과 포매팅 (doctype 기반 템플릿 + 노이즈 제거)
 
         Args:
             filename: 요청한 파일명
-            file_result: 파일 정보
+            file_result: 파일 정보 (doctype, display_date, claimed_total, sum_match 포함)
 
         Returns:
             포매팅된 문자열
         """
-        answer = f"**📄 문서:** {file_result['filename']}\n\n"
+        # doctype 정보 추출
+        doctype = file_result.get('doctype', 'proposal')
+        doctype_names = {
+            'proposal': '기안서',
+            'report': '보고서',
+            'review': '검토서',
+            'minutes': '회의록',
+            'unknown': '미분류'
+        }
+        doctype_label = doctype_names.get(doctype, '문서')
+
+        answer = f"**📄 문서:** {file_result['filename']}\n"
+        answer += f"**🏷️ 유형:** {doctype_label}\n\n"
 
         # 메타데이터
         answer += "**📋 문서 정보**\n"
         answer += f"- **기안자:** {file_result['drafter']}\n"
-        answer += f"- **날짜:** {file_result['date']}\n"
-        answer += f"- **카테고리:** {file_result['category']}\n\n"
+        answer += f"- **날짜:** {file_result.get('display_date', file_result['date'])}\n"
+        answer += f"- **카테고리:** {file_result['category']}\n"
+
+        # 비용 정보 (있는 경우)
+        if file_result.get('claimed_total'):
+            answer += f"- **비용 합계:** ₩{file_result['claimed_total']:,}"
+            if file_result.get('sum_match') is False:
+                answer += " ⚠️ (검증 필요)"
+            answer += "\n"
+
+        answer += "\n"
 
         # 내용 미리보기 (노이즈 제거 + 처음 1000자)
         content = file_result.get('content', '')

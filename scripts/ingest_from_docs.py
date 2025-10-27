@@ -35,6 +35,40 @@ from modules.metadata_db import MetadataDB
 logger = get_logger(__name__)
 
 
+def extract_claimed_total_fallback(text: str) -> Optional[int]:
+    """본문에서 비용 합계 금액을 폴백 추출
+
+    Args:
+        text: 문서 본문 텍스트
+
+    Returns:
+        추출된 금액 (정수) 또는 None
+    """
+    # 합계 라벨 패턴 (OR): 비용 합계, 합계(VAT별도), 합계, 총계
+    label_pattern = r"(?:비용\s*합계|합계\s*\(VAT\s*별도\)|합계(?!\s*검증)|총계)"
+    # 금액 패턴: 선택적 통화 기호 + 숫자+구분자 + 선택적 통화 단위
+    amount_pattern = r"(?:₩|KRW)?\s*([\d\.,]+)\s*(?:원|KRW|₩)?"
+
+    # 전체 패턴: 라벨 + 선택적 공백/기호 + 금액
+    full_pattern = label_pattern + r"\s*[:\s]*" + amount_pattern
+
+    match = re.search(full_pattern, text)
+    if not match:
+        return None
+
+    amount_str = match.group(1)
+
+    try:
+        # 숫자 정규화: , ₩ 원 공백 제거
+        normalized = amount_str.replace(",", "").replace("₩", "").replace("원", "").replace(" ", "")
+        claimed_total = int(normalized)
+        logger.info(f"claimed_total_fallback={claimed_total:,}원 (패턴: {match.group(0)[:50]})")
+        return claimed_total
+    except (ValueError, OverflowError) as e:
+        logger.warning(f"claimed_total 변환 실패: {amount_str} - {e}")
+        return None
+
+
 class DocumentIngester:
     """문서 투입 처리기"""
 
@@ -293,6 +327,33 @@ class DocumentIngester:
                     f"cost_items={len(cost_data.get('items', []))}"
                 )
 
+            # 7.1 claimed_total 추출 (표 파싱 → 폴백)
+            claimed_total = None
+            if cost_data and cost_data.get("claimed_total"):
+                claimed_total = cost_data.get("claimed_total")
+            else:
+                # 폴백: 본문에서 "비용 합계", "합계(VAT별도)" 등 추출
+                claimed_total = extract_claimed_total_fallback(raw_text)
+                if claimed_total:
+                    result["actions"].append(f"claimed_total_fallback={claimed_total:,}")
+
+            # 7.2 sum_match 계산
+            sum_match = None
+            if claimed_total is not None and cost_data and cost_data.get("items"):
+                # 라인아이템이 있으면 합계 검증
+                items = cost_data.get("items", [])
+                items_sum = sum(item.get("amount", 0) for item in items if item.get("amount"))
+
+                if items_sum > 0:
+                    # ±1원 허용 (반올림 오차)
+                    if abs(items_sum - claimed_total) <= 1:
+                        sum_match = True
+                        result["actions"].append(f"sum_match=True ({items_sum:,}≈{claimed_total:,})")
+                    else:
+                        sum_match = False
+                        result["actions"].append(f"sum_match=False ({items_sum:,}≠{claimed_total:,})")
+            # 라인아이템 없으면 sum_match는 None 유지
+
             # 8. 텍스트 저장
             if not self.dry_run:
                 extracted_file = self.extracted_dir / f"{pdf_path.stem}.txt"
@@ -325,10 +386,8 @@ class DocumentIngester:
                     "keywords": [],
                     "doctype": doctype,
                     "display_date": parsed_meta.get("display_date", ""),
-                    "claimed_total": (
-                        cost_data.get("claimed_total") if cost_data else None
-                    ),
-                    "sum_match": cost_data.get("sum_match") if cost_data else None,
+                    "claimed_total": claimed_total,
+                    "sum_match": sum_match,
                 }
                 self.db.add_document(doc_metadata)
                 result["actions"].append("db_upserted")

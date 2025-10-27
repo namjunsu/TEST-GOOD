@@ -39,15 +39,17 @@ class TestTextCleaner:
 문서 내용
 http://gw.channela-mt.com/approval_form_popup.php?seq=123
 더 많은 내용
-approval_form_popup.php?id=456
+http://gw.channela-mt.com/another_page.php?id=456
 """
         cleaned, counts = cleaner.clean(text)
 
-        # URL이 제거되었는지 확인
-        assert "approval_form_popup.php" not in cleaned
+        # 도메인 포함 URL이 제거되었는지 확인 (도메인 없는 파일명은 유지)
+        assert "gw.channela-mt.com" not in cleaned
 
-        # 노이즈 카운트 확인 (그룹웨어 URL + 팝업 스크립트 합산)
-        url_count = counts.get('그룹웨어 도메인 URL', 0) + counts.get('결재 팝업 스크립트', 0)
+        # 노이즈 카운트 확인 (그룹웨어 URL 패턴 합산)
+        url_count = (counts.get('그룹웨어 결재 팝업 전체 URL', 0) +
+                    counts.get('그룹웨어 도메인 URL (기타)', 0) +
+                    counts.get('그룹웨어 전체 URL (http 포함)', 0))
         assert url_count >= 1
 
     def test_remove_page_number(self, cleaner):

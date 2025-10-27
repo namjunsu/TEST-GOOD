@@ -2,4 +2,4 @@
 
 from app.rag.render.summary_templates import SummaryRenderer
 
-__all__ = ['SummaryRenderer']
+__all__ = ["SummaryRenderer"]

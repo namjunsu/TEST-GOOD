@@ -27,11 +27,19 @@ class TextCleaner:
         """
         self.config = self._load_config(config_path)
         self.noise_patterns = self._compile_patterns()
-        self.deduplicate_lines = self.config.get('text_cleaning', {}).get('deduplicate_lines', True)
-        self.max_duplicate_threshold = self.config.get('text_cleaning', {}).get('max_duplicate_threshold', 2)
-        self.min_repeat_for_noise = self.config.get('text_cleaning', {}).get('min_repeat_for_noise', 3)
+        self.deduplicate_lines = self.config.get("text_cleaning", {}).get(
+            "deduplicate_lines", True
+        )
+        self.max_duplicate_threshold = self.config.get("text_cleaning", {}).get(
+            "max_duplicate_threshold", 2
+        )
+        self.min_repeat_for_noise = self.config.get("text_cleaning", {}).get(
+            "min_repeat_for_noise", 3
+        )
 
-        logger.info(f"🧹 텍스트 클리너 초기화: {len(self.noise_patterns)}개 노이즈 패턴 로드")
+        logger.info(
+            f"🧹 텍스트 클리너 초기화: {len(self.noise_patterns)}개 노이즈 패턴 로드"
+        )
 
     def _load_config(self, config_path: str) -> Dict[str, Any]:
         """설정 파일 로드
@@ -48,7 +56,7 @@ class TextCleaner:
                 logger.warning(f"⚠️ 설정 파일 없음: {config_path}, 기본값 사용")
                 return {}
 
-            with open(config_file, 'r', encoding='utf-8') as f:
+            with open(config_file, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
                 logger.info(f"✓ 설정 로드: {config_path}")
                 return config
@@ -64,11 +72,11 @@ class TextCleaner:
             (컴파일된 패턴, 설명) 튜플 리스트
         """
         patterns = []
-        noise_config = self.config.get('text_cleaning', {}).get('noise_patterns', [])
+        noise_config = self.config.get("text_cleaning", {}).get("noise_patterns", [])
 
         for pattern_config in noise_config:
-            pattern_str = pattern_config.get('pattern')
-            description = pattern_config.get('description', 'unknown')
+            pattern_str = pattern_config.get("pattern")
+            description = pattern_config.get("description", "unknown")
 
             try:
                 compiled = re.compile(pattern_str)
@@ -91,7 +99,7 @@ class TextCleaner:
         if not text:
             return "", {}
 
-        lines = text.split('\n')
+        lines = text.split("\n")
         noise_counts = {}
 
         # 1. 패턴 기반 노이즈 제거
@@ -100,23 +108,25 @@ class TextCleaner:
 
         # 2. 빈도 기반 반복 헤더/푸터 제거
         lines, repeat_count = self._remove_repeated_lines(lines)
-        noise_counts['repeated_headers_footers'] = repeat_count
+        noise_counts["repeated_headers_footers"] = repeat_count
 
         # 3. 중복 라인 제거 (선택적)
         if self.deduplicate_lines:
             lines, dedup_count = self._deduplicate_consecutive_lines(lines)
-            noise_counts['deduplicated_lines'] = dedup_count
+            noise_counts["deduplicated_lines"] = dedup_count
 
         # 4. 빈 라인 정리 (연속된 빈 라인을 하나로)
         lines = self._normalize_blank_lines(lines)
 
-        cleaned_text = '\n'.join(lines)
+        cleaned_text = "\n".join(lines)
 
         logger.debug(f"🧹 정리 완료: {sum(noise_counts.values())}개 노이즈 제거")
 
         return cleaned_text, noise_counts
 
-    def _remove_pattern_noise(self, lines: List[str]) -> Tuple[List[str], Dict[str, int]]:
+    def _remove_pattern_noise(
+        self, lines: List[str]
+    ) -> Tuple[List[str], Dict[str, int]]:
         """패턴 기반 노이즈 제거
 
         Args:
@@ -161,14 +171,17 @@ class TextCleaner:
 
         # 반복 라인 식별 (min_repeat_for_noise회 이상)
         repeated_lines = {
-            line for line, count in line_counts.items()
+            line
+            for line, count in line_counts.items()
             if count >= self.min_repeat_for_noise
         }
 
         if not repeated_lines:
             return lines, 0
 
-        logger.debug(f"🔍 반복 라인 {len(repeated_lines)}개 발견: {list(repeated_lines)[:3]}...")
+        logger.debug(
+            f"🔍 반복 라인 {len(repeated_lines)}개 발견: {list(repeated_lines)[:3]}..."
+        )
 
         # 반복 라인 제거
         cleaned_lines = []
@@ -233,7 +246,7 @@ class TextCleaner:
 
             if is_blank:
                 if not prev_blank:
-                    cleaned_lines.append('')
+                    cleaned_lines.append("")
                 prev_blank = True
             else:
                 cleaned_lines.append(line)

@@ -13,13 +13,18 @@ from typing import List, Dict, Any, Tuple
 # TextCleaner 가져오기 (폴백 포함)
 try:
     from app.rag.preprocess.clean_text import TextCleaner
+
     _cleaner = TextCleaner()
+
     def clean_text(text: str) -> str:
         cleaned, _ = _cleaner.clean(text or "")
         return cleaned
+
 except Exception:
+
     def clean_text(t: str) -> str:  # 최소 폴백
         return t or ""
+
 
 # 노이즈 패턴
 TS_RE = re.compile(r"(오전|오후)\s?\d{1,2}:\d{2}")
@@ -30,11 +35,12 @@ PAGE_NUM_RE = re.compile(r"^\s*-\s*\d+\s*-\s*$", re.M)
 def _normalize_fname(name: str) -> str:
     """파일명 정규화 (중복 검출용)"""
     import unicodedata
+
     n = (name or "").strip()
     n = unicodedata.normalize("NFKC", n)
     n = n.replace(" ", "_").replace("-", "_").lower()  # 공백, 하이픈 → 언더스코어
     n = re.sub(r"\((\d+)\)(?=\.pdf$)", "", n, flags=re.I)  # (1).pdf 제거
-    n = re.sub(r"_(\d+)(?=\.pdf$)", "", n, flags=re.I)     # _1.pdf 제거
+    n = re.sub(r"_(\d+)(?=\.pdf$)", "", n, flags=re.I)  # _1.pdf 제거
     n = re.sub(r"__+", "_", n)  # 연속 언더스코어 제거
     return n
 
@@ -77,7 +83,12 @@ def _fallback_snippet(item: Dict[str, Any]) -> str:
 
 def _primary_snippet(item: Dict[str, Any]) -> str:
     """주 스니펫 생성 (클린 + 폴백)"""
-    raw = item.get("content") or item.get("raw_fragment") or item.get("text_preview") or ""
+    raw = (
+        item.get("content")
+        or item.get("raw_fragment")
+        or item.get("text_preview")
+        or ""
+    )
     snip = _clean_snippet(raw)
     return snip if snip else _fallback_snippet(item)
 

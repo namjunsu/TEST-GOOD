@@ -21,13 +21,14 @@ from app.rag.query_router import QueryRouter, QueryMode
 logger = get_logger(__name__)
 
 # 진단 모드 설정
-DIAG_RAG = os.getenv('DIAG_RAG', 'false').lower() == 'true'
-DIAG_LOG_LEVEL = os.getenv('DIAG_LOG_LEVEL', 'INFO').upper()
+DIAG_RAG = os.getenv("DIAG_RAG", "false").lower() == "true"
+DIAG_LOG_LEVEL = os.getenv("DIAG_LOG_LEVEL", "INFO").upper()
 
 
 # ============================================================================
 # Request / Response 데이터 클래스
 # ============================================================================
+
 
 @dataclass
 class RAGRequest:
@@ -40,6 +41,7 @@ class RAGRequest:
         use_hyde: HyDE 사용 여부
         temperature: LLM 생성 온도
     """
+
     query: str
     top_k: int = 5
     compression_ratio: float = 0.7
@@ -62,6 +64,7 @@ class RAGResponse:
         metrics: 내부 지표 (검색/압축/생성 시간 등)
         diagnostics: 진단 정보 (DIAG_RAG=true일 때만 채워짐)
     """
+
     answer: str
     source_docs: List[str] = field(default_factory=list)
     evidence_chunks: List[Dict[str, Any]] = field(default_factory=list)
@@ -76,6 +79,7 @@ class RAGResponse:
 # ============================================================================
 # 프로토콜 정의 (의존성 역전)
 # ============================================================================
+
 
 class Retriever(Protocol):
     """검색 엔진 인터페이스"""
@@ -104,7 +108,9 @@ class Retriever(Protocol):
 class Compressor(Protocol):
     """컨텍스트 압축기 인터페이스"""
 
-    def compress(self, chunks: List[Dict[str, Any]], ratio: float) -> List[Dict[str, Any]]:
+    def compress(
+        self, chunks: List[Dict[str, Any]], ratio: float
+    ) -> List[Dict[str, Any]]:
         """문서 압축
 
         Args:
@@ -137,6 +143,7 @@ class Generator(Protocol):
 # ============================================================================
 # RAG 파이프라인 (파사드)
 # ============================================================================
+
 
 class RAGPipeline:
     """RAG 파이프라인 파사드
@@ -192,7 +199,6 @@ class RAGPipeline:
         Returns:
             RAGResponse: 답변 + 메타데이터
         """
-        import time
 
         # 입력 검증
         if not query or not query.strip():
@@ -215,7 +221,7 @@ class RAGPipeline:
             # [DIAG] 검색 결과 진단
             if DIAG_RAG:
                 diagnostics["retrieved_k"] = len(results)
-                if DIAG_LOG_LEVEL in ['DEBUG', 'INFO']:
+                if DIAG_LOG_LEVEL in ["DEBUG", "INFO"]:
                     logger.info(f"[DIAG] 검색 완료: {len(results)}개 문서 검색됨")
 
             if not results:
@@ -240,8 +246,10 @@ class RAGPipeline:
             if DIAG_RAG:
                 diagnostics["after_compress_k"] = len(compressed)
                 diagnostics["compression_ratio"] = compression_ratio
-                if DIAG_LOG_LEVEL in ['DEBUG', 'INFO']:
-                    logger.info(f"[DIAG] 압축 완료: {len(results)} → {len(compressed)}개 문서")
+                if DIAG_LOG_LEVEL in ["DEBUG", "INFO"]:
+                    logger.info(
+                        f"[DIAG] 압축 완료: {len(results)} → {len(compressed)}개 문서"
+                    )
 
             # 3. 생성: 컨텍스트는 스니펫 집합으로 구성
             gen_start = time.perf_counter()
@@ -249,12 +257,14 @@ class RAGPipeline:
             # CRITICAL: Inject compressed chunks into generator for proper LLM context
             if hasattr(self.generator, "compressed_chunks"):
                 self.generator.compressed_chunks = compressed
-                logger.debug(f"Injected {len(compressed)} compressed chunks into generator")
+                logger.debug(
+                    f"Injected {len(compressed)} compressed chunks into generator"
+                )
 
             context = "\n\n".join([c.get("snippet", "") for c in compressed])
 
             # [DIAG] 생성 전 컨텍스트 스냅샷
-            if DIAG_RAG and DIAG_LOG_LEVEL == 'DEBUG':
+            if DIAG_RAG and DIAG_LOG_LEVEL == "DEBUG":
                 for i, c in enumerate(compressed[:3], 1):  # 상위 3개만 로그
                     logger.debug(
                         f"[DIAG] Context[{i}]: doc_id={c.get('doc_id')}, "
@@ -271,8 +281,10 @@ class RAGPipeline:
                 diagnostics["mode"] = "normal"
                 diagnostics["generate_path"] = "from_context"
                 diagnostics["used_k"] = len(compressed)
-                if DIAG_LOG_LEVEL in ['DEBUG', 'INFO']:
-                    logger.info(f"[DIAG] 생성 완료: from_context 경로, {len(compressed)}개 문서 사용")
+                if DIAG_LOG_LEVEL in ["DEBUG", "INFO"]:
+                    logger.info(
+                        f"[DIAG] 생성 완료: from_context 경로, {len(compressed)}개 문서 사용"
+                    )
 
             total_latency = time.perf_counter() - start_time
             metrics["total_time"] = total_latency
@@ -322,7 +334,9 @@ class RAGPipeline:
                 latency=time.perf_counter() - start_time,
             )
 
-    def _make_response(self, text: str, selected: List[Dict[str, Any]], retrieved: List[Dict[str, Any]]) -> dict:
+    def _make_response(
+        self, text: str, selected: List[Dict[str, Any]], retrieved: List[Dict[str, Any]]
+    ) -> dict:
         """표준 응답 구조 생성 (citations 포함)
 
         Args:
@@ -333,24 +347,29 @@ class RAGPipeline:
         Returns:
             표준화된 응답 dict (citations 필수)
         """
-        citations = [{
-            "doc_id": c.get("doc_id"),
-            "title": c.get("title") or c.get("filename") or c.get("doc_id"),
-            "page": c.get("page", 1),
-            "snippet": (c.get("text") or c.get("snippet") or c.get("content") or "")[:300],
-            "preview_url": c.get("preview_url"),
-            "download_url": c.get("download_url"),
-        } for c in selected]
+        citations = [
+            {
+                "doc_id": c.get("doc_id"),
+                "title": c.get("title") or c.get("filename") or c.get("doc_id"),
+                "page": c.get("page", 1),
+                "snippet": (
+                    c.get("text") or c.get("snippet") or c.get("content") or ""
+                )[:300],
+                "preview_url": c.get("preview_url"),
+                "download_url": c.get("download_url"),
+            }
+            for c in selected
+        ]
 
         return {
             "text": text,
             "citations": citations,  # 🔴 표준 키 (필수)
-            "evidence": citations,   # 하위 호환성 (동일 데이터)
+            "evidence": citations,  # 하위 호환성 (동일 데이터)
             "status": {
                 "retrieved_count": len(retrieved),
                 "selected_count": len(selected),
-                "found": len(selected) > 0  # 🔴 유일한 판정 기준
-            }
+                "found": len(selected) > 0,  # 🔴 유일한 판정 기준
+            },
         }
 
     def answer(self, query: str, top_k: Optional[int] = None) -> dict:
@@ -373,7 +392,7 @@ class RAGPipeline:
             }
         """
         # 🔥 CRITICAL: 기안자/날짜 검색은 QuickFixRAG에 위임 (전문 로직 보유)
-        if hasattr(self.generator, 'rag'):
+        if hasattr(self.generator, "rag"):
             import re
             import sqlite3
 
@@ -388,7 +407,9 @@ class RAGPipeline:
             # 🎯 모드 라우팅: Q&A 의도 키워드가 있으면 파일명이 있어도 Q&A 모드 우선
             query_mode = self.query_router.classify_mode(actual_query)
             router_reason = self.query_router.get_routing_reason(actual_query)
-            logger.info(f"🔀 라우팅 결과: mode={query_mode.value}, reason={router_reason}")
+            logger.info(
+                f"🔀 라우팅 결과: mode={query_mode.value}, reason={router_reason}"
+            )
 
             # 🔍 디버깅: 실제 pattern matching 대상 로깅
             logger.info(f"🔍 Pattern matching 대상 쿼리: '{actual_query[:100]}'")
@@ -396,8 +417,12 @@ class RAGPipeline:
             # ✅ P0: 파일명 직접 언급 패턴 감지 (PREVIEW 모드일 때만)
             if query_mode == QueryMode.PREVIEW:
                 # 패턴 1: 요약 요청 - "파일명.pdf 내용 요약해줘" / "파일명.pdf 요약"
-                file_summary_pattern = r'(\S+\.pdf)\s*(이\s*)?(문서\s*)?(내용\s*)?(요약|정리)'
-                summary_match = re.search(file_summary_pattern, actual_query, re.IGNORECASE)
+                file_summary_pattern = (
+                    r"(\S+\.pdf)\s*(이\s*)?(문서\s*)?(내용\s*)?(요약|정리)"
+                )
+                summary_match = re.search(
+                    file_summary_pattern, actual_query, re.IGNORECASE
+                )
 
                 if summary_match:
                     filename = summary_match.group(1).strip()
@@ -408,21 +433,23 @@ class RAGPipeline:
                         import pdfplumber
                         from pathlib import Path
 
-                        conn = sqlite3.connect('metadata.db')
+                        conn = sqlite3.connect("metadata.db")
                         cursor = conn.cursor()
-                        cursor.execute("""
+                        cursor.execute(
+                            """
                             SELECT path, filename, drafter, date, category, text_preview
                             FROM documents
                             WHERE filename LIKE ?
                             LIMIT 1
-                        """, (f'%{filename}%',))
+                        """,
+                            (f"%{filename}%",),
+                        )
 
                         result = cursor.fetchone()
                         conn.close()
 
                         if result:
                             pdf_path, fname, drafter, date, category, preview = result
-                            doc_num = None  # doc_number 컬럼이 없으므로 None
 
                             # PDF 전문 텍스트 로드
                             full_text = preview or ""
@@ -441,34 +468,49 @@ class RAGPipeline:
 
                             # 간단한 요약 생성 (LLM 없이)
                             answer_text = f"**📄 {fname}**\n\n"
-                            answer_text += f"**📋 문서 정보**\n"
+                            answer_text += "**📋 문서 정보**\n"
                             answer_text += f"- **기안자:** {drafter or '정보 없음'}\n"
                             answer_text += f"- **날짜:** {date or '정보 없음'}\n"
-                            answer_text += f"- **카테고리:** {category or '정보 없음'}\n"
+                            answer_text += (
+                                f"- **카테고리:** {category or '정보 없음'}\n"
+                            )
 
-                            answer_text += f"\n**📝 주요 내용**\n"
+                            answer_text += "\n**📝 주요 내용**\n"
                             # 처음 800자 미리보기
                             content_preview = full_text[:800].strip()
                             if content_preview:
                                 answer_text += content_preview
                                 if len(full_text) > 800:
-                                    answer_text += "...\n\n*(전체 문서는 더 긴 내용을 포함합니다)*"
+                                    answer_text += (
+                                        "...\n\n*(전체 문서는 더 긴 내용을 포함합니다)*"
+                                    )
                             else:
                                 answer_text += "*(문서 내용을 읽을 수 없습니다)*"
 
                             # Evidence 구성
-                            evidence = [{
-                                "doc_id": fname,
-                                "page": 1,
-                                "snippet": full_text[:500],
-                                "meta": {"filename": fname, "drafter": drafter, "date": date, "category": category}
-                            }]
+                            evidence = [
+                                {
+                                    "doc_id": fname,
+                                    "page": 1,
+                                    "snippet": full_text[:500],
+                                    "meta": {
+                                        "filename": fname,
+                                        "drafter": drafter,
+                                        "date": date,
+                                        "category": category,
+                                    },
+                                }
+                            ]
 
                             return {
                                 "text": answer_text,
                                 "citations": [fname],
                                 "evidence": evidence,
-                                "status": {"retrieved_count": 1, "selected_count": 1, "found": True}
+                                "status": {
+                                    "retrieved_count": 1,
+                                    "selected_count": 1,
+                                    "found": True,
+                                },
                             }
                         else:
                             logger.warning(f"⚠️ 파일 없음: {filename}")
@@ -479,7 +521,7 @@ class RAGPipeline:
 
                 # 패턴 2: 기안자 질의 - "파일명.pdf 기안자가 누구야?"
                 # (컬럼 수정 완료: doc_number 제거)
-                file_author_pattern = r'(\S+\.pdf)\s*(기안자|작성자).*(누구|알려줘)'
+                file_author_pattern = r"(\S+\.pdf)\s*(기안자|작성자).*(누구|알려줘)"
                 file_match = re.search(file_author_pattern, actual_query, re.IGNORECASE)
 
                 if file_match:
@@ -488,39 +530,54 @@ class RAGPipeline:
 
                     # metadata.db에서 직접 조회
                     try:
-                        conn = sqlite3.connect('metadata.db')
+                        conn = sqlite3.connect("metadata.db")
                         cursor = conn.cursor()
-                        cursor.execute("""
+                        cursor.execute(
+                            """
                             SELECT filename, drafter, date, category
                             FROM documents
                             WHERE filename LIKE ?
                             LIMIT 1
-                        """, (f'%{filename}%',))
+                        """,
+                            (f"%{filename}%",),
+                        )
 
                         result = cursor.fetchone()
                         conn.close()
 
                         if result:
                             fname, drafter, date, category = result
-                            doc_num = None
                             answer_text = f"**{fname}**\n\n"
                             answer_text += f"📌 **기안자:** {drafter or '정보 없음'}\n"
                             answer_text += f"📅 **날짜:** {date or '정보 없음'}\n"
-                            answer_text += f"📁 **카테고리:** {category or '정보 없음'}\n"
+                            answer_text += (
+                                f"📁 **카테고리:** {category or '정보 없음'}\n"
+                            )
 
                             # Evidence 구성 (정확한 파일 1건)
-                            evidence = [{
-                                "doc_id": fname,
-                                "page": 1,
-                                "snippet": f"기안자: {drafter}, 날짜: {date}, 카테고리: {category}",
-                                "meta": {"filename": fname, "drafter": drafter, "date": date, "category": category}
-                            }]
+                            evidence = [
+                                {
+                                    "doc_id": fname,
+                                    "page": 1,
+                                    "snippet": f"기안자: {drafter}, 날짜: {date}, 카테고리: {category}",
+                                    "meta": {
+                                        "filename": fname,
+                                        "drafter": drafter,
+                                        "date": date,
+                                        "category": category,
+                                    },
+                                }
+                            ]
 
                             return {
                                 "text": answer_text,
                                 "citations": [fname],
                                 "evidence": evidence,
-                                "status": {"retrieved_count": 1, "selected_count": 1, "found": True}
+                                "status": {
+                                    "retrieved_count": 1,
+                                    "selected_count": 1,
+                                    "found": True,
+                                },
                             }
                         else:
                             logger.warning(f"⚠️ 파일 없음: {filename}")
@@ -528,7 +585,11 @@ class RAGPipeline:
                                 "text": f"❌ '{filename}' 파일을 찾을 수 없습니다.",
                                 "citations": [],
                                 "evidence": [],
-                                "status": {"retrieved_count": 0, "selected_count": 0, "found": False}
+                                "status": {
+                                    "retrieved_count": 0,
+                                    "selected_count": 0,
+                                    "found": False,
+                                },
                             }
 
                     except Exception as e:
@@ -536,19 +597,25 @@ class RAGPipeline:
                         # 오류 시 일반 검색으로 폴백
 
             # 기안자 검색 패턴 감지 (실제 질문에서만)
-            author_patterns = [r'([가-힣]{2,4})\s*(문서|기안서|검토서)',
-                              r'([가-힣]{2,4})가?\s*(작성한|작성안|기안한|쓴|만든)',
-                              r'(기안자|작성자|제안자)[:\s]+([가-힣]{2,4})']
+            author_patterns = [
+                r"([가-힣]{2,4})\s*(문서|기안서|검토서)",
+                r"([가-힣]{2,4})가?\s*(작성한|작성안|기안한|쓴|만든)",
+                r"(기안자|작성자|제안자)[:\s]+([가-힣]{2,4})",
+            ]
             # 날짜 검색 패턴 감지
-            year_pattern = r'(\d{4})\s*년'
+            year_pattern = r"(\d{4})\s*년"
 
             is_author_query = any(re.search(p, actual_query) for p in author_patterns)
             is_year_query = re.search(year_pattern, actual_query)
 
             if is_author_query or is_year_query:
-                logger.info(f"🎯 특수 검색 모드 감지: author={is_author_query}, year={is_year_query}")
+                logger.info(
+                    f"🎯 특수 검색 모드 감지: author={is_author_query}, year={is_year_query}"
+                )
                 # QuickFixRAG.answer()로 직접 처리 (실제 질문 전달)
-                answer_text = self.generator.rag.answer(actual_query, use_llm_summary=False)
+                answer_text = self.generator.rag.answer(
+                    actual_query, use_llm_summary=False
+                )
 
                 # 표준 응답 형식으로 변환
                 return {
@@ -558,8 +625,9 @@ class RAGPipeline:
                     "status": {
                         "retrieved_count": 0,
                         "selected_count": 0,
-                        "found": "관련 문서" not in answer_text and "없습니다" not in answer_text
-                    }
+                        "found": "관련 문서" not in answer_text
+                        and "없습니다" not in answer_text,
+                    },
                 }
 
         # 일반 쿼리는 기존 로직 사용
@@ -572,7 +640,9 @@ class RAGPipeline:
                     "doc_id": c.get("doc_id"),
                     "page": c.get("page", 1),
                     "snippet": c.get("snippet", ""),
-                    "meta": c.get("meta", {"doc_id": c.get("doc_id"), "page": c.get("page", 1)}),
+                    "meta": c.get(
+                        "meta", {"doc_id": c.get("doc_id"), "page": c.get("page", 1)}
+                    ),
                 }
                 for c in (response.evidence_chunks or [])
             ]
@@ -580,7 +650,7 @@ class RAGPipeline:
             # CRITICAL: Evidence 최소 보장 (sources_cited가 비어도 검색 결과는 표시)
             evidence_injected = False
             if not evidence and response.raw_results:
-                logger.info(f"Evidence empty, using raw_results[:3] as fallback")
+                logger.info("Evidence empty, using raw_results[:3] as fallback")
                 evidence = [
                     {
                         "doc_id": r.get("doc_id") or r.get("chunk_id", "unknown"),
@@ -608,18 +678,19 @@ class RAGPipeline:
             status = {
                 "retrieved_count": len(response.raw_results or []),
                 "selected_count": len(evidence),
-                "found": len(evidence) > 0  # 🔴 유일한 판정 기준
+                "found": len(evidence) > 0,  # 🔴 유일한 판정 기준
             }
 
             # 운영 표준 1행 요약 로그 (필수)
             import re
+
             author_mode = bool(re.search(r"(작성자|기안자|제안자)", query))
             search_ms = int(response.metrics.get("search_time", 0) * 1000)
             generate_ms = int(response.metrics.get("generate_time", 0) * 1000)
             total_ms = int(response.latency * 1000)
 
             logger.info(
-                f"[RAG] query=\"{query[:50]}...\" | "
+                f'[RAG] query="{query[:50]}..." | '
                 f"retrieved={status['retrieved_count']} | "
                 f"selected={status['selected_count']} | "
                 f"found={status['found']} | "
@@ -633,31 +704,29 @@ class RAGPipeline:
             return {
                 "text": response.answer,
                 "citations": evidence,  # 🔴 표준 키 (필수)
-                "evidence": evidence,   # 하위 호환성 (동일 데이터)
-                "status": status,       # UI에서 이것만 확인
-                "diagnostics": response.diagnostics if DIAG_RAG else {}
+                "evidence": evidence,  # 하위 호환성 (동일 데이터)
+                "status": status,  # UI에서 이것만 확인
+                "diagnostics": response.diagnostics if DIAG_RAG else {},
             }
         else:
             # 에러 발생 시 (중립 톤, 사과 표현 금지)
-            error_msg = ERROR_MESSAGES.get(ErrorCode.E_GENERATE, "답변 생성 중 오류가 발생했다.")
+            error_msg = ERROR_MESSAGES.get(
+                ErrorCode.E_GENERATE, "답변 생성 중 오류가 발생했다."
+            )
             if response.error:
                 error_msg = f"{error_msg}\n\n상세: {response.error}"
 
             # 운영 표준 로그 (에러 케이스)
             logger.error(
-                f"[RAG] query=\"{query[:50]}...\" | "
-                f"status=ERROR | error=\"{response.error}\""
+                f'[RAG] query="{query[:50]}..." | '
+                f'status=ERROR | error="{response.error}"'
             )
 
             return {
                 "text": error_msg,
                 "citations": [],  # 🔴 표준 키 (필수)
-                "evidence": [],   # 하위 호환성
-                "status": {
-                    "retrieved_count": 0,
-                    "selected_count": 0,
-                    "found": False
-                }
+                "evidence": [],  # 하위 호환성
+                "status": {"retrieved_count": 0, "selected_count": 0, "found": False},
             }
 
     def answer_text(self, query: str) -> str:
@@ -700,12 +769,15 @@ class RAGPipeline:
         - false/없음: HybridRetriever 사용 (기존 레거시)
         """
         import os
-        use_v2 = os.getenv('USE_V2_RETRIEVER', 'false').lower() == 'true'
+
+        use_v2 = os.getenv("USE_V2_RETRIEVER", "false").lower() == "true"
 
         if use_v2:
             # V2 Retriever는 archive로 이동되었습니다 (20251026)
             # 레거시 코드를 제거하고 v1으로 폴백합니다
-            logger.warning("⚠️ USE_V2_RETRIEVER는 더 이상 지원되지 않습니다. v1 Retriever를 사용합니다.")
+            logger.warning(
+                "⚠️ USE_V2_RETRIEVER는 더 이상 지원되지 않습니다. v1 Retriever를 사용합니다."
+            )
             use_v2 = False
             # try:
             #     from app.rag.retriever_v2 import HybridRetrieverV2
@@ -722,6 +794,7 @@ class RAGPipeline:
         if not use_v2:
             try:
                 from app.rag.retrievers.hybrid import HybridRetriever
+
                 retriever = HybridRetriever()
                 logger.info("Default HybridRetriever (v1 레거시) 생성 완료")
                 return retriever
@@ -769,6 +842,7 @@ class RAGPipeline:
 # 폴백 구현 (기본 동작 보장)
 # ============================================================================
 
+
 class _DummyRetriever:
     """더미 검색기 (폴백용)"""
 
@@ -780,7 +854,9 @@ class _DummyRetriever:
 class _NoOpCompressor:
     """No-op 압축기 (압축하지 않음)"""
 
-    def compress(self, chunks: List[Dict[str, Any]], ratio: float) -> List[Dict[str, Any]]:
+    def compress(
+        self, chunks: List[Dict[str, Any]], ratio: float
+    ) -> List[Dict[str, Any]]:
         logger.debug("No-op compressor: 압축 스킵")
         return chunks
 
@@ -797,7 +873,9 @@ class _QuickFixGenerator:
         try:
             # 1) QuickFixRAG에 전용 메서드가 있으면 사용
             if hasattr(self.rag, "generate_from_context"):
-                return self.rag.generate_from_context(query, context, temperature=temperature)
+                return self.rag.generate_from_context(
+                    query, context, temperature=temperature
+                )
 
             # 2) 내부 LLM 직접 접근 경로가 있으면 사용
             # 🔥 CRITICAL: LLM lazy loading - ensure LLM is loaded before checking
@@ -809,14 +887,24 @@ class _QuickFixGenerator:
                 # Convert context string back to chunks format
                 if self.compressed_chunks:
                     # Use stored compressed chunks (preferred)
-                    logger.debug(f"Using {len(self.compressed_chunks)} compressed chunks for generation")
-                    response = self.rag.llm.generate_response(query, self.compressed_chunks, max_retries=1)
+                    logger.debug(
+                        f"Using {len(self.compressed_chunks)} compressed chunks for generation"
+                    )
+                    response = self.rag.llm.generate_response(
+                        query, self.compressed_chunks, max_retries=1
+                    )
                 else:
                     # Fallback: convert context string to minimal chunks
-                    logger.warning("No compressed_chunks available, converting context string")
+                    logger.warning(
+                        "No compressed_chunks available, converting context string"
+                    )
                     snippets = context.split("\n\n")
-                    chunks = [{"snippet": s, "content": s} for s in snippets if s.strip()]
-                    response = self.rag.llm.generate_response(query, chunks, max_retries=1)
+                    chunks = [
+                        {"snippet": s, "content": s} for s in snippets if s.strip()
+                    ]
+                    response = self.rag.llm.generate_response(
+                        query, chunks, max_retries=1
+                    )
 
                 # Extract answer from RAGResponse object
                 if hasattr(response, "answer"):
@@ -914,22 +1002,30 @@ class _V2RetrieverAdapter:
                     if doc.get("date"):
                         fallback_parts.append(f"날짜: {doc['date']}")
 
-                    snippet = " | ".join(fallback_parts) if fallback_parts else f"문서 ID: {doc_id}"
-                    logger.warning(f"V2 Adapter: doc_id={doc_id} snippet 결손, 메타데이터 폴백 사용")
+                    snippet = (
+                        " | ".join(fallback_parts)
+                        if fallback_parts
+                        else f"문서 ID: {doc_id}"
+                    )
+                    logger.warning(
+                        f"V2 Adapter: doc_id={doc_id} snippet 결손, 메타데이터 폴백 사용"
+                    )
 
-                v1_results.append({
-                    "doc_id": doc_id,
-                    "snippet": snippet,
-                    "page": 1,  # v2에서는 page 정보 없음, 기본 1
-                    "score": doc.get("score", 0.0),
-                    "meta": {
+                v1_results.append(
+                    {
                         "doc_id": doc_id,
-                        "filename": doc.get("filename", ""),
-                        "title": doc.get("title", ""),
-                        "date": doc.get("date", ""),
-                        "page": 1,
-                    },
-                })
+                        "snippet": snippet,
+                        "page": 1,  # v2에서는 page 정보 없음, 기본 1
+                        "score": doc.get("score", 0.0),
+                        "meta": {
+                            "doc_id": doc_id,
+                            "filename": doc.get("filename", ""),
+                            "title": doc.get("title", ""),
+                            "date": doc.get("date", ""),
+                            "page": 1,
+                        },
+                    }
+                )
 
             logger.info(f"V2 Adapter: {len(v1_results)} results converted")
             return v1_results

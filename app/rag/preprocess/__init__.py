@@ -2,4 +2,4 @@
 
 from app.rag.preprocess.clean_text import TextCleaner
 
-__all__ = ['TextCleaner']
+__all__ = ["TextCleaner"]

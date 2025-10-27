@@ -12,7 +12,7 @@
 """
 
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 import yaml
 
 from app.core.logging import get_logger
@@ -30,9 +30,9 @@ class SummaryRenderer:
             config_path: 설정 파일 경로
         """
         self.config = self._load_config(config_path)
-        self.template_config = self.config.get('summary_template', {})
-        self.sections = self.template_config.get('sections', [])
-        self.output_format = self.template_config.get('output_format', 'markdown')
+        self.template_config = self.config.get("summary_template", {})
+        self.sections = self.template_config.get("sections", [])
+        self.output_format = self.template_config.get("output_format", "markdown")
 
         logger.info(f"📝 요약 렌더러 초기화: {len(self.sections)}개 섹션")
 
@@ -51,7 +51,7 @@ class SummaryRenderer:
                 logger.warning(f"⚠️ 설정 파일 없음: {config_path}, 기본값 사용")
                 return {}
 
-            with open(config_file, 'r', encoding='utf-8') as f:
+            with open(config_file, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
                 logger.info(f"✓ 설정 로드: {config_path}")
                 return config
@@ -68,7 +68,7 @@ class SummaryRenderer:
         cost_data: Optional[Dict[str, Any]] = None,
         risk: Optional[str] = None,
         doctype: Optional[str] = None,
-        extra_sections: Optional[Dict[str, str]] = None
+        extra_sections: Optional[Dict[str, str]] = None,
     ) -> str:
         """doctype별 요약 렌더링
 
@@ -86,16 +86,16 @@ class SummaryRenderer:
         """
         # doctype 기본값
         if not doctype:
-            doctype = meta.get('doctype', 'proposal')
+            doctype = meta.get("doctype", "proposal")
 
         # doctype별 렌더링 분기
-        if doctype == 'proposal':
+        if doctype == "proposal":
             return self._render_proposal(filename, meta, summary, cost_data, risk)
-        elif doctype == 'report':
+        elif doctype == "report":
             return self._render_report(filename, meta, summary, extra_sections or {})
-        elif doctype == 'review':
+        elif doctype == "review":
             return self._render_review(filename, meta, summary, extra_sections or {})
-        elif doctype == 'minutes':
+        elif doctype == "minutes":
             return self._render_minutes(filename, meta, summary, extra_sections or {})
         else:
             # unknown은 기본 템플릿 사용
@@ -107,7 +107,7 @@ class SummaryRenderer:
         meta: Dict[str, Any],
         summary: str,
         cost_data: Optional[Dict[str, Any]] = None,
-        risk: Optional[str] = None
+        risk: Optional[str] = None,
     ) -> str:
         """기안서 템플릿 (기존 4섹션)
 
@@ -147,11 +147,7 @@ class SummaryRenderer:
         return "\n".join(lines)
 
     def _render_report(
-        self,
-        filename: str,
-        meta: Dict[str, Any],
-        summary: str,
-        extra: Dict[str, str]
+        self, filename: str, meta: Dict[str, Any], summary: str, extra: Dict[str, str]
     ) -> str:
         """보고서 템플릿
 
@@ -179,14 +175,14 @@ class SummaryRenderer:
         lines.append("")
 
         # 3. 결론 및 권고
-        conclusion = extra.get('conclusion', '')
+        conclusion = extra.get("conclusion", "")
         if conclusion:
             lines.append("**📌 결론 및 권고**")
             lines.append(conclusion)
             lines.append("")
 
         # 4. 후속조치
-        follow_up = extra.get('follow_up', '')
+        follow_up = extra.get("follow_up", "")
         if follow_up:
             lines.append("**🔜 후속조치**")
             lines.append(follow_up)
@@ -195,11 +191,7 @@ class SummaryRenderer:
         return "\n".join(lines)
 
     def _render_review(
-        self,
-        filename: str,
-        meta: Dict[str, Any],
-        summary: str,
-        extra: Dict[str, str]
+        self, filename: str, meta: Dict[str, Any], summary: str, extra: Dict[str, str]
     ) -> str:
         """검토서 템플릿
 
@@ -227,14 +219,14 @@ class SummaryRenderer:
         lines.append("")
 
         # 3. 검토 항목별 평가
-        evaluation = extra.get('evaluation', '')
+        evaluation = extra.get("evaluation", "")
         if evaluation:
             lines.append("**✅ 검토 항목별 평가**")
             lines.append(evaluation)
             lines.append("")
 
         # 4. 권고안
-        recommendation = extra.get('recommendation', '')
+        recommendation = extra.get("recommendation", "")
         if recommendation:
             lines.append("**💡 권고안**")
             lines.append(recommendation)
@@ -243,11 +235,7 @@ class SummaryRenderer:
         return "\n".join(lines)
 
     def _render_minutes(
-        self,
-        filename: str,
-        meta: Dict[str, Any],
-        summary: str,
-        extra: Dict[str, str]
+        self, filename: str, meta: Dict[str, Any], summary: str, extra: Dict[str, str]
     ) -> str:
         """회의록 템플릿
 
@@ -275,14 +263,14 @@ class SummaryRenderer:
         lines.append("")
 
         # 3. 주요 결정사항
-        decisions = extra.get('decisions', '')
+        decisions = extra.get("decisions", "")
         if decisions:
             lines.append("**✔️ 주요 결정사항**")
             lines.append(decisions)
             lines.append("")
 
         # 4. Action Items
-        action_items = extra.get('action_items', '')
+        action_items = extra.get("action_items", "")
         if action_items:
             lines.append("**📌 Action Items (담당/기한)**")
             lines.append(action_items)
@@ -303,26 +291,26 @@ class SummaryRenderer:
         lines.append("**📋 문서 정보**")
 
         # 기안자/부서
-        drafter = meta.get('drafter', '정보 없음')
-        department = meta.get('department', '정보 없음')
+        drafter = meta.get("drafter", "정보 없음")
+        department = meta.get("department", "정보 없음")
         lines.append(f"- **기안자/부서:** {drafter} / {department}")
 
         # 날짜 (기안일자 / 시행일자)
-        date_detail = meta.get('date_detail', '정보 없음')
+        date_detail = meta.get("date_detail", "정보 없음")
         lines.append(f"- **기안일자 / 시행일자:** {date_detail}")
 
         # 카테고리
-        category = meta.get('category', '미분류')
+        category = meta.get("category", "미분류")
         lines.append(f"- **유형/카테고리:** {category}")
 
         # 문서번호 (선택)
-        doc_number = meta.get('doc_number')
-        if doc_number and doc_number != '정보 없음':
+        doc_number = meta.get("doc_number")
+        if doc_number and doc_number != "정보 없음":
             lines.append(f"- **문서번호:** {doc_number}")
 
         # 보존기간 (선택)
-        retention = meta.get('retention')
-        if retention and retention != '정보 없음':
+        retention = meta.get("retention")
+        if retention and retention != "정보 없음":
             lines.append(f"- **보존기간:** {retention}")
 
         return "\n".join(lines)
@@ -354,24 +342,26 @@ class SummaryRenderer:
         lines = []
         lines.append("**💰 비용 (VAT 별도)**")
 
-        items = cost_data.get('items', [])
+        items = cost_data.get("items", [])
         if not items:
             lines.append("- 비용 정보를 찾을 수 없습니다")
             return "\n".join(lines)
 
         # 항목별 비용
         for item in items:
-            name = item.get('name', '항목')
-            amount = item.get('amount', 0)
+            name = item.get("name", "항목")
+            amount = item.get("amount", 0)
             lines.append(f"- {name}: ₩{amount:,}")
 
         # 합계
-        total = cost_data.get('total', 0)
-        sum_match = cost_data.get('sum_match')
+        total = cost_data.get("total", 0)
+        sum_match = cost_data.get("sum_match")
 
         if sum_match is False:
-            claimed_total = cost_data.get('claimed_total', 0)
-            lines.append(f"- **합계:** ₩{total:,} ⚠️ (문서 합계: ₩{claimed_total:,}, 차이 있음)")
+            claimed_total = cost_data.get("claimed_total", 0)
+            lines.append(
+                f"- **합계:** ₩{total:,} ⚠️ (문서 합계: ₩{claimed_total:,}, 차이 있음)"
+            )
         else:
             lines.append(f"- **합계:** ₩{total:,}")
 
@@ -392,12 +382,7 @@ class SummaryRenderer:
 
         return "\n".join(lines)
 
-    def render_simple(
-        self,
-        filename: str,
-        meta: Dict[str, Any],
-        summary: str
-    ) -> str:
+    def render_simple(self, filename: str, meta: Dict[str, Any], summary: str) -> str:
         """간단한 요약 렌더링 (비용, 리스크 없음)
 
         Args:

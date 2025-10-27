@@ -9,9 +9,8 @@
 - 카테고리: 규칙 기반 분류, "정보 없음" 대신 "미분류" 사용
 """
 
-import re
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Tuple
 import yaml
 
 from app.core.logging import get_logger
@@ -31,22 +30,35 @@ class MetaParser:
         self.config = self._load_config(config_path)
 
         # metadata 섹션에서 설정 로드
-        metadata_config = self.config.get('metadata', {})
+        metadata_config = self.config.get("metadata", {})
 
         # 날짜 우선순위 (config에서 로드, 없으면 기본값)
-        self.date_priority = metadata_config.get('date_priority', ["시행일자", "기안일자", "작성일자", "보고일자", "회의일자"])
+        self.date_priority = metadata_config.get(
+            "date_priority",
+            ["시행일자", "기안일자", "작성일자", "보고일자", "회의일자"],
+        )
 
         # 작성자 필드 우선순위
-        self.author_fields = metadata_config.get('author_fields', ["기안자", "작성자", "보고자", "검토자"])
+        self.author_fields = metadata_config.get(
+            "author_fields", ["기안자", "작성자", "보고자", "검토자"]
+        )
 
         # 부서 필드 우선순위
-        self.department_fields = metadata_config.get('department_fields', ["기안부서", "소속", "부서"])
+        self.department_fields = metadata_config.get(
+            "department_fields", ["기안부서", "소속", "부서"]
+        )
 
         # 카테고리 규칙 (이전 호환성 유지)
-        self.category_rules = self.config.get('meta_parsing', {}).get('category_rules', {})
-        self.default_category = self.config.get('meta_parsing', {}).get('default_category', "미분류")
+        self.category_rules = self.config.get("meta_parsing", {}).get(
+            "category_rules", {}
+        )
+        self.default_category = self.config.get("meta_parsing", {}).get(
+            "default_category", "미분류"
+        )
 
-        logger.info(f"📋 메타 파서 초기화: 날짜 우선순위 {len(self.date_priority)}개, 작성자 필드 {len(self.author_fields)}개, 카테고리 규칙 {len(self.category_rules)}개")
+        logger.info(
+            f"📋 메타 파서 초기화: 날짜 우선순위 {len(self.date_priority)}개, 작성자 필드 {len(self.author_fields)}개, 카테고리 규칙 {len(self.category_rules)}개"
+        )
 
     def _load_config(self, config_path: str) -> Dict[str, Any]:
         """설정 파일 로드
@@ -63,7 +75,7 @@ class MetaParser:
                 logger.warning(f"⚠️ 설정 파일 없음: {config_path}, 기본값 사용")
                 return {}
 
-            with open(config_file, 'r', encoding='utf-8') as f:
+            with open(config_file, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
                 logger.info(f"✓ 설정 로드: {config_path}")
                 return config
@@ -91,8 +103,8 @@ class MetaParser:
                 break
 
         # 기안일자와 시행일자를 모두 표시
-        draft_date = metadata.get('기안일자') or metadata.get('date')
-        action_date = metadata.get('시행일자')
+        draft_date = metadata.get("기안일자") or metadata.get("date")
+        action_date = metadata.get("시행일자")
 
         if draft_date and action_date:
             date_detail = f"{draft_date} / {action_date}"
@@ -107,7 +119,9 @@ class MetaParser:
 
         return display_date, date_detail
 
-    def classify_category(self, title: str = "", content: str = "", filename: str = "") -> Tuple[str, str]:
+    def classify_category(
+        self, title: str = "", content: str = "", filename: str = ""
+    ) -> Tuple[str, str]:
         """카테고리 분류
 
         Args:
@@ -127,20 +141,20 @@ class MetaParser:
         matched_categories = []
 
         # 1. 문서 유형 규칙 적용 (우선순위 1)
-        doc_type_rules = self.category_rules.get('document_type', [])
+        doc_type_rules = self.category_rules.get("document_type", [])
         for rule in doc_type_rules:
-            keywords = rule.get('keywords', [])
-            category = rule.get('category', '')
+            keywords = rule.get("keywords", [])
+            category = rule.get("category", "")
 
             if any(kw in search_text for kw in keywords):
                 matched_categories.append(category)
                 logger.debug(f"✓ 문서 유형 매칭: {category} (키워드: {keywords})")
 
         # 2. 장비 분류 규칙 적용 (우선순위 2)
-        equipment_rules = self.category_rules.get('equipment_type', [])
+        equipment_rules = self.category_rules.get("equipment_type", [])
         for rule in equipment_rules:
-            keywords = rule.get('keywords', [])
-            category = rule.get('category', '')
+            keywords = rule.get("keywords", [])
+            category = rule.get("category", "")
 
             if any(kw in search_text for kw in keywords):
                 matched_categories.append(category)
@@ -159,7 +173,9 @@ class MetaParser:
         # 5. 기본 카테고리
         return self.default_category, "default"
 
-    def parse(self, metadata: Dict[str, Any], title: str = "", content: str = "") -> Dict[str, Any]:
+    def parse(
+        self, metadata: Dict[str, Any], title: str = "", content: str = ""
+    ) -> Dict[str, Any]:
         """메타데이터 파싱 및 표준화
 
         Args:
@@ -179,7 +195,7 @@ class MetaParser:
             if field in metadata and metadata[field]:
                 author = metadata[field]
                 break
-        author = author or metadata.get('drafter') or '정보 없음'
+        author = author or metadata.get("drafter") or "정보 없음"
 
         # 부서 추출 (우선순위 순서대로)
         department = None
@@ -187,30 +203,36 @@ class MetaParser:
             if field in metadata and metadata[field]:
                 department = metadata[field]
                 break
-        department = department or metadata.get('department') or '정보 없음'
+        department = department or metadata.get("department") or "정보 없음"
 
         # 카테고리 분류
-        filename = metadata.get('filename', '')
+        filename = metadata.get("filename", "")
         category, category_source = self.classify_category(title, content, filename)
 
         # 표준화된 메타데이터 구성
         standardized = {
-            'drafter': author,
-            'department': department,
-            'doc_number': metadata.get('doc_number') or metadata.get('문서번호') or '정보 없음',
-            'retention': metadata.get('retention') or metadata.get('보존기간') or '정보 없음',
-            'display_date': display_date,
-            'date_detail': date_detail,
-            'category': category,
-            'category_source': category_source,
-            'filename': filename,
+            "drafter": author,
+            "department": department,
+            "doc_number": metadata.get("doc_number")
+            or metadata.get("문서번호")
+            or "정보 없음",
+            "retention": metadata.get("retention")
+            or metadata.get("보존기간")
+            or "정보 없음",
+            "display_date": display_date,
+            "date_detail": date_detail,
+            "category": category,
+            "category_source": category_source,
+            "filename": filename,
         }
 
         # "정보 없음"을 미분류로 변경 (카테고리만)
-        if standardized['category'] == '정보 없음':
-            standardized['category'] = self.default_category
+        if standardized["category"] == "정보 없음":
+            standardized["category"] = self.default_category
 
-        logger.debug(f"📋 메타 파싱 완료: author={author}, category={category} (source={category_source}), date={date_detail}")
+        logger.debug(
+            f"📋 메타 파싱 완료: author={author}, category={category} (source={category_source}), date={date_detail}"
+        )
 
         return standardized
 
@@ -224,15 +246,17 @@ class MetaParser:
             Markdown 형식의 메타데이터 문자열
         """
         lines = []
-        lines.append(f"**기안자/부서:** {parsed_meta['drafter']} / {parsed_meta['department']}")
+        lines.append(
+            f"**기안자/부서:** {parsed_meta['drafter']} / {parsed_meta['department']}"
+        )
         lines.append(f"**기안일자 / 시행일자:** {parsed_meta['date_detail']}")
         lines.append(f"**유형/카테고리:** {parsed_meta['category']}")
 
         # 선택적 필드
-        if parsed_meta.get('doc_number') and parsed_meta['doc_number'] != '정보 없음':
+        if parsed_meta.get("doc_number") and parsed_meta["doc_number"] != "정보 없음":
             lines.append(f"**문서번호:** {parsed_meta['doc_number']}")
 
-        if parsed_meta.get('retention') and parsed_meta['retention'] != '정보 없음':
+        if parsed_meta.get("retention") and parsed_meta["retention"] != "정보 없음":
             lines.append(f"**보존기간:** {parsed_meta['retention']}")
 
         return "\n".join(lines)

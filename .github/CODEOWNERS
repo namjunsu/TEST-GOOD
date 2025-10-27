@@ -1,0 +1,26 @@
+# RAG System Code Owners
+# 이 파일에 명시된 파일 변경 시 자동으로 리뷰어 지정
+
+# RAG 핵심 모듈
+/app/rag/                               @wnstn4647
+/app/rag/parse/                         @wnstn4647
+/app/rag/preprocess/                    @wnstn4647
+/app/rag/render/                        @wnstn4647
+
+# 인덱싱 및 메타데이터
+/scripts/ingest_from_docs.py            @wnstn4647
+/modules/metadata_db.py                 @wnstn4647
+/modules/metadata_extractor.py          @wnstn4647
+
+# 설정 파일
+/config/document_processing.yaml        @wnstn4647
+/config/llm_optimization.yaml           @wnstn4647
+
+# 테스트
+/tests/test_clean_text.py               @wnstn4647
+/tests/test_parse_meta.py               @wnstn4647
+/tests/test_parse_table.py              @wnstn4647
+
+# CI/CD
+/.github/workflows/rag-ci.yml           @wnstn4647
+/.github/CODEOWNERS                     @wnstn4647

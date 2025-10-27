@@ -30,9 +30,19 @@ class TableParser:
             config_path: 설정 파일 경로
         """
         self.config = self._load_config(config_path)
-        self.header_patterns = self.config.get('table_parsing', {}).get('header_patterns', [])
-        self.remove_chars = self.config.get('table_parsing', {}).get('number_normalization', {}).get('remove_chars', [])
-        self.sum_tolerance = self.config.get('table_parsing', {}).get('sum_validation', {}).get('tolerance', 1)
+        self.header_patterns = self.config.get("table_parsing", {}).get(
+            "header_patterns", []
+        )
+        self.remove_chars = (
+            self.config.get("table_parsing", {})
+            .get("number_normalization", {})
+            .get("remove_chars", [])
+        )
+        self.sum_tolerance = (
+            self.config.get("table_parsing", {})
+            .get("sum_validation", {})
+            .get("tolerance", 1)
+        )
 
         logger.info(f"📊 표 파서 초기화: {len(self.header_patterns)}개 헤더 패턴")
 
@@ -51,7 +61,7 @@ class TableParser:
                 logger.warning(f"⚠️ 설정 파일 없음: {config_path}, 기본값 사용")
                 return {}
 
-            with open(config_file, 'r', encoding='utf-8') as f:
+            with open(config_file, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
                 logger.info(f"✓ 설정 로드: {config_path}")
                 return config
@@ -75,10 +85,10 @@ class TableParser:
         # 제거할 문자 제거
         normalized = text
         for char in self.remove_chars:
-            normalized = normalized.replace(char, '')
+            normalized = normalized.replace(char, "")
 
         # 탭, 개행 등 제거
-        normalized = normalized.strip().replace('\t', '').replace('\n', '')
+        normalized = normalized.strip().replace("\t", "").replace("\n", "")
 
         try:
             return int(normalized)
@@ -124,7 +134,7 @@ class TableParser:
         # 예: "모델명    수량    단가    금액"
         #     "ABC-123   2      100,000  200,000원"
 
-        amount_pattern = r'(\d{1,3}(?:,\d{3})*)\s*원?'
+        amount_pattern = r"(\d{1,3}(?:,\d{3})*)\s*원?"
         amounts = re.findall(amount_pattern, text)
 
         if not amounts:
@@ -134,19 +144,23 @@ class TableParser:
         for i, amount_str in enumerate(amounts):
             amount = self.normalize_number(amount_str)
             if amount is not None:
-                items.append({
-                    "name": f"항목 {i+1}",
-                    "quantity": None,
-                    "unit_price": None,
-                    "amount": amount
-                })
+                items.append(
+                    {
+                        "name": f"항목 {i+1}",
+                        "quantity": None,
+                        "unit_price": None,
+                        "amount": amount,
+                    }
+                )
 
         if items:
             return items, True, f"{len(items)}개 항목 추출"
         else:
             return items, False, "항목 추출 실패"
 
-    def validate_sum(self, items: List[Dict[str, Any]], claimed_total: Optional[int] = None) -> Tuple[bool, int, Optional[int]]:
+    def validate_sum(
+        self, items: List[Dict[str, Any]], claimed_total: Optional[int] = None
+    ) -> Tuple[bool, int, Optional[int]]:
         """합계 검증
 
         Args:
@@ -160,7 +174,7 @@ class TableParser:
             - claimed_total: 문서 합계
         """
         # 계산된 합계
-        calculated_total = sum(item.get('amount', 0) for item in items)
+        calculated_total = sum(item.get("amount", 0) for item in items)
 
         # 문서 합계가 없으면 검증 불가
         if claimed_total is None:
@@ -171,7 +185,9 @@ class TableParser:
         match = difference <= self.sum_tolerance
 
         if not match:
-            logger.warning(f"⚠️ 합계 불일치: 계산={calculated_total:,}원, 문서={claimed_total:,}원, 차이={difference:,}원")
+            logger.warning(
+                f"⚠️ 합계 불일치: 계산={calculated_total:,}원, 문서={claimed_total:,}원, 차이={difference:,}원"
+            )
         else:
             logger.debug(f"✓ 합계 일치: {calculated_total:,}원")
 
@@ -192,7 +208,7 @@ class TableParser:
             "claimed_total": None,
             "sum_match": None,
             "parse_status": "failed",
-            "error_message": None
+            "error_message": None,
         }
 
         try:
@@ -227,9 +243,13 @@ class TableParser:
                 result["parse_status"] = "success"
             else:
                 result["parse_status"] = "partial"
-                result["error_message"] = f"합계 불일치 (계산: {calculated_total:,}원, 문서: {claimed_total:,}원)"
+                result["error_message"] = (
+                    f"합계 불일치 (계산: {calculated_total:,}원, 문서: {claimed_total:,}원)"
+                )
 
-            logger.debug(f"📊 표 파싱 완료: {len(items)}개 항목, 합계={calculated_total:,}원")
+            logger.debug(
+                f"📊 표 파싱 완료: {len(items)}개 항목, 합계={calculated_total:,}원"
+            )
 
         except Exception as e:
             logger.error(f"❌ 표 파싱 실패: {e}")
@@ -249,9 +269,9 @@ class TableParser:
         """
         # 합계 패턴: "합계: 1,234,567원" 또는 "총액: 1,234,567원"
         total_patterns = [
-            r'합계[:\s]+(\d{1,3}(?:,\d{3})*)\s*원?',
-            r'총액[:\s]+(\d{1,3}(?:,\d{3})*)\s*원?',
-            r'소계[:\s]+(\d{1,3}(?:,\d{3})*)\s*원?',
+            r"합계[:\s]+(\d{1,3}(?:,\d{3})*)\s*원?",
+            r"총액[:\s]+(\d{1,3}(?:,\d{3})*)\s*원?",
+            r"소계[:\s]+(\d{1,3}(?:,\d{3})*)\s*원?",
         ]
 
         for pattern in total_patterns:
@@ -277,24 +297,26 @@ class TableParser:
         lines = []
         lines.append("**💰 비용 (VAT 별도)**")
 
-        items = parsed_table.get('items', [])
+        items = parsed_table.get("items", [])
         if not items:
             lines.append("- 비용 정보를 찾을 수 없습니다")
             return "\n".join(lines)
 
         # 항목별 비용
         for item in items:
-            name = item.get('name', '항목')
-            amount = item.get('amount', 0)
+            name = item.get("name", "항목")
+            amount = item.get("amount", 0)
             lines.append(f"- {name}: ₩{amount:,}")
 
         # 합계
-        total = parsed_table.get('total', 0)
-        sum_match = parsed_table.get('sum_match')
+        total = parsed_table.get("total", 0)
+        sum_match = parsed_table.get("sum_match")
 
         if sum_match is False:
-            claimed_total = parsed_table.get('claimed_total', 0)
-            lines.append(f"\n**합계:** ₩{total:,} ⚠️ (문서 합계: ₩{claimed_total:,}, 차이 있음)")
+            claimed_total = parsed_table.get("claimed_total", 0)
+            lines.append(
+                f"\n**합계:** ₩{total:,} ⚠️ (문서 합계: ₩{claimed_total:,}, 차이 있음)"
+            )
         else:
             lines.append(f"\n**합계:** ₩{total:,}")
 

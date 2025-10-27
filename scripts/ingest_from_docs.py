@@ -20,7 +20,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Any, Tuple, Optional
+from typing import Dict, Any, Tuple, Optional
 
 # 프로젝트 루트를 sys.path에 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -47,7 +47,7 @@ class DocumentIngester:
         extracted_dir: str = "data/extracted",
         db_path: str = "metadata.db",
         ocr_enabled: bool = False,
-        dry_run: bool = False
+        dry_run: bool = False,
     ):
         self.incoming_dir = Path(incoming_dir)
         self.processed_dir = Path(processed_dir)
@@ -59,7 +59,12 @@ class DocumentIngester:
         self.dry_run = dry_run
 
         # 폴더 생성
-        for d in [self.processed_dir, self.rejected_dir, self.quarantine_dir, self.extracted_dir]:
+        for d in [
+            self.processed_dir,
+            self.rejected_dir,
+            self.quarantine_dir,
+            self.extracted_dir,
+        ]:
             d.mkdir(parents=True, exist_ok=True)
 
         # 파서 초기화
@@ -95,6 +100,7 @@ class DocumentIngester:
     def _normalize_filename(self, filename: str) -> str:
         """파일명 정규화 (중복 판정용)"""
         import unicodedata
+
         n = filename.strip()
         n = unicodedata.normalize("NFKC", n)
         n = n.replace(" ", "_").replace("-", "_").lower()
@@ -107,7 +113,7 @@ class DocumentIngester:
         """PDF 텍스트 추출"""
         try:
             import pdfplumber
-            
+
             text_pages = []
             metadata = {}
 
@@ -133,7 +139,9 @@ class DocumentIngester:
             logger.error(f"PDF 추출 실패: {pdf_path.name} - {e}")
             return "", {}
 
-    def _is_duplicate(self, file_path: Path, file_hash: str, norm_filename: str) -> Tuple[bool, str]:
+    def _is_duplicate(
+        self, file_path: Path, file_hash: str, norm_filename: str
+    ) -> Tuple[bool, str]:
         """중복 판정"""
         if self.dry_run or not self.db:
             return False, ""
@@ -160,7 +168,7 @@ class DocumentIngester:
             "reason": "",
             "duration_ms": 0,
             "doctype": "",
-            "actions": []
+            "actions": [],
         }
 
         try:
@@ -203,11 +211,14 @@ class DocumentIngester:
             # 6. 메타데이터 파싱
             # 간단한 메타 추출 (실제로는 PDF 메타데이터를 더 상세히 파싱해야 함)
             from modules.metadata_extractor import MetadataExtractor
+
             extractor = MetadataExtractor()
             extracted_meta = extractor.extract_all(raw_text, pdf_path.name)
-            
+
             # 날짜/작성자/부서 파싱
-            parsed_meta = self.meta_parser.parse(extracted_meta, title=pdf_path.stem, content=cleaned_text[:1000])
+            parsed_meta = self.meta_parser.parse(
+                extracted_meta, title=pdf_path.stem, content=cleaned_text[:1000]
+            )
             result["actions"].append("meta_parsed")
 
             # 7. 표 파싱 (비용표)
@@ -215,7 +226,9 @@ class DocumentIngester:
             cost_data = None
             if tables.get("cost_table"):
                 cost_data = tables["cost_table"]
-                result["actions"].append(f"cost_items={len(cost_data.get('items', []))}")
+                result["actions"].append(
+                    f"cost_items={len(cost_data.get('items', []))}"
+                )
 
             # 8. 텍스트 저장
             if not self.dry_run:
@@ -230,8 +243,16 @@ class DocumentIngester:
                     "filename": pdf_path.name,
                     "title": parsed_meta.get("title", pdf_path.stem),
                     "date": parsed_meta.get("display_date", ""),
-                    "year": parsed_meta.get("display_date", "")[:4] if parsed_meta.get("display_date") else "",
-                    "month": parsed_meta.get("display_date", "")[:7] if len(parsed_meta.get("display_date", "")) >= 7 else "",
+                    "year": (
+                        parsed_meta.get("display_date", "")[:4]
+                        if parsed_meta.get("display_date")
+                        else ""
+                    ),
+                    "month": (
+                        parsed_meta.get("display_date", "")[:7]
+                        if len(parsed_meta.get("display_date", "")) >= 7
+                        else ""
+                    ),
                     "category": parsed_meta.get("category", ""),
                     "drafter": parsed_meta.get("drafter", ""),
                     "amount": cost_data.get("total", 0) if cost_data else 0,
@@ -241,7 +262,9 @@ class DocumentIngester:
                     "keywords": [],
                     "doctype": doctype,
                     "display_date": parsed_meta.get("display_date", ""),
-                    "claimed_total": cost_data.get("claimed_total") if cost_data else None,
+                    "claimed_total": (
+                        cost_data.get("claimed_total") if cost_data else None
+                    ),
                     "sum_match": cost_data.get("sum_match") if cost_data else None,
                 }
                 self.db.add_document(doc_metadata)
@@ -297,7 +320,9 @@ class DocumentIngester:
         if pattern:
             pdf_files = list(self.incoming_dir.glob(pattern))
         else:
-            pdf_files = list(self.incoming_dir.glob("*.pdf")) + list(self.incoming_dir.glob("*.PDF"))
+            pdf_files = list(self.incoming_dir.glob("*.pdf")) + list(
+                self.incoming_dir.glob("*.PDF")
+            )
 
         pdf_files = pdf_files[:limit] if limit else pdf_files
         self.stats["total"] = len(pdf_files)
@@ -311,8 +336,10 @@ class DocumentIngester:
             self.results.append(result)
 
             # 진행 상황 출력
-            logger.info(f"  ✓ {result['status']} ({result['duration_ms']}ms) - {result['doctype']}")
-            if result['reason']:
+            logger.info(
+                f"  ✓ {result['status']} ({result['duration_ms']}ms) - {result['doctype']}"
+            )
+            if result["reason"]:
                 logger.info(f"    사유: {result['reason']}")
             logger.info(f"    경로: {' → '.join(result['actions'])}")
 
@@ -341,18 +368,20 @@ class DocumentIngester:
         logger.info(f"⚠️ 격리: {self.stats['quarantined']}")
 
         # 성공률
-        if self.stats['total'] > 0:
-            success_rate = (self.stats['success'] / self.stats['total']) * 100
+        if self.stats["total"] > 0:
+            success_rate = (self.stats["success"] / self.stats["total"]) * 100
             logger.info(f"\n성공률: {success_rate:.1f}%")
 
         # SLA 체크 (10건 / 60초)
-        total_duration = sum(r['duration_ms'] for r in self.results)
+        total_duration = sum(r["duration_ms"] for r in self.results)
         avg_duration = total_duration / len(self.results) if self.results else 0
         logger.info(f"평균 처리 시간: {avg_duration:.0f}ms/파일")
 
-        if self.stats['total'] == 10:
+        if self.stats["total"] == 10:
             sla_ok = total_duration <= 60000
-            logger.info(f"SLA (10건/60초): {'✅ 통과' if sla_ok else '❌ 초과'} ({total_duration/1000:.1f}초)")
+            logger.info(
+                f"SLA (10건/60초): {'✅ 통과' if sla_ok else '❌ 초과'} ({total_duration/1000:.1f}초)"
+            )
 
         logger.info("=" * 80)
 
@@ -372,7 +401,9 @@ class DocumentIngester:
             "results": self.results,
         }
 
-        log_file.write_text(json.dumps(log_data, ensure_ascii=False, indent=2), encoding="utf-8")
+        log_file.write_text(
+            json.dumps(log_data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         logger.info(f"\n📄 상세 로그 저장: {log_file}")
 
 
@@ -381,14 +412,13 @@ def main():
     parser.add_argument("--limit", type=int, help="처리할 최대 파일 수")
     parser.add_argument("--only", type=str, help="파일명 패턴 (glob)")
     parser.add_argument("--ocr", action="store_true", help="OCR 활성화")
-    parser.add_argument("--dry-run", action="store_true", help="실제 이동/업서트 없이 리포트만")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="실제 이동/업서트 없이 리포트만"
+    )
 
     args = parser.parse_args()
 
-    ingester = DocumentIngester(
-        ocr_enabled=args.ocr,
-        dry_run=args.dry_run
-    )
+    ingester = DocumentIngester(ocr_enabled=args.ocr, dry_run=args.dry_run)
 
     ingester.run(limit=args.limit, pattern=args.only)
 

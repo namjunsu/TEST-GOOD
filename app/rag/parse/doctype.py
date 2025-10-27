@@ -6,7 +6,7 @@
 """
 
 import re
-from typing import Dict, List, Any, Tuple
+from typing import Dict, Any
 import yaml
 from pathlib import Path
 
@@ -39,22 +39,52 @@ class DocumentTypeClassifier:
             "doctype": {
                 "proposal": {
                     "enabled": True,
-                    "keywords": ["기안서", "장비구매", "장비수리", "기안자", "시행일자", "품의서"],
+                    "keywords": [
+                        "기안서",
+                        "장비구매",
+                        "장비수리",
+                        "기안자",
+                        "시행일자",
+                        "품의서",
+                    ],
                     "priority": 1,
                 },
                 "report": {
                     "enabled": True,
-                    "keywords": ["보고서", "개요", "결론", "결재안", "검토의견", "장표", "그림"],
+                    "keywords": [
+                        "보고서",
+                        "개요",
+                        "결론",
+                        "결재안",
+                        "검토의견",
+                        "장표",
+                        "그림",
+                    ],
                     "priority": 2,
                 },
                 "review": {
                     "enabled": True,
-                    "keywords": ["기술검토서", "검토서", "검토 의견", "비교표", "대안", "평가"],
+                    "keywords": [
+                        "기술검토서",
+                        "검토서",
+                        "검토 의견",
+                        "비교표",
+                        "대안",
+                        "평가",
+                    ],
                     "priority": 3,
                 },
                 "minutes": {
                     "enabled": True,
-                    "keywords": ["회의록", "참석자", "안건", "결정사항", "To-Do", "Action Item", "조치사항"],
+                    "keywords": [
+                        "회의록",
+                        "참석자",
+                        "안건",
+                        "결정사항",
+                        "To-Do",
+                        "Action Item",
+                        "조치사항",
+                    ],
                     "priority": 4,
                 },
             },
@@ -98,7 +128,10 @@ class DocumentTypeClassifier:
             for keyword in keywords:
                 normalized_keyword = self._normalize_text(keyword)
                 # 텍스트와 파일명 모두에서 검색
-                if normalized_keyword in normalized_text or normalized_keyword in normalized_filename:
+                if (
+                    normalized_keyword in normalized_text
+                    or normalized_keyword in normalized_filename
+                ):
                     matched_keywords.append(keyword)
 
             if matched_keywords:

@@ -201,9 +201,10 @@ def render_doc_card(
             )
 
         # 5행: PDF 뷰어 (예외 처리 강화, 다운로드 fallback)
+        # 기본은 접힘 상태, 버튼 클릭 시에만 펼침
         session_key = f"show_preview_{index}_{filename}"
-        if st.session_state.get(session_key, show_preview_inline):
-            with st.expander("📄 PDF 미리보기", expanded=True):
+        if st.session_state.get(session_key, False):
+            with st.expander("📄 PDF 미리보기", expanded=False):
                 render_pdf_preview(
                     file_path=str(file_path),
                     height=600,
@@ -614,8 +615,8 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                         display_evidence = evidence_list[:MAX_DISPLAY]
                         has_more = len(evidence_list) > MAX_DISPLAY
 
-                        # 1건이면 자동 확장, 2건 이상이면 접힘
-                        auto_expand = len(display_evidence) == 1
+                        # 기본은 접힘 상태 (버튼 클릭 필요)
+                        auto_expand = False
 
                         with st.expander(f"📚 출처 문서 ({len(display_evidence)}건)", expanded=auto_expand):
                             for i, ev in enumerate(display_evidence, 1):

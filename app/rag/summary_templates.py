@@ -126,7 +126,7 @@ def get_summary_prompt(
 
 
 def parse_summary_json(response: str) -> Dict[str, Any]:
-    """LLM 응답에서 JSON 추출 및 파싱
+    """LLM 응답에서 JSON 추출 및 파싱 (강건한 파서)
 
     Args:
         response: LLM 응답 텍스트
@@ -134,22 +134,28 @@ def parse_summary_json(response: str) -> Dict[str, Any]:
     Returns:
         파싱된 JSON dict, 실패 시 None
     """
-    try:
-        # JSON 블록 추출 시도 (```json ... ``` 제거)
-        if "```json" in response:
-            json_start = response.find("```json") + 7
-            json_end = response.find("```", json_start)
-            json_str = response[json_start:json_end].strip()
-        elif "```" in response:
-            json_start = response.find("```") + 3
-            json_end = response.find("```", json_start)
-            json_str = response[json_start:json_end].strip()
-        else:
-            json_str = response.strip()
+    import re
 
-        # JSON 파싱
-        parsed = json.loads(json_str)
-        return parsed
+    try:
+        # 1단계: ```json ... ``` 블록 제거
+        cleaned = re.sub(r"```json|```", "", response).strip()
+
+        # 2단계: 첫 번째 {...} 블록 추출
+        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+        if not match:
+            return None
+
+        json_str = match.group(0)
+
+        # 3단계: JSON 파싱 시도
+        try:
+            parsed = json.loads(json_str)
+            return parsed
+        except json.JSONDecodeError:
+            # 4단계: 흔한 JSON 오류 수정 시도 (끝 콤마 제거)
+            json_str = re.sub(r",\s*([}\]])", r"\1", json_str)
+            parsed = json.loads(json_str)
+            return parsed
 
     except Exception as e:
         return None

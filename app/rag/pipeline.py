@@ -1435,17 +1435,14 @@ class RAGPipeline:
                     logger.info("✓ 포맷팅된 요약 생성 완료")
 
                 else:
-                    # Fallback: 원본 LLM 응답 그대로 사용
-                    logger.warning("⚠️ JSON 파싱 실패, 원본 LLM 응답 사용")
+                    # Fallback: JSON 파싱 실패 시 안내 메시지 (원본 JSON 숨김)
+                    logger.error("❌ JSON 파싱 완전 실패 (2회 재시도 후)")
                     answer_text = f"**📄 {fname}**\n\n"
+                    answer_text += "⚠️ 요약 생성 중 오류가 발생했습니다.\n\n"
+                    answer_text += "문서를 직접 확인하시려면 아래 미리보기를 이용해주세요.\n\n"
 
-                    if 'llm_response' in locals() and llm_response:
-                        answer_text += llm_response
-                    else:
-                        answer_text += "요약 생성에 실패했습니다.\n\n"
-
-                    # 메타데이터 추가
-                    answer_text += f"\n\n---\n**📋 문서 정보**\n"
+                    # 메타데이터만 표시
+                    answer_text += "---\n**📋 문서 정보**\n"
                     answer_text += f"- 기안자: {drafter or '정보 없음'}\n"
                     answer_text += f"- 날짜: {display_date or date or '정보 없음'}\n"
                     if claimed_total:

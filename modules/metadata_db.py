@@ -107,6 +107,45 @@ class MetadataDB:
 
         self.conn.commit()
 
+        # 스키마 마이그레이션: doctype, display_date, claimed_total, sum_match 컬럼 추가
+        self._migrate_schema()
+
+    def _migrate_schema(self):
+        """스키마 마이그레이션: 신규 컬럼 추가"""
+        try:
+            # 백업 생성
+            backup_path = f"{self.db_path}.bak"
+            import shutil
+            if Path(self.db_path).exists() and not Path(backup_path).exists():
+                shutil.copy2(self.db_path, backup_path)
+                logger.info(f"DB 백업 생성: {backup_path}")
+
+            # doctype 컬럼 추가 (존재 확인 후 추가)
+            cursor = self.conn.execute("PRAGMA table_info(documents)")
+            columns = [col[1] for col in cursor.fetchall()]
+
+            if 'doctype' not in columns:
+                self.conn.execute('ALTER TABLE documents ADD COLUMN doctype TEXT DEFAULT "proposal"')
+                logger.info("✓ doctype 컬럼 추가")
+
+            if 'display_date' not in columns:
+                self.conn.execute('ALTER TABLE documents ADD COLUMN display_date TEXT')
+                logger.info("✓ display_date 컬럼 추가")
+
+            if 'claimed_total' not in columns:
+                self.conn.execute('ALTER TABLE documents ADD COLUMN claimed_total INTEGER')
+                logger.info("✓ claimed_total 컬럼 추가")
+
+            if 'sum_match' not in columns:
+                self.conn.execute('ALTER TABLE documents ADD COLUMN sum_match BOOLEAN')
+                logger.info("✓ sum_match 컬럼 추가")
+
+            self.conn.commit()
+
+        except Exception as e:
+            logger.error(f"스키마 마이그레이션 실패: {e}")
+            self.conn.rollback()
+
     def add_document(self, metadata: Dict[str, Any]) -> int:
         """문서 메타데이터 추가"""
         try:
@@ -118,8 +157,9 @@ class MetadataDB:
             cursor = self.conn.execute('''
                 INSERT OR REPLACE INTO documents (
                     path, filename, title, date, year, month, category,
-                    drafter, amount, file_size, page_count, text_preview, keywords
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    drafter, amount, file_size, page_count, text_preview, keywords,
+                    doctype, display_date, claimed_total, sum_match
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 str(metadata.get('path', '')),
                 metadata.get('filename', ''),
@@ -133,7 +173,11 @@ class MetadataDB:
                 metadata.get('file_size', 0),
                 metadata.get('page_count', 0),
                 metadata.get('text_preview', ''),
-                keywords
+                keywords,
+                metadata.get('doctype', 'proposal'),
+                metadata.get('display_date', ''),
+                metadata.get('claimed_total', None),
+                metadata.get('sum_match', None)
             ))
 
             self.conn.commit()
@@ -214,7 +258,8 @@ class MetadataDB:
         values = []
         for key, value in kwargs.items():
             if key in ['title', 'date', 'year', 'month', 'category', 'drafter',
-                      'amount', 'file_size', 'page_count', 'text_preview', 'keywords']:
+                      'amount', 'file_size', 'page_count', 'text_preview', 'keywords',
+                      'doctype', 'display_date', 'claimed_total', 'sum_match']:
                 fields.append(f"{key} = ?")
                 if key == 'keywords' and isinstance(value, list):
                     value = json.dumps(value, ensure_ascii=False)

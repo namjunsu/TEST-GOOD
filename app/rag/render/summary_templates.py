@@ -66,9 +66,11 @@ class SummaryRenderer:
         meta: Dict[str, Any],
         summary: str,
         cost_data: Optional[Dict[str, Any]] = None,
-        risk: Optional[str] = None
+        risk: Optional[str] = None,
+        doctype: Optional[str] = None,
+        extra_sections: Optional[Dict[str, str]] = None
     ) -> str:
-        """4섹션 요약 렌더링
+        """doctype별 요약 렌더링
 
         Args:
             filename: 파일명
@@ -76,9 +78,48 @@ class SummaryRenderer:
             summary: 핵심 요약 텍스트
             cost_data: 비용 데이터 (parse_tables.py의 결과, 선택)
             risk: 리스크 텍스트 (선택)
+            doctype: 문서 유형 (proposal/report/review/minutes/unknown)
+            extra_sections: 추가 섹션 데이터
 
         Returns:
             Markdown 형식의 요약 문자열
+        """
+        # doctype 기본값
+        if not doctype:
+            doctype = meta.get('doctype', 'proposal')
+
+        # doctype별 렌더링 분기
+        if doctype == 'proposal':
+            return self._render_proposal(filename, meta, summary, cost_data, risk)
+        elif doctype == 'report':
+            return self._render_report(filename, meta, summary, extra_sections or {})
+        elif doctype == 'review':
+            return self._render_review(filename, meta, summary, extra_sections or {})
+        elif doctype == 'minutes':
+            return self._render_minutes(filename, meta, summary, extra_sections or {})
+        else:
+            # unknown은 기본 템플릿 사용
+            return self._render_proposal(filename, meta, summary, cost_data, risk)
+
+    def _render_proposal(
+        self,
+        filename: str,
+        meta: Dict[str, Any],
+        summary: str,
+        cost_data: Optional[Dict[str, Any]] = None,
+        risk: Optional[str] = None
+    ) -> str:
+        """기안서 템플릿 (기존 4섹션)
+
+        Args:
+            filename: 파일명
+            meta: 메타데이터
+            summary: 핵심 요약
+            cost_data: 비용 데이터
+            risk: 리스크
+
+        Returns:
+            렌더링된 문자열
         """
         lines = []
 
@@ -101,6 +142,150 @@ class SummaryRenderer:
         # 4. 리스크 섹션 (있는 경우)
         if risk:
             lines.append(self._render_risk_section(risk))
+            lines.append("")
+
+        return "\n".join(lines)
+
+    def _render_report(
+        self,
+        filename: str,
+        meta: Dict[str, Any],
+        summary: str,
+        extra: Dict[str, str]
+    ) -> str:
+        """보고서 템플릿
+
+        Args:
+            filename: 파일명
+            meta: 메타데이터
+            summary: 핵심 발견사항
+            extra: 추가 섹션 (conclusion, follow_up)
+
+        Returns:
+            렌더링된 문자열
+        """
+        lines = []
+
+        # 파일명
+        lines.append(f"**📄 문서:** {filename}\n")
+
+        # 1. 메타데이터
+        lines.append(self._render_meta_section(meta))
+        lines.append("")
+
+        # 2. 핵심 발견사항
+        lines.append("**🔍 핵심 발견사항**")
+        lines.append(summary)
+        lines.append("")
+
+        # 3. 결론 및 권고
+        conclusion = extra.get('conclusion', '')
+        if conclusion:
+            lines.append("**📌 결론 및 권고**")
+            lines.append(conclusion)
+            lines.append("")
+
+        # 4. 후속조치
+        follow_up = extra.get('follow_up', '')
+        if follow_up:
+            lines.append("**🔜 후속조치**")
+            lines.append(follow_up)
+            lines.append("")
+
+        return "\n".join(lines)
+
+    def _render_review(
+        self,
+        filename: str,
+        meta: Dict[str, Any],
+        summary: str,
+        extra: Dict[str, str]
+    ) -> str:
+        """검토서 템플릿
+
+        Args:
+            filename: 파일명
+            meta: 메타데이터
+            summary: 요청사항
+            extra: 추가 섹션 (evaluation, recommendation)
+
+        Returns:
+            렌더링된 문자열
+        """
+        lines = []
+
+        # 파일명
+        lines.append(f"**📄 문서:** {filename}\n")
+
+        # 1. 메타데이터
+        lines.append(self._render_meta_section(meta))
+        lines.append("")
+
+        # 2. 요청사항
+        lines.append("**📝 요청사항**")
+        lines.append(summary)
+        lines.append("")
+
+        # 3. 검토 항목별 평가
+        evaluation = extra.get('evaluation', '')
+        if evaluation:
+            lines.append("**✅ 검토 항목별 평가**")
+            lines.append(evaluation)
+            lines.append("")
+
+        # 4. 권고안
+        recommendation = extra.get('recommendation', '')
+        if recommendation:
+            lines.append("**💡 권고안**")
+            lines.append(recommendation)
+            lines.append("")
+
+        return "\n".join(lines)
+
+    def _render_minutes(
+        self,
+        filename: str,
+        meta: Dict[str, Any],
+        summary: str,
+        extra: Dict[str, str]
+    ) -> str:
+        """회의록 템플릿
+
+        Args:
+            filename: 파일명
+            meta: 메타데이터
+            summary: 회의 개요
+            extra: 추가 섹션 (decisions, action_items)
+
+        Returns:
+            렌더링된 문자열
+        """
+        lines = []
+
+        # 파일명
+        lines.append(f"**📄 문서:** {filename}\n")
+
+        # 1. 메타데이터
+        lines.append(self._render_meta_section(meta))
+        lines.append("")
+
+        # 2. 회의 개요
+        lines.append("**📋 회의 개요**")
+        lines.append(summary)
+        lines.append("")
+
+        # 3. 주요 결정사항
+        decisions = extra.get('decisions', '')
+        if decisions:
+            lines.append("**✔️ 주요 결정사항**")
+            lines.append(decisions)
+            lines.append("")
+
+        # 4. Action Items
+        action_items = extra.get('action_items', '')
+        if action_items:
+            lines.append("**📌 Action Items (담당/기한)**")
+            lines.append(action_items)
             lines.append("")
 
         return "\n".join(lines)

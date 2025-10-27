@@ -29,11 +29,24 @@ class MetaParser:
             config_path: 설정 파일 경로
         """
         self.config = self._load_config(config_path)
-        self.date_priority = self.config.get('meta_parsing', {}).get('date_priority', ["기안일자", "시행일자", "작성일자"])
+
+        # metadata 섹션에서 설정 로드
+        metadata_config = self.config.get('metadata', {})
+
+        # 날짜 우선순위 (config에서 로드, 없으면 기본값)
+        self.date_priority = metadata_config.get('date_priority', ["시행일자", "기안일자", "작성일자", "보고일자", "회의일자"])
+
+        # 작성자 필드 우선순위
+        self.author_fields = metadata_config.get('author_fields', ["기안자", "작성자", "보고자", "검토자"])
+
+        # 부서 필드 우선순위
+        self.department_fields = metadata_config.get('department_fields', ["기안부서", "소속", "부서"])
+
+        # 카테고리 규칙 (이전 호환성 유지)
         self.category_rules = self.config.get('meta_parsing', {}).get('category_rules', {})
         self.default_category = self.config.get('meta_parsing', {}).get('default_category', "미분류")
 
-        logger.info(f"📋 메타 파서 초기화: 날짜 우선순위 {len(self.date_priority)}개, 카테고리 규칙 {len(self.category_rules)}개")
+        logger.info(f"📋 메타 파서 초기화: 날짜 우선순위 {len(self.date_priority)}개, 작성자 필드 {len(self.author_fields)}개, 카테고리 규칙 {len(self.category_rules)}개")
 
     def _load_config(self, config_path: str) -> Dict[str, Any]:
         """설정 파일 로드
@@ -160,14 +173,30 @@ class MetaParser:
         # 날짜 파싱
         display_date, date_detail = self.parse_dates(metadata)
 
+        # 작성자 추출 (우선순위 순서대로)
+        author = None
+        for field in self.author_fields:
+            if field in metadata and metadata[field]:
+                author = metadata[field]
+                break
+        author = author or metadata.get('drafter') or '정보 없음'
+
+        # 부서 추출 (우선순위 순서대로)
+        department = None
+        for field in self.department_fields:
+            if field in metadata and metadata[field]:
+                department = metadata[field]
+                break
+        department = department or metadata.get('department') or '정보 없음'
+
         # 카테고리 분류
         filename = metadata.get('filename', '')
         category, category_source = self.classify_category(title, content, filename)
 
         # 표준화된 메타데이터 구성
         standardized = {
-            'drafter': metadata.get('drafter') or metadata.get('기안자') or '정보 없음',
-            'department': metadata.get('department') or metadata.get('부서') or '정보 없음',
+            'drafter': author,
+            'department': department,
             'doc_number': metadata.get('doc_number') or metadata.get('문서번호') or '정보 없음',
             'retention': metadata.get('retention') or metadata.get('보존기간') or '정보 없음',
             'display_date': display_date,
@@ -181,7 +210,7 @@ class MetaParser:
         if standardized['category'] == '정보 없음':
             standardized['category'] = self.default_category
 
-        logger.debug(f"📋 메타 파싱 완료: category={category} (source={category_source}), date={date_detail}")
+        logger.debug(f"📋 메타 파싱 완료: author={author}, category={category} (source={category_source}), date={date_detail}")
 
         return standardized
 

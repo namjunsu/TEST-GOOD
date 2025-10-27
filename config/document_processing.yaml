@@ -119,6 +119,21 @@ summary:
   # 최대 길이
   max_length: 2000
 
+# 텍스트 클리닝 설정 (TextCleaner용)
+text_cleaning:
+  # 노이즈 패턴 (정규식)
+  noise_patterns:
+    # 타임스탬프 패턴
+    - pattern: "(오전|오후)\\s?\\d{1,2}:\\d{2}"
+      description: "프린트 타임스탬프"
+    # URL 패턴
+    - pattern: "(approval_form_popup\\.php\\S*|gw\\.channela-mt\\.com\\S*)"
+      description: "프린트뷰 URL"
+    # 페이지 번호 패턴
+    - pattern: "^\\s*-\\s*\\d+\\s*-\\s*$"
+      description: "페이지 번호"
+      multiline: true
+
 # 폴더 경로 설정
 folders:
   incoming: "docs/incoming"

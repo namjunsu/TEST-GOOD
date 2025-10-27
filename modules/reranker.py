@@ -30,10 +30,10 @@ class RuleBasedReranker:
                 - recent_days: 최근 문서 기준 일수 (기본값: 7)
         """
         self.config = config or {}
-        self.title_match_boost = self.config.get('title_match_boost', 0.3)
-        self.recent_boost = self.config.get('recent_boost', 0.2)
+        self.title_match_boost = self.config.get('title_match_boost', 0.5)  # 0.3 → 0.5 (제목 일치 강화)
+        self.recent_boost = self.config.get('recent_boost', 0.3)  # 0.2 → 0.3 (최근 문서 강화)
         self.category_boost = self.config.get('category_boost', 0.1)
-        self.recent_days = self.config.get('recent_days', 7)
+        self.recent_days = self.config.get('recent_days', 14)  # 7 → 14 (최근 문서 기준 확대)
 
         logger.info(f"✅ RuleBasedReranker 초기화 완료 "
                    f"(title_boost={self.title_match_boost}, "

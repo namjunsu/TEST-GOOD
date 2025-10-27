@@ -354,7 +354,7 @@ class RAGPipeline:
                 "page": c.get("page", 1),
                 "snippet": (
                     c.get("text") or c.get("snippet") or c.get("content") or ""
-                )[:300],
+                )[:400],  # 300 → 400 (스니펫 가독성 개선)
                 "preview_url": c.get("preview_url"),
                 "download_url": c.get("download_url"),
             }
@@ -492,7 +492,7 @@ class RAGPipeline:
                                 {
                                     "doc_id": fname,
                                     "page": 1,
-                                    "snippet": full_text[:500],
+                                    "snippet": full_text[:400],  # 500 → 400 (스니펫 일관성)
                                     "meta": {
                                         "filename": fname,
                                         "drafter": drafter,
@@ -655,7 +655,7 @@ class RAGPipeline:
                     {
                         "doc_id": r.get("doc_id") or r.get("chunk_id", "unknown"),
                         "page": 0,  # 검색 결과는 페이지 정보 없음
-                        "snippet": r.get("snippet") or r.get("text_preview", "")[:500],
+                        "snippet": r.get("snippet") or r.get("text_preview", "")[:400],  # 500 → 400 (스니펫 일관성)
                         "meta": {
                             "doc_id": r.get("doc_id") or r.get("chunk_id", "unknown"),
                             "filename": r.get("filename", ""),

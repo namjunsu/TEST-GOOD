@@ -44,6 +44,11 @@ def extract_claimed_total_fallback(text: str) -> Optional[int]:
     Returns:
         추출된 금액 (정수) 또는 None
     """
+    # 🛡️ 오매칭 방지: 수량 패턴 제외 ("합계 2000개" 같은 케이스)
+    if re.search(r"합계\s*[\d,]+\s*개\b", text):
+        logger.debug("수량 패턴 감지 (합계 N개), 금액 추출 스킵")
+        return None
+
     # 합계 라벨 패턴 (OR): 비용 합계, 합계(VAT별도), 합계, 총계
     label_pattern = r"(?:비용\s*합계|합계\s*\(VAT\s*별도\)|합계(?!\s*검증)|총계)"
     # 금액 패턴: 선택적 통화 기호 + 숫자+구분자 + 선택적 통화 단위
@@ -62,6 +67,12 @@ def extract_claimed_total_fallback(text: str) -> Optional[int]:
         # 숫자 정규화: , ₩ 원 공백 제거
         normalized = amount_str.replace(",", "").replace("₩", "").replace("원", "").replace(" ", "")
         claimed_total = int(normalized)
+
+        # 🛡️ 최소 금액 필터: 1만원 미만은 의심 (수량 오인 가능성)
+        if claimed_total < 10000:
+            logger.warning(f"claimed_total={claimed_total:,}원 너무 작음, 수량 오인 가능성으로 제외")
+            return None
+
         logger.info(f"claimed_total_fallback={claimed_total:,}원 (패턴: {match.group(0)[:50]})")
         return claimed_total
     except (ValueError, OverflowError) as e:

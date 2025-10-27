@@ -34,7 +34,7 @@ def _encode_file_ref(filename: str) -> Optional[str]:
         base64 인코딩된 ref 또는 None
     """
     try:
-        # metadata.db에서 경로 찾기
+        # 1. metadata.db에서 경로 찾기 시도
         conn = sqlite3.connect("metadata.db")
         cursor = conn.cursor()
         cursor.execute(
@@ -47,10 +47,30 @@ def _encode_file_ref(filename: str) -> Optional[str]:
         if result and result[0]:
             file_path = Path(result[0])
             # docs 하위인지 확인
-            if "docs" in file_path.parts:
+            if "docs" in file_path.parts and file_path.exists():
                 # base64 인코딩
                 ref = base64.urlsafe_b64encode(str(file_path).encode()).decode()
                 return ref
+
+        # 2. Fallback: docs 폴더에서 파일 검색 (year 폴더 포함)
+        import re
+        year_match = re.search(r'(\d{4})-', filename)
+        if year_match:
+            year = year_match.group(1)
+            # docs/year_YYYY/ 폴더에서 찾기
+            file_path = Path(f"docs/year_{year}") / filename
+            if file_path.exists():
+                ref = base64.urlsafe_b64encode(str(file_path).encode()).decode()
+                return ref
+
+        # 3. Fallback2: docs 폴더 전체 검색
+        docs_dir = Path("docs")
+        if docs_dir.exists():
+            for file_path in docs_dir.rglob(filename):
+                if file_path.is_file():
+                    ref = base64.urlsafe_b64encode(str(file_path).encode()).decode()
+                    return ref
+
     except Exception as e:
         logger.warning(f"ref 인코딩 실패: {filename} - {e}")
 
@@ -836,7 +856,7 @@ class RAGPipeline:
                     }
                 }
 
-            # 2줄 카드 형식으로 포맷팅 (최대 160자 요약)
+            # 2줄 카드 형식으로 포맷팅 (파일명 기반 핵심 요약)
             cards = []
             for doc in docs:
                 filename = doc.get("filename", "알 수 없음")
@@ -844,30 +864,35 @@ class RAGPipeline:
                 date = doc.get("display_date") or doc.get("date", "날짜 없음")
                 drafter_name = doc.get("drafter", "작성자 미상")
 
-                # 한 줄 요약: text_preview 첫 160자 (UI 가독성 개선)
-                preview = doc.get("text_preview", "")
-                # 개행 제거, 공백 정리, 불필요한 수식어 제거
-                preview = " ".join(preview.split())[:160].strip()
-                if len(doc.get("text_preview", "")) > 160:
-                    preview += "…"
+                # 파일명에서 핵심 내용 추출 (날짜 제거, 언더스코어를 공백으로)
+                import re
+                # 날짜 패턴 제거 (YYYY-MM-DD_)
+                title = re.sub(r'^\d{4}-\d{2}-\d{2}_', '', filename)
+                # .pdf 확장자 제거
+                title = re.sub(r'\.pdf$', '', title, flags=re.IGNORECASE)
+                # 언더스코어를 공백으로 변환
+                title = title.replace('_', ' ')
 
-                # 2줄 카드
-                card = f"📄 {filename} | 🏷 {doctype} | 📅 {date} | ✍ {drafter_name}\n{preview}"
+                # 2줄 카드: 제목 + 메타정보
+                card = f"**{title}**\n🏷 {doctype} · 📅 {date} · ✍ {drafter_name}"
                 cards.append(card)
 
             answer_text = "\n\n".join(cards[:10])  # 최대 10개
 
-            # Evidence 구성 (snippet도 160자로 제한)
+            # Evidence 구성 (파일명 기반 요약으로 통일)
             evidence = []
             for doc in docs[:10]:
                 filename = doc.get("filename", "")
                 ref = _encode_file_ref(filename) if filename else None
 
-                # snippet도 160자로 제한 (UI 카드 레이아웃 일관성)
-                raw_snippet = doc.get("text_preview", "")
-                snippet = " ".join(raw_snippet.split())[:160].strip()
-                if len(raw_snippet) > 160:
-                    snippet += "…"
+                # 파일명에서 핵심 내용 추출 (답변 텍스트와 동일한 방식)
+                import re
+                title = re.sub(r'^\d{4}-\d{2}-\d{2}_', '', filename)
+                title = re.sub(r'\.pdf$', '', title, flags=re.IGNORECASE)
+                title = title.replace('_', ' ')
+
+                # snippet을 제목으로 사용 (간결하고 의미 있는 정보)
+                snippet = title[:160]
 
                 evidence.append({
                     "doc_id": filename,

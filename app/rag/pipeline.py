@@ -1187,7 +1187,7 @@ class RAGPipeline:
         """내용 요약 (5줄 섹션, 가짜 정보 생성 금지)
 
         Args:
-            query: 사용자 질의 (예: "[파일명].pdf 내용 요약해줘")
+            query: 사용자 질의 (예: "[파일명].pdf 내용 요약해줘" 또는 "미러클랩 카메라 삼각대 기술검토서 이문서 내용 요약헤줘")
 
         Returns:
             dict: 표준 응답 구조 (5줄 섹션 요약)
@@ -1196,42 +1196,68 @@ class RAGPipeline:
         import sqlite3
 
         try:
-            # 파일명 추출
+            # 1. .pdf 확장자 포함 파일명 추출 시도
             filename_match = re.search(r"(\S+\.pdf)", query, re.IGNORECASE)
+
+            # 2. 확장자 없으면 키워드 기반 검색
             if not filename_match:
-                return {
-                    "text": "파일명을 찾을 수 없습니다. 파일명을 포함해 다시 질의해주세요.",
-                    "citations": [],
-                    "evidence": [],
-                    "status": {
-                        "retrieved_count": 0,
-                        "selected_count": 0,
-                        "found": False
+                # 불용어 제거 (요약, 이문서, 내용 등)
+                stopwords = ["요약", "요약해", "요약헤줘", "정리", "정리해", "이문서", "이 문서", "해당 문서",
+                             "내용", "해줘", "헤줘", "알려줘", "알려", "보여줘", "보여"]
+                keywords = query
+                for word in stopwords:
+                    keywords = keywords.replace(word, " ")
+                keywords = " ".join(keywords.split())  # 공백 정리
+
+                if not keywords or len(keywords) < 3:
+                    return {
+                        "text": "문서명이나 키워드를 포함해 다시 질의해주세요.",
+                        "citations": [],
+                        "evidence": [],
+                        "status": {
+                            "retrieved_count": 0,
+                            "selected_count": 0,
+                            "found": False
+                        }
                     }
-                }
 
-            filename = filename_match.group(1)
-
-            # DB에서 문서 조회
-            conn = sqlite3.connect("metadata.db")
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT filename, drafter, date, display_date, category,
-                       text_preview, claimed_total, doctype
-                FROM documents
-                WHERE filename LIKE ?
-                LIMIT 1
-            """,
-                (f"%{filename}%",),
-            )
+                # 키워드로 문서 검색 (파일명에서 검색)
+                conn = sqlite3.connect("metadata.db")
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT filename, drafter, date, display_date, category,
+                           text_preview, claimed_total, doctype
+                    FROM documents
+                    WHERE filename LIKE ?
+                    ORDER BY date DESC
+                    LIMIT 1
+                """,
+                    (f"%{keywords}%",),
+                )
+            else:
+                # 파일명으로 검색
+                filename = filename_match.group(1)
+                conn = sqlite3.connect("metadata.db")
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT filename, drafter, date, display_date, category,
+                           text_preview, claimed_total, doctype
+                    FROM documents
+                    WHERE filename LIKE ?
+                    LIMIT 1
+                """,
+                    (f"%{filename}%",),
+                )
 
             result = cursor.fetchone()
             conn.close()
 
             if not result:
+                search_term = filename if filename_match else keywords
                 return {
-                    "text": f"'{filename}' 파일을 찾을 수 없습니다.",
+                    "text": f"'{search_term}' 관련 문서를 찾을 수 없습니다.",
                     "citations": [],
                     "evidence": [],
                     "status": {
@@ -1269,14 +1295,22 @@ class RAGPipeline:
             # 비고
             answer_text += f"**비고:** {doctype or '문서'}, 기안자: {drafter or '정보 없음'}"
 
-            # Evidence 구성
-            ref = _encode_file_ref(fname)
+            # Evidence 구성 (file_path 직접 포함)
+            # year 폴더 자동 감지
+            year_match = re.search(r'(\d{4})-', fname)
+            if year_match:
+                year = year_match.group(1)
+                file_path_str = f"docs/year_{year}/{fname}"
+            else:
+                file_path_str = f"docs/{fname}"
+
             evidence = [{
                 "doc_id": fname,
                 "filename": fname,
+                "file_path": file_path_str,  # 직접 파일 경로 (ref 대신)
                 "page": 1,
                 "snippet": text_preview[:400] if text_preview else "",
-                "ref": ref,  # 🔴 base64 인코딩된 파일 경로
+                "ref": None,  # 더 이상 사용하지 않음
                 "meta": {
                     "filename": fname,
                     "drafter": drafter,

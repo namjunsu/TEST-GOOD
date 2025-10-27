@@ -45,9 +45,15 @@ class QueryRouter:
         re.IGNORECASE,
     )
 
-    # 요약 패턴 (요약/정리/개요)
+    # 요약 패턴 (요약/정리/개요 + 다양한 변형)
     SUMMARY_INTENT_PATTERN = re.compile(
-        r"(요약|정리|개요|내용.*요약)",
+        r"(요약|정리|개요|내용.*요약|요약해|요약헤줘|정리해|개요.*알려)",
+        re.IGNORECASE,
+    )
+
+    # 문서 지시어 패턴 (이문서, 이 문서, 해당 문서 등)
+    DOC_REFERENCE_PATTERN = re.compile(
+        r"(이\s?문서|해당\s?문서|이\s?파일|그\s?문서)",
         re.IGNORECASE,
     )
 
@@ -117,39 +123,42 @@ class QueryRouter:
             re.search(self.filename_pattern, query, re.IGNORECASE) is not None
         )
 
-        # 2. 미리보기 전용 키워드 체크
+        # 2. 문서 지시어 체크 (이문서, 해당 문서 등)
+        has_doc_reference = self.DOC_REFERENCE_PATTERN.search(query) is not None
+
+        # 3. 미리보기 전용 키워드 체크
         has_preview_intent = any(
             keyword in query_lower for keyword in self.preview_keywords
         )
 
-        # 3. PREVIEW 모드 (파일명 + 미리보기 의도)
+        # 4. PREVIEW 모드 (파일명 + 미리보기 의도)
         if has_filename and (has_preview_intent or "미리보기" in query_lower):
             logger.info("🎯 모드 결정: PREVIEW (파일명 + 미리보기)")
             return QueryMode.PREVIEW
 
-        # 4. LIST 모드 (연도/작성자 + 찾기)
-        if self.LIST_INTENT_PATTERN.search(query):
+        # 5. LIST 모드 (연도/작성자 + 찾기) - 요약 의도가 없을 때만
+        if self.LIST_INTENT_PATTERN.search(query) and not self.SUMMARY_INTENT_PATTERN.search(query):
             logger.info("🎯 모드 결정: LIST (목록 검색)")
             return QueryMode.LIST
 
-        # 5. SUMMARY 모드 (파일명 + 요약)
-        if has_filename and self.SUMMARY_INTENT_PATTERN.search(query):
+        # 6. SUMMARY 모드 (파일명 또는 문서 지시어 + 요약 의도)
+        if (has_filename or has_doc_reference) and self.SUMMARY_INTENT_PATTERN.search(query):
             logger.info("🎯 모드 결정: SUMMARY (내용 요약)")
             return QueryMode.SUMMARY
 
-        # 6. Q&A 의도 키워드 체크 (레거시 호환)
+        # 7. Q&A 의도 키워드 체크 (레거시 호환)
         has_qa_intent = any(keyword in query_lower for keyword in self.qa_keywords)
 
         if has_qa_intent:
             logger.info("🎯 모드 결정: QA (의도 키워드 감지)")
             return QueryMode.QA
 
-        # 7. 파일명만 있으면 PREVIEW (레거시 호환)
+        # 8. 파일명만 있으면 PREVIEW (레거시 호환)
         if has_filename:
             logger.info("🎯 모드 결정: PREVIEW (파일명만 존재)")
             return QueryMode.PREVIEW
 
-        # 8. 기본: Q&A 모드
+        # 9. 기본: Q&A 모드
         logger.info("🎯 모드 결정: QA (기본)")
         return QueryMode.QA
 
@@ -167,6 +176,7 @@ class QueryRouter:
         has_cost_intent = self.COST_INTENT_PATTERN.search(query) is not None
         has_list_intent = self.LIST_INTENT_PATTERN.search(query) is not None
         has_summary_intent = self.SUMMARY_INTENT_PATTERN.search(query) is not None
+        has_doc_reference = self.DOC_REFERENCE_PATTERN.search(query) is not None
         has_qa_intent = any(keyword in query_lower for keyword in self.qa_keywords)
         has_filename = (
             re.search(self.filename_pattern, query, re.IGNORECASE) is not None
@@ -190,6 +200,9 @@ class QueryRouter:
 
         if has_summary_intent:
             reason_parts.append("summary_intent")
+
+        if has_doc_reference:
+            reason_parts.append("doc_reference")
 
         if has_filename:
             reason_parts.append("filename_detected")

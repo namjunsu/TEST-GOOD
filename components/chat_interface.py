@@ -478,25 +478,65 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                     # 답변 텍스트 표시
                     message_placeholder.markdown(response["text"])
 
-                    # Evidence 표시 (별도 expander)
+                    # Evidence 표시 (미리보기/다운로드 버튼 포함)
                     if response.get("evidence"):
-                        with st.expander("📚 근거 문서 (Evidence)", expanded=False):
+                        # 1건이면 자동 확장, 2건 이상이면 접힘
+                        auto_expand = len(response["evidence"]) == 1
+
+                        with st.expander("📚 출처 문서", expanded=auto_expand):
                             for i, ev in enumerate(response["evidence"], 1):
                                 # Evidence가 dict 또는 객체일 수 있으므로 안전하게 접근
                                 if isinstance(ev, dict):
                                     doc_id = ev.get("doc_id") or ev.get("chunk_id", "unknown")
+                                    filename = ev.get("filename", doc_id)
                                     page = ev.get("page", 1)
                                     snippet = ev.get("snippet") or ev.get("content", "")
+                                    ref = ev.get("ref")  # base64 인코딩된 파일 경로
+                                    meta = ev.get("meta", {})
                                 else:
                                     # 객체인 경우
                                     doc_id = getattr(ev, "doc_id", None) or getattr(ev, "chunk_id", "unknown")
+                                    filename = getattr(ev, "filename", doc_id)
                                     page = getattr(ev, "page", 1)
                                     snippet = getattr(ev, "snippet", None) or getattr(ev, "content", "")
+                                    ref = getattr(ev, "ref", None)
+                                    meta = getattr(ev, "meta", {})
 
-                                st.markdown(
-                                    f"**{i}. {doc_id}** (페이지 {page})\n\n"
-                                    f"{snippet[:300]}"  # 스니펫 길이 제한
-                                )
+                                # 문서 정보 표시
+                                st.markdown(f"**{i}. {filename}** (페이지 {page})")
+
+                                # 메타데이터 표시 (기안자, 날짜)
+                                if meta:
+                                    meta_parts = []
+                                    if meta.get("drafter"):
+                                        meta_parts.append(f"✍ {meta['drafter']}")
+                                    if meta.get("date"):
+                                        meta_parts.append(f"📅 {meta['date']}")
+                                    if meta_parts:
+                                        st.caption(" | ".join(meta_parts))
+
+                                # 스니펫 표시
+                                st.markdown(f"{snippet[:300]}")  # 스니펫 길이 제한
+
+                                # 버튼 (ref가 있을 때만)
+                                if ref:
+                                    col1, col2 = st.columns([1, 1])
+                                    with col1:
+                                        preview_url = f"http://localhost:7860/files/preview?ref={ref}"
+                                        st.link_button("🔎 미리보기", preview_url, use_container_width=True)
+                                    with col2:
+                                        download_url = f"http://localhost:7860/files/download?ref={ref}"
+                                        st.link_button("⬇️ 원본 다운로드", download_url, use_container_width=True)
+
+                                    # 1건일 때만 iFrame 자동 렌더 (520px)
+                                    if auto_expand and i == 1:
+                                        st.markdown("---")
+                                        st.markdown("**📄 문서 미리보기**")
+                                        st.markdown(
+                                            f'<iframe src="{preview_url}" width="100%" height="520px"></iframe>',
+                                            unsafe_allow_html=True
+                                        )
+
                                 if i < len(response["evidence"]):
                                     st.markdown("---")
 

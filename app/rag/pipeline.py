@@ -11,6 +11,9 @@ Example:
 
 import os
 import time
+import base64
+import sqlite3
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Protocol, List, Optional, Dict, Any
 
@@ -19,6 +22,39 @@ from app.core.errors import ModelError, SearchError, ErrorCode, ERROR_MESSAGES
 from app.rag.query_router import QueryRouter, QueryMode
 
 logger = get_logger(__name__)
+
+
+def _encode_file_ref(filename: str) -> Optional[str]:
+    """파일명을 base64 ref로 인코딩 (docs 하위 경로 찾기)
+
+    Args:
+        filename: 파일명
+
+    Returns:
+        base64 인코딩된 ref 또는 None
+    """
+    try:
+        # metadata.db에서 경로 찾기
+        conn = sqlite3.connect("metadata.db")
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT path FROM documents WHERE filename = ? LIMIT 1",
+            (filename,)
+        )
+        result = cursor.fetchone()
+        conn.close()
+
+        if result and result[0]:
+            file_path = Path(result[0])
+            # docs 하위인지 확인
+            if "docs" in file_path.parts:
+                # base64 인코딩
+                ref = base64.urlsafe_b64encode(str(file_path).encode()).decode()
+                return ref
+    except Exception as e:
+        logger.warning(f"ref 인코딩 실패: {filename} - {e}")
+
+    return None
 
 # 진단 모드 설정
 DIAG_RAG = os.getenv("DIAG_RAG", "false").lower() == "true"
@@ -347,19 +383,23 @@ class RAGPipeline:
         Returns:
             표준화된 응답 dict (citations 필수)
         """
-        citations = [
-            {
+        citations = []
+        for c in selected:
+            filename = c.get("filename") or c.get("doc_id") or c.get("title", "")
+            ref = _encode_file_ref(filename) if filename else None
+
+            citations.append({
                 "doc_id": c.get("doc_id"),
-                "title": c.get("title") or c.get("filename") or c.get("doc_id"),
+                "filename": filename,
+                "title": c.get("title") or filename or c.get("doc_id"),
                 "page": c.get("page", 1),
                 "snippet": (
                     c.get("text") or c.get("snippet") or c.get("content") or ""
-                )[:400],  # 300 → 400 (스니펫 가독성 개선)
+                )[:400],
+                "ref": ref,  # 🔴 base64 인코딩된 파일 경로
                 "preview_url": c.get("preview_url"),
                 "download_url": c.get("download_url"),
-            }
-            for c in selected
-        ]
+            })
 
         return {
             "text": text,
@@ -820,12 +860,17 @@ class RAGPipeline:
             # Evidence 구성
             evidence = []
             for doc in docs[:10]:
+                filename = doc.get("filename", "")
+                ref = _encode_file_ref(filename) if filename else None
+
                 evidence.append({
-                    "doc_id": doc.get("filename"),
+                    "doc_id": filename,
+                    "filename": filename,
                     "page": 1,
                     "snippet": doc.get("text_preview", "")[:400],
+                    "ref": ref,  # 🔴 base64 인코딩된 파일 경로
                     "meta": {
-                        "filename": doc.get("filename"),
+                        "filename": filename,
                         "drafter": doc.get("drafter"),
                         "date": doc.get("display_date") or doc.get("date"),
                         "doctype": doc.get("doctype")
@@ -916,10 +961,13 @@ class RAGPipeline:
                     answer_text += f"검증: {verification}"
 
                     # Evidence 구성
+                    ref = _encode_file_ref(filename)
                     evidence = [{
                         "doc_id": filename,
+                        "filename": filename,
                         "page": 1,
                         "snippet": f"비용 합계: ₩{claimed_total:,}",
+                        "ref": ref,  # 🔴 base64 인코딩된 파일 경로
                         "meta": {
                             "filename": filename,
                             "drafter": doc.get("drafter"),
@@ -1044,10 +1092,13 @@ class RAGPipeline:
             answer_text += preview_content
 
             # Evidence 구성
+            ref = _encode_file_ref(fname)
             evidence = [{
                 "doc_id": fname,
+                "filename": fname,
                 "page": 1,
                 "snippet": preview_content[:400],
+                "ref": ref,  # 🔴 base64 인코딩된 파일 경로
                 "meta": {
                     "filename": fname,
                     "drafter": drafter,
@@ -1168,10 +1219,13 @@ class RAGPipeline:
             answer_text += f"**비고:** {doctype or '문서'}, 기안자: {drafter or '정보 없음'}"
 
             # Evidence 구성
+            ref = _encode_file_ref(fname)
             evidence = [{
                 "doc_id": fname,
+                "filename": fname,
                 "page": 1,
                 "snippet": text_preview[:400] if text_preview else "",
+                "ref": ref,  # 🔴 base64 인코딩된 파일 경로
                 "meta": {
                     "filename": fname,
                     "drafter": drafter,

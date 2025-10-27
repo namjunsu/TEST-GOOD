@@ -7,9 +7,13 @@ import sys
 import os
 import time
 import subprocess
+import base64
+import json
 from datetime import datetime
-from fastapi import FastAPI
+from pathlib import Path
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, StreamingResponse
 
 app = FastAPI(
     title="AI-CHAT API",
@@ -25,6 +29,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# 파일 접근 로깅 함수
+def log_file_access(filename: str, action: str, query: str = ""):
+    """파일 접근 로그 기록
+
+    Args:
+        filename: 파일명
+        action: 액션 타입 (preview|download)
+        query: 검색 질의 (선택)
+    """
+    try:
+        log_dir = Path("logs")
+        log_dir.mkdir(exist_ok=True)
+
+        log_file = log_dir / "file_access.jsonl"
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "filename": filename,
+            "action": action,
+            "query": query
+        }
+
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+    except Exception as e:
+        print(f"로깅 실패: {e}")
 
 
 @app.get("/_healthz")
@@ -80,13 +111,135 @@ def health():
     }
 
 
+@app.get("/files/preview")
+def preview_file(ref: str = Query(..., description="base64 encoded file path")):
+    """파일 미리보기 (보안: docs 하위만 허용)
+
+    Args:
+        ref: base64로 인코딩된 파일 경로
+
+    Returns:
+        파일 응답 (PDF/이미지 등)
+    """
+    try:
+        # base64 디코딩
+        decoded_path = base64.urlsafe_b64decode(ref).decode()
+        file_path = Path(decoded_path)
+
+        # 보안 검증: docs 하위만 허용
+        if "docs" not in file_path.parts:
+            log_file_access(file_path.name, "preview_denied", "")
+            raise HTTPException(
+                status_code=403,
+                detail="문서 위치가 허용 범위 외입니다. (docs 하위만 허용)"
+            )
+
+        # 파일 존재 확인
+        if not file_path.exists():
+            log_file_access(file_path.name, "preview_not_found", "")
+            raise HTTPException(
+                status_code=404,
+                detail=f"파일을 찾을 수 없습니다: {file_path.name}"
+            )
+
+        # 경로 탈출 방지 (resolve로 실제 경로 확인)
+        resolved_path = file_path.resolve()
+        if "docs" not in resolved_path.parts:
+            log_file_access(file_path.name, "preview_denied", "")
+            raise HTTPException(
+                status_code=403,
+                detail="경로 탐색 시도가 감지되었습니다."
+            )
+
+        # 로깅
+        log_file_access(file_path.name, "preview", "")
+
+        # 파일 반환 (inline 미리보기)
+        return FileResponse(
+            path=str(resolved_path),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"inline; filename={file_path.name}"}
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"파일 미리보기 실패: {str(e)}"
+        )
+
+
+@app.get("/files/download")
+def download_file(ref: str = Query(..., description="base64 encoded file path")):
+    """파일 다운로드 (보안: docs 하위만 허용)
+
+    Args:
+        ref: base64로 인코딩된 파일 경로
+
+    Returns:
+        파일 다운로드 응답
+    """
+    try:
+        # base64 디코딩
+        decoded_path = base64.urlsafe_b64decode(ref).decode()
+        file_path = Path(decoded_path)
+
+        # 보안 검증: docs 하위만 허용
+        if "docs" not in file_path.parts:
+            log_file_access(file_path.name, "download_denied", "")
+            raise HTTPException(
+                status_code=403,
+                detail="문서 위치가 허용 범위 외입니다. (docs 하위만 허용)"
+            )
+
+        # 파일 존재 확인
+        if not file_path.exists():
+            log_file_access(file_path.name, "download_not_found", "")
+            raise HTTPException(
+                status_code=404,
+                detail=f"파일을 찾을 수 없습니다: {file_path.name}"
+            )
+
+        # 경로 탈출 방지
+        resolved_path = file_path.resolve()
+        if "docs" not in resolved_path.parts:
+            log_file_access(file_path.name, "download_denied", "")
+            raise HTTPException(
+                status_code=403,
+                detail="경로 탐색 시도가 감지되었습니다."
+            )
+
+        # 로깅
+        log_file_access(file_path.name, "download", "")
+
+        # 파일 반환 (attachment 다운로드)
+        return FileResponse(
+            path=str(resolved_path),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={file_path.name}"}
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"파일 다운로드 실패: {str(e)}"
+        )
+
+
 @app.get("/")
 def root():
     """루트 엔드포인트"""
     return {
         "message": "AI-CHAT API Server",
         "version": "1.0.0",
-        "healthcheck": "/_healthz"
+        "healthcheck": "/_healthz",
+        "endpoints": {
+            "preview": "/files/preview?ref=<base64>",
+            "download": "/files/download?ref=<base64>"
+        }
     }
 
 

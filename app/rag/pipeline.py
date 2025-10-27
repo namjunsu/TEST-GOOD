@@ -1183,8 +1183,68 @@ class RAGPipeline:
                 }
             }
 
+    def _gather_summary_context(self, filename: str, pdf_path: str) -> str:
+        """요약용 컨텍스트 수집 (PDF 끝 + RAG 청크 + 스냅샷)
+
+        Args:
+            filename: 파일명
+            pdf_path: PDF 파일 경로
+
+        Returns:
+            수집된 컨텍스트 텍스트 (최대 10,000자)
+        """
+        import pdfplumber
+        parts = []
+
+        # 1) PDF 끝 2~3페이지 추출 (결론이 보통 여기 있음)
+        try:
+            with pdfplumber.open(pdf_path) as pdf:
+                total_pages = len(pdf.pages)
+                start_page = max(0, total_pages - 3)  # 끝 3페이지
+                tail = ""
+                for page in pdf.pages[start_page:]:
+                    tail += (page.extract_text() or "")
+                if tail.strip():
+                    parts.append("=== [문서 결론/말미] ===\n" + tail)
+                    logger.info(f"✓ PDF 끝 {total_pages - start_page}페이지 추출: {len(tail)}자")
+        except Exception as e:
+            logger.warning(f"⚠️ PDF 끝부분 추출 실패: {e}")
+
+        # 2) RAG 상위 청크 (같은 파일만)
+        try:
+            import re
+            # 파일명에서 핵심 키워드 추출
+            search_keywords = re.sub(r'^\d{4}-\d{2}-\d{2}_', '', filename)  # 날짜 제거
+            search_keywords = re.sub(r'\.pdf$', '', search_keywords, flags=re.IGNORECASE)
+            search_keywords = search_keywords.replace('_', ' ')
+
+            hits = self.retriever.search(search_keywords, top_k=5)
+            same_file_hits = [h for h in hits if h.get("filename") == filename][:3]
+
+            for i, h in enumerate(same_file_hits, 1):
+                chunk_text = h.get('text') or h.get('snippet') or h.get('content') or ""
+                if chunk_text:
+                    parts.append(f"=== [관련 청크 {i}] ===\n" + chunk_text[:2000])
+
+            if same_file_hits:
+                logger.info(f"✓ RAG 청크 {len(same_file_hits)}개 추출")
+        except Exception as e:
+            logger.warning(f"⚠️ RAG 청크 추출 실패: {e}")
+
+        # 3) OCR/원문 스냅샷 (있으면 - 현재는 DB text_preview 활용)
+        # 향후 확장: full_text 필드가 있으면 활용
+        # if hasattr(self, 'get_fulltext'):
+        #     full = self.get_fulltext(filename)
+        #     if full and len(full) > 1000:
+        #         parts.append("=== [원문 스냅샷] ===\n" + full[:3000])
+
+        # 결합 및 길이 제한
+        context = "\n\n".join(parts)[:10000]
+        logger.info(f"📋 최종 컨텍스트 길이: {len(context)}자")
+        return context
+
     def _answer_summary(self, query: str) -> dict:
-        """내용 요약 (JSON 구조화 + doctype별 맞춤 프롬프트)
+        """내용 요약 (문서 타입 자동 감지 + 맞춤 프롬프트)
 
         Args:
             query: 사용자 질의 (예: "[파일명].pdf 내용 요약해줘" 또는 "미러클랩 카메라 삼각대 기술검토서 이문서 내용 요약헤줘")
@@ -1196,7 +1256,8 @@ class RAGPipeline:
         import sqlite3
         import pdfplumber
         from app.rag.summary_templates import (
-            get_summary_prompt,
+            detect_doc_kind,
+            build_prompt,
             parse_summary_json,
             format_summary_output
         )
@@ -1310,83 +1371,17 @@ class RAGPipeline:
             else:
                 pdf_path = f"docs/{fname}"
 
-            # 🔥 단계 1: RAG 검색으로 Top-5 청크 가져오기
-            logger.info(f"🔍 RAG 검색 시작: {fname}")
-            rag_chunks_text = ""
-            try:
-                # 파일명에서 핵심 키워드 추출
-                search_keywords = re.sub(r'^\d{4}-\d{2}-\d{2}_', '', fname)  # 날짜 제거
-                search_keywords = re.sub(r'\.pdf$', '', search_keywords, flags=re.IGNORECASE)  # 확장자 제거
-                search_keywords = search_keywords.replace('_', ' ')  # 언더스코어를 공백으로
+            # 🔥 새 구조: 컨텍스트 수집 (PDF 끝 + RAG + 스냅샷)
+            logger.info(f"📋 컨텍스트 수집 시작: {fname}")
+            context_text = self._gather_summary_context(fname, pdf_path)
 
-                # RAG 검색 실행
-                search_results = self.retriever.search(search_keywords, top_k=5)
+            # Fallback: 컨텍스트가 비어있으면 text_preview 사용
+            if not context_text or len(context_text.strip()) < 100:
+                if text_preview:
+                    context_text = "=== 문서 내용 ===\n" + text_preview
+                    logger.info(f"⚠️ Fallback: text_preview 사용 ({len(text_preview)}자)")
 
-                # 청크 텍스트 수집
-                for i, chunk in enumerate(search_results[:5], 1):
-                    chunk_text = chunk.get('snippet') or chunk.get('text') or chunk.get('content') or ""
-                    if chunk_text:
-                        rag_chunks_text += f"[청크 {i}]\n{chunk_text}\n\n"
-
-                logger.info(f"✓ RAG 청크 수집: {len(search_results)}개, {len(rag_chunks_text)}자")
-            except Exception as e:
-                logger.warning(f"⚠️ RAG 검색 실패: {e}")
-                rag_chunks_text = ""
-
-            # 🔥 단계 2: PDF 마지막 2쪽 읽기 (결론 부분)
-            logger.info(f"📄 PDF 마지막 페이지 읽기 시작: {pdf_path}")
-            pdf_ending_text = ""
-            try:
-                with pdfplumber.open(pdf_path) as pdf:
-                    total_pages = len(pdf.pages)
-                    # 마지막 2쪽 읽기
-                    start_page = max(0, total_pages - 2)
-                    for page_num in range(start_page, total_pages):
-                        page_text = pdf.pages[page_num].extract_text() or ""
-                        pdf_ending_text += f"[페이지 {page_num+1}]\n{page_text}\n\n"
-
-                    logger.info(f"✓ PDF 마지막 페이지 추출 성공: {len(pdf_ending_text)}자")
-            except Exception as e:
-                logger.warning(f"⚠️ PDF 마지막 페이지 읽기 실패: {e}")
-                pdf_ending_text = ""
-
-            # 🔥 단계 3: 컨텍스트 합치기 (우선순위: PDF 끝부분 > RAG 청크)
-            # 최대 10,000자 (LLM 부담 고려)
-            context_text = ""
-
-            # 1) PDF 마지막 부분 (결론이 보통 여기 있음)
-            if pdf_ending_text:
-                context_text += "=== 문서 결론 부분 ===\n" + pdf_ending_text
-
-            # 2) RAG 검색 청크
-            if rag_chunks_text:
-                context_text += "\n=== 문서 주요 내용 ===\n" + rag_chunks_text
-
-            # 3) text_preview fallback (DB에 저장된 미리보기)
-            if not context_text and text_preview:
-                context_text = "=== 문서 내용 ===\n" + text_preview
-
-            # 4) 정말 아무것도 없으면 PDF 전체 시도
-            if not context_text:
-                logger.warning(f"⚠️ 컨텍스트 없음, PDF 전체 추출 시도")
-                try:
-                    with pdfplumber.open(pdf_path) as pdf:
-                        full_text = ""
-                        for page in pdf.pages[:5]:  # 최대 5페이지
-                            full_text += (page.extract_text() or "")
-                        context_text = full_text
-                except Exception as e:
-                    logger.error(f"❌ PDF 전체 추출 실패: {e}")
-                    context_text = ""
-
-            # 길이 제한 (최대 10,000자)
-            if len(context_text) > 10000:
-                context_text = context_text[:10000]
-                logger.info(f"⚠️ 컨텍스트 길이 제한 (10,000자로 축소)")
-
-            logger.info(f"📋 최종 컨텍스트 길이: {len(context_text)}자")
-
-            # 🔥 단계 4: doctype별 맞춤 프롬프트 생성
+            # 🔥 새 구조: 문서 타입 자동 감지
             if not context_text or len(context_text.strip()) < 100:
                 # 컨텍스트 없으면 메타데이터만 표시
                 answer_text = f"**📄 {fname}**\n\n"
@@ -1398,18 +1393,23 @@ class RAGPipeline:
                     answer_text += f"- 금액: ₩{claimed_total:,}\n"
 
             else:
-                # doctype별 맞춤 프롬프트 생성
-                system_prompt, user_prompt = get_summary_prompt(
-                    doctype=doctype or "기본",
+                # 문서 종류 자동 감지
+                kind = detect_doc_kind(fname, context_text)
+                logger.info(f"🎯 문서 타입 감지: {kind}")
+
+                # 타입별 맞춤 프롬프트 생성
+                prompt = build_prompt(
+                    kind=kind,
                     filename=fname,
+                    drafter=drafter or "정보 없음",
                     display_date=display_date or date or "정보 없음",
-                    claimed_total=claimed_total,
-                    context_text=context_text
+                    context_text=context_text,
+                    claimed_total=claimed_total
                 )
 
-                logger.info(f"📝 프롬프트 생성 완료 (doctype: {doctype})")
+                logger.info(f"📝 프롬프트 생성 완료 (kind: {kind})")
 
-                # 🔥 단계 5: LLM 호출 (JSON 응답 요청)
+                # 🔥 LLM 호출 (JSON 응답 요청)
                 max_retries = 2
                 parsed_json = None
 
@@ -1419,9 +1419,10 @@ class RAGPipeline:
 
                         # LLM 호출
                         llm_response = self.generator.generate(
-                            query=user_prompt,
+                            query=prompt,
                             context="",  # 프롬프트에 이미 포함됨
-                            temperature=0.2  # 낮은 temperature로 일관성 향상
+                            temperature=0.2,  # 낮은 temperature로 일관성 향상
+                            max_tokens=800  # 요약 길이 제한
                         )
 
                         logger.info(f"✓ LLM 응답 수신: {len(llm_response)}자")
@@ -1436,19 +1437,18 @@ class RAGPipeline:
                             logger.warning(f"⚠️ JSON 파싱 실패 (시도 {attempt}회), 재시도...")
                             if attempt < max_retries:
                                 # 재시도 시 리마인드 추가
-                                user_prompt += "\n\n**중요**: 반드시 JSON만 반환하세요. 다른 설명이나 마크다운 블록 없이 순수 JSON 객체만 출력하세요."
+                                prompt += "\n\n**중요**: 반드시 JSON만 반환하세요. 다른 설명이나 마크다운 블록 없이 순수 JSON 객체만 출력하세요."
 
                     except Exception as e:
                         logger.error(f"❌ LLM 호출 실패 (시도 {attempt}회): {e}")
                         if attempt >= max_retries:
                             break
 
-                # 🔥 단계 6: 출력 포맷팅
+                # 🔥 동적 포맷팅 (존재하는 섹션만 렌더)
                 if parsed_json:
-                    # JSON 기반 포맷팅
                     answer_text = format_summary_output(
                         parsed_json=parsed_json,
-                        doctype=doctype or "기본",
+                        kind=kind,
                         filename=fname,
                         drafter=drafter,
                         display_date=display_date or date,
@@ -1457,7 +1457,7 @@ class RAGPipeline:
                     logger.info("✓ 포맷팅된 요약 생성 완료")
 
                 else:
-                    # Fallback: JSON 파싱 실패 시 안내 메시지 (원본 JSON 숨김)
+                    # Fallback: JSON 파싱 실패 시
                     logger.error("❌ JSON 파싱 완전 실패 (2회 재시도 후)")
                     answer_text = f"**📄 {fname}**\n\n"
                     answer_text += "⚠️ 요약 생성 중 오류가 발생했습니다.\n\n"

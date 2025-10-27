@@ -415,11 +415,23 @@ class RAGPipeline:
             if query_mode == QueryMode.COST_SUM:
                 return self._answer_cost_sum(actual_query)
 
+            # 📋 LIST 모드: 목록 검색 (2줄 카드 형식)
+            if query_mode == QueryMode.LIST:
+                return self._answer_list(actual_query)
+
+            # 📝 SUMMARY 모드: 내용 요약 (5줄 섹션)
+            if query_mode == QueryMode.SUMMARY:
+                return self._answer_summary(actual_query)
+
+            # 👀 PREVIEW 모드: 문서 미리보기 (원문 6-8줄, 가짜 표 금지)
+            if query_mode == QueryMode.PREVIEW:
+                return self._answer_preview(actual_query)
+
             # 🔍 디버깅: 실제 pattern matching 대상 로깅
             logger.info(f"🔍 Pattern matching 대상 쿼리: '{actual_query[:100]}'")
 
-            # ✅ P0: 파일명 직접 언급 패턴 감지 (PREVIEW 모드일 때만)
-            if query_mode == QueryMode.PREVIEW:
+            # ✅ P0: 파일명 직접 언급 패턴 감지 (레거시 호환, PREVIEW 모드 외)
+            if False:  # 비활성화: PREVIEW 모드로 통합됨
                 # 패턴 1: 요약 요청 - "파일명.pdf 내용 요약해줘" / "파일명.pdf 요약"
                 file_summary_pattern = (
                     r"(\S+\.pdf)\s*(이\s*)?(문서\s*)?(내용\s*)?(요약|정리)"
@@ -745,6 +757,107 @@ class RAGPipeline:
         result = self.answer(query)
         return result["text"]
 
+    def _answer_list(self, query: str) -> dict:
+        """목록 검색 (2줄 카드 형식)
+
+        Args:
+            query: 사용자 질의 (예: "2024년 남준수 문서 찾아줘")
+
+        Returns:
+            dict: 표준 응답 구조 (2줄 카드 목록)
+        """
+        import re
+        from modules.metadata_db import MetadataDB
+
+        try:
+            # 연도 추출 (예: "2024년" → "2024")
+            year_match = re.search(r"(\d{4})년?", query)
+            year = year_match.group(1) if year_match else None
+
+            # 기안자 추출 (예: "남준수")
+            drafter_match = re.search(r"([가-힣]{2,4})(가|이)?", query)
+            drafter = drafter_match.group(1) if drafter_match else None
+
+            logger.info(f"📋 목록 검색: year={year}, drafter={drafter}")
+
+            # DB 검색
+            db = MetadataDB()
+            docs = db.search_documents(drafter=drafter, year=year, limit=20)
+
+            if not docs:
+                return {
+                    "text": f"검색 결과가 없습니다. (year={year}, drafter={drafter})",
+                    "citations": [],
+                    "evidence": [],
+                    "status": {
+                        "retrieved_count": 0,
+                        "selected_count": 0,
+                        "found": False
+                    }
+                }
+
+            # 2줄 카드 형식으로 포맷팅
+            cards = []
+            for doc in docs:
+                filename = doc.get("filename", "알 수 없음")
+                doctype = doc.get("doctype", "문서")
+                date = doc.get("display_date") or doc.get("date", "날짜 없음")
+                drafter_name = doc.get("drafter", "작성자 미상")
+
+                # 한 줄 요약: text_preview 첫 180자
+                preview = doc.get("text_preview", "")
+                # 개행 제거, 공백 정리
+                preview = " ".join(preview.split())[:180]
+                if len(preview) >= 180:
+                    preview += "…"
+
+                # 2줄 카드
+                card = f"📄 {filename} | 🏷 {doctype} | 📅 {date} | ✍ {drafter_name}\n{preview}"
+                cards.append(card)
+
+            answer_text = "\n\n".join(cards[:10])  # 최대 10개
+
+            # Evidence 구성
+            evidence = []
+            for doc in docs[:10]:
+                evidence.append({
+                    "doc_id": doc.get("filename"),
+                    "page": 1,
+                    "snippet": doc.get("text_preview", "")[:400],
+                    "meta": {
+                        "filename": doc.get("filename"),
+                        "drafter": doc.get("drafter"),
+                        "date": doc.get("display_date") or doc.get("date"),
+                        "doctype": doc.get("doctype")
+                    }
+                })
+
+            logger.info(f"📋 목록 검색 성공: {len(docs)}건 발견, 상위 {min(10, len(docs))}건 표시")
+
+            return {
+                "text": answer_text,
+                "citations": evidence,
+                "evidence": evidence,
+                "status": {
+                    "retrieved_count": len(docs),
+                    "selected_count": min(10, len(docs)),
+                    "found": True
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"❌ 목록 검색 실패: {e}", exc_info=True)
+            return {
+                "text": f"목록 검색 중 오류가 발생했습니다: {str(e)}",
+                "citations": [],
+                "evidence": [],
+                "status": {
+                    "retrieved_count": 0,
+                    "selected_count": 0,
+                    "found": False
+                }
+            }
+
     def _answer_cost_sum(self, query: str) -> dict:
         """비용 합계 직접 조회 (DB claimed_total 활용)
 
@@ -784,12 +897,23 @@ class RAGPipeline:
                 if doc and doc.get("claimed_total"):
                     claimed_total = doc["claimed_total"]
 
-                    # 3. 답변 포맷팅
-                    answer_text = f"**💰 비용 합계**\n\n"
-                    answer_text += f"합계: **₩{claimed_total:,}**\n\n"
-                    answer_text += f"📄 출처: {filename}\n"
-                    answer_text += f"📅 날짜: {doc.get('display_date') or doc.get('date') or '정보 없음'}\n"
-                    answer_text += f"✍️ 기안자: {doc.get('drafter') or '정보 없음'}"
+                    # 3. 답변 포맷팅 (VAT, 검증 배지 포함)
+                    # VAT 판단 (text_preview에서 "VAT" 키워드 검색)
+                    text_preview = doc.get("text_preview", "")
+                    vat_status = "VAT 별도" if "VAT" in text_preview or "부가세" in text_preview else "VAT 포함 추정"
+
+                    # sum_match 검증 배지
+                    sum_match = doc.get("sum_match")
+                    if sum_match is None:
+                        verification = "sum_match=없음"
+                    elif sum_match:
+                        verification = "sum_match=일치 ✅"
+                    else:
+                        verification = "sum_match=불일치 ⚠️"
+
+                    answer_text = f"💰 합계: **₩{claimed_total:,}** ({vat_status})\n"
+                    answer_text += f"출처: {filename} | 날짜: {doc.get('display_date') or doc.get('date') or '정보 없음'} | 기안자: {doc.get('drafter') or '정보 없음'}\n"
+                    answer_text += f"검증: {verification}"
 
                     # Evidence 구성
                     evidence = [{
@@ -834,6 +958,246 @@ class RAGPipeline:
             logger.error(f"❌ 비용 질의 처리 실패: {e}", exc_info=True)
             return {
                 "text": f"비용 정보 조회 중 오류가 발생했습니다: {str(e)}",
+                "citations": [],
+                "evidence": [],
+                "status": {
+                    "retrieved_count": 0,
+                    "selected_count": 0,
+                    "found": False
+                }
+            }
+
+    def _answer_preview(self, query: str) -> dict:
+        """문서 미리보기 (원문 인용, 가짜 표 생성 금지)
+
+        Args:
+            query: 사용자 질의 (예: "[파일명].pdf 미리보기")
+
+        Returns:
+            dict: 표준 응답 구조 (원문 6-8줄)
+        """
+        import re
+        import sqlite3
+        from pathlib import Path
+
+        try:
+            # 파일명 추출
+            filename_match = re.search(r"(\S+\.pdf)", query, re.IGNORECASE)
+            if not filename_match:
+                return {
+                    "text": "파일명을 찾을 수 없습니다.",
+                    "citations": [],
+                    "evidence": [],
+                    "status": {
+                        "retrieved_count": 0,
+                        "selected_count": 0,
+                        "found": False
+                    }
+                }
+
+            filename = filename_match.group(1)
+
+            # DB에서 문서 조회
+            conn = sqlite3.connect("metadata.db")
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT path, filename, drafter, date, display_date, text_preview
+                FROM documents
+                WHERE filename LIKE ?
+                LIMIT 1
+            """,
+                (f"%{filename}%",),
+            )
+
+            result = cursor.fetchone()
+            conn.close()
+
+            if not result:
+                return {
+                    "text": f"'{filename}' 파일을 찾을 수 없습니다.",
+                    "citations": [],
+                    "evidence": [],
+                    "status": {
+                        "retrieved_count": 0,
+                        "selected_count": 0,
+                        "found": False
+                    }
+                }
+
+            pdf_path, fname, drafter, date, display_date, text_preview = result
+
+            # 원문 6-8줄 추출 (cleaned_text)
+            preview_text = text_preview or ""
+
+            # 개행 기준 6-8줄 추출
+            lines = [line.strip() for line in preview_text.split('\n') if line.strip()]
+            preview_lines = lines[:8]  # 최대 8줄
+
+            if len(preview_lines) == 0:
+                preview_content = "(문서 내용을 읽을 수 없습니다)"
+            else:
+                preview_content = "\n".join(preview_lines)
+
+            # 답변 포맷팅 (가짜 표 생성 절대 금지)
+            answer_text = f"**📄 {fname} 미리보기**\n\n"
+            answer_text += preview_content
+
+            # Evidence 구성
+            evidence = [{
+                "doc_id": fname,
+                "page": 1,
+                "snippet": preview_content[:400],
+                "meta": {
+                    "filename": fname,
+                    "drafter": drafter,
+                    "date": display_date or date
+                }
+            }]
+
+            logger.info(f"👀 미리보기 생성 완료: {fname} ({len(preview_lines)}줄)")
+
+            return {
+                "text": answer_text,
+                "citations": evidence,
+                "evidence": evidence,
+                "status": {
+                    "retrieved_count": 1,
+                    "selected_count": 1,
+                    "found": True
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"❌ 미리보기 생성 실패: {e}", exc_info=True)
+            return {
+                "text": f"미리보기 생성 중 오류가 발생했습니다: {str(e)}",
+                "citations": [],
+                "evidence": [],
+                "status": {
+                    "retrieved_count": 0,
+                    "selected_count": 0,
+                    "found": False
+                }
+            }
+
+    def _answer_summary(self, query: str) -> dict:
+        """내용 요약 (5줄 섹션, 가짜 정보 생성 금지)
+
+        Args:
+            query: 사용자 질의 (예: "[파일명].pdf 내용 요약해줘")
+
+        Returns:
+            dict: 표준 응답 구조 (5줄 섹션 요약)
+        """
+        import re
+        import sqlite3
+
+        try:
+            # 파일명 추출
+            filename_match = re.search(r"(\S+\.pdf)", query, re.IGNORECASE)
+            if not filename_match:
+                return {
+                    "text": "파일명을 찾을 수 없습니다. 파일명을 포함해 다시 질의해주세요.",
+                    "citations": [],
+                    "evidence": [],
+                    "status": {
+                        "retrieved_count": 0,
+                        "selected_count": 0,
+                        "found": False
+                    }
+                }
+
+            filename = filename_match.group(1)
+
+            # DB에서 문서 조회
+            conn = sqlite3.connect("metadata.db")
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT filename, drafter, date, display_date, category,
+                       text_preview, claimed_total, doctype
+                FROM documents
+                WHERE filename LIKE ?
+                LIMIT 1
+            """,
+                (f"%{filename}%",),
+            )
+
+            result = cursor.fetchone()
+            conn.close()
+
+            if not result:
+                return {
+                    "text": f"'{filename}' 파일을 찾을 수 없습니다.",
+                    "citations": [],
+                    "evidence": [],
+                    "status": {
+                        "retrieved_count": 0,
+                        "selected_count": 0,
+                        "found": False
+                    }
+                }
+
+            fname, drafter, date, display_date, category, text_preview, claimed_total, doctype = result
+
+            # 5줄 섹션 포맷팅
+            answer_text = f"**📄 {fname} 요약**\n\n"
+
+            # 목적/배경 (text_preview 첫 120자)
+            purpose = " ".join(text_preview.split())[:120] + "…" if text_preview else "정보 없음"
+            answer_text += f"**목적/배경:** {purpose}\n\n"
+
+            # 주요 조치 (실제로는 추출 불가, 간단히 카테고리 기반)
+            if category:
+                answer_text += f"**주요 조치:** {category} 관련 조치\n\n"
+            else:
+                answer_text += "**주요 조치:** 정보 없음\n\n"
+
+            # 일정 (시행일자)
+            schedule = display_date or date or "정보 없음"
+            answer_text += f"**일정:** {schedule} (시행)\n\n"
+
+            # 금액 (있을 때만)
+            if claimed_total:
+                answer_text += f"**금액:** ₩{claimed_total:,}\n\n"
+            else:
+                answer_text += "**금액:** 정보 없음\n\n"
+
+            # 비고
+            answer_text += f"**비고:** {doctype or '문서'}, 기안자: {drafter or '정보 없음'}"
+
+            # Evidence 구성
+            evidence = [{
+                "doc_id": fname,
+                "page": 1,
+                "snippet": text_preview[:400] if text_preview else "",
+                "meta": {
+                    "filename": fname,
+                    "drafter": drafter,
+                    "date": display_date or date,
+                    "doctype": doctype,
+                    "claimed_total": claimed_total
+                }
+            }]
+
+            logger.info(f"📝 요약 생성 완료: {fname}")
+
+            return {
+                "text": answer_text,
+                "citations": evidence,
+                "evidence": evidence,
+                "status": {
+                    "retrieved_count": 1,
+                    "selected_count": 1,
+                    "found": True
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"❌ 요약 생성 실패: {e}", exc_info=True)
+            return {
+                "text": f"요약 생성 중 오류가 발생했습니다: {str(e)}",
                 "citations": [],
                 "evidence": [],
                 "status": {

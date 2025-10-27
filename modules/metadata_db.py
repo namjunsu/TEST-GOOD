@@ -217,6 +217,38 @@ class MetadataDB:
         )
         return [dict(row) for row in cursor.fetchall()]
 
+    def search_documents(
+        self, drafter: Optional[str] = None, year: Optional[str] = None, limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        """다중 필터 검색 (drafter, year 조합 지원)
+
+        Args:
+            drafter: 기안자명 (부분 일치)
+            year: 연도 (display_date 기준, 예: "2024")
+            limit: 최대 결과 수
+
+        Returns:
+            검색 결과 리스트 (날짜 내림차순)
+        """
+        query = "SELECT * FROM documents WHERE 1=1"
+        params = []
+
+        if drafter:
+            query += " AND drafter LIKE ?"
+            params.append(f"%{drafter}%")
+
+        if year:
+            # display_date 또는 date 필드에서 연도 추출
+            query += " AND (display_date LIKE ? OR date LIKE ?)"
+            params.append(f"{year}%")
+            params.append(f"{year}%")
+
+        query += " ORDER BY date DESC LIMIT ?"
+        params.append(limit)
+
+        cursor = self.conn.execute(query, params)
+        return [dict(row) for row in cursor.fetchall()]
+
     def search_by_category(self, category: str) -> List[Dict[str, Any]]:
         """카테고리별 검색"""
         cursor = self.conn.execute(

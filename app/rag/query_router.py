@@ -23,9 +23,11 @@ logger = get_logger(__name__)
 class QueryMode(Enum):
     """쿼리 모드"""
 
-    QA = "qa"  # 질답 모드 (RAG 파이프라인)
+    COST_SUM = "cost_sum"  # 비용 합계 직접 조회 모드 (최우선)
     PREVIEW = "preview"  # 문서 미리보기 모드 (파일 전문)
-    COST_SUM = "cost_sum"  # 비용 합계 직접 조회 모드
+    LIST = "list"  # 목록 검색 모드 (다건 카드 표시)
+    SUMMARY = "summary"  # 내용 요약 모드 (5줄 섹션)
+    QA = "qa"  # 질답 모드 (RAG 파이프라인, 기본)
 
 
 class QueryRouter:
@@ -34,6 +36,18 @@ class QueryRouter:
     # 비용 질의 패턴 (합계/총액/금액 얼마 질의)
     COST_INTENT_PATTERN = re.compile(
         r"(합계|총액|총계|금액|비용).*(얼마|알려줘|확인|인지)|얼마였지|얼마였나요|얼마야",
+        re.IGNORECASE,
+    )
+
+    # 목록 검색 패턴 (연도/작성자 + 찾기)
+    LIST_INTENT_PATTERN = re.compile(
+        r"(\d{4}년?|[가-힣]{2,4}(가|이)?).*(찾아|검색|리스트|목록|보여|알려)",
+        re.IGNORECASE,
+    )
+
+    # 요약 패턴 (요약/정리/개요)
+    SUMMARY_INTENT_PATTERN = re.compile(
+        r"(요약|정리|개요|내용.*요약)",
         re.IGNORECASE,
     )
 
@@ -83,13 +97,13 @@ class QueryRouter:
             return {}
 
     def classify_mode(self, query: str) -> QueryMode:
-        """쿼리 모드 분류
+        """쿼리 모드 분류 (우선순위: COST_SUM > PREVIEW > LIST > SUMMARY > QA)
 
         Args:
             query: 사용자 질의
 
         Returns:
-            QueryMode.COST_SUM, QueryMode.QA, 또는 QueryMode.PREVIEW
+            QueryMode (COST_SUM, PREVIEW, LIST, SUMMARY, QA 중 하나)
         """
         query_lower = query.lower()
 
@@ -98,39 +112,46 @@ class QueryRouter:
             logger.info("🎯 모드 결정: COST_SUM (비용 질의 감지)")
             return QueryMode.COST_SUM
 
-        # 1. Q&A 의도 키워드 체크
-        has_qa_intent = any(keyword in query_lower for keyword in self.qa_keywords)
-
-        # 2. 파일명 패턴 체크
+        # 1. 파일명 패턴 체크
         has_filename = (
             re.search(self.filename_pattern, query, re.IGNORECASE) is not None
         )
 
-        # 3. 미리보기 전용 키워드 체크
+        # 2. 미리보기 전용 키워드 체크
         has_preview_intent = any(
             keyword in query_lower for keyword in self.preview_keywords
         )
 
-        # 결정 로직
-        if has_qa_intent:
-            # Q&A 의도가 있으면 파일명이 있어도 Q&A 모드
-            logger.info("🎯 모드 결정: Q&A (의도 키워드 감지)")
-            return QueryMode.QA
-
-        elif has_filename and has_preview_intent:
-            # 파일명 + 미리보기 전용 키워드 → 미리보기 모드
-            logger.info("🎯 모드 결정: PREVIEW (파일명 + 미리보기 키워드)")
+        # 3. PREVIEW 모드 (파일명 + 미리보기 의도)
+        if has_filename and (has_preview_intent or "미리보기" in query_lower):
+            logger.info("🎯 모드 결정: PREVIEW (파일명 + 미리보기)")
             return QueryMode.PREVIEW
 
-        elif has_filename and not has_qa_intent:
-            # 파일명만 있고 Q&A 의도 없음 → 미리보기 모드
+        # 4. LIST 모드 (연도/작성자 + 찾기)
+        if self.LIST_INTENT_PATTERN.search(query):
+            logger.info("🎯 모드 결정: LIST (목록 검색)")
+            return QueryMode.LIST
+
+        # 5. SUMMARY 모드 (파일명 + 요약)
+        if has_filename and self.SUMMARY_INTENT_PATTERN.search(query):
+            logger.info("🎯 모드 결정: SUMMARY (내용 요약)")
+            return QueryMode.SUMMARY
+
+        # 6. Q&A 의도 키워드 체크 (레거시 호환)
+        has_qa_intent = any(keyword in query_lower for keyword in self.qa_keywords)
+
+        if has_qa_intent:
+            logger.info("🎯 모드 결정: QA (의도 키워드 감지)")
+            return QueryMode.QA
+
+        # 7. 파일명만 있으면 PREVIEW (레거시 호환)
+        if has_filename:
             logger.info("🎯 모드 결정: PREVIEW (파일명만 존재)")
             return QueryMode.PREVIEW
 
-        else:
-            # 기본: Q&A 모드
-            logger.info("🎯 모드 결정: Q&A (기본)")
-            return QueryMode.QA
+        # 8. 기본: Q&A 모드
+        logger.info("🎯 모드 결정: QA (기본)")
+        return QueryMode.QA
 
     def get_routing_reason(self, query: str) -> str:
         """모드 라우팅 이유 반환 (로깅용)
@@ -144,6 +165,8 @@ class QueryRouter:
         query_lower = query.lower()
 
         has_cost_intent = self.COST_INTENT_PATTERN.search(query) is not None
+        has_list_intent = self.LIST_INTENT_PATTERN.search(query) is not None
+        has_summary_intent = self.SUMMARY_INTENT_PATTERN.search(query) is not None
         has_qa_intent = any(keyword in query_lower for keyword in self.qa_keywords)
         has_filename = (
             re.search(self.filename_pattern, query, re.IGNORECASE) is not None
@@ -161,6 +184,12 @@ class QueryRouter:
 
         if has_cost_intent:
             reason_parts.append("cost_intent")
+
+        if has_list_intent:
+            reason_parts.append("list_intent")
+
+        if has_summary_intent:
+            reason_parts.append("summary_intent")
 
         if has_filename:
             reason_parts.append("filename_detected")

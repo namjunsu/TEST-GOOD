@@ -204,7 +204,7 @@ class DocumentIngester:
             # 간단한 메타 추출 (실제로는 PDF 메타데이터를 더 상세히 파싱해야 함)
             from modules.metadata_extractor import MetadataExtractor
             extractor = MetadataExtractor()
-            extracted_meta = extractor.extract(raw_text)
+            extracted_meta = extractor.extract_all(raw_text, pdf_path.name)
             
             # 날짜/작성자/부서 파싱
             parsed_meta = self.meta_parser.parse(extracted_meta, title=pdf_path.stem, content=cleaned_text[:1000])

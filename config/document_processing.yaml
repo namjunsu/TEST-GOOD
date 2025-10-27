@@ -128,6 +128,38 @@ metadata:
     - "소속"
     - "부서"
 
+  # 작성자 Stoplist (기안자 오검출 방지)
+  # 대문자 약어, 장비명, 부서명, 일반 용어 등 제외
+  author_stoplist:
+    - "BNC"
+    - "ENG"
+    - "NLE"
+    - "USB"
+    - "LED"
+    - "HDMI"
+    - "SDI"
+    - "UPS"
+    - "DVR"
+    - "CCTV"
+    - "PC"
+    - "휴대용"
+    - "스캔문서"
+    - "채널A"
+    - "채널에이"
+    - "미디어텍"
+    - "방송기술팀"
+    - "기술관리팀"
+    - "영상편집팀"
+    - "제작팀"
+    - "뉴스비전"
+    - "보도기술"
+    - "상암제작팀"
+    - "광화문"
+    - "사옥"
+    - "장비"
+    - "시스템"
+    - "워크스테이션"
+
 # 요약 템플릿 설정
 summary:
   # doctype별 템플릿 활성화
@@ -143,6 +175,8 @@ summary:
 table_parsing:
   # 헤더 패턴 (표 감지용 - regex)
   header_patterns:
+    - "구분.*항목.*(조치)?.*수량.*단가.*(합계|금액)"  # 기안서 표준 양식
+    - "번호.*내용.*수량"  # 간소화 양식
     - "품명.*수량.*단가.*금액"
     - "품목.*개수.*금액"
     - "내역.*수량.*단가.*합계"
@@ -203,11 +237,13 @@ text_cleaning:
     - pattern: "(오전|오후)\\s?\\d{1,2}:\\d{2}"
       description: "프린트 타임스탬프 (시간만)"
 
-    # 그룹웨어 URL 패턴
+    # 그룹웨어 URL 패턴 (프린트뷰 URL 제거)
+    - pattern: "gw\\.channela-mt\\.com/.*approval_form_popup\\.php\\S*"
+      description: "그룹웨어 결재 팝업 전체 URL"
     - pattern: "gw\\.channela-mt\\.com/\\S+"
-      description: "그룹웨어 도메인 URL"
-    - pattern: "approval_form_popup\\.php\\S*"
-      description: "결재 팝업 스크립트"
+      description: "그룹웨어 도메인 URL (기타)"
+    - pattern: "http://gw\\.channela-mt\\.com\\S*"
+      description: "그룹웨어 전체 URL (http 포함)"
 
     # 페이지 번호 패턴
     - pattern: "^\\s*-\\s*\\d+\\s*-\\s*$"

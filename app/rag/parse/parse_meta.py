@@ -48,6 +48,9 @@ class MetaParser:
             "department_fields", ["기안부서", "소속", "부서"]
         )
 
+        # 작성자 Stoplist (기안자 오검출 방지)
+        self.author_stoplist = metadata_config.get("author_stoplist", [])
+
         # 카테고리 규칙 (이전 호환성 유지)
         self.category_rules = self.config.get("meta_parsing", {}).get(
             "category_rules", {}
@@ -57,8 +60,37 @@ class MetaParser:
         )
 
         logger.info(
-            f"📋 메타 파서 초기화: 날짜 우선순위 {len(self.date_priority)}개, 작성자 필드 {len(self.author_fields)}개, 카테고리 규칙 {len(self.category_rules)}개"
+            f"📋 메타 파서 초기화: 날짜 우선순위 {len(self.date_priority)}개, 작성자 필드 {len(self.author_fields)}개, Stoplist {len(self.author_stoplist)}개, 카테고리 규칙 {len(self.category_rules)}개"
         )
+
+    def _validate_author(self, author: str) -> bool:
+        """작성자 이름 검증 (한글 2~4음절 + Stoplist)
+
+        Args:
+            author: 작성자 후보 문자열
+
+        Returns:
+            검증 통과 여부
+        """
+        if not author or not author.strip():
+            return False
+
+        author = author.strip()
+
+        # Stoplist 체크
+        if author in self.author_stoplist:
+            logger.debug(f"작성자 Stoplist 제외: {author}")
+            return False
+
+        # 한글 2~4음절만 허용 (공백 없이)
+        import re
+
+        pattern = r"^[가-힣]{2,4}$"
+        if not re.match(pattern, author):
+            logger.debug(f"작성자 패턴 불일치 (한글 2~4음절 아님): {author}")
+            return False
+
+        return True
 
     def _load_config(self, config_path: str) -> Dict[str, Any]:
         """설정 파일 로드
@@ -92,19 +124,27 @@ class MetaParser:
 
         Returns:
             (display_date, date_detail)
-            - display_date: 우선순위에 따른 대표 날짜
+            - display_date: 우선순위에 따른 대표 날짜 (YYYY-MM-DD)
             - date_detail: "기안일자 / 시행일자" 형식
         """
         # 우선순위에 따라 대표 날짜 선택
         display_date = None
         for date_key in self.date_priority:
             if date_key in metadata and metadata[date_key]:
-                display_date = metadata[date_key]
+                raw_date = metadata[date_key]
+                # 날짜 정규화 (범위, 시간 제거, 형식 표준화)
+                display_date = self._normalize_date(raw_date)
                 break
 
         # 기안일자와 시행일자를 모두 표시
         draft_date = metadata.get("기안일자") or metadata.get("date")
         action_date = metadata.get("시행일자")
+
+        # 각 날짜도 정규화
+        if draft_date:
+            draft_date = self._normalize_date(draft_date)
+        if action_date:
+            action_date = self._normalize_date(action_date)
 
         if draft_date and action_date:
             date_detail = f"{draft_date} / {action_date}"
@@ -118,6 +158,62 @@ class MetaParser:
         display_date = display_date or "정보 없음"
 
         return display_date, date_detail
+
+    def _normalize_date(self, date_str: str) -> str:
+        """날짜 문자열 정규화 (YYYY-MM-DD 형식)
+
+        Args:
+            date_str: 원본 날짜 문자열
+
+        Returns:
+            정규화된 날짜 (YYYY-MM-DD) 또는 원본
+        """
+        if not date_str or not isinstance(date_str, str):
+            return date_str
+
+        import re
+        from datetime import datetime
+
+        date_str = date_str.strip()
+
+        # 1. 범위 형식 처리 (YYYY-MM-DD ~ YYYY-MM-DD → 앞 날짜 채택)
+        range_pattern = r"(\d{4}-\d{1,2}-\d{1,2})\s*~\s*\d{4}-\d{1,2}-\d{1,2}"
+        range_match = re.search(range_pattern, date_str)
+        if range_match:
+            date_str = range_match.group(1)
+
+        # 2. 시간 제거 (YYYY-MM-DD HH:MM:SS → YYYY-MM-DD)
+        date_str = re.sub(r"\s+\d{1,2}:\d{2}(:\d{2})?", "", date_str)
+
+        # 3. YY. M. D. 형식 → YYYY-MM-DD
+        # 예: "24. 10. 24" → "2024-10-24"
+        yy_pattern = r"(\d{2})\.\s*(\d{1,2})\.\s*(\d{1,2})"
+        yy_match = re.search(yy_pattern, date_str)
+        if yy_match:
+            yy, mm, dd = yy_match.groups()
+            # 2자리 연도를 4자리로 변환 (20YY로 가정)
+            yyyy = f"20{yy}"
+            return f"{yyyy}-{mm.zfill(2)}-{dd.zfill(2)}"
+
+        # 4. YYYY-M-D 또는 YYYY.M.D → YYYY-MM-DD
+        date_str = re.sub(r"(\d{4})[./](\d{1,2})[./](\d{1,2})", r"\1-\2-\3", date_str)
+
+        # 5. 패딩 (YYYY-M-D → YYYY-MM-DD)
+        padding_pattern = r"(\d{4})-(\d{1,2})-(\d{1,2})"
+        padding_match = re.search(padding_pattern, date_str)
+        if padding_match:
+            yyyy, mm, dd = padding_match.groups()
+            return f"{yyyy}-{mm.zfill(2)}-{dd.zfill(2)}"
+
+        # 6. 검증 및 반환
+        try:
+            # YYYY-MM-DD 형식 검증
+            datetime.strptime(date_str, "%Y-%m-%d")
+            return date_str
+        except ValueError:
+            # 파싱 실패 시 원본 반환
+            logger.debug(f"날짜 정규화 실패 (원본 반환): {date_str}")
+            return date_str
 
     def classify_category(
         self, title: str = "", content: str = "", filename: str = ""
@@ -193,8 +289,11 @@ class MetaParser:
         author = None
         for field in self.author_fields:
             if field in metadata and metadata[field]:
-                author = metadata[field]
-                break
+                candidate = metadata[field]
+                # 작성자 검증 (한글 2~4음절 + Stoplist)
+                if self._validate_author(candidate):
+                    author = candidate
+                    break
         author = author or metadata.get("drafter") or "정보 없음"
 
         # 부서 추출 (우선순위 순서대로)

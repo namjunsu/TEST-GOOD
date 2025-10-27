@@ -1297,31 +1297,69 @@ class RAGPipeline:
                     logger.error(f"❌ PDF 직접 추출 실패: {e}")
                     text_preview = ""
 
-            # 5줄 섹션 포맷팅
-            answer_text = f"**📄 {fname} 요약**\n\n"
+            # LLM 기반 실제 요약 생성
+            if text_preview and len(text_preview.strip()) > 100:
+                # LLM 요약 프롬프트
+                summary_prompt = f"""다음 문서의 내용을 간결하게 요약해주세요.
 
-            # 목적/배경 (text_preview 첫 120자)
-            purpose = " ".join(text_preview.split())[:120] + "…" if text_preview else "정보 없음"
-            answer_text += f"**목적/배경:** {purpose}\n\n"
+문서명: {fname}
+기안자: {drafter or '정보 없음'}
+날짜: {display_date or date or '정보 없음'}
 
-            # 주요 조치 (실제로는 추출 불가, 간단히 카테고리 기반)
-            if category:
-                answer_text += f"**주요 조치:** {category} 관련 조치\n\n"
+[문서 내용]
+{text_preview[:3000]}
+
+위 문서의 핵심 내용을 다음 형식으로 요약해주세요:
+1. 목적/배경: 이 문서가 작성된 이유와 배경
+2. 현황: 현재 상황이나 문제점
+3. 주요 내용: 핵심 내용 또는 제안 사항
+4. 결론/조치: 최종 결정사항이나 필요한 조치
+
+각 항목은 1-2문장으로 간결하게 작성해주세요."""
+
+                try:
+                    # LLM 호출
+                    llm_summary = self.generator.generate(
+                        query=summary_prompt,
+                        context="",  # 컨텍스트는 이미 프롬프트에 포함됨
+                        temperature=0.3
+                    )
+
+                    # LLM 응답 포맷팅
+                    answer_text = f"**📄 {fname}**\n\n"
+                    answer_text += llm_summary
+
+                    # 메타데이터 추가
+                    answer_text += f"\n\n---\n**📋 문서 정보**\n"
+                    answer_text += f"- 기안자: {drafter or '정보 없음'}\n"
+                    answer_text += f"- 날짜: {display_date or date or '정보 없음'}\n"
+                    if claimed_total:
+                        answer_text += f"- 금액: ₩{claimed_total:,}\n"
+
+                    logger.info(f"✓ LLM 요약 생성 성공: {len(llm_summary)}자")
+
+                except Exception as e:
+                    logger.error(f"❌ LLM 요약 실패, fallback 사용: {e}")
+                    # Fallback: 메타데이터 기반 요약
+                    answer_text = f"**📄 {fname} 요약**\n\n"
+                    purpose = " ".join(text_preview.split())[:200] + "…" if text_preview else "정보 없음"
+                    answer_text += f"**목적/배경:** {purpose}\n\n"
+                    if category:
+                        answer_text += f"**주요 조치:** {category} 관련 조치\n\n"
+                    schedule = display_date or date or "정보 없음"
+                    answer_text += f"**일정:** {schedule} (시행)\n\n"
+                    if claimed_total:
+                        answer_text += f"**금액:** ₩{claimed_total:,}\n\n"
+                    answer_text += f"**비고:** {doctype or '문서'}, 기안자: {drafter or '정보 없음'}"
             else:
-                answer_text += "**주요 조치:** 정보 없음\n\n"
-
-            # 일정 (시행일자)
-            schedule = display_date or date or "정보 없음"
-            answer_text += f"**일정:** {schedule} (시행)\n\n"
-
-            # 금액 (있을 때만)
-            if claimed_total:
-                answer_text += f"**금액:** ₩{claimed_total:,}\n\n"
-            else:
-                answer_text += "**금액:** 정보 없음\n\n"
-
-            # 비고
-            answer_text += f"**비고:** {doctype or '문서'}, 기안자: {drafter or '정보 없음'}"
+                # text_preview가 너무 짧으면 메타데이터만 표시
+                answer_text = f"**📄 {fname}**\n\n"
+                answer_text += "문서 내용을 읽을 수 없습니다.\n\n"
+                answer_text += f"**📋 문서 정보**\n"
+                answer_text += f"- 기안자: {drafter or '정보 없음'}\n"
+                answer_text += f"- 날짜: {display_date or date or '정보 없음'}\n"
+                if claimed_total:
+                    answer_text += f"- 금액: ₩{claimed_total:,}\n"
 
             # Evidence 구성 (file_path 직접 포함)
             # year 폴더 자동 감지
@@ -1348,11 +1386,13 @@ class RAGPipeline:
                 }
             }]
 
-            # 품질 방어선 로그
+            # 품질 방어선 로그 (LLM 사용 여부 정확히 표시)
+            used_llm = text_preview and len(text_preview.strip()) > 100
             logger.info({
                 "mode": "SUMMARY",
                 "files": [fname],
-                "llm": True  # SUMMARY는 LLM 사용
+                "llm": used_llm,
+                "text_length": len(text_preview) if text_preview else 0
             })
 
             return {

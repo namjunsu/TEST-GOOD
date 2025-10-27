@@ -229,7 +229,7 @@ class QuickFixRAG:
                 metrics['fallback_reason'] = 'llm_disabled'
                 metrics['total_ms'] = int((time.time() - start_time) * 1000)
                 self._log_metrics(metrics)
-                fallback_msg = "💡 **LLM 비활성**: 검색 결과만 표시합니다 (요약 미제공)\n\n"
+                fallback_msg = "🔎 **검색 결과만 표시했습니다**. 문서를 하나 선택하면 '요약'을 생성할 수 있어요.\n\n"
                 return fallback_msg + self._format_search_results(query, search_results)
 
         except Exception as e:
@@ -276,7 +276,7 @@ class QuickFixRAG:
 
         except Exception as e:
             logger.error(f"❌ LLM 요약 실패: {e}, 검색 결과로 대체")
-            fallback_msg = "⚠️ **LLM 요약 실패**: 검색 결과만 표시합니다\n\n"
+            fallback_msg = "⚠️ **요약 생성 실패**: 검색 결과만 표시합니다. 문서를 선택하면 다시 시도할 수 있어요.\n\n"
             return fallback_msg + self._format_search_results(query, search_results)
 
     def _format_no_results_message(self, query: str) -> str:

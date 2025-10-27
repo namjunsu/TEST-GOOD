@@ -1262,21 +1262,43 @@ class RAGPipeline:
             result = cursor.fetchone()
             conn.close()
 
+            # 🔍 퍼지 매칭 Fallback (정확 매칭 실패 시)
             if not result:
-                if filename_match:
-                    search_term = filename
+                from modules.metadata_db import MetadataDB
+
+                search_term = filename if filename_match else keywords
+                logger.info(f"🔍 퍼지 매칭 시도: {search_term}")
+
+                # 임시 DB 연결로 퍼지 검색
+                db = MetadataDB()
+                fuzzy_doc = db.get_by_filename_fuzzy(search_term)
+                db.close()
+
+                if fuzzy_doc:
+                    logger.info(f"✅ 퍼지 매칭 성공: {fuzzy_doc.get('filename')}")
+                    # result 튜플 재구성
+                    result = (
+                        fuzzy_doc.get('filename'),
+                        fuzzy_doc.get('drafter'),
+                        fuzzy_doc.get('date'),
+                        fuzzy_doc.get('display_date'),
+                        fuzzy_doc.get('category'),
+                        fuzzy_doc.get('text_preview'),
+                        fuzzy_doc.get('claimed_total'),
+                        fuzzy_doc.get('doctype', 'proposal')
+                    )
                 else:
-                    search_term = keywords
-                return {
-                    "text": f"'{search_term}' 관련 문서를 찾을 수 없습니다.",
-                    "citations": [],
-                    "evidence": [],
-                    "status": {
-                        "retrieved_count": 0,
-                        "selected_count": 0,
-                        "found": False
+                    logger.warning(f"❌ 퍼지 매칭 실패: {search_term}")
+                    return {
+                        "text": f"'{search_term}' 관련 문서를 찾을 수 없습니다.",
+                        "citations": [],
+                        "evidence": [],
+                        "status": {
+                            "retrieved_count": 0,
+                            "selected_count": 0,
+                            "found": False
+                        }
                     }
-                }
 
             fname, drafter, date, display_date, category, text_preview, claimed_total, doctype = result
 

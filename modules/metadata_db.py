@@ -314,6 +314,36 @@ class MetadataDB:
         row = cursor.fetchone()
         return dict(row) if row else None
 
+    def get_by_filename_fuzzy(self, name: str) -> Optional[Dict[str, Any]]:
+        """퍼지 매칭으로 파일명 검색 (언더스코어/공백/특수기호 무시)
+
+        Args:
+            name: 검색할 파일명 (일부만 입력 가능)
+
+        Returns:
+            가장 유사한 문서 딕셔너리 또는 None
+        """
+        def slug(s):
+            """문자열 정규화: 소문자 + 특수기호 제거"""
+            s = s.lower().replace("&", "and")
+            return re.sub(r"[^0-9a-z가-힣]", "", s)
+
+        s = slug(name)
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            SELECT *,
+              ABS(LENGTH(filename) - ?) AS len_diff
+            FROM documents
+            WHERE REPLACE(REPLACE(LOWER(filename), '_',''), ' ','') LIKE ?
+            ORDER BY len_diff ASC
+            LIMIT 1
+            """,
+            (len(name), f"%{s}%"),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
     def update_document(self, filename: str, **kwargs):
         """문서 메타데이터 간편 업데이트 (perfect_rag.py 호환용)"""
         # 먼저 문서 찾기

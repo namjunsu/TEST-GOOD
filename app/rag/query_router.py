@@ -16,8 +16,30 @@ import yaml
 from typing import Dict, Any
 
 from app.core.logging import get_logger
+from typing import List, Tuple, Optional
 
 logger = get_logger(__name__)
+
+
+# 헬퍼 함수: 파일명 정규화 (공백/특수문자 제거)
+def _norm(s: str) -> str:
+    """문자열 정규화: 소문자 + 공백/특수문자 제거"""
+    s = s.lower()
+    s = s.replace("&", "and")
+    s = re.sub(r"[\s_·,:()\\[\\\]-]+", "", s)
+    return s
+
+
+# 헬퍼 함수: 파일명 유사도 스코어
+def _score(qn: str, tn: str) -> float:
+    """부분 포함 + 길이 근접 혼합 스코어 (0~1)"""
+    if qn in tn or tn in qn:
+        base = 0.8
+    else:
+        base = 0.0
+    diff = abs(len(qn) - len(tn))
+    length_bonus = max(0.0, 0.4 - diff * 0.01)
+    return min(1.0, base + length_bonus)
 
 
 class QueryMode(Enum):
@@ -219,3 +241,46 @@ class QueryRouter:
             reason_parts.append("default_qa")
 
         return "|".join(reason_parts)
+
+    def classify_mode_with_hits(
+        self,
+        query: str,
+        hits: Optional[List[Dict[str, Any]]] = None
+    ) -> Tuple[QueryMode, Optional[List[Dict[str, Any]]]]:
+        """검색 결과(hits)를 고려한 모드 분류 + 단일 후보 확정
+
+        Args:
+            query: 사용자 질의
+            hits: 검색 결과 리스트 (filename, title 등 포함)
+
+        Returns:
+            (QueryMode, filtered_hits or None)
+        """
+        q = query.strip()
+
+        # 요약 의도 감지
+        wants_summary = self.SUMMARY_INTENT_PATTERN.search(q) is not None
+
+        if wants_summary and hits:
+            # 쿼리 정규화
+            qn = _norm(q)
+
+            # 검색 결과를 스코어로 정렬
+            ranked = sorted(
+                hits,
+                key=lambda h: _score(qn, _norm(h.get("title") or h.get("filename", ""))),
+                reverse=True
+            )[:2]  # 상위 2개만
+
+            if ranked:
+                top = ranked[0]
+                top_score = _score(qn, _norm(top.get("title") or top.get("filename", "")))
+
+                # 단일 후보 확정 조건: 1개만 있거나, 상위 스코어가 0.66 이상
+                if len(ranked) == 1 or top_score >= 0.66:
+                    logger.info(f"✅ 요약 의도 감지 + 단일 후보 확정 (score={top_score:.2f}) → SUMMARY 모드")
+                    return QueryMode.SUMMARY, [top]
+
+        # 기본 분류 (검색 결과 무관)
+        mode = self.classify_mode(query)
+        return mode, hits

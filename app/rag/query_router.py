@@ -25,10 +25,17 @@ class QueryMode(Enum):
 
     QA = "qa"  # 질답 모드 (RAG 파이프라인)
     PREVIEW = "preview"  # 문서 미리보기 모드 (파일 전문)
+    COST_SUM = "cost_sum"  # 비용 합계 직접 조회 모드
 
 
 class QueryRouter:
     """쿼리 모드 라우터"""
+
+    # 비용 질의 패턴 (합계/총액/금액 얼마 질의)
+    COST_INTENT_PATTERN = re.compile(
+        r"(합계|총액|총계|금액|비용).*(얼마|알려줘|확인|인지)|얼마였지|얼마였나요|얼마야",
+        re.IGNORECASE,
+    )
 
     def __init__(self, config_path: str = "config/document_processing.yaml"):
         """초기화
@@ -82,11 +89,16 @@ class QueryRouter:
             query: 사용자 질의
 
         Returns:
-            QueryMode.QA 또는 QueryMode.PREVIEW
+            QueryMode.COST_SUM, QueryMode.QA, 또는 QueryMode.PREVIEW
         """
         query_lower = query.lower()
 
-        # 1. Q&A 의도 키워드 체크 (최우선)
+        # 0. 비용 질의 체크 (최우선)
+        if self.COST_INTENT_PATTERN.search(query):
+            logger.info("🎯 모드 결정: COST_SUM (비용 질의 감지)")
+            return QueryMode.COST_SUM
+
+        # 1. Q&A 의도 키워드 체크
         has_qa_intent = any(keyword in query_lower for keyword in self.qa_keywords)
 
         # 2. 파일명 패턴 체크
@@ -131,6 +143,7 @@ class QueryRouter:
         """
         query_lower = query.lower()
 
+        has_cost_intent = self.COST_INTENT_PATTERN.search(query) is not None
         has_qa_intent = any(keyword in query_lower for keyword in self.qa_keywords)
         has_filename = (
             re.search(self.filename_pattern, query, re.IGNORECASE) is not None
@@ -145,6 +158,9 @@ class QueryRouter:
         ]
 
         reason_parts = []
+
+        if has_cost_intent:
+            reason_parts.append("cost_intent")
 
         if has_filename:
             reason_parts.append("filename_detected")

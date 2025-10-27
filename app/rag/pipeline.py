@@ -411,6 +411,10 @@ class RAGPipeline:
                 f"🔀 라우팅 결과: mode={query_mode.value}, reason={router_reason}"
             )
 
+            # 💰 COST_SUM 모드: 비용 합계 직접 조회
+            if query_mode == QueryMode.COST_SUM:
+                return self._answer_cost_sum(actual_query)
+
             # 🔍 디버깅: 실제 pattern matching 대상 로깅
             logger.info(f"🔍 Pattern matching 대상 쿼리: '{actual_query[:100]}'")
 
@@ -740,6 +744,104 @@ class RAGPipeline:
         """
         result = self.answer(query)
         return result["text"]
+
+    def _answer_cost_sum(self, query: str) -> dict:
+        """비용 합계 직접 조회 (DB claimed_total 활용)
+
+        Args:
+            query: 사용자 질의 (예: "채널에이 중계차 보수 합계 얼마였지?")
+
+        Returns:
+            dict: 표준 응답 구조 (text, citations, evidence, status)
+        """
+        try:
+            # 1. 검색으로 후보 문서 찾기
+            search_results = self.retriever.search(query, top_k=3)
+
+            if not search_results:
+                logger.warning(f"비용 질의 검색 실패: {query}")
+                return {
+                    "text": "관련 문서를 찾을 수 없습니다.",
+                    "citations": [],
+                    "evidence": [],
+                    "status": {
+                        "retrieved_count": 0,
+                        "selected_count": 0,
+                        "found": False
+                    }
+                }
+
+            # 2. DB에서 claimed_total 조회
+            from modules.metadata_db import MetadataDB
+            db = MetadataDB()
+
+            for result in search_results:
+                filename = result.get("meta", {}).get("filename") or result.get("doc_id", "")
+                if not filename:
+                    continue
+
+                doc = db.get_by_filename(filename)
+                if doc and doc.get("claimed_total"):
+                    claimed_total = doc["claimed_total"]
+
+                    # 3. 답변 포맷팅
+                    answer_text = f"**💰 비용 합계**\n\n"
+                    answer_text += f"합계: **₩{claimed_total:,}**\n\n"
+                    answer_text += f"📄 출처: {filename}\n"
+                    answer_text += f"📅 날짜: {doc.get('display_date') or doc.get('date') or '정보 없음'}\n"
+                    answer_text += f"✍️ 기안자: {doc.get('drafter') or '정보 없음'}"
+
+                    # Evidence 구성
+                    evidence = [{
+                        "doc_id": filename,
+                        "page": 1,
+                        "snippet": f"비용 합계: ₩{claimed_total:,}",
+                        "meta": {
+                            "filename": filename,
+                            "drafter": doc.get("drafter"),
+                            "date": doc.get("display_date") or doc.get("date"),
+                            "claimed_total": claimed_total
+                        }
+                    }]
+
+                    logger.info(f"💰 비용 질의 성공: {filename} → ₩{claimed_total:,}")
+
+                    return {
+                        "text": answer_text,
+                        "citations": evidence,
+                        "evidence": evidence,
+                        "status": {
+                            "retrieved_count": len(search_results),
+                            "selected_count": 1,
+                            "found": True
+                        }
+                    }
+
+            # claimed_total 없는 경우
+            logger.warning(f"검색된 문서에 비용 정보 없음: {[r.get('doc_id') for r in search_results]}")
+            return {
+                "text": "검색된 문서에 비용 합계 정보가 없습니다.",
+                "citations": [],
+                "evidence": [],
+                "status": {
+                    "retrieved_count": len(search_results),
+                    "selected_count": 0,
+                    "found": False
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"❌ 비용 질의 처리 실패: {e}", exc_info=True)
+            return {
+                "text": f"비용 정보 조회 중 오류가 발생했습니다: {str(e)}",
+                "citations": [],
+                "evidence": [],
+                "status": {
+                    "retrieved_count": 0,
+                    "selected_count": 0,
+                    "found": False
+                }
+            }
 
     def warmup(self) -> None:
         """워밍업: LLM + 인덱스 사전 로딩

@@ -266,6 +266,22 @@ class MetadataDB:
         row = cursor.fetchone()
         return dict(row) if row else None
 
+    def get_by_filename(self, filename: str) -> Optional[Dict[str, Any]]:
+        """파일명으로 문서 조회 (claimed_total 포함, 대소문자 무시)
+
+        Args:
+            filename: 파일명 (확장자 포함 가능)
+
+        Returns:
+            문서 딕셔너리 (claimed_total 포함) 또는 None
+        """
+        cursor = self.conn.execute(
+            "SELECT * FROM documents WHERE filename = ? COLLATE NOCASE LIMIT 1",
+            (filename,)
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
     def update_document(self, filename: str, **kwargs):
         """문서 메타데이터 간편 업데이트 (perfect_rag.py 호환용)"""
         # 먼저 문서 찾기

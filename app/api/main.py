@@ -16,6 +16,10 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
+
 app = FastAPI(
     title="AI-CHAT API",
     description="RAG 시스템 백엔드 API",

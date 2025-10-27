@@ -11,6 +11,7 @@ import base64
 import json
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
@@ -155,10 +156,14 @@ def preview_file(ref: str = Query(..., description="base64 encoded file path")):
         log_file_access(file_path.name, "preview", "")
 
         # 파일 반환 (inline 미리보기)
+        # RFC 5987: filename*=UTF-8''encoded_name for non-ASCII filenames
+        encoded_filename = quote(file_path.name)
         return FileResponse(
             path=str(resolved_path),
             media_type="application/pdf",
-            headers={"Content-Disposition": f"inline; filename={file_path.name}"}
+            headers={
+                "Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}"
+            }
         )
 
     except HTTPException:
@@ -214,10 +219,14 @@ def download_file(ref: str = Query(..., description="base64 encoded file path"))
         log_file_access(file_path.name, "download", "")
 
         # 파일 반환 (attachment 다운로드)
+        # RFC 5987: filename*=UTF-8''encoded_name for non-ASCII filenames
+        encoded_filename = quote(file_path.name)
         return FileResponse(
             path=str(resolved_path),
             media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename={file_path.name}"}
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+            }
         )
 
     except HTTPException:

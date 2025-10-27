@@ -242,13 +242,45 @@ class DocumentIngester:
             # 6. 메타데이터 파싱
             # 간단한 메타 추출 (실제로는 PDF 메타데이터를 더 상세히 파싱해야 함)
             from modules.metadata_extractor import MetadataExtractor
+            import re
 
             extractor = MetadataExtractor()
             extracted_meta = extractor.extract_all(raw_text, pdf_path.name)
 
+            # 한글 필드명 직접 추출 (기안서 프린트뷰 전용)
+            korean_fields = {}
+
+            # 시행일자 추출
+            action_date_match = re.search(r"시행일자\s+(\d{4}[-./]\d{1,2}[-./]\d{1,2}(?:\s*~\s*\d{4}[-./]\d{1,2}[-./]\d{1,2})?)", raw_text)
+            if action_date_match:
+                korean_fields["시행일자"] = action_date_match.group(1)
+
+            # 기안일자 추출
+            draft_date_match = re.search(r"기안일자\s+(\d{4}[-./]\d{1,2}[-./]\d{1,2}(?:\s+\d{1,2}:\d{2})?)", raw_text)
+            if draft_date_match:
+                korean_fields["기안일자"] = draft_date_match.group(1)
+
+            # 작성일자 추출
+            created_date_match = re.search(r"작성일자\s+(\d{4}[-./]\d{1,2}[-./]\d{1,2})", raw_text)
+            if created_date_match:
+                korean_fields["작성일자"] = created_date_match.group(1)
+
+            # 기안자 추출
+            drafter_match = re.search(r"기안자\s+([가-힣]{2,4})", raw_text)
+            if drafter_match:
+                korean_fields["기안자"] = drafter_match.group(1)
+
+            # 기안부서 추출
+            dept_match = re.search(r"기안부서\s+([^\n]+)", raw_text)
+            if dept_match:
+                korean_fields["기안부서"] = dept_match.group(1).strip()
+
+            # 한글 필드와 영문 필드 병합
+            merged_meta = {**extracted_meta, **korean_fields}
+
             # 날짜/작성자/부서 파싱
             parsed_meta = self.meta_parser.parse(
-                extracted_meta, title=pdf_path.stem, content=cleaned_text[:1000]
+                merged_meta, title=pdf_path.stem, content=cleaned_text[:1000]
             )
             result["actions"].append("meta_parsed")
 
@@ -270,7 +302,7 @@ class DocumentIngester:
             # 9. 메타DB 업서트
             if not self.dry_run and self.db:
                 doc_metadata = {
-                    "path": str(pdf_path.relative_to(Path.cwd())),
+                    "path": str(pdf_path.resolve().relative_to(Path.cwd())),
                     "filename": pdf_path.name,
                     "title": parsed_meta.get("title", pdf_path.stem),
                     "date": parsed_meta.get("display_date", ""),

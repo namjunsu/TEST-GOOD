@@ -1184,16 +1184,22 @@ class RAGPipeline:
             }
 
     def _answer_summary(self, query: str) -> dict:
-        """내용 요약 (5줄 섹션, 가짜 정보 생성 금지)
+        """내용 요약 (JSON 구조화 + doctype별 맞춤 프롬프트)
 
         Args:
             query: 사용자 질의 (예: "[파일명].pdf 내용 요약해줘" 또는 "미러클랩 카메라 삼각대 기술검토서 이문서 내용 요약헤줘")
 
         Returns:
-            dict: 표준 응답 구조 (5줄 섹션 요약)
+            dict: 표준 응답 구조 (JSON 기반 요약)
         """
         import re
         import sqlite3
+        import pdfplumber
+        from app.rag.summary_templates import (
+            get_summary_prompt,
+            parse_summary_json,
+            format_summary_output
+        )
 
         try:
             # 1. .pdf 확장자 포함 파일명 추출 시도
@@ -1274,85 +1280,93 @@ class RAGPipeline:
 
             fname, drafter, date, display_date, category, text_preview, claimed_total, doctype = result
 
-            # text_preview가 비어있으면 PDF에서 직접 추출 (fallback)
-            if not text_preview or len(text_preview.strip()) == 0:
-                logger.warning(f"⚠️ text_preview 비어있음, PDF 직접 추출 시도: {fname}")
-                try:
-                    year_match = re.search(r'(\d{4})-', fname)
-                    if year_match:
-                        year = year_match.group(1)
-                        pdf_path = f"docs/year_{year}/{fname}"
-                    else:
-                        pdf_path = f"docs/{fname}"
-
-                    # pdfplumber로 추출
-                    import pdfplumber
-                    with pdfplumber.open(pdf_path) as pdf:
-                        extracted_text = ""
-                        for page in pdf.pages[:5]:  # 최대 5페이지만
-                            extracted_text += (page.extract_text() or "")
-                        text_preview = extracted_text[:2000]  # 최대 2000자
-                        logger.info(f"✓ PDF 직접 추출 성공: {len(text_preview)}자")
-                except Exception as e:
-                    logger.error(f"❌ PDF 직접 추출 실패: {e}")
-                    text_preview = ""
-
-            # LLM 기반 실제 요약 생성
-            if text_preview and len(text_preview.strip()) > 100:
-                # LLM 요약 프롬프트
-                summary_prompt = f"""다음 문서의 내용을 간결하게 요약해주세요.
-
-문서명: {fname}
-기안자: {drafter or '정보 없음'}
-날짜: {display_date or date or '정보 없음'}
-
-[문서 내용]
-{text_preview[:3000]}
-
-위 문서의 핵심 내용을 다음 형식으로 요약해주세요:
-1. 목적/배경: 이 문서가 작성된 이유와 배경
-2. 현황: 현재 상황이나 문제점
-3. 주요 내용: 핵심 내용 또는 제안 사항
-4. 결론/조치: 최종 결정사항이나 필요한 조치
-
-각 항목은 1-2문장으로 간결하게 작성해주세요."""
-
-                try:
-                    # LLM 호출
-                    llm_summary = self.generator.generate(
-                        query=summary_prompt,
-                        context="",  # 컨텍스트는 이미 프롬프트에 포함됨
-                        temperature=0.3
-                    )
-
-                    # LLM 응답 포맷팅
-                    answer_text = f"**📄 {fname}**\n\n"
-                    answer_text += llm_summary
-
-                    # 메타데이터 추가
-                    answer_text += f"\n\n---\n**📋 문서 정보**\n"
-                    answer_text += f"- 기안자: {drafter or '정보 없음'}\n"
-                    answer_text += f"- 날짜: {display_date or date or '정보 없음'}\n"
-                    if claimed_total:
-                        answer_text += f"- 금액: ₩{claimed_total:,}\n"
-
-                    logger.info(f"✓ LLM 요약 생성 성공: {len(llm_summary)}자")
-
-                except Exception as e:
-                    logger.error(f"❌ LLM 요약 실패, fallback 사용: {e}")
-                    # Fallback: 메타데이터 기반 요약
-                    answer_text = f"**📄 {fname} 요약**\n\n"
-                    purpose = " ".join(text_preview.split())[:200] + "…" if text_preview else "정보 없음"
-                    answer_text += f"**목적/배경:** {purpose}\n\n"
-                    if category:
-                        answer_text += f"**주요 조치:** {category} 관련 조치\n\n"
-                    schedule = display_date or date or "정보 없음"
-                    answer_text += f"**일정:** {schedule} (시행)\n\n"
-                    if claimed_total:
-                        answer_text += f"**금액:** ₩{claimed_total:,}\n\n"
-                    answer_text += f"**비고:** {doctype or '문서'}, 기안자: {drafter or '정보 없음'}"
+            # PDF 경로 확인
+            year_match = re.search(r'(\d{4})-', fname)
+            if year_match:
+                year = year_match.group(1)
+                pdf_path = f"docs/year_{year}/{fname}"
             else:
-                # text_preview가 너무 짧으면 메타데이터만 표시
+                pdf_path = f"docs/{fname}"
+
+            # 🔥 단계 1: RAG 검색으로 Top-5 청크 가져오기
+            logger.info(f"🔍 RAG 검색 시작: {fname}")
+            rag_chunks_text = ""
+            try:
+                # 파일명에서 핵심 키워드 추출
+                search_keywords = re.sub(r'^\d{4}-\d{2}-\d{2}_', '', fname)  # 날짜 제거
+                search_keywords = re.sub(r'\.pdf$', '', search_keywords, flags=re.IGNORECASE)  # 확장자 제거
+                search_keywords = search_keywords.replace('_', ' ')  # 언더스코어를 공백으로
+
+                # RAG 검색 실행
+                search_results = self.retriever.search(search_keywords, top_k=5)
+
+                # 청크 텍스트 수집
+                for i, chunk in enumerate(search_results[:5], 1):
+                    chunk_text = chunk.get('snippet') or chunk.get('text') or chunk.get('content') or ""
+                    if chunk_text:
+                        rag_chunks_text += f"[청크 {i}]\n{chunk_text}\n\n"
+
+                logger.info(f"✓ RAG 청크 수집: {len(search_results)}개, {len(rag_chunks_text)}자")
+            except Exception as e:
+                logger.warning(f"⚠️ RAG 검색 실패: {e}")
+                rag_chunks_text = ""
+
+            # 🔥 단계 2: PDF 마지막 2쪽 읽기 (결론 부분)
+            logger.info(f"📄 PDF 마지막 페이지 읽기 시작: {pdf_path}")
+            pdf_ending_text = ""
+            try:
+                with pdfplumber.open(pdf_path) as pdf:
+                    total_pages = len(pdf.pages)
+                    # 마지막 2쪽 읽기
+                    start_page = max(0, total_pages - 2)
+                    for page_num in range(start_page, total_pages):
+                        page_text = pdf.pages[page_num].extract_text() or ""
+                        pdf_ending_text += f"[페이지 {page_num+1}]\n{page_text}\n\n"
+
+                    logger.info(f"✓ PDF 마지막 페이지 추출 성공: {len(pdf_ending_text)}자")
+            except Exception as e:
+                logger.warning(f"⚠️ PDF 마지막 페이지 읽기 실패: {e}")
+                pdf_ending_text = ""
+
+            # 🔥 단계 3: 컨텍스트 합치기 (우선순위: PDF 끝부분 > RAG 청크)
+            # 최대 10,000자 (LLM 부담 고려)
+            context_text = ""
+
+            # 1) PDF 마지막 부분 (결론이 보통 여기 있음)
+            if pdf_ending_text:
+                context_text += "=== 문서 결론 부분 ===\n" + pdf_ending_text
+
+            # 2) RAG 검색 청크
+            if rag_chunks_text:
+                context_text += "\n=== 문서 주요 내용 ===\n" + rag_chunks_text
+
+            # 3) text_preview fallback (DB에 저장된 미리보기)
+            if not context_text and text_preview:
+                context_text = "=== 문서 내용 ===\n" + text_preview
+
+            # 4) 정말 아무것도 없으면 PDF 전체 시도
+            if not context_text:
+                logger.warning(f"⚠️ 컨텍스트 없음, PDF 전체 추출 시도")
+                try:
+                    with pdfplumber.open(pdf_path) as pdf:
+                        full_text = ""
+                        for page in pdf.pages[:5]:  # 최대 5페이지
+                            full_text += (page.extract_text() or "")
+                        context_text = full_text
+                except Exception as e:
+                    logger.error(f"❌ PDF 전체 추출 실패: {e}")
+                    context_text = ""
+
+            # 길이 제한 (최대 10,000자)
+            if len(context_text) > 10000:
+                context_text = context_text[:10000]
+                logger.info(f"⚠️ 컨텍스트 길이 제한 (10,000자로 축소)")
+
+            logger.info(f"📋 최종 컨텍스트 길이: {len(context_text)}자")
+
+            # 🔥 단계 4: doctype별 맞춤 프롬프트 생성
+            if not context_text or len(context_text.strip()) < 100:
+                # 컨텍스트 없으면 메타데이터만 표시
                 answer_text = f"**📄 {fname}**\n\n"
                 answer_text += "문서 내용을 읽을 수 없습니다.\n\n"
                 answer_text += f"**📋 문서 정보**\n"
@@ -1360,6 +1374,82 @@ class RAGPipeline:
                 answer_text += f"- 날짜: {display_date or date or '정보 없음'}\n"
                 if claimed_total:
                     answer_text += f"- 금액: ₩{claimed_total:,}\n"
+
+            else:
+                # doctype별 맞춤 프롬프트 생성
+                system_prompt, user_prompt = get_summary_prompt(
+                    doctype=doctype or "기본",
+                    filename=fname,
+                    display_date=display_date or date or "정보 없음",
+                    claimed_total=claimed_total,
+                    context_text=context_text
+                )
+
+                logger.info(f"📝 프롬프트 생성 완료 (doctype: {doctype})")
+
+                # 🔥 단계 5: LLM 호출 (JSON 응답 요청)
+                max_retries = 2
+                parsed_json = None
+
+                for attempt in range(1, max_retries + 1):
+                    try:
+                        logger.info(f"🤖 LLM 호출 시도 {attempt}/{max_retries}")
+
+                        # LLM 호출
+                        llm_response = self.generator.generate(
+                            query=user_prompt,
+                            context="",  # 프롬프트에 이미 포함됨
+                            temperature=0.2  # 낮은 temperature로 일관성 향상
+                        )
+
+                        logger.info(f"✓ LLM 응답 수신: {len(llm_response)}자")
+
+                        # JSON 파싱 시도
+                        parsed_json = parse_summary_json(llm_response)
+
+                        if parsed_json:
+                            logger.info(f"✓ JSON 파싱 성공 (시도 {attempt}회)")
+                            break
+                        else:
+                            logger.warning(f"⚠️ JSON 파싱 실패 (시도 {attempt}회), 재시도...")
+                            if attempt < max_retries:
+                                # 재시도 시 리마인드 추가
+                                user_prompt += "\n\n**중요**: 반드시 JSON만 반환하세요. 다른 설명이나 마크다운 블록 없이 순수 JSON 객체만 출력하세요."
+
+                    except Exception as e:
+                        logger.error(f"❌ LLM 호출 실패 (시도 {attempt}회): {e}")
+                        if attempt >= max_retries:
+                            break
+
+                # 🔥 단계 6: 출력 포맷팅
+                if parsed_json:
+                    # JSON 기반 포맷팅
+                    answer_text = format_summary_output(
+                        parsed_json=parsed_json,
+                        doctype=doctype or "기본",
+                        filename=fname,
+                        drafter=drafter,
+                        display_date=display_date or date,
+                        claimed_total=claimed_total
+                    )
+                    logger.info("✓ 포맷팅된 요약 생성 완료")
+
+                else:
+                    # Fallback: 원본 LLM 응답 그대로 사용
+                    logger.warning("⚠️ JSON 파싱 실패, 원본 LLM 응답 사용")
+                    answer_text = f"**📄 {fname}**\n\n"
+
+                    if 'llm_response' in locals() and llm_response:
+                        answer_text += llm_response
+                    else:
+                        answer_text += "요약 생성에 실패했습니다.\n\n"
+
+                    # 메타데이터 추가
+                    answer_text += f"\n\n---\n**📋 문서 정보**\n"
+                    answer_text += f"- 기안자: {drafter or '정보 없음'}\n"
+                    answer_text += f"- 날짜: {display_date or date or '정보 없음'}\n"
+                    if claimed_total:
+                        answer_text += f"- 금액: ₩{claimed_total:,}\n"
 
             # Evidence 구성 (file_path 직접 포함)
             # year 폴더 자동 감지

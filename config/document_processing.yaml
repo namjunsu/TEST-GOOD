@@ -4,18 +4,21 @@
 # doctype 분류 활성화
 enable_doctype_classification: true
 
-# doctype별 처리 설정
+# doctype별 처리 설정 (코퍼스 기반 보정 2025-10-27)
 doctype:
   # 기안서 (기본 지원)
   proposal:
     enabled: true
     keywords:
       - "기안서"
+      - "장비구매/수리"
       - "장비구매"
       - "장비수리"
       - "기안자"
       - "시행일자"
       - "품의서"
+      - "구매 기안"
+      - "수리 기안"
     priority: 1
 
   # 보고서
@@ -29,6 +32,8 @@ doctype:
       - "검토의견"
       - "장표"
       - "그림"
+      - "분석결과"
+      - "종합의견"
     priority: 2
 
   # 검토서
@@ -37,10 +42,13 @@ doctype:
     keywords:
       - "기술검토서"
       - "검토서"
+      - "검토의 건"
       - "검토 의견"
       - "비교표"
+      - "비교검토"
       - "대안"
       - "평가"
+      - "적합성"
     priority: 3
 
   # 회의록
@@ -54,7 +62,19 @@ doctype:
       - "To-Do"
       - "Action Item"
       - "조치사항"
+      - "협의내용"
     priority: 4
+
+  # 폐기/처분 문서 (실측 추가)
+  disposal:
+    enabled: true
+    keywords:
+      - "폐기"
+      - "불용"
+      - "처분"
+      - "폐기 요청"
+      - "불용장비"
+    priority: 5
 
 # 문서 인덱싱 설정
 ingestion:
@@ -119,19 +139,68 @@ summary:
   # 최대 길이
   max_length: 2000
 
+# 표 파싱 설정 (비용표 등)
+table_parsing:
+  # 비용표 헤더 별칭 (코퍼스 실측)
+  cost_table_headers:
+    item_aliases:
+      - "품명"
+      - "품목"
+      - "내역"
+      - "구매품목"
+      - "수리항목"
+    quantity_aliases:
+      - "수량"
+      - "개수"
+      - "ea"
+      - "EA"
+    unit_price_aliases:
+      - "단가"
+      - "금액"
+      - "가격"
+    total_aliases:
+      - "합계"
+      - "총계"
+      - "금액합계"
+      - "총액"
+      - "소계"
+    vat_aliases:
+      - "VAT"
+      - "부가세"
+      - "부가가치세"
+
+  # 숫자 정규화 허용 오차
+  sum_tolerance: 1  # ±1원 허용 (반올림 오차)
+
 # 텍스트 클리닝 설정 (TextCleaner용)
 text_cleaning:
-  # 노이즈 패턴 (정규식)
+  # 노이즈 패턴 (정규식) - 코퍼스 기반 보정 (2025-10-27)
   noise_patterns:
-    # 타임스탬프 패턴
+    # 타임스탬프 패턴 (확장: 날짜.시간 형식 포함)
+    - pattern: "\\b\\d{1,2}\\.\\s*\\d{1,2}\\.\\s*\\d{1,2}\\.\\s*(오전|오후)\\s*\\d{1,2}:\\d{2}\\b"
+      description: "프린트 타임스탬프 (날짜 포함)"
     - pattern: "(오전|오후)\\s?\\d{1,2}:\\d{2}"
-      description: "프린트 타임스탬프"
-    # URL 패턴
-    - pattern: "(approval_form_popup\\.php\\S*|gw\\.channela-mt\\.com\\S*)"
-      description: "프린트뷰 URL"
+      description: "프린트 타임스탬프 (시간만)"
+
+    # 그룹웨어 URL 패턴
+    - pattern: "gw\\.channela-mt\\.com/\\S+"
+      description: "그룹웨어 도메인 URL"
+    - pattern: "approval_form_popup\\.php\\S*"
+      description: "결재 팝업 스크립트"
+
     # 페이지 번호 패턴
     - pattern: "^\\s*-\\s*\\d+\\s*-\\s*$"
       description: "페이지 번호"
+      multiline: true
+
+    # 반복 헤더 제거 (코퍼스 실측)
+    - pattern: "^(장비구매/수리\\s*기안서|기안서)\\s*$"
+      description: "반복되는 문서 제목"
+      multiline: true
+
+    # 섹션 앵커 (단독 라인으로 나타나는 경우 제거)
+    - pattern: "^(개요|내용|신청수량|수령인|비고|수리\\s*내용|발생\\s*비용|구매\\s*내용|비교검토|기술\\s*검토|별도\\s*첨부)\\s*$"
+      description: "단독 섹션 앵커"
       multiline: true
 
 # 폴더 경로 설정

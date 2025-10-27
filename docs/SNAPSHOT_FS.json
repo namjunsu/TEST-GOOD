@@ -1,0 +1,26 @@
+{
+  "generated_at": "2025-10-27",
+  "total_pdfs_found": 748,
+  "compliant_filenames": 747,
+  "non_compliant_filenames": 1,
+  "compliance_rate": "99.9%",
+  "folder_distribution": {
+    "year_2017": 81,
+    "year_2022": 37,
+    "year_2016": 29,
+    "year_2020": 61,
+    "year_2023": 33,
+    "year_2015": 25,
+    "year_2019": 83,
+    "year_2021": 69,
+    "year_2024": 21,
+    "broken_pdfs": 268,
+    "year_2025": 20,
+    "year_2014": 9,
+    "year_2018": 12
+  },
+  "non_compliant_samples": [
+    "docs/year_2020/2020-06-15데스크라이트_대체_장비_구매_건.pdf"
+  ],
+  "filename_pattern": "YYYY-MM-DD_제목.pdf"
+}

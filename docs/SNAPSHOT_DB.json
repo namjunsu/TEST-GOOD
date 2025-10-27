@@ -1,0 +1,80 @@
+{
+  "generated_at": "2025-10-27",
+  "total_documents": 812,
+  "doctype_distribution": {
+    "proposal": 812
+  },
+  "year_distribution": {
+    "2014": 15,
+    "2015": 44,
+    "2016": 59,
+    "2017": 170,
+    "2018": 17,
+    "2019": 152,
+    "2020": 116,
+    "2021": 105,
+    "2022": 42,
+    "2023": 36,
+    "2024": 28,
+    "2025": 28
+  },
+  "unknown_doctype_samples": [],
+  "bad_filenames_count": 0,
+  "bad_filenames_samples": [],
+  "duplicate_groups": 268,
+  "duplicate_samples": {
+    "2014_07_02_tv_upack용_bnc케이블_구매.pdf": 2,
+    "2014_07_02_헬리캠_구매_기안서.pdf": 2,
+    "2014_11_20_인터럼용_밧데리_2개_구매_요첨.pdf": 2,
+    "2014_12_19_12월_장비구매기안서_명상제작팀.pdf": 2,
+    "2014_12_30_상암동_ddmc_조명_소모품_신청서.pdf": 2
+  },
+  "short_snippets_count": 25,
+  "short_snippets_samples": [
+    {
+      "filename": "2022-12-21_티비로직_월모니터_고장_수리_검토의_건.pdf",
+      "length": 0
+    },
+    {
+      "filename": "2025-01-09_광화문_스튜디오_모니터_&_스탠드_교체_검토서.pdf",
+      "length": 0
+    },
+    {
+      "filename": "2025-07-17_미러클랩_카메라_삼각대_기술검토서.pdf",
+      "length": 0
+    },
+    {
+      "filename": "2021-10-05_뉴스비전_영상취재팀_ENG카메라관련_수리_기술검토서.pdf",
+      "length": 0
+    },
+    {
+      "filename": "2025-03-04_방송_영상_보존용_DVR_교체_검토의_건.pdf",
+      "length": 0
+    },
+    {
+      "filename": "2022-10-20_채널에이_월모니터_구매_검토의_건.pdf",
+      "length": 0
+    },
+    {
+      "filename": "2022-02-03_영상편집팀_NLE_워크스테이션_교체_검토의_건.pdf",
+      "length": 0
+    },
+    {
+      "filename": "2023-07-11_광화문_티비로직_방송모니터_수리_구매_검토의_건.pdf",
+      "length": 0
+    },
+    {
+      "filename": "2024-08-13_기술관리팀_방송시스템_소모품_구매_검토서.pdf",
+      "length": 0
+    },
+    {
+      "filename": "2025-01-14_채널A_불용_방송_장비_폐기_요청의_건.pdf",
+      "length": 0
+    }
+  ],
+  "sum_match_validation": {
+    "matched": 0,
+    "mismatched": 0,
+    "null": 0
+  }
+}

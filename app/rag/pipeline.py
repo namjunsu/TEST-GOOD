@@ -1222,6 +1222,8 @@ class RAGPipeline:
                     }
 
                 # 키워드로 문서 검색 (파일명에서 검색)
+                # 공백을 % 와일드카드로 변경 (파일명은 언더스코어 사용)
+                keywords_wildcard = keywords.replace(' ', '%')
                 conn = sqlite3.connect("metadata.db")
                 cursor = conn.cursor()
                 cursor.execute(
@@ -1233,7 +1235,7 @@ class RAGPipeline:
                     ORDER BY date DESC
                     LIMIT 1
                 """,
-                    (f"%{keywords}%",),
+                    (f"%{keywords_wildcard}%",),
                 )
             else:
                 # 파일명으로 검색
@@ -1255,7 +1257,10 @@ class RAGPipeline:
             conn.close()
 
             if not result:
-                search_term = filename if filename_match else keywords
+                if filename_match:
+                    search_term = filename
+                else:
+                    search_term = keywords
                 return {
                     "text": f"'{search_term}' 관련 문서를 찾을 수 없습니다.",
                     "citations": [],

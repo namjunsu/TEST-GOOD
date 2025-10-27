@@ -916,7 +916,13 @@ class RAGPipeline:
                     }
                 })
 
-            logger.info(f"📋 목록 검색 성공: {len(docs)}건 발견, 상위 {min(10, len(docs))}건 표시")
+            # 품질 방어선 로그 (재현 용이성)
+            logger.info({
+                "mode": "LIST",
+                "files": [doc.get("filename") for doc in docs[:3]],
+                "count": len(docs),
+                "llm": os.getenv("LLM_ENABLED", "false").lower() == "true"
+            })
 
             return {
                 "text": answer_text,
@@ -1145,7 +1151,13 @@ class RAGPipeline:
                 }
             }]
 
-            logger.info(f"👀 미리보기 생성 완료: {fname} ({len(preview_lines)}줄)")
+            # 품질 방어선 로그
+            logger.info({
+                "mode": "PREVIEW",
+                "files": [fname],
+                "lines": len(preview_lines),
+                "llm": False  # PREVIEW는 LLM 사용 안 함
+            })
 
             return {
                 "text": answer_text,
@@ -1274,7 +1286,12 @@ class RAGPipeline:
                 }
             }]
 
-            logger.info(f"📝 요약 생성 완료: {fname}")
+            # 품질 방어선 로그
+            logger.info({
+                "mode": "SUMMARY",
+                "files": [fname],
+                "llm": True  # SUMMARY는 LLM 사용
+            })
 
             return {
                 "text": answer_text,

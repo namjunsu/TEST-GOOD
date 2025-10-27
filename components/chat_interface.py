@@ -136,13 +136,13 @@ def render_doc_card(
     summary: str,
     show_preview_inline: bool = False
 ) -> None:
-    """문서 카드 렌더링 (고정 레이아웃) - 문서 라이브러리와 통일된 방식
+    """문서 카드 렌더링 (고정 레이아웃) - 안전가드 + 캐시 적용
 
     1행: 📄 파일명
     2행: 메타칩 (doctype · date · drafter)
     3행: LLM 요약 (최대 2줄, 160자)
     4행: 버튼 (미리보기 / 다운로드)
-    5행: PDF 뷰어 (선택적, Streamlit 내장 방식)
+    5행: PDF 뷰어 (선택적, 예외 처리 강화)
 
     Args:
         index: 카드 번호 (1부터 시작)
@@ -154,7 +154,7 @@ def render_doc_card(
         summary: LLM 요약 (이미 160자로 제한된 상태)
         show_preview_inline: 인라인 미리보기 표시 여부
     """
-    from components.pdf_viewer import PDFViewer
+    from utils.pdf_utils import download_pdf_button, render_pdf_preview
 
     # 1행: 파일명
     st.markdown(f"**{index}. 📄 {filename}**")
@@ -179,8 +179,8 @@ def render_doc_card(
         summary_truncated += "..."
     st.markdown(f"{summary_truncated}")
 
-    # 4행: 버튼 (파일이 존재할 때만)
-    if file_path and file_path.exists():
+    # 4행: 버튼 (안전가드 + 표준 함수 사용)
+    if file_path:
         col1, col2 = st.columns([1, 1])
 
         # 미리보기 버튼 (expander 토글)
@@ -192,34 +192,25 @@ def render_doc_card(
                 st.session_state[session_key] = not st.session_state.get(session_key, False)
                 st.rerun()
 
-        # 다운로드 버튼
+        # 다운로드 버튼 (표준 함수 사용)
         with col2:
-            try:
-                with open(file_path, "rb") as f:
-                    pdf_bytes = f.read()
-                st.download_button(
-                    label="⬇ 다운로드",
-                    data=pdf_bytes,
-                    file_name=filename,
-                    mime="application/pdf",
-                    key=f"download_{index}_{filename[:10]}",
-                    use_container_width=True
-                )
-            except Exception as e:
-                logger.warning(f"다운로드 버튼 생성 실패: {filename} - {e}")
+            download_pdf_button(
+                file_path=str(file_path),
+                key=f"download_{index}_{filename[:10]}",
+                use_container_width=True
+            )
 
-        # 5행: PDF 뷰어 (Streamlit 내장, 문서 라이브러리와 동일)
+        # 5행: PDF 뷰어 (예외 처리 강화, 다운로드 fallback)
         session_key = f"show_preview_{index}_{filename}"
         if st.session_state.get(session_key, show_preview_inline):
             with st.expander("📄 PDF 미리보기", expanded=True):
-                try:
-                    viewer = PDFViewer(str(file_path), height=600)
-                    viewer.render()
-                except Exception as e:
-                    st.error(f"미리보기 로드 실패: {str(e)}")
-                    logger.error(f"PDF 뷰어 오류: {filename} - {e}")
+                render_pdf_preview(
+                    file_path=str(file_path),
+                    height=600,
+                    show_download_fallback=True
+                )
     else:
-        st.warning("⚠️ 파일을 찾을 수 없습니다")
+        st.warning("⚠️ 파일 경로가 제공되지 않았습니다")
 
 
 def _normalize_rag_response(resp: Any) -> dict:

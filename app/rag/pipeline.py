@@ -1274,6 +1274,29 @@ class RAGPipeline:
 
             fname, drafter, date, display_date, category, text_preview, claimed_total, doctype = result
 
+            # text_preview가 비어있으면 PDF에서 직접 추출 (fallback)
+            if not text_preview or len(text_preview.strip()) == 0:
+                logger.warning(f"⚠️ text_preview 비어있음, PDF 직접 추출 시도: {fname}")
+                try:
+                    year_match = re.search(r'(\d{4})-', fname)
+                    if year_match:
+                        year = year_match.group(1)
+                        pdf_path = f"docs/year_{year}/{fname}"
+                    else:
+                        pdf_path = f"docs/{fname}"
+
+                    # pdfplumber로 추출
+                    import pdfplumber
+                    with pdfplumber.open(pdf_path) as pdf:
+                        extracted_text = ""
+                        for page in pdf.pages[:5]:  # 최대 5페이지만
+                            extracted_text += (page.extract_text() or "")
+                        text_preview = extracted_text[:2000]  # 최대 2000자
+                        logger.info(f"✓ PDF 직접 추출 성공: {len(text_preview)}자")
+                except Exception as e:
+                    logger.error(f"❌ PDF 직접 추출 실패: {e}")
+                    text_preview = ""
+
             # 5줄 섹션 포맷팅
             answer_text = f"**📄 {fname} 요약**\n\n"
 

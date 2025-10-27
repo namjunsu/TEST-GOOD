@@ -879,11 +879,10 @@ class RAGPipeline:
 
             answer_text = "\n\n".join(cards[:10])  # 최대 10개
 
-            # Evidence 구성 (파일명 기반 요약으로 통일)
+            # Evidence 구성 (파일명 기반 요약 + 실제 파일 경로)
             evidence = []
             for doc in docs[:10]:
                 filename = doc.get("filename", "")
-                ref = _encode_file_ref(filename) if filename else None
 
                 # 파일명에서 핵심 내용 추출 (답변 텍스트와 동일한 방식)
                 import re
@@ -894,12 +893,21 @@ class RAGPipeline:
                 # snippet을 제목으로 사용 (간결하고 의미 있는 정보)
                 snippet = title[:160]
 
+                # 실제 파일 경로 생성 (year 폴더 자동 감지)
+                year_match = re.search(r'(\d{4})-', filename)
+                if year_match:
+                    year = year_match.group(1)
+                    file_path_str = f"docs/year_{year}/{filename}"
+                else:
+                    file_path_str = f"docs/{filename}"
+
                 evidence.append({
                     "doc_id": filename,
                     "filename": filename,
+                    "file_path": file_path_str,  # ← 실제 파일 경로 (Streamlit 내장 방식)
                     "page": 1,
                     "snippet": snippet,
-                    "ref": ref,  # 🔴 base64 인코딩된 파일 경로
+                    "ref": None,  # 더 이상 사용하지 않음 (FastAPI 방식 제거)
                     "meta": {
                         "filename": filename,
                         "drafter": doc.get("drafter"),

@@ -19,6 +19,7 @@ from typing import List, Dict, Optional, Protocol, Any
 from typing_extensions import TypedDict, Literal
 from datetime import datetime
 from functools import lru_cache
+from pathlib import Path
 
 from app.core.logging import get_logger
 
@@ -128,33 +129,33 @@ def _get_api_base_url() -> str:
 def render_doc_card(
     index: int,
     filename: str,
+    file_path: Optional[Path],
     doctype: Optional[str],
     display_date: Optional[str],
     drafter: Optional[str],
     summary: str,
-    ref: Optional[str],
-    api_base_url: str,
-    show_preview_iframe: bool = False
+    show_preview_inline: bool = False
 ) -> None:
-    """문서 카드 렌더링 (고정 레이아웃)
+    """문서 카드 렌더링 (고정 레이아웃) - 문서 라이브러리와 통일된 방식
 
     1행: 📄 파일명
     2행: 메타칩 (doctype · date · drafter)
     3행: LLM 요약 (최대 2줄, 160자)
     4행: 버튼 (미리보기 / 다운로드)
-    5행: iframe (선택적)
+    5행: PDF 뷰어 (선택적, Streamlit 내장 방식)
 
     Args:
         index: 카드 번호 (1부터 시작)
         filename: 파일명
+        file_path: 실제 파일 경로 (Path 객체)
         doctype: 문서 타입
         display_date: 날짜
         drafter: 기안자
         summary: LLM 요약 (이미 160자로 제한된 상태)
-        ref: base64 인코딩된 파일 경로
-        api_base_url: API 기준 URL
-        show_preview_iframe: iframe 미리보기 표시 여부
+        show_preview_inline: 인라인 미리보기 표시 여부
     """
+    from components.pdf_viewer import PDFViewer
+
     # 1행: 파일명
     st.markdown(f"**{index}. 📄 {filename}**")
 
@@ -178,21 +179,47 @@ def render_doc_card(
         summary_truncated += "..."
     st.markdown(f"{summary_truncated}")
 
-    # 4행: 버튼 (ref가 있을 때만)
-    if ref:
+    # 4행: 버튼 (파일이 존재할 때만)
+    if file_path and file_path.exists():
         col1, col2 = st.columns([1, 1])
-        preview_url = f"{api_base_url}/files/preview?ref={ref}"
-        download_url = f"{api_base_url}/files/download?ref={ref}"
 
+        # 미리보기 버튼 (expander 토글)
         with col1:
-            st.link_button("🔎 미리보기", preview_url, use_container_width=True)
-        with col2:
-            st.link_button("⬇ 원본 다운로드", download_url, use_container_width=True)
+            preview_key = f"preview_btn_{index}_{filename[:10]}"
+            if st.button("🔎 미리보기", key=preview_key, use_container_width=True):
+                # 세션 상태에 미리보기 정보 저장
+                session_key = f"show_preview_{index}_{filename}"
+                st.session_state[session_key] = not st.session_state.get(session_key, False)
+                st.rerun()
 
-        # 5행: iframe (선택적)
-        if show_preview_iframe:
-            with st.expander("📄 문서 미리보기 (내장)", expanded=False):
-                st.components.v1.iframe(preview_url, height=520, scrolling=True)
+        # 다운로드 버튼
+        with col2:
+            try:
+                with open(file_path, "rb") as f:
+                    pdf_bytes = f.read()
+                st.download_button(
+                    label="⬇ 다운로드",
+                    data=pdf_bytes,
+                    file_name=filename,
+                    mime="application/pdf",
+                    key=f"download_{index}_{filename[:10]}",
+                    use_container_width=True
+                )
+            except Exception as e:
+                logger.warning(f"다운로드 버튼 생성 실패: {filename} - {e}")
+
+        # 5행: PDF 뷰어 (Streamlit 내장, 문서 라이브러리와 동일)
+        session_key = f"show_preview_{index}_{filename}"
+        if st.session_state.get(session_key, show_preview_inline):
+            with st.expander("📄 PDF 미리보기", expanded=True):
+                try:
+                    viewer = PDFViewer(str(file_path), height=600)
+                    viewer.render()
+                except Exception as e:
+                    st.error(f"미리보기 로드 실패: {str(e)}")
+                    logger.error(f"PDF 뷰어 오류: {filename} - {e}")
+    else:
+        st.warning("⚠️ 파일을 찾을 수 없습니다")
 
 
 def _normalize_rag_response(resp: Any) -> dict:
@@ -587,7 +614,7 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                     # 답변 텍스트 표시
                     message_placeholder.markdown(response["text"])
 
-                    # Evidence 표시 (Top-K=5 제한, 고정 카드 레이아웃)
+                    # Evidence 표시 (Top-K=5 제한, 고정 카드 레이아웃, 문서 라이브러리와 통일)
                     if response.get("evidence"):
                         evidence_list = response["evidence"]
 
@@ -599,9 +626,6 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                         # 1건이면 자동 확장, 2건 이상이면 접힘
                         auto_expand = len(display_evidence) == 1
 
-                        # API 기준 URL 가져오기
-                        api_base_url = _get_api_base_url()
-
                         with st.expander(f"📚 출처 문서 ({len(display_evidence)}건)", expanded=auto_expand):
                             for i, ev in enumerate(display_evidence, 1):
                                 # Evidence가 dict 또는 객체일 수 있으므로 안전하게 접근
@@ -609,32 +633,44 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                                     doc_id = ev.get("doc_id") or ev.get("chunk_id", "unknown")
                                     filename = ev.get("filename", doc_id)
                                     snippet = ev.get("snippet") or ev.get("content", "") or ev.get("text", "")
-                                    ref = ev.get("ref")
+                                    file_path_str = ev.get("file_path")  # ← 실제 파일 경로
                                     meta = ev.get("meta", {})
                                 else:
                                     # 객체인 경우
                                     doc_id = getattr(ev, "doc_id", None) or getattr(ev, "chunk_id", "unknown")
                                     filename = getattr(ev, "filename", doc_id)
                                     snippet = getattr(ev, "snippet", None) or getattr(ev, "content", "") or getattr(ev, "text", "")
-                                    ref = getattr(ev, "ref", None)
+                                    file_path_str = getattr(ev, "file_path", None)
                                     meta = getattr(ev, "meta", {})
+
+                                # 파일 경로 생성 (year 폴더 지원)
+                                if file_path_str:
+                                    file_path = Path(file_path_str)
+                                else:
+                                    # Fallback: _encode_file_ref 로직과 동일
+                                    import re
+                                    year_match = re.search(r'(\d{4})-', filename)
+                                    if year_match:
+                                        year = year_match.group(1)
+                                        file_path = Path(f"docs/year_{year}") / filename
+                                    else:
+                                        file_path = Path("docs") / filename
 
                                 # 메타 데이터 추출
                                 doctype = meta.get("doctype") if isinstance(meta, dict) else None
                                 display_date = meta.get("date") or meta.get("display_date") if isinstance(meta, dict) else None
                                 drafter = meta.get("drafter") if isinstance(meta, dict) else None
 
-                                # 카드 렌더링 (1건일 때만 iframe 자동 표시)
+                                # 카드 렌더링 (1건일 때만 인라인 미리보기 자동 표시)
                                 render_doc_card(
                                     index=i,
                                     filename=filename,
+                                    file_path=file_path,
                                     doctype=doctype,
                                     display_date=display_date,
                                     drafter=drafter,
                                     summary=snippet,
-                                    ref=ref,
-                                    api_base_url=api_base_url,
-                                    show_preview_iframe=(auto_expand and i == 1)
+                                    show_preview_inline=(auto_expand and i == 1)
                                 )
 
                                 # 구분선 (마지막 아이템 제외)

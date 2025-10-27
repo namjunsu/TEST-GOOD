@@ -29,8 +29,9 @@ class TestTextCleaner:
         assert "오후 3:43" not in cleaned
         assert "오전 10:20" not in cleaned
 
-        # 노이즈 카운트 확인
-        assert counts.get('프린트 타임스탬프', 0) >= 2
+        # 노이즈 카운트 확인 (날짜 포함 + 시간만 패턴 합산)
+        timestamp_count = counts.get('프린트 타임스탬프 (날짜 포함)', 0) + counts.get('프린트 타임스탬프 (시간만)', 0)
+        assert timestamp_count >= 2
 
     def test_remove_url(self, cleaner):
         """URL 제거 테스트"""
@@ -45,8 +46,9 @@ approval_form_popup.php?id=456
         # URL이 제거되었는지 확인
         assert "approval_form_popup.php" not in cleaned
 
-        # 노이즈 카운트 확인 (최소 1개의 URL 패턴이 매칭되어야 함)
-        assert counts.get('프린트뷰 URL', 0) >= 1
+        # 노이즈 카운트 확인 (그룹웨어 URL + 팝업 스크립트 합산)
+        url_count = counts.get('그룹웨어 도메인 URL', 0) + counts.get('결재 팝업 스크립트', 0)
+        assert url_count >= 1
 
     def test_remove_page_number(self, cleaner):
         """페이지 번호 제거 테스트"""

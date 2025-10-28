@@ -5,10 +5,12 @@
 RAG 파이프라인에서 생성되는 청크들이 필수 계약을 준수하는지 검증합니다.
 
 계약 사항:
-1. 필수 필드: doc_id, page, snippet, score, meta
-2. snippet은 비어있지 않아야 함 (최소 1자 이상)
+1. 필수 필드: doc_id, page, text, score, meta
+2. text는 비어있지 않아야 함 (최소 1자 이상)
 3. meta는 딕셔너리이며 filename을 포함해야 함
 4. score는 float 타입
+
+Note: 2025-10-26 이후 'snippet' 필드는 'text'로 통합됨
 """
 
 import pytest
@@ -27,19 +29,27 @@ def validate_chunk_contract(chunk: Dict[str, Any]) -> List[str]:
     """
     violations = []
 
-    # 1. 필수 필드 존재 확인
-    required_fields = ["doc_id", "page", "snippet", "score", "meta"]
+    # 1. 필수 필드 존재 확인 (text 또는 snippet 중 하나는 있어야 함)
+    required_fields = ["doc_id", "page", "score", "meta"]
     for field in required_fields:
         if field not in chunk:
             violations.append(f"필수 필드 누락: {field}")
 
-    # 2. snippet 비어있지 않음 확인
-    if "snippet" in chunk:
-        snippet = chunk["snippet"]
-        if not snippet or (isinstance(snippet, str) and not snippet.strip()):
-            violations.append(f"snippet 비어있음: {repr(snippet)}")
-        elif len(snippet.strip()) < 1:
-            violations.append(f"snippet 길이 부족: {len(snippet)} chars")
+    # text 필드 체크 (신규 표준) - text 또는 snippet 중 하나는 필수
+    has_text = "text" in chunk
+    has_snippet = "snippet" in chunk
+    if not has_text and not has_snippet:
+        violations.append("필수 필드 누락: text (또는 snippet)")
+
+    # 2. text/snippet 비어있지 않음 확인
+    text_field = chunk.get("text") or chunk.get("snippet")
+    if has_text or has_snippet:
+        if not text_field or (isinstance(text_field, str) and not text_field.strip()):
+            field_name = "text" if has_text else "snippet"
+            violations.append(f"{field_name} 비어있음: {repr(text_field)}")
+        elif isinstance(text_field, str) and len(text_field.strip()) < 1:
+            field_name = "text" if has_text else "snippet"
+            violations.append(f"{field_name} 길이 부족: {len(text_field)} chars")
 
     # 3. meta 필드 검증
     if "meta" in chunk:
@@ -67,8 +77,20 @@ def validate_chunk_contract(chunk: Dict[str, Any]) -> List[str]:
 def test_chunk_contract_validation():
     """청크 계약 검증 함수 자체 테스트"""
 
-    # 정상 청크
-    valid_chunk = {
+    # 정상 청크 (text 필드 사용 - 신규 표준)
+    valid_chunk_text = {
+        "doc_id": "test.pdf",
+        "page": 1,
+        "text": "이것은 테스트 내용입니다.",
+        "score": 0.85,
+        "meta": {"filename": "test.pdf", "date": "2024-01-01"}
+    }
+
+    violations = validate_chunk_contract(valid_chunk_text)
+    assert len(violations) == 0, f"정상 청크(text)에서 위반 발견: {violations}"
+
+    # 정상 청크 (snippet 필드 사용 - 레거시 호환)
+    valid_chunk_snippet = {
         "doc_id": "test.pdf",
         "page": 1,
         "snippet": "이것은 테스트 내용입니다.",
@@ -76,29 +98,29 @@ def test_chunk_contract_validation():
         "meta": {"filename": "test.pdf", "date": "2024-01-01"}
     }
 
-    violations = validate_chunk_contract(valid_chunk)
-    assert len(violations) == 0, f"정상 청크에서 위반 발견: {violations}"
+    violations = validate_chunk_contract(valid_chunk_snippet)
+    assert len(violations) == 0, f"정상 청크(snippet)에서 위반 발견: {violations}"
 
     # 필수 필드 누락
     invalid_chunk_missing = {
         "doc_id": "test.pdf",
         "page": 1,
         "score": 0.85
-        # snippet과 meta 누락
+        # text/snippet과 meta 누락
     }
     violations = validate_chunk_contract(invalid_chunk_missing)
     assert len(violations) >= 2, "필수 필드 누락 감지 실패"
 
-    # snippet 비어있음
-    invalid_chunk_empty_snippet = {
+    # text 비어있음
+    invalid_chunk_empty_text = {
         "doc_id": "test.pdf",
         "page": 1,
-        "snippet": "",  # 빈 문자열
+        "text": "",  # 빈 문자열
         "score": 0.85,
         "meta": {"filename": "test.pdf"}
     }
-    violations = validate_chunk_contract(invalid_chunk_empty_snippet)
-    assert any("snippet" in v for v in violations), "빈 snippet 감지 실패"
+    violations = validate_chunk_contract(invalid_chunk_empty_text)
+    assert any("text" in v for v in violations), "빈 text 감지 실패"
 
 
 @pytest.mark.integration

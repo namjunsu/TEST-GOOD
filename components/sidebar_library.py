@@ -51,7 +51,7 @@ def display_document_list(
                 doc_counter += 1
 
                 # 심플한 버튼으로 문서 선택
-                if st.button(button_text, key=unique_key, use_container_width=True):
+                if st.button(button_text, key=unique_key, width="stretch"):
                     st.session_state.selected_doc = row
                     st.session_state.show_doc_preview = True
                     st.rerun()
@@ -141,7 +141,7 @@ def render_sidebar_library(rag_instance) -> None:
     if 'auto_indexer' in st.session_state:
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("새로고침", key="refresh_index", use_container_width=True):
+            if st.button("새로고침", key="refresh_index", width="stretch"):
                 with st.spinner("인덱싱 중..."):
                     result = st.session_state.auto_indexer.check_new_files()
                     if result['new']:
@@ -154,7 +154,7 @@ def render_sidebar_library(rag_instance) -> None:
                         st.info("변경사항 없음")
 
         with col2:
-            if st.button("♻️ 전체재인덱싱", key="force_reindex", use_container_width=True):
+            if st.button("♻️ 전체재인덱싱", key="force_reindex", width="stretch"):
                 with st.spinner("전체 재인덱싱 중..."):
                     result = st.session_state.auto_indexer.force_reindex()
                     st.success(f"✅ {result['total']}개 파일 재인덱싱 완료!")

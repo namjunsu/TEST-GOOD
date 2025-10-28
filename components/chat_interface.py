@@ -186,7 +186,7 @@ def render_doc_card(
         # 미리보기 버튼 (expander 토글)
         with col1:
             preview_key = f"preview_btn_{index}_{filename[:10]}"
-            if st.button("🔎 미리보기", key=preview_key, use_container_width=True):
+            if st.button("🔎 미리보기", key=preview_key, width="stretch"):
                 # 세션 상태에 미리보기 정보 저장
                 session_key = f"show_preview_{index}_{filename}"
                 st.session_state[session_key] = not st.session_state.get(session_key, False)
@@ -197,7 +197,7 @@ def render_doc_card(
             download_pdf_button(
                 file_path=str(file_path),
                 key=f"download_{index}_{filename[:10]}",
-                use_container_width=True
+                width="stretch"
             )
 
         # 5행: PDF 뷰어 (예외 처리 강화, 다운로드 fallback)

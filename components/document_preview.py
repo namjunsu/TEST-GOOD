@@ -47,11 +47,11 @@ def render_document_preview(rag_instance: Any, config_module: Any) -> None:
                     file_name=doc['filename'],
                     mime="application/pdf",
                     key=f"dl_{hashlib.md5(doc['filename'].encode()).hexdigest()}",
-                    use_container_width=True
+                    width="stretch"
                 )
 
         with col4:
-            if st.button("❌ 닫기", use_container_width=True):
+            if st.button("❌ 닫기", width="stretch"):
                 st.session_state.show_doc_preview = False
                 if 'selected_doc' in st.session_state:
                     del st.session_state.selected_doc

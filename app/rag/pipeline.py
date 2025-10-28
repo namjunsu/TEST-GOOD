@@ -1204,6 +1204,70 @@ class RAGPipeline:
                 }
             }
 
+    def _extract_with_ocr(self, pdf_path: str, start_page: int, total_pages: int) -> str:
+        """OCR을 사용하여 PDF에서 텍스트 추출 (pytesseract 우선, paddleocr 폴백)
+
+        Args:
+            pdf_path: PDF 파일 경로
+            start_page: 시작 페이지 (0-based)
+            total_pages: 전체 페이지 수
+
+        Returns:
+            추출된 텍스트
+        """
+        try:
+            from pdf2image import convert_from_path
+            import pytesseract
+            from PIL import Image
+
+            # PDF를 이미지로 변환 (끝 3페이지만)
+            images = convert_from_path(
+                pdf_path,
+                first_page=start_page + 1,  # 1-based
+                last_page=total_pages
+            )
+
+            text = ""
+            for i, img in enumerate(images):
+                try:
+                    # pytesseract 사용
+                    page_text = pytesseract.image_to_string(img, lang='kor+eng')
+                    text += page_text + "\n"
+                    logger.info(f"✓ OCR (pytesseract) 페이지 {start_page + i + 1}: {len(page_text)}자")
+                except Exception as e:
+                    logger.warning(f"⚠️ pytesseract 실패 (페이지 {start_page + i + 1}): {e}")
+
+            if len(text.strip()) > 50:
+                return text
+
+            # pytesseract 실패 시 paddleocr 시도
+            logger.info("🔄 paddleocr 폴백 시도...")
+            try:
+                from paddleocr import PaddleOCR
+                ocr = PaddleOCR(use_angle_cls=True, lang='korean')
+
+                text = ""
+                for i, img in enumerate(images):
+                    # PaddleOCR는 파일 경로 또는 numpy array를 받음
+                    import numpy as np
+                    img_array = np.array(img)
+                    result = ocr.ocr(img_array, cls=True)
+
+                    if result and result[0]:
+                        page_text = "\n".join([line[1][0] for line in result[0]])
+                        text += page_text + "\n"
+                        logger.info(f"✓ OCR (paddleocr) 페이지 {start_page + i + 1}: {len(page_text)}자")
+
+                return text
+
+            except Exception as e:
+                logger.warning(f"⚠️ paddleocr 실패: {e}")
+                return ""
+
+        except Exception as e:
+            logger.error(f"❌ OCR 추출 실패: {e}")
+            return ""
+
     def _gather_summary_context(self, filename: str, pdf_path: str) -> str:
         """요약용 컨텍스트 수집 (PDF 끝 + RAG 청크 + 스냅샷)
 
@@ -1225,6 +1289,12 @@ class RAGPipeline:
                 tail = ""
                 for page in pdf.pages[start_page:]:
                     tail += (page.extract_text() or "")
+
+                # OCR 폴백 (텍스트가 너무 짧을 경우)
+                if len(tail.strip()) < 50:
+                    logger.warning(f"⚠️ PDF 텍스트 부족 ({len(tail)}자), OCR 시도...")
+                    tail = self._extract_with_ocr(pdf_path, start_page, total_pages)
+
                 if tail.strip():
                     parts.append("=== [문서 결론/말미] ===\n" + tail)
                     logger.info(f"✓ PDF 끝 {total_pages - start_page}페이지 추출: {len(tail)}자")
@@ -1478,18 +1548,56 @@ class RAGPipeline:
                     logger.info("✓ 포맷팅된 요약 생성 완료")
 
                 else:
-                    # Fallback: JSON 파싱 실패 시
-                    logger.error("❌ JSON 파싱 완전 실패 (2회 재시도 후)")
-                    answer_text = f"**📄 {fname}**\n\n"
-                    answer_text += "⚠️ 요약 생성 중 오류가 발생했습니다.\n\n"
-                    answer_text += "문서를 직접 확인하시려면 아래 미리보기를 이용해주세요.\n\n"
+                    # Fallback: JSON 파싱 실패 시 → 자유 요약 생성
+                    logger.warning("⚠️ JSON 파싱 실패, 자유 요약으로 대체...")
 
-                    # 메타데이터만 표시
-                    answer_text += "---\n**📋 문서 정보**\n"
-                    answer_text += f"- 기안자: {drafter or '정보 없음'}\n"
-                    answer_text += f"- 날짜: {display_date or date or '정보 없음'}\n"
-                    if claimed_total:
-                        answer_text += f"- 금액: ₩{claimed_total:,}\n"
+                    free_form_prompt = f"""다음 문서를 3~5문장으로 자유롭게 요약해주세요.
+핵심 내용, 목적, 금액(있으면), 결론 등을 간결하게 포함하세요.
+마크다운 형식으로 작성하세요.
+
+**문서명**: {filename}
+**기안자**: {drafter or '정보 없음'}
+**날짜**: {display_date or '정보 없음'}
+
+[원문]
+{context_text[:5000]}
+"""
+
+                    try:
+                        free_summary = self.generator.generate(
+                            query=free_form_prompt,
+                            context="",
+                            temperature=0.3,
+                            max_tokens=500
+                        )
+
+                        # 배너 + 자유 요약
+                        answer_text = f"**📄 {fname}**\n\n"
+                        answer_text += "⚠️ **구조화 요약 실패(스키마 미일치). 자유 요약으로 대체.**\n\n"
+                        answer_text += "---\n\n"
+                        answer_text += free_summary.strip() + "\n\n"
+
+                        # 메타데이터 추가
+                        answer_text += "---\n**📋 문서 정보**\n"
+                        answer_text += f"- 기안자: {drafter or '정보 없음'}\n"
+                        answer_text += f"- 날짜: {display_date or date or '정보 없음'}\n"
+                        if claimed_total:
+                            answer_text += f"- 금액: ₩{claimed_total:,}\n"
+
+                        logger.info("✓ 자유 요약 생성 완료")
+
+                    except Exception as e:
+                        logger.error(f"❌ 자유 요약 생성도 실패: {e}")
+                        # 최종 폴백: 컨텍스트 일부라도 보여주기
+                        answer_text = f"**📄 {fname}**\n\n"
+                        answer_text += "⚠️ **요약 생성 실패. 문서 일부 내용을 표시합니다.**\n\n"
+                        answer_text += "---\n\n"
+                        answer_text += context_text[:1000] + "...\n\n"
+                        answer_text += "---\n**📋 문서 정보**\n"
+                        answer_text += f"- 기안자: {drafter or '정보 없음'}\n"
+                        answer_text += f"- 날짜: {display_date or date or '정보 없음'}\n"
+                        if claimed_total:
+                            answer_text += f"- 금액: ₩{claimed_total:,}\n"
 
             # Evidence 구성 (file_path 직접 포함)
             # year 폴더 자동 감지

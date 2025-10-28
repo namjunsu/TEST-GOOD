@@ -47,8 +47,13 @@ st.set_page_config(
 load_all_css()
 
 
+@st.cache_resource
 def initialize_rag_system():
-    """RAG 시스템 초기화 (한 번만 실행) - RAGPipeline 사용 (파사드 패턴)"""
+    """RAG 시스템 초기화 (한 번만 실행) - RAGPipeline 사용 (파사드 패턴)
+
+    @st.cache_resource 데코레이터를 사용하여 전역적으로 한 번만 초기화하고
+    모든 세션에서 동일한 인스턴스를 공유합니다.
+    """
     print("🚀 RAGPipeline 초기화 중...")
     pipeline = RAGPipeline()
 

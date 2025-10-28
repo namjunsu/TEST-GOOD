@@ -159,6 +159,16 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+@st.cache_resource
+def initialize_quick_fix_rag():
+    """QuickFixRAG 시스템 초기화 (한 번만 실행)
+
+    @st.cache_resource 데코레이터를 사용하여 전역적으로 한 번만 초기화하고
+    모든 세션에서 동일한 인스턴스를 공유합니다.
+    """
+    return QuickFixRAG()
+
+
 # 세션 상태 초기화
 def init_session_state():
     """세션 상태 초기화"""
@@ -173,7 +183,7 @@ def init_session_state():
 
     if 'rag' not in st.session_state:
         with st.spinner('🔧 RAG 시스템 초기화 중...'):
-            st.session_state.rag = QuickFixRAG()
+            st.session_state.rag = initialize_quick_fix_rag()
 
     if 'session_id' not in st.session_state:
         st.session_state.session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -299,7 +309,7 @@ def main():
         st.title("💬 채팅 세션")
 
         # 새 대화 시작
-        if st.button("🆕 새 대화", use_container_width=True):
+        if st.button("🆕 새 대화", width="stretch"):
             st.session_state.messages = []
             st.session_state.session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
             st.session_state.messages.append({
@@ -310,7 +320,7 @@ def main():
             st.rerun()
 
         # 현재 세션 저장
-        if st.button("💾 대화 저장", use_container_width=True):
+        if st.button("💾 대화 저장", width="stretch"):
             saved_file = save_chat_session()
             st.success(f"✅ 저장 완료: {saved_file.name}")
 
@@ -329,7 +339,7 @@ def main():
                 if st.button(
                     f"📅 {session_time.strftime('%Y-%m-%d %H:%M')}",
                     key=f"load_{session_name}",
-                    use_container_width=True
+                    width="stretch"
                 ):
                     load_chat_session(session_file)
                     st.rerun()
@@ -369,7 +379,7 @@ def main():
         )
 
     with col2:
-        send_button = st.button("전송 ➤", use_container_width=True, type="primary")
+        send_button = st.button("전송 ➤", width="stretch", type="primary")
 
     # 메시지 전송 처리
     if send_button and user_input:

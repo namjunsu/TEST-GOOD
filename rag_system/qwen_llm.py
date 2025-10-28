@@ -150,6 +150,14 @@ class QwenLLM:
             except Exception as e:
                 self.logger.warning(f"최적화 설정 로드 실패: {e}")
 
+    def _get_chunk_source(self, chunk: Dict[str, Any]) -> str:
+        """청크에서 소스(파일명) 추출 with fallback chain"""
+        # 폴백 순서: source → filename → file_path → doc_id → ''
+        return (chunk.get('source') or
+                chunk.get('filename') or
+                chunk.get('file_path') or
+                chunk.get('doc_id') or '')
+
     def _load_model(self):
         """모델 로드"""
         try:
@@ -232,7 +240,7 @@ class QwenLLM:
         context_text = ""
         
         for i, chunk in enumerate(context_chunks, 1):
-            filename = Path(chunk.get('source', '')).name
+            filename = Path(self._get_chunk_source(chunk)).name
             # 🔥 CRITICAL: Support both 'content' and 'snippet' fields
             content = chunk.get('content') or chunk.get('snippet', '')
             score = chunk.get('score', 0.0)
@@ -308,7 +316,7 @@ class QwenLLM:
             if total_tokens >= self.max_context_tokens:
                 break
 
-            filename = Path(chunk.get('source', '')).name
+            filename = Path(self._get_chunk_source(chunk)).name
             # 🔥 CRITICAL: Support both 'content' and 'snippet' fields
             content = chunk.get('content') or chunk.get('snippet', '')
 
@@ -514,7 +522,7 @@ A:"""
 
             return RAGResponse(
                 answer=answer_with_sources,
-                sources_cited=[chunk.get('source', '') for chunk in context_chunks[:2]],  # 상위 2개 문서
+                sources_cited=[self._get_chunk_source(chunk) for chunk in context_chunks[:2]],  # 상위 2개 문서
                 confidence=self._calculate_confidence(answer_with_sources, context_chunks) * 0.8,  # 신뢰도 약간 감소
                 generation_time=best_answer['generation_time'],
                 has_proper_citation=True,  # 강제 추가했으므로 True
@@ -531,7 +539,7 @@ A:"""
             # 검색 결과를 기반으로 간단한 요약 생성
             summary_parts = []
             for i, chunk in enumerate(context_chunks[:3], 1):
-                filename = chunk.get('source', '알 수 없음')
+                filename = self._get_chunk_source(chunk) or '알 수 없음'
                 # 🔥 CRITICAL: Support both 'content' and 'snippet' fields
                 content_preview = ((chunk.get('content') or chunk.get('snippet', ''))[:200] or '(내용 없음)')
                 summary_parts.append(f"{i}. {filename}\n{content_preview}...")
@@ -539,7 +547,7 @@ A:"""
             basic_summary = f"다음 {len(context_chunks[:3])}개 문서에서 관련 정보를 찾았습니다:\n\n" + "\n\n".join(summary_parts)
 
             # 출처 추가
-            top_sources = [chunk.get('source', '') for chunk in context_chunks[:2] if chunk.get('source')]
+            top_sources = [self._get_chunk_source(chunk) for chunk in context_chunks[:2] if self._get_chunk_source(chunk)]
             if top_sources:
                 sources_text = ', '.join([f"[{src}]" for src in top_sources])
                 basic_summary += f"\n\n출처: {sources_text}"
@@ -665,10 +673,11 @@ A:"""
         # 단일 문서 모드 강화 - 가장 관련성 높은 문서만 사용
         if context_chunks:
             best_chunk = context_chunks[0]  # 최고 점수 문서
-            filtered_chunks = [chunk for chunk in context_chunks 
-                             if chunk.get('source', '') == best_chunk.get('source', '')]
-            
-            self.logger.info(f"비교 질문: 단일 문서 모드 적용 - {best_chunk.get('source', '').split('/')[-1]}")
+            best_source = self._get_chunk_source(best_chunk)
+            filtered_chunks = [chunk for chunk in context_chunks
+                             if self._get_chunk_source(chunk) == best_source]
+
+            self.logger.info(f"비교 질문: 단일 문서 모드 적용 - {Path(best_source).name if best_source else '(unknown)'}")
             context_chunks = filtered_chunks[:3]  # 최대 3개 청크만 사용
         
         enhanced_prompt = f"""질문: {question_analysis.original_question}
@@ -689,8 +698,10 @@ A:"""
 참고 문서 (단일 문서 모드):"""
         
         for i, chunk in enumerate(context_chunks[:2], 1):  # 최대 2개만 사용
-            filename = chunk.get('source', '').split('/')[-1]
-            content = chunk.get('content', '')[:200]
+            filename = Path(self._get_chunk_source(chunk)).name
+            # 폴백 체인: text → content → snippet → text_preview
+            content = (chunk.get('text') or chunk.get('content') or
+                      chunk.get('snippet') or chunk.get('text_preview') or '')[:200]
             score = chunk.get('score', 0.0)
             
             enhanced_prompt += f"\n--- 청크 {i}: {filename} (점수: {score:.3f}) ---\n{content}..."
@@ -734,8 +745,10 @@ A:"""
 참고 문서:"""
         
         for i, chunk in enumerate(context_chunks[:3], 1):
-            filename = chunk.get('source', '').split('/')[-1]
-            content = chunk.get('content', '')[:300]
+            filename = Path(self._get_chunk_source(chunk)).name
+            # 폴백 체인: text → content → snippet → text_preview
+            content = (chunk.get('text') or chunk.get('content') or
+                      chunk.get('snippet') or chunk.get('text_preview') or '')[:300]
             score = chunk.get('score', 0.0)
             
             enhanced_prompt += f"\n--- 문서 {i}: {filename} (점수: {score:.3f}) ---\n{content}..."
@@ -767,8 +780,10 @@ A:"""
 참고 문서:"""
         
         for i, chunk in enumerate(context_chunks[:4], 1):  # 복합 질문은 최대 4개 문서
-            filename = chunk.get('source', '').split('/')[-1]
-            content = chunk.get('content', '')[:250]
+            filename = Path(self._get_chunk_source(chunk)).name
+            # 폴백 체인: text → content → snippet → text_preview
+            content = (chunk.get('text') or chunk.get('content') or
+                      chunk.get('snippet') or chunk.get('text_preview') or '')[:250]
             score = chunk.get('score', 0.0)
             
             enhanced_prompt += f"\n--- 문서 {i}: {filename} (점수: {score:.3f}) ---\n{content}..."
@@ -855,19 +870,31 @@ A:"""
         """같은 문서의 청크들을 우선적으로 선택하여 포괄적 정보 제공"""
         if not context_chunks:
             return context_chunks
-            
+
         # 가장 점수가 높은 문서 찾기
-        best_chunk = context_chunks[0] 
-        best_source = best_chunk.get('source', '')
-        
-        self.logger.info(f"우선 문서: {Path(best_source).name}")
+        best_chunk = context_chunks[0]
+        best_source = self._get_chunk_source(best_chunk)
+
+        # DEBUG: 첫 번째 청크의 키 확인
+        self.logger.info(f"📦 First chunk keys: {list(best_chunk.keys())}")
+        # DEBUG: 텍스트 필드 확인
+        for key in ['text', 'content', 'snippet', 'text_preview', 'page_content']:
+            value = best_chunk.get(key)
+            if value:
+                preview = str(value)[:80].replace('\n', ' ')
+                self.logger.info(f"   ✓ {key}: {preview}...")
+            else:
+                # Show the actual value (even if empty string)
+                self.logger.info(f"   ✗ {key}: {repr(value)}")
+
+        self.logger.info(f"우선 문서: {Path(best_source).name if best_source else '(unknown)'}")
         
         # 같은 문서의 모든 청크와 다른 문서의 청크 분리
         same_doc_chunks = []
         other_doc_chunks = []
         
         for chunk in context_chunks:
-            chunk_source = chunk.get('source', '')
+            chunk_source = self._get_chunk_source(chunk)
             if chunk_source == best_source:
                 same_doc_chunks.append(chunk)
             else:
@@ -921,8 +948,9 @@ A:"""
         
         # 사용 가능한 파일명 수집
         for chunk in context_chunks:
-            filename = Path(chunk.get('source', '')).name
-            if filename:
+            source = self._get_chunk_source(chunk)
+            if source:
+                filename = Path(source).name
                 available_files.add(filename)
         
         # 답변에서 인용 추출 (컴파일된 패턴 사용)
@@ -1174,9 +1202,11 @@ A:"""
         # 컨텍스트 구성 - 자연스러운 대화형 답변을 위한 컨텍스트
         context_parts = []
         for chunk in context_chunks[:5]:
-            content = chunk.get('content', '').strip()
-            source = chunk.get('source', 'unknown')
-            
+            # 폴백 체인: text → content → snippet → text_preview
+            content = (chunk.get('text') or chunk.get('content') or
+                      chunk.get('snippet') or chunk.get('text_preview') or '').strip()
+            source = self._get_chunk_source(chunk) or 'unknown'
+
             if content:
                 context_parts.append(f"[{source}]\n{content}")
         
@@ -1610,14 +1640,17 @@ class LlamaLLM:
         """컨텍스트 포맷팅"""
         formatted = []
         for chunk in context_chunks:
-            source = Path(chunk.get('source', '')).name
-            content = chunk.get('content', '')
-            formatted.append(f"[{source}]\n{content}")
+            source = self._get_chunk_source(chunk)
+            source_name = Path(source).name if source else 'unknown'
+            # 폴백 체인: text → content → snippet → text_preview
+            content = (chunk.get('text') or chunk.get('content') or
+                      chunk.get('snippet') or chunk.get('text_preview') or '')
+            formatted.append(f"[{source_name}]\n{content}")
         return "\n\n".join(formatted)
     
     def _extract_sources(self, context_chunks: List[Dict[str, Any]]) -> List[str]:
         """소스 추출"""
-        return [Path(chunk.get('source', '')).name for chunk in context_chunks]
+        return [Path(self._get_chunk_source(chunk)).name for chunk in context_chunks if self._get_chunk_source(chunk)]
 
 def create_llm(model_type: str = "llama", **kwargs) -> Any:
     """LLM 팩토리 함수"""

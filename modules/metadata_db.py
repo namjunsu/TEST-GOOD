@@ -344,6 +344,22 @@ class MetadataDB:
         row = cur.fetchone()
         return dict(row) if row else None
 
+    def get_text_preview(self, filename: str) -> Optional[str]:
+        """파일명으로 text_preview 조회 (snippet 보강용)
+
+        Args:
+            filename: 파일명 (확장자 포함 가능)
+
+        Returns:
+            text_preview 문자열 또는 None
+        """
+        cursor = self.conn.execute(
+            "SELECT text_preview FROM documents WHERE filename = ? COLLATE NOCASE LIMIT 1",
+            (filename,)
+        )
+        row = cursor.fetchone()
+        return row["text_preview"] if row and row["text_preview"] else None
+
     def update_document(self, filename: str, **kwargs):
         """문서 메타데이터 간편 업데이트 (perfect_rag.py 호환용)"""
         # 먼저 문서 찾기

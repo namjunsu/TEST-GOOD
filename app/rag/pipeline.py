@@ -317,7 +317,14 @@ class RAGPipeline:
                     f"Injected {len(compressed)} compressed chunks into generator"
                 )
 
-            context = "\n\n".join([c.get("snippet", "") for c in compressed])
+            # 🔥 HOTFIX: Use Context Hydrator instead of simple snippet join
+            from app.rag.utils.context_hydrator import hydrate_context
+            context, hydrator_metrics = hydrate_context(compressed, max_len=10000)
+            logger.info(
+                f"LLM_CTX len={len(context)}; "
+                f"parts=[chunks:{hydrator_metrics['chunks_used']}, "
+                f"pdf_tail:{hydrator_metrics['pdf_tail_pages']}]"
+            )
 
             # [DIAG] 생성 전 컨텍스트 스냅샷
             if DIAG_RAG and DIAG_LOG_LEVEL == "DEBUG":

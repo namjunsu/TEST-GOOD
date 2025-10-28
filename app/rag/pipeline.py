@@ -1512,8 +1512,7 @@ class RAGPipeline:
                         llm_response = self.generator.generate(
                             query=prompt,
                             context="",  # 프롬프트에 이미 포함됨
-                            temperature=0.2,  # 낮은 temperature로 일관성 향상
-                            max_tokens=800  # 요약 길이 제한
+                            temperature=0.2  # 낮은 temperature로 일관성 향상
                         )
 
                         logger.info(f"✓ LLM 응답 수신: {len(llm_response)}자")
@@ -1567,8 +1566,7 @@ class RAGPipeline:
                         free_summary = self.generator.generate(
                             query=free_form_prompt,
                             context="",
-                            temperature=0.3,
-                            max_tokens=500
+                            temperature=0.3
                         )
 
                         # 배너 + 자유 요약

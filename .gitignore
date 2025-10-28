@@ -77,3 +77,19 @@ tmp/
 docs/**/*.pdf
 docs/**/*.docx
 docs/**/*.xlsx
+
+# Build artifacts and runtime files
+.coverage
+coverage.xml
+logs/
+*.log
+data/
+*.db.bak*
+*.db.backup*
+
+# Test artifacts
+test_*.py
+verify_*.py
+check_*.py
+debug_*.py
+health_check.py

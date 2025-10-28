@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import re
+from functools import lru_cache
 
 logger = get_logger(__name__)
 
@@ -343,6 +344,73 @@ class MetadataDB:
         )
         row = cur.fetchone()
         return dict(row) if row else None
+
+    def get_text_preview(self, filename: str) -> Optional[str]:
+        """파일명으로 text_preview 조회 (snippet 보강용)
+
+        Args:
+            filename: 파일명 (확장자 포함 가능)
+
+        Returns:
+            text_preview 문자열 또는 None
+        """
+        cursor = self.conn.execute(
+            "SELECT text_preview FROM documents WHERE filename = ? COLLATE NOCASE LIMIT 1",
+            (filename,)
+        )
+        row = cursor.fetchone()
+        return row["text_preview"] if row and row["text_preview"] else None
+
+    def get_page_text(self, doc_id: str, page: int) -> Optional[str]:
+        """특정 문서의 특정 페이지 텍스트 추출 (캐시 지원)
+
+        Args:
+            doc_id: 문서 ID (filename 또는 path)
+            page: 페이지 번호 (1-based)
+
+        Returns:
+            페이지 텍스트 또는 None
+        """
+        try:
+            # 문서 경로 조회
+            cursor = self.conn.execute(
+                "SELECT path FROM documents WHERE filename = ? OR path = ? LIMIT 1",
+                (doc_id, doc_id)
+            )
+            row = cursor.fetchone()
+
+            if not row:
+                logger.debug(f"문서를 찾을 수 없음: {doc_id}")
+                return None
+
+            pdf_path = Path(row["path"])
+
+            if not pdf_path.exists():
+                logger.debug(f"PDF 파일 없음: {pdf_path}")
+                return None
+
+            # PDF에서 페이지 추출 (pdfplumber 사용)
+            try:
+                import pdfplumber
+
+                with pdfplumber.open(pdf_path) as pdf:
+                    if page < 1 or page > len(pdf.pages):
+                        logger.debug(f"페이지 범위 초과: {page} (총 {len(pdf.pages)}쪽)")
+                        return None
+
+                    page_obj = pdf.pages[page - 1]  # 0-based index
+                    text = page_obj.extract_text() or ""
+
+                    logger.debug(f"페이지 추출 성공: {doc_id} page={page}, len={len(text)}")
+                    return text.strip()
+
+            except Exception as e:
+                logger.error(f"PDF 페이지 추출 실패: {pdf_path} page={page}, error={e}")
+                return None
+
+        except Exception as e:
+            logger.error(f"get_page_text 실패: doc_id={doc_id}, page={page}, error={e}")
+            return None
 
     def update_document(self, filename: str, **kwargs):
         """문서 메타데이터 간편 업데이트 (perfect_rag.py 호환용)"""

@@ -58,11 +58,39 @@ class HybridRetriever:
                 # 정규화된 형식으로 변환
                 normalized = []
                 for r in results[:top_k]:
+                    # 🔥 HOTFIX: snippet 폴백 체인 (text → content → preview → text_preview)
+                    snippet = (
+                        (r.get("text") or "").strip()
+                        or (r.get("content") or "").strip()
+                        or (r.get("preview") or "").strip()
+                        or (r.get("text_preview") or "").strip()
+                        or (r.get("snippet") or "").strip()
+                    )
+
+                    # snippet이 여전히 비어있으면 DB에서 페이지 텍스트 로드 시도
+                    if not snippet:
+                        filename = r.get("filename")
+                        if filename and hasattr(self.rag, "metadata_db"):
+                            try:
+                                # DB에서 text_preview 조회
+                                from modules.metadata_db import MetadataDB
+                                db_text = self.rag.metadata_db.get_text_preview(filename)
+                                if db_text:
+                                    snippet = db_text.strip()
+                                    logger.debug(f"snippet_filled from=db_preview filename={filename}")
+                            except Exception as e:
+                                logger.debug(f"DB 조회 실패: {e}")
+
+                    # 최종 안전장치: 여전히 비어있으면 파일명이라도 표시
+                    if not snippet:
+                        snippet = f"[{r.get('filename', 'unknown')}]"
+                        logger.warning(f"⚠️ snippet 비어있음, fallback to filename: {r.get('filename')}")
+
                     normalized.append({
                         "doc_id": r.get("filename", "unknown"),
                         "page": 1,  # 페이지 정보 없음
                         "score": r.get("score", 0.0),
-                        "snippet": r.get("preview", "")[:400],  # 스니펫 400자
+                        "snippet": snippet[:800],  # 스니펫 800자 상한
                         "meta": {
                             "filename": r.get("filename", ""),
                             "drafter": r.get("drafter", ""),

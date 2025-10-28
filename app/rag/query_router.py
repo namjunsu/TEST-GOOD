@@ -57,7 +57,24 @@ class QueryRouter:
 
     # 비용 질의 패턴 (합계/총액/금액 얼마 질의)
     COST_INTENT_PATTERN = re.compile(
-        r"(합계|총액|총계|금액|비용).*(얼마|알려줘|확인|인지)|얼마였지|얼마였나요|얼마야",
+        r"("
+        # Pattern 1: Original - cost keyword + interrogative (backward compatibility)
+        r"(합계|총액|총계|금액|비용).*(얼마|알려줘|확인|인지)"
+        r"|"
+        # Pattern 2: Original - short interrogative forms
+        r"얼마였지|얼마였나요|얼마야"
+        r"|"
+        # Pattern 3: NEW - cost keyword + optional particle + question mark (e.g., "총액은?")
+        r"(총액|금액|비용|합계|총계)(은|는)?\s*\?"
+        r"|"
+        # Pattern 4: NEW - context + cost keyword (e.g., "기안한 문서 총액", "소모품 구매 총액")
+        r"(기안|작성|문서|구매|소모품|발주|납품).*(총액|금액|비용|합계|총계)"
+        r"|"
+        # Pattern 5: NEW - compound cost phrases (e.g., "비용 합계", "합계 금액")
+        r"(비용|구매)\s*(합계|총액)"
+        r"|"
+        r"(합계|총액)\s*(금액|비용)"
+        r")",
         re.IGNORECASE,
     )
 

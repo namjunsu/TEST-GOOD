@@ -1,0 +1,98 @@
+📦 License and Security Report
+============================================================
+Total packages: 109
+Scan date: Wed Oct 29 19:58:58 KST 2025
+
+📊 License Distribution:
+------------------------------
+  Copyleft       :   9 (  8.3%)
+  Other          :   7 (  6.4%)
+  Permissive     :  57 ( 52.3%)
+  Proprietary    :  12 ( 11.0%)
+  Unknown        :  24 ( 22.0%)
+
+📜 Package Licenses:
+------------------------------
+
+Permissive Licenses:
+  • Automat                        22.10.0         MIT
+  • Babel                          2.10.3          BSD
+  • Jinja2                         3.1.2           BSD-3-Clause
+  • MarkupSafe                     2.1.5           BSD-3-Clause
+  • PyHamcrest                     2.1.0           BSD License
+  • PyJWT                          2.7.0           MIT
+  • PyYAML                         6.0.1           MIT
+  • Pygments                       2.17.2          BSD-2-Clause
+  • Twisted                        24.3.0          MIT License
+  • bcrypt                         3.2.2           Apache License, Version 2.0
+  • charset-normalizer             3.4.4           MIT
+  • click                          8.1.6           BSD-3-Clause
+  • cloud-init                     25.2            Dual-licensed under GPLv3 or Apache 2.0
+  • configobj                      5.0.8           BSD (2 clause)
+  • constantly                     23.10.4         MIT
+  • cryptography                   41.0.7          Apache-2.0 OR BSD-3-Clause
+  • dbus-python                    1.3.2           Expat (MIT/X11)
+  • distro                         1.9.0           Apache License, Version 2.0
+  • faiss-cpu                      1.12.0          MIT
+  • httplib2                       0.20.4          MIT
+  ... and 37 more
+
+Copyleft Licenses:
+  • PyGObject                      3.48.2          GNU LGPL
+  • chardet                        5.2.0           LGPL
+  • launchpadlib                   1.11.0          LGPL v3
+  • lazr.restfulclient             0.14.6          LGPL v3
+  • lazr.uri                       1.0.6           LGPL v3
+  • python-apt                     2.7.7+ubuntu5   GNU GPL
+  • systemd-python                 235             LGPLv2+
+  • ubuntu-pro-client              8001            GPLv3
+  • wadllib                        1.3.6           LGPL v3
+
+Other Licenses:
+  • certifi                        2023.11.17      MPL-2.0
+  • command-not-found              0.3             UNKNOWN
+  • numpy                          2.3.4           Copyright (c) 2005-2025, NumPy Developers.
+  • pillow                         12.0.0          HPND
+  • python-dateutil                2.9.0.post0     Dual License
+  • scipy                          1.16.2          Copyright (c) 2001-2002 Enthought, Inc. 2003, SciPy Developers.
+  • zope.interface                 6.1             ZPL 2.1
+
+Unknown Licenses:
+  • PyPDF2                         3.0.1           
+  • attrs                          23.2.0          
+  • blinker                        1.7.0           
+  • colorama                       0.4.6           
+  • distro-info                    1.7+build1      
+  • filelock                       3.20.0          
+  • fsspec                         2025.9.0        
+  • hf-xet                         1.1.10          
+  • idna                           3.6             
+  • markdown-it-py                 3.0.0           
+  • mdurl                          0.1.2           
+  • packaging                      25.0            
+  • pdfminer.six                   20250506        
+  • pdfplumber                     0.11.7          
+  • pyparsing                      3.1.1           
+  • regex                          2025.10.23      
+  • safetensors                    0.6.2           
+  • service-identity               24.1.0          
+  • setuptools                     68.1.2          
+  • tokenizers                     0.22.1          
+  ... and 4 more
+
+🔒 Security Analysis:
+------------------------------
+✅ No immediate security concerns identified
+
+📋 Compliance Summary:
+------------------------------
+✅ Permissive licenses: 57 packages
+⚠️  Copyleft licenses: 9 packages
+ℹ️  Unknown licenses: 24 packages
+
+Risk Level: 🔴 HIGH
+
+💡 Recommendations:
+------------------------------
+1. Review copyleft licensed packages for compliance
+2. Investigate packages with unknown licenses

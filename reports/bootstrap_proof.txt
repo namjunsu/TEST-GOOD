@@ -1,0 +1,39 @@
+🚀 AI-CHAT Bootstrap Test
+=========================
+Start: Wed Oct 29 19:49:33 KST 2025
+
+[1/6] Checking prerequisites...
+Python 3.12.3
+pip 24.0 from /usr/lib/python3/dist-packages/pip (python 3.12)
+
+[2/6] Virtual environment exists
+
+[3/6] Installing dependencies...
+
+[notice] A new release of pip is available: 25.2 -> 25.3
+[notice] To update, run: pip install --upgrade pip
+
+[4/6] Configuring environment...
+.env exists
+
+[5/6] Running smoke tests...
+🏆 Results: 8/8 tests passed
+✅ All smoke tests passed!
+
+[6/6] Verifying system components...
+[19:49:34] INFO     app: Logging system initialized
+✅ All components importable
+
+=========================
+End: Wed Oct 29 19:49:35 KST 2025
+Total time: 1 seconds (0 minutes)
+✅ Bootstrap completed in under 10 minutes!
+
+📊 Summary:
+- Prerequisites: ✅
+- Environment: ✅
+- Dependencies: ✅
+- Tests: ✅
+- Components: ✅
+
+✅ System ready to run with: ./start_ai_chat.sh

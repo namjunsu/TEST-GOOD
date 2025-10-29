@@ -269,7 +269,7 @@ class PDFViewer:
                 img_display = img
 
             # 이미지 표시
-            st.image(img_display, use_container_width=True)
+            st.image(img_display)
 
             # 페이지 네비게이션 버튼
             if total_pages > 1:

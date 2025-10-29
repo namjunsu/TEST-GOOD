@@ -149,7 +149,7 @@ def render_document_card(title, info):
                     if st.button(
                         "🔍 미리보기" if not current_state else "📖 미리보는중",
                         key=preview_key,
-                        use_container_width=True,
+                        width="stretch",
                         type="secondary" if not current_state else "primary"
                     ):
                         st.session_state[f'show_preview_{preview_key}'] = not current_state
@@ -183,7 +183,7 @@ def render_document_card(title, info):
                             file_name=info['filename'],
                             mime="application/pdf",
                             key=f"dl_{hashlib.md5(unique_id.encode()).hexdigest()}",
-                            use_container_width=True,
+                            width="stretch",
                             help=f"클릭하여 {info['filename']} 파일을 다운로드합니다"
                         )
                     except MemoryError:
@@ -279,9 +279,9 @@ def main():
     with col2:
         # 로고 이미지 표시 (흰색 버전)
         if Path('channel_a_logo_inverted.png').exists():
-            st.image('channel_a_logo_inverted.png', use_container_width=True)
+            st.image('channel_a_logo_inverted.png')
         elif Path('channel_a_logo.png').exists():
-            st.image('channel_a_logo.png', use_container_width=True)
+            st.image('channel_a_logo.png')
         
         # 제목
         st.markdown("""

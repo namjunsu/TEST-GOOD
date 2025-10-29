@@ -244,11 +244,42 @@ class MetadataDB:
             params.append(f"{year}%")
             params.append(f"{year}%")
 
-        query += " ORDER BY date DESC LIMIT ?"
-        params.append(limit)
+        query += " ORDER BY date DESC"
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
 
         cursor = self.conn.execute(query, params)
         return [dict(row) for row in cursor.fetchall()]
+
+    def count_documents(
+        self, drafter: Optional[str] = None, year: Optional[str] = None
+    ) -> int:
+        """문서 개수 조회 (필터 적용)
+
+        Args:
+            drafter: 기안자명 (부분 일치)
+            year: 연도 (display_date 기준, 예: "2024")
+
+        Returns:
+            조건에 맞는 문서 개수
+        """
+        query = "SELECT COUNT(*) as count FROM documents WHERE 1=1"
+        params = []
+
+        if drafter:
+            query += " AND drafter LIKE ?"
+            params.append(f"%{drafter}%")
+
+        if year:
+            # display_date 또는 date 필드에서 연도 추출
+            query += " AND (display_date LIKE ? OR date LIKE ?)"
+            params.append(f"{year}%")
+            params.append(f"{year}%")
+
+        cursor = self.conn.execute(query, params)
+        result = cursor.fetchone()
+        return result["count"] if result else 0
 
     def search_by_category(self, category: str) -> List[Dict[str, Any]]:
         """카테고리별 검색"""
@@ -324,23 +355,35 @@ class MetadataDB:
         Returns:
             가장 유사한 문서 딕셔너리 또는 None
         """
+        # 이모지와 메타데이터 제거 (🏷, 📅, ✍ 등)
+        # "뉴스 스튜디오 지미집 Control Box 수리 건 🏷 proposal · 📅 2024-11-25 · ✍ 남준수"
+        # -> "뉴스 스튜디오 지미집 Control Box 수리 건"
+        clean_name = re.sub(r'[🏷📅✍·].*$', '', name).strip()
+
         def slug(s):
             """문자열 정규화: 소문자 + 특수기호 제거"""
             s = s.lower().replace("&", "and")
+            # 공백과 언더스코어를 모두 제거하여 비교
             return re.sub(r"[^0-9a-z가-힣]", "", s)
 
-        s = slug(name)
+        s = slug(clean_name)
+
+        # 빈 문자열이면 None 반환
+        if not s:
+            return None
+
         cur = self.conn.cursor()
+        # SQL에서도 모든 특수문자 제거하여 비교
         cur.execute(
             """
             SELECT *,
               ABS(LENGTH(filename) - ?) AS len_diff
             FROM documents
-            WHERE REPLACE(REPLACE(LOWER(filename), '_',''), ' ','') LIKE ?
+            WHERE LOWER(REPLACE(REPLACE(REPLACE(REPLACE(filename, '_',''), ' ',''), '.pdf',''), '-','')) LIKE ?
             ORDER BY len_diff ASC
             LIMIT 1
             """,
-            (len(name), f"%{s}%"),
+            (len(clean_name), f"%{s}%"),
         )
         row = cur.fetchone()
         return dict(row) if row else None

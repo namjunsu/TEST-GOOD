@@ -859,15 +859,29 @@ class RAGPipeline:
             drafter_match = re.search(r"([가-힣]{2,4})(가|이)?", query)
             drafter = drafter_match.group(1) if drafter_match else None
 
-            logger.info(f"📋 목록 검색: year={year}, drafter={drafter}")
+            # '전부', '전체' 등은 필터 미적용
+            if drafter in ('전부', '전체', '모든', '모두', '전체', '*'):
+                drafter = None
+                limit = None  # 전체 결과 반환
+            else:
+                limit = 20  # 기본 페이지 크기
+
+            logger.info(f"📋 목록 검색: year={year}, drafter={drafter}, limit={limit}")
 
             # DB 검색
             db = MetadataDB()
-            docs = db.search_documents(drafter=drafter, year=year, limit=20)
+            docs = db.search_documents(drafter=drafter, year=year, limit=limit)
+
+            # 전체 카운트 조회
+            total_count = db.count_documents(drafter=drafter, year=year)
 
             if not docs:
                 return {
+                    "mode": "LIST",
                     "text": f"검색 결과가 없습니다. (year={year}, drafter={drafter})",
+                    "files": [],
+                    "count": 0,
+                    "total_count": 0,
                     "citations": [],
                     "evidence": [],
                     "status": {
@@ -937,16 +951,28 @@ class RAGPipeline:
                     }
                 })
 
+            # 파일 목록 추출
+            file_list = [doc.get("filename") for doc in docs if doc.get("filename")]
+
             # 품질 방어선 로그 (재현 용이성)
             logger.info({
                 "mode": "LIST",
-                "files": [doc.get("filename") for doc in docs[:3]],
+                "files": file_list[:3],
                 "count": len(docs),
+                "total_count": total_count,
                 "llm": os.getenv("LLM_ENABLED", "false").lower() == "true"
             })
 
+            # total_count 정보 추가
+            if total_count > len(docs):
+                answer_text = f"📊 **전체 {total_count}건 중 {len(docs)}건 표시**\n\n" + answer_text
+
             return {
+                "mode": "LIST",
                 "text": answer_text,
+                "files": file_list,
+                "count": len(docs),
+                "total_count": total_count,
                 "citations": evidence,
                 "evidence": evidence,
                 "status": {
@@ -1204,6 +1230,76 @@ class RAGPipeline:
                 }
             }
 
+    def _safe_fname(self, meta: dict = None, doc_path: str = None) -> str:
+        """파일명 안전 추출 (다양한 소스에서 시도)
+
+        Args:
+            meta: 메타데이터 딕셔너리
+            doc_path: 문서 경로
+
+        Returns:
+            안전하게 추출된 파일명 (기본값: '미상 문서')
+        """
+        import os
+
+        meta = meta or {}
+
+        # 다양한 필드에서 파일명 시도
+        fname = (
+            meta.get("fname")
+            or meta.get("filename")
+            or meta.get("doc_id")
+            or (os.path.basename(doc_path) if doc_path else None)
+            or "미상 문서"
+        )
+
+        return fname
+
+    def _make_chunks_for_doc(self, filename: str) -> list:
+        """특정 문서의 청크만 로드 (문서 고정 모드용)
+
+        Args:
+            filename: 문서 파일명
+
+        Returns:
+            해당 문서의 청크 리스트
+        """
+        try:
+            # 전체 검색 인덱스에서 해당 문서만 필터링
+            import sqlite3
+            conn = sqlite3.connect("rag_system/db/everything_index.db")
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT doc_id, page, snippet as text, score
+                FROM documents
+                WHERE doc_id = ? OR doc_id = ?
+                ORDER BY page, score DESC
+                LIMIT 20
+            """, (filename, filename.replace('.pdf', '')))
+
+            chunks = []
+            for row in cursor:
+                chunks.append({
+                    'doc_id': row['doc_id'],
+                    'page': row['page'],
+                    'text': row['text'],
+                    'score': row['score'],
+                    'filename': filename
+                })
+
+            conn.close()
+
+            if not chunks:
+                logger.warning(f"⚠️ 문서 청크 없음: {filename}")
+
+            return chunks
+
+        except Exception as e:
+            logger.error(f"❌ 문서 청크 로드 실패: {e}")
+            return []
+
     def _extract_with_ocr(self, pdf_path: str, start_page: int, total_pages: int) -> str:
         """OCR을 사용하여 PDF에서 텍스트 추출 (pytesseract 우선, paddleocr 폴백)
 
@@ -1268,12 +1364,13 @@ class RAGPipeline:
             logger.error(f"❌ OCR 추출 실패: {e}")
             return ""
 
-    def _gather_summary_context(self, filename: str, pdf_path: str) -> str:
+    def _gather_summary_context(self, filename: str, pdf_path: str, doc_locked: bool = False) -> str:
         """요약용 컨텍스트 수집 (PDF 끝 + RAG 청크 + 스냅샷)
 
         Args:
             filename: 파일명
             pdf_path: PDF 파일 경로
+            doc_locked: True면 해당 문서 청크만 사용 (다른 문서 검색 금지)
 
         Returns:
             수집된 컨텍스트 텍스트 (최대 10,000자)
@@ -1301,24 +1398,37 @@ class RAGPipeline:
         except Exception as e:
             logger.warning(f"⚠️ PDF 끝부분 추출 실패: {e}")
 
-        # 2) RAG 상위 청크 (같은 파일만)
+        # 2) RAG 상위 청크 (doc_locked=True면 같은 파일만, False면 일반 검색)
         try:
-            import re
-            # 파일명에서 핵심 키워드 추출
-            search_keywords = re.sub(r'^\d{4}-\d{2}-\d{2}_', '', filename)  # 날짜 제거
-            search_keywords = re.sub(r'\.pdf$', '', search_keywords, flags=re.IGNORECASE)
-            search_keywords = search_keywords.replace('_', ' ')
+            if doc_locked:
+                # 문서 고정 모드: 해당 문서의 청크만 로드
+                logger.info(f"🔒 문서 고정 모드: {filename}의 청크만 사용")
+                chunks = self._make_chunks_for_doc(filename)
 
-            hits = self.retriever.search(search_keywords, top_k=5)
-            same_file_hits = [h for h in hits if h.get("filename") == filename][:3]
+                for i, chunk in enumerate(chunks[:5], 1):
+                    chunk_text = chunk.get('text') or chunk.get('snippet') or chunk.get('content') or ""
+                    if chunk_text:
+                        parts.append(f"=== [문서 청크 {i}] ===\n" + chunk_text[:2000])
 
-            for i, h in enumerate(same_file_hits, 1):
-                chunk_text = h.get('text') or h.get('snippet') or h.get('content') or ""
-                if chunk_text:
-                    parts.append(f"=== [관련 청크 {i}] ===\n" + chunk_text[:2000])
+                if chunks:
+                    logger.info(f"✓ 문서 고정 청크 {len(chunks[:5])}개 추출")
+            else:
+                # 일반 모드: 키워드 검색 후 같은 파일 필터링
+                import re
+                search_keywords = re.sub(r'^\d{4}-\d{2}-\d{2}_', '', filename)  # 날짜 제거
+                search_keywords = re.sub(r'\.pdf$', '', search_keywords, flags=re.IGNORECASE)
+                search_keywords = search_keywords.replace('_', ' ')
 
-            if same_file_hits:
-                logger.info(f"✓ RAG 청크 {len(same_file_hits)}개 추출")
+                hits = self.retriever.search(search_keywords, top_k=5)
+                same_file_hits = [h for h in hits if h.get("filename") == filename][:3]
+
+                for i, h in enumerate(same_file_hits, 1):
+                    chunk_text = h.get('text') or h.get('snippet') or h.get('content') or ""
+                    if chunk_text:
+                        parts.append(f"=== [관련 청크 {i}] ===\n" + chunk_text[:2000])
+
+                if same_file_hits:
+                    logger.info(f"✓ RAG 청크 {len(same_file_hits)}개 추출")
         except Exception as e:
             logger.warning(f"⚠️ RAG 청크 추출 실패: {e}")
 
@@ -1352,13 +1462,44 @@ class RAGPipeline:
             parse_summary_json,
             format_summary_output
         )
+        from app.rag.utils.json_utils import (
+            parse_summary_json_robust,
+            ensure_citations,
+            validate_numeric_fields
+        )
 
         try:
-            # 1. .pdf 확장자 포함 파일명 추출 시도
-            filename_match = re.search(r"(\S+\.pdf)", query, re.IGNORECASE)
+            # 0. doc=<파일명> 또는 [DOC]<파일명> 패턴 확인 (정확 참조 토큰)
+            doc_ref = None
+            doc_locked = False
+            doc_exact_match = re.search(r"(?:doc=|DOC])\s*([^\s]+\.pdf)", query, re.IGNORECASE)
+            if not doc_exact_match:
+                doc_exact_match = re.search(r"\[DOC\]\s*([^\s]+\.pdf)", query, re.IGNORECASE)
 
+            if doc_exact_match:
+                doc_ref = doc_exact_match.group(1)
+                doc_locked = True
+                logger.info(f"🔒 정확 참조 모드: doc={doc_ref}")
+
+            # 1. .pdf 확장자 포함 파일명 추출 시도
+            filename_match = re.search(r"(\S+\.pdf)", query, re.IGNORECASE) if not doc_ref else None
+
+            # doc_ref가 있으면 직접 사용
+            if doc_ref:
+                conn = sqlite3.connect("metadata.db")
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT filename, drafter, date, display_date, category,
+                           text_preview, claimed_total, doctype
+                    FROM documents
+                    WHERE filename = ?
+                    LIMIT 1
+                """,
+                    (doc_ref,),
+                )
             # 2. 확장자 없으면 키워드 기반 검색
-            if not filename_match:
+            elif not filename_match:
                 # 불용어 제거 (요약, 이문서, 내용 등)
                 stopwords = ["요약", "요약해", "요약헤줘", "정리", "정리해", "이문서", "이 문서", "해당 문서",
                              "내용", "해줘", "헤줘", "알려줘", "알려", "보여줘", "보여"]
@@ -1414,8 +1555,8 @@ class RAGPipeline:
             result = cursor.fetchone()
             conn.close()
 
-            # 🔍 퍼지 매칭 Fallback (정확 매칭 실패 시)
-            if not result:
+            # 🔍 퍼지 매칭 Fallback (정확 매칭 실패 시, doc_locked이 아닌 경우만)
+            if not result and not doc_locked:
                 from modules.metadata_db import MetadataDB
 
                 search_term = filename if filename_match else keywords
@@ -1452,6 +1593,20 @@ class RAGPipeline:
                         }
                     }
 
+            # doc_locked 모드에서 문서를 찾지 못한 경우
+            if doc_locked and not result:
+                logger.warning(f"❌ 정확 참조 문서 없음: {doc_ref}")
+                return {
+                    "text": f"'{doc_ref}' 문서를 찾을 수 없습니다.",
+                    "citations": [],
+                    "evidence": [],
+                    "status": {
+                        "retrieved_count": 0,
+                        "selected_count": 0,
+                        "found": False
+                    }
+                }
+
             fname, drafter, date, display_date, category, text_preview, claimed_total, doctype = result
 
             # PDF 경로 확인
@@ -1463,8 +1618,8 @@ class RAGPipeline:
                 pdf_path = f"docs/{fname}"
 
             # 🔥 새 구조: 컨텍스트 수집 (PDF 끝 + RAG + 스냅샷)
-            logger.info(f"📋 컨텍스트 수집 시작: {fname}")
-            context_text = self._gather_summary_context(fname, pdf_path)
+            logger.info(f"📋 컨텍스트 수집 시작: {fname} (doc_locked={doc_locked})")
+            context_text = self._gather_summary_context(fname, pdf_path, doc_locked=doc_locked)
 
             # Fallback: 컨텍스트가 비어있으면 text_preview 사용
             if not context_text or len(context_text.strip()) < 100:
@@ -1517,10 +1672,15 @@ class RAGPipeline:
 
                         logger.info(f"✓ LLM 응답 수신: {len(llm_response)}자")
 
-                        # JSON 파싱 시도
-                        parsed_json = parse_summary_json(llm_response)
+                        # JSON 파싱 시도 (강건한 버전)
+                        parsed_json = parse_summary_json_robust(llm_response)
 
                         if parsed_json:
+                            # 인용 보강 (doc_locked 모드에서)
+                            if doc_locked:
+                                parsed_json = ensure_citations(parsed_json, doc_ref=fname)
+                            # 수치 필드 검증 (원문 대조)
+                            parsed_json = validate_numeric_fields(parsed_json, context_text)
                             logger.info(f"✓ JSON 파싱 성공 (시도 {attempt}회)")
                             break
                         else:
@@ -1554,7 +1714,7 @@ class RAGPipeline:
 핵심 내용, 목적, 금액(있으면), 결론 등을 간결하게 포함하세요.
 마크다운 형식으로 작성하세요.
 
-**문서명**: {filename}
+**문서명**: {fname}
 **기안자**: {drafter or '정보 없음'}
 **날짜**: {display_date or '정보 없음'}
 

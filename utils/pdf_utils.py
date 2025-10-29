@@ -63,7 +63,7 @@ def download_pdf_button(
     file_path: str,
     label: str = "⬇ 원본 다운로드",
     key: Optional[str] = None,
-    use_container_width: bool = True
+    width: str = "stretch"  # 'stretch' or 'content'
 ) -> bool:
     """표준화된 PDF 다운로드 버튼 (한글 파일명 안전)
 
@@ -71,7 +71,7 @@ def download_pdf_button(
         file_path: PDF 파일 경로
         label: 버튼 라벨
         key: Streamlit 위젯 키
-        use_container_width: 컨테이너 너비 사용 여부
+        width: 버튼 너비 ('stretch' 또는 'content')
 
     Returns:
         bool: 버튼 클릭 여부
@@ -86,7 +86,7 @@ def download_pdf_button(
             file_name=safe_file_path.name,
             mime="application/pdf",
             key=key,
-            use_container_width=use_container_width
+            width=width
         )
 
     except FileNotFoundError:

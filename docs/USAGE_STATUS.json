@@ -1,0 +1,512 @@
+[
+  {
+    "file": "web_interface.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "test_chat_interface_improved.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "config.py",
+    "state": "CORE",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "web_interface_chat.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "quick_fix_rag.py",
+    "state": "SECONDARY",
+    "covered": 0.1712,
+    "age_days": 0
+  },
+  {
+    "file": "test_current_state.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "test_config_improved.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "everything_like_search.py",
+    "state": "CORE",
+    "covered": 0.2151,
+    "age_days": 0
+  },
+  {
+    "file": "test_final_validation.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 1
+  },
+  {
+    "file": "rebuild_metadata.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "rebuild_rag_indexes.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 1
+  },
+  {
+    "file": "test_improvements.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "modules/intent_module.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "modules/cache_module.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "modules/optimized_llm.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 25
+  },
+  {
+    "file": "modules/reranker.py",
+    "state": "CORE",
+    "covered": 0.2019,
+    "age_days": 0
+  },
+  {
+    "file": "modules/search_module.py",
+    "state": "CORE",
+    "covered": 0.2061,
+    "age_days": 1
+  },
+  {
+    "file": "modules/llm_module.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "modules/ocr_processor.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "modules/metadata_db.py",
+    "state": "CORE",
+    "covered": 0.3594,
+    "age_days": 0
+  },
+  {
+    "file": "modules/search_module_hybrid.py",
+    "state": "CORE",
+    "covered": 0.2396,
+    "age_days": 1
+  },
+  {
+    "file": "modules/metadata_extractor.py",
+    "state": "CORE",
+    "covered": 0.1206,
+    "age_days": 2
+  },
+  {
+    "file": "modules/response_formatter.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "modules/document_module.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "modules/statistics_module.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "app/__init__.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "tests/test_results_list_postprocess.py",
+    "state": "TEST",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "tests/test_parse_meta.py",
+    "state": "TEST",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "tests/test_clean_text.py",
+    "state": "TEST",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "tests/test_l2_rag.py",
+    "state": "TEST",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "tests/test_filename_matching.py",
+    "state": "TEST",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "tests/test_parse_table.py",
+    "state": "TEST",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "tests/__init__.py",
+    "state": "TEST",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "components/chat_interface_before_improvement.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "components/chat_interface.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 1
+  },
+  {
+    "file": "components/pdf_viewer.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "components/sidebar_library.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "components/document_preview.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "components/__init__.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "scripts/smoke_test.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 1
+  },
+  {
+    "file": "scripts/audit_missing_content.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "scripts/run_smoke_test.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "scripts/bench_rag.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "scripts/test_queries.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "scripts/ingest_content.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "scripts/list_documents.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "scripts/quick_rebuild_bm25.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "rag_system/bm25_store.py",
+    "state": "CORE",
+    "covered": 0.1511,
+    "age_days": 2
+  },
+  {
+    "file": "rag_system/query_optimizer.py",
+    "state": "CORE",
+    "covered": 0.2842,
+    "age_days": 2
+  },
+  {
+    "file": "rag_system/qwen_llm.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "rag_system/enhanced_ocr_processor.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 30
+  },
+  {
+    "file": "rag_system/query_expansion.py",
+    "state": "CORE",
+    "covered": 0.1382,
+    "age_days": 2
+  },
+  {
+    "file": "rag_system/korean_vector_store.py",
+    "state": "CORE",
+    "covered": 0.1762,
+    "age_days": 2
+  },
+  {
+    "file": "rag_system/korean_reranker.py",
+    "state": "CORE",
+    "covered": 0.1888,
+    "age_days": 2
+  },
+  {
+    "file": "rag_system/llm_singleton.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 30
+  },
+  {
+    "file": "rag_system/metadata_extractor.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 30
+  },
+  {
+    "file": "rag_system/document_compression.py",
+    "state": "CORE",
+    "covered": 0.1778,
+    "age_days": 2
+  },
+  {
+    "file": "rag_system/multilevel_filter.py",
+    "state": "CORE",
+    "covered": 0.2781,
+    "age_days": 1
+  },
+  {
+    "file": "rag_system/hybrid_search.py",
+    "state": "CORE",
+    "covered": 0.08929,
+    "age_days": 1
+  },
+  {
+    "file": "rag_system/__init__.py",
+    "state": "SECONDARY",
+    "covered": 1.0,
+    "age_days": 30
+  },
+  {
+    "file": "utils/system_checker.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "utils/session_manager.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "utils/document_loader.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "utils/error_handler.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 3
+  },
+  {
+    "file": "utils/css_loader.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "utils/performance.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 3
+  },
+  {
+    "file": "app/rag/query_router.py",
+    "state": "CORE",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "app/rag/pipeline.py",
+    "state": "CORE",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "app/rag/__init__.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "app/core/logging.py",
+    "state": "CORE",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "app/core/errors.py",
+    "state": "CORE",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "app/core/__init__.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "app/api/main.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "app/api/__init__.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 1
+  },
+  {
+    "file": "app/rag/retrievers/__init__.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 2
+  },
+  {
+    "file": "app/rag/preprocess/clean_text.py",
+    "state": "CORE",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "app/rag/preprocess/__init__.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "app/rag/render/list_postprocess.py",
+    "state": "CORE",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "app/rag/render/summary_templates.py",
+    "state": "CORE",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "app/rag/render/__init__.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "app/rag/parse/parse_meta.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "app/rag/parse/parse_tables.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "app/rag/parse/__init__.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 0
+  },
+  {
+    "file": "scripts/utils/auto_index_watcher.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 4
+  },
+  {
+    "file": "scripts/utils/auto_indexer.py",
+    "state": "SECONDARY",
+    "covered": 0.0,
+    "age_days": 5
+  }
+]

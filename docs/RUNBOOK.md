@@ -253,6 +253,81 @@ git restore metadata.db everything_index.db
 ./start_ai_chat.sh
 ```
 
+## Rollback Plan
+
+### Emergency Rollback to Previous Version
+
+If critical issues occur after deployment, follow these 5 steps to rollback:
+
+#### Step 1: Stop Current Services
+```bash
+# Stop all running services
+pkill -f streamlit
+pkill -f uvicorn
+# Or if using systemd:
+sudo systemctl stop backend.service ui.service
+```
+
+#### Step 2: Create Backup of Current State
+```bash
+# Backup current databases and configs
+cp metadata.db metadata.db.$(date +%Y%m%d_%H%M%S).bak
+cp everything_index.db everything_index.db.$(date +%Y%m%d_%H%M%S).bak
+cp .env .env.$(date +%Y%m%d_%H%M%S).bak
+```
+
+#### Step 3: Checkout Previous Tag
+```bash
+# List available tags
+git tag -l
+
+# Rollback to pre-hygiene tag
+git checkout pre-hygiene-20251029
+
+# Or rollback to specific version
+git checkout v2025.10.28  # Replace with target version
+```
+
+#### Step 4: Restore Dependencies
+```bash
+# Clean and reinstall dependencies
+pip uninstall -y -r requirements.txt
+pip install -r requirements.txt
+```
+
+#### Step 5: Restart Services
+```bash
+# Start services
+./start_ai_chat.sh
+
+# Or if using systemd:
+sudo systemctl start backend.service ui.service
+
+# Verify services are running
+curl http://localhost:7860/_healthz
+curl http://localhost:8501
+```
+
+### Post-Rollback Verification
+```bash
+# Check service health
+make test
+
+# Verify database integrity
+python check_db_content.py
+
+# Monitor logs for errors
+tail -f logs/start_*.log
+```
+
+### Rollback Triggers
+Consider rollback if:
+- Service fails to start after 3 attempts
+- Database corruption detected
+- API response time > 5 seconds
+- Memory usage > 80% sustained
+- Critical functionality broken
+
 ## Maintenance Tasks
 
 ### Daily

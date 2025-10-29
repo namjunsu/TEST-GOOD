@@ -1,0 +1,40 @@
+[Unit]
+Description=AI-CHAT Streamlit UI
+Documentation=https://github.com/namjunsu/TEST-GOOD
+After=network.target backend.service
+Requires=network.target backend.service
+
+[Service]
+Type=simple
+User=ai-chat
+Group=ai-chat
+WorkingDirectory=/opt/ai-chat
+Environment="PATH=/opt/ai-chat/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONPATH=/opt/ai-chat"
+Environment="STREAMLIT_BROWSER_GATHER_USAGE_STATS=false"
+Environment="STREAMLIT_SERVER_HEADLESS=true"
+Environment="STREAMLIT_SERVER_PORT=8501"
+Environment="STREAMLIT_SERVER_ADDRESS=0.0.0.0"
+EnvironmentFile=/opt/ai-chat/.env
+ExecStartPre=/bin/bash -c 'source /opt/ai-chat/.venv/bin/activate && pip list | grep -q streamlit'
+ExecStart=/opt/ai-chat/.venv/bin/streamlit run web_interface.py --server.port 8501 --server.address 0.0.0.0 --server.headless true --browser.gatherUsageStats false
+ExecStop=/bin/kill -TERM $MAINPID
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/var/log/ai-chat/ui.log
+StandardError=append:/var/log/ai-chat/ui-error.log
+
+# Performance and Security
+LimitNOFILE=65535
+LimitNPROC=4096
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/ai-chat/logs /opt/ai-chat/*.db /var/log/ai-chat /opt/ai-chat/.streamlit
+
+# Health check
+ExecStartPost=/bin/bash -c 'sleep 10 && curl -f http://localhost:8501 || exit 1'
+
+[Install]
+WantedBy=multi-user.target

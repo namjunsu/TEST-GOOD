@@ -1904,14 +1904,9 @@ class RAGPipeline:
         Returns:
             QuickFixRAG: 레거시 RAG 인스턴스
         """
-        from quick_fix_rag import QuickFixRAG
-
-        # 레거시 시스템 초기화
-        logger.info("Loading legacy QuickFixRAG adapter...")
-        rag = QuickFixRAG(use_hybrid=True)
-        logger.info("Legacy adapter loaded successfully")
-
-        return rag
+        # QuickFixRAG 모듈이 제거됨 - None 반환
+        logger.warning("⚠️ QuickFixRAG 모듈이 제거됨 - 레거시 어댑터 사용 불가")
+        return None
 
     def _load_known_drafters(self) -> set:
         """메타DB에서 고유 기안자 로드 (Closed-World Validation용)
@@ -2008,6 +2003,9 @@ class _QuickFixGenerator:
 
             # 3) 폴백: 재검색이 포함된 answer는 최후 수단으로만
             logger.warning("generate_from_context 미지원 → 폴백(answer) 사용")
+            if self.rag is None:
+                logger.error("LegacyAdapter: QuickFixRAG가 없어 답변 생성 불가")
+                return "죄송합니다. 현재 답변 생성 기능이 비활성화되어 있습니다."
             return self.rag.answer(query, use_llm_summary=True)
         except Exception as e:
             logger.error(f"Generation 실패: {e}", exc_info=True)

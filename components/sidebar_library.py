@@ -105,9 +105,10 @@ def render_sidebar_library(rag_instance) -> None:
         from modules.metadata_db import MetadataDB
         db = MetadataDB()
 
-        # 총 문서 수
-        stats = db.get_statistics()
-        st.metric("총 문서", f"{stats['total_documents']}건")
+        # 고유 문서 수만 표시 (중복 제외)
+        cursor = db.conn.execute("SELECT COUNT(DISTINCT filename) as unique_files FROM documents")
+        unique_count = cursor.fetchone()["unique_files"]
+        st.metric("총 문서", f"{unique_count}건")
 
         # 최근 문서 (expander)
         with st.expander("최근 10건", expanded=False):
@@ -178,10 +179,11 @@ def render_sidebar_library(rag_instance) -> None:
 
     # 문서 목록이 로드된 경우 탭 표시
     if not df.empty:
-        # 전체 문서 개수를 작게 표시
+        # 고유 문서 개수를 작게 표시 (중복 제거)
+        unique_files = df['filename'].nunique() if 'filename' in df.columns else len(df)
         col1, col2 = st.columns([3, 1])
         with col1:
-            st.caption(f"전체 {len(df)}개 문서")
+            st.caption(f"검색 가능: {unique_files}개 문서")
 
         # 탭 구성
         tab1, tab2 = st.tabs(["📁 문서 검색", "📅 연도별"])

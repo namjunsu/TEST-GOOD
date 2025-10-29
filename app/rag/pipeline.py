@@ -233,7 +233,10 @@ class RAGPipeline:
         self.generator = generator or self._create_default_generator()
         self.query_router = QueryRouter()  # 🎯 모드 라우터 초기화
 
-        logger.info("RAG Pipeline initialized")
+        # 🔒 Closed-World Validation: 고유 기안자 캐싱
+        self.known_drafters = self._load_known_drafters()
+
+        logger.info(f"RAG Pipeline initialized (known_drafters: {len(self.known_drafters)}명)")
 
     def query(
         self,
@@ -839,34 +842,33 @@ class RAGPipeline:
         return result["text"]
 
     def _answer_list(self, query: str) -> dict:
-        """목록 검색 (2줄 카드 형식)
+        """목록 검색 (2줄 카드 형식) - Closed-World Validation 적용
 
         Args:
-            query: 사용자 질의 (예: "2024년 남준수 문서 찾아줘")
+            query: 사용자 질의 (예: "2024년 남준수 문서 찾아줘", "year:2024 drafter:최새름")
 
         Returns:
             dict: 표준 응답 구조 (2줄 카드 목록)
         """
-        import re
         from modules.metadata_db import MetadataDB
+        from app.rag.query_parser import QueryParser
 
         try:
-            # 연도 추출 (예: "2024년" → "2024")
-            year_match = re.search(r"(\d{4})년?", query)
-            year = year_match.group(1) if year_match else None
+            # 🔒 Closed-World Validation: 쿼리 파싱
+            parser = QueryParser(self.known_drafters)
+            filters = parser.parse_filters(query)
 
-            # 기안자 추출 (예: "남준수")
-            drafter_match = re.search(r"([가-힣]{2,4})(가|이)?", query)
-            drafter = drafter_match.group(1) if drafter_match else None
+            year = filters['year']
+            drafter = filters['drafter']
+            source = filters['source']
 
-            # '전부', '전체' 등은 필터 미적용
-            if drafter in ('전부', '전체', '모든', '모두', '전체', '*'):
-                drafter = None
-                limit = None  # 전체 결과 반환
+            # '전부', '전체' 등 명시 시 limit 제거
+            if any(keyword in query for keyword in ['전부', '전체', '모든', '모두']):
+                limit = None
             else:
                 limit = 20  # 기본 페이지 크기
 
-            logger.info(f"📋 목록 검색: year={year}, drafter={drafter}, limit={limit}")
+            logger.info(f"📋 목록 검색: year={year}, drafter={drafter}, source={source}, limit={limit}")
 
             # DB 검색
             db = MetadataDB()
@@ -1910,6 +1912,25 @@ class RAGPipeline:
         logger.info("Legacy adapter loaded successfully")
 
         return rag
+
+    def _load_known_drafters(self) -> set:
+        """메타DB에서 고유 기안자 로드 (Closed-World Validation용)
+
+        Returns:
+            set: 고유 기안자 이름 집합
+        """
+        try:
+            from modules.metadata_db import MetadataDB
+
+            db = MetadataDB()
+            drafters = db.list_unique_drafters()
+            db.close()
+
+            logger.info(f"✅ 고유 기안자 {len(drafters)}명 캐싱 완료")
+            return drafters
+        except Exception as e:
+            logger.error(f"기안자 로드 실패: {e}")
+            return set()
 
 
 # ============================================================================

@@ -14,9 +14,10 @@ def render_document_preview(rag_instance: Any, config_module: Any) -> None:
 
     Args:
         rag_instance: RAG 시스템 인스턴스 (st.session_state.rag)
-        config_module: config 모듈 (config.DOCS_DIR 접근용)
+        config_module: config 모듈 (config.DOCS_DIR 접근용) - app.config.settings
     """
     from components.pdf_viewer import show_pdf_preview
+    from app.config.settings import DOCS_DIR
 
     # 선택된 문서 미리보기 (사이드바에서 선택시)
     if 'selected_doc' in st.session_state and st.session_state.get('show_doc_preview', False):
@@ -36,7 +37,10 @@ def render_document_preview(rag_instance: Any, config_module: Any) -> None:
 
         with col3:
             # Use the full path from metadata, not just filename
-            file_path = Path(doc.get('path', Path(config_module.DOCS_DIR) / doc['filename']))
+            if 'path' in doc and doc['path']:
+                file_path = Path(doc['path'])
+            else:
+                file_path = Path(DOCS_DIR) / doc['filename']
             if file_path.exists():
                 with open(file_path, 'rb') as f:
                     pdf_bytes = f.read()
@@ -90,7 +94,7 @@ def render_document_preview(rag_instance: Any, config_module: Any) -> None:
                     except MemoryError as _:
                         st.error(f"💾 메모리 부족: 너무 큰 문서를 처리하려고 합니다")
                         st.info("💡 문서를 개별로 검색하거나 시스템을 재시작해주세요")
-                    except Exception as _:
+                    except Exception as e:
                         st.error(f"❌ 예상치 못한 오류가 발생했습니다")
                         with st.expander("🔍 상세 오류 정보"):
                             st.text(f"오류 타입: {type(e).__name__}")
@@ -128,7 +132,10 @@ def render_document_preview(rag_instance: Any, config_module: Any) -> None:
             # PDF 미리보기 표시
             if st.session_state.pdf_preview_shown:
                 # Use the full path from metadata, not just filename
-                file_path = Path(doc.get('path', Path(config_module.DOCS_DIR) / doc['filename']))
+                if 'path' in doc and doc['path']:
+                    file_path = Path(doc['path'])
+                else:
+                    file_path = Path(DOCS_DIR) / doc['filename']
                 if file_path.exists():
                     with st.spinner("📄 PDF 로딩 중..."):
                         show_pdf_preview(file_path, height)

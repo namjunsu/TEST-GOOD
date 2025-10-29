@@ -543,10 +543,156 @@ class MetadataDB:
         self.conn.commit()
         logger.info("FTS 인덱스 재구축 완료")
 
+    def list_unique_drafters(self) -> set:
+        """DB에 존재하는 고유 기안자 목록 반환 (Closed-World Validation용)
+
+        Returns:
+            set: 고유 기안자 이름 집합
+        """
+        try:
+            cursor = self.conn.execute("""
+                SELECT DISTINCT drafter
+                FROM documents
+                WHERE drafter IS NOT NULL
+                  AND drafter != ''
+                  AND drafter != '미상'
+                  AND drafter != '작성자 미상'
+            """)
+            drafters = {row['drafter'] for row in cursor.fetchall()}
+            logger.info(f"✅ 고유 기안자 {len(drafters)}명 로드")
+            return drafters
+        except Exception as e:
+            logger.error(f"기안자 목록 조회 실패: {e}")
+            return set()
+
     def close(self):
         """데이터베이스 연결 종료"""
         if self.conn:
             self.conn.close()
+
+    def count_unique_documents(self, allowed_ext=('pdf', 'txt')) -> int:
+        """고유 문서 수 카운트 (중복 제거, 확장자 필터)
+
+        Args:
+            allowed_ext: 허용 확장자 튜플 (기본: pdf, txt)
+
+        Returns:
+            고유 문서 수
+        """
+        try:
+            # 확장자 조건 생성
+            ext_conditions = []
+            for ext in allowed_ext:
+                ext_conditions.append(f"LOWER(filename) LIKE '%.{ext}'")
+            ext_where = f"({' OR '.join(ext_conditions)})" if ext_conditions else "1=1"
+
+            # 고유 문서 카운트 (중복 제거)
+            query = f"""
+                SELECT COUNT(DISTINCT filename) as count
+                FROM documents
+                WHERE {ext_where}
+            """
+
+            cursor = self.conn.execute(query)
+            result = cursor.fetchone()
+            return result['count'] if result else 0
+
+        except Exception as e:
+            logger.error(f"고유 문서 카운트 실패: {e}")
+            return 0
+
+    def count_by_extension(self) -> dict:
+        """확장자별 문서 수 카운트 (물리 파일 기준)
+
+        Returns:
+            {'pdf': N, 'txt': M, 'others': K} 형태의 딕셔너리
+        """
+        try:
+            import json
+            import os
+            from config.indexing import DB_PATHS
+
+            # file_index.json에서 물리 파일 정보 읽기
+            file_index_path = DB_PATHS.get("file_index", "file_index.json")
+
+            if os.path.exists(file_index_path):
+                with open(file_index_path, 'r', encoding='utf-8') as f:
+                    file_data = json.load(f)
+
+                counts = {'pdf': 0, 'txt': 0, 'others': 0}
+
+                # 파일별로 확장자 카운트
+                for file_info in file_data.get('files', []):
+                    filename = file_info.get('name', '').lower()
+                    if filename.endswith('.pdf'):
+                        counts['pdf'] += 1
+                    elif filename.endswith('.txt'):
+                        counts['txt'] += 1
+                    else:
+                        counts['others'] += 1
+
+                return counts
+            else:
+                # file_index.json이 없으면 DB에서 카운트
+                counts = {'pdf': 0, 'txt': 0, 'others': 0}
+
+                cursor = self.conn.execute("""
+                    SELECT
+                        LOWER(filename) as fname
+                    FROM documents
+                """)
+
+                for row in cursor:
+                    fname = row['fname']
+                    if fname.endswith('.pdf'):
+                        counts['pdf'] += 1
+                    elif fname.endswith('.txt'):
+                        counts['txt'] += 1
+                    else:
+                        counts['others'] += 1
+
+                return counts
+
+        except Exception as e:
+            logger.error(f"확장자별 카운트 실패: {e}")
+            return {'pdf': 0, 'txt': 0, 'others': 0}
+
+    def count_search_index(self) -> int:
+        """검색 인덱스에 등록된 고유 문서 수
+
+        Returns:
+            검색 가능한 고유 문서 수
+        """
+        try:
+            import sqlite3
+            import os
+            from config.indexing import DB_PATHS
+
+            # everything_index.db에서 검색 가능 문서 수 조회
+            index_db_path = DB_PATHS.get("everything_index", "everything_index.db")
+
+            if os.path.exists(index_db_path):
+                index_conn = sqlite3.connect(index_db_path)
+                index_conn.row_factory = sqlite3.Row
+
+                # 고유 파일명 기준으로 카운트
+                cursor = index_conn.execute("""
+                    SELECT COUNT(DISTINCT filename) as count
+                    FROM files
+                """)
+
+                result = cursor.fetchone()
+                index_conn.close()
+
+                return result['count'] if result else 0
+            else:
+                # everything_index.db가 없으면 metadata.db 사용
+                return self.count_unique_documents()
+
+        except Exception as e:
+            logger.error(f"검색 인덱스 카운트 실패: {e}")
+            # 폴백: metadata.db의 고유 문서 수 반환
+            return self.count_unique_documents()
 
     def __enter__(self):
         return self

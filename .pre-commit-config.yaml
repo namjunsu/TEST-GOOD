@@ -21,3 +21,12 @@ repos:
       - id: check-added-large-files
       - id: check-merge-conflict
       - id: debug-statements
+
+  - repo: local
+    hooks:
+      - id: license-check
+        name: Check dependency licenses
+        entry: bash -c 'if [ -f .github/scripts/check_licenses.py ]; then pip-licenses --format=json --output-file=licenses.json && python .github/scripts/check_licenses.py; fi'
+        language: system
+        pass_filenames: false
+        verbose: true

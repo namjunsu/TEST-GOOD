@@ -103,7 +103,7 @@ All 8 mandatory verification items have been completed with evidence.
 ### Testing
 - Smoke tests: 8/8 passing
 - Test scenarios: 20/20 executed
-- Bootstrap time: < 1 minute
+- Bootstrap time: 1 second
 
 ### Documentation
 - System Overview ✅

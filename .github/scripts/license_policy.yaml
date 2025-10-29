@@ -1,0 +1,98 @@
+# License Policy Configuration
+# Used by CI/CD pipeline to enforce license compliance
+
+version: "1.0"
+last_updated: "2025-10-29"
+
+# Licenses that are always allowed
+allowed:
+  - MIT
+  - MIT License
+  - BSD
+  - BSD License
+  - BSD-2-Clause
+  - BSD-3-Clause
+  - Apache
+  - Apache 2.0
+  - Apache-2.0
+  - Apache Software License
+  - ISC
+  - ISC License
+  - MPL-2.0
+  - Mozilla Public License
+  - Python Software Foundation License
+  - PSF
+  - Unlicense
+  - Public Domain
+  - CC0
+  - HPND
+
+# Licenses that require review but don't block
+warning:
+  - LGPL
+  - LGPL-2.1
+  - LGPL-3.0
+  - GNU Lesser General Public License
+  message: "Copyleft license - ensure dynamic linking only"
+
+# Licenses that block the build
+blocked:
+  - GPL
+  - GPL-2.0
+  - GPL-3.0
+  - GPLv2
+  - GPLv3
+  - GNU General Public License
+  - AGPL
+  - AGPL-3.0
+  - Proprietary
+  - Commercial
+  message: "Incompatible with distribution model"
+
+# System packages that are exceptions
+exceptions:
+  system_packages:
+    - python-apt
+    - ubuntu-pro-client
+    - cloud-init
+    - command-not-found
+    - distro-info
+    - systemd-python
+  reason: "System utilities not bundled with application"
+
+# Packages with known acceptable licenses
+known_acceptable:
+  numpy: BSD
+  scipy: BSD
+  pandas: BSD
+  cryptography: Apache/BSD dual
+  pillow: HPND
+
+# Build failure thresholds
+thresholds:
+  max_unknown_licenses: 30
+  max_warning_licenses: 15
+  fail_on_blocked: true
+  fail_on_unknown: false  # Set to true for stricter compliance
+
+# SBOM (Software Bill of Materials) settings
+sbom:
+  format: cyclonedx
+  output: sbom.json
+  include_dev_dependencies: false
+
+# Security scanning settings
+security:
+  scan_vulnerabilities: true
+  fail_on_critical: true
+  fail_on_high: false
+  tools:
+    - pip-audit
+    - safety
+
+# Reporting
+reporting:
+  generate_html: true
+  generate_markdown: true
+  update_licenses_md: true
+  update_third_party_notices: true

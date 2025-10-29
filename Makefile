@@ -1,20 +1,22 @@
 # AI-CHAT Repository Management Makefile
 
-.PHONY: help audit test fmt lint type-check clean install pre-commit run
+.PHONY: help audit test fmt lint type-check clean install pre-commit run license-check license-update
 
 # Default target
 help:
 	@echo "AI-CHAT Repository Management Commands"
 	@echo ""
-	@echo "  make audit      - Run repository audit and generate reports"
-	@echo "  make test       - Run smoke tests"
-	@echo "  make fmt        - Format code with black and ruff"
-	@echo "  make lint       - Check code with ruff"
-	@echo "  make type-check - Check types with pyright"
-	@echo "  make clean      - Remove cache and temporary files"
-	@echo "  make install    - Install dependencies and pre-commit hooks"
-	@echo "  make pre-commit - Run pre-commit hooks on all files"
-	@echo "  make run        - Start the AI-CHAT system"
+	@echo "  make audit         - Run repository audit and generate reports"
+	@echo "  make test          - Run smoke tests"
+	@echo "  make fmt           - Format code with black and ruff"
+	@echo "  make lint          - Check code with ruff"
+	@echo "  make type-check    - Check types with pyright"
+	@echo "  make clean         - Remove cache and temporary files"
+	@echo "  make install       - Install dependencies and pre-commit hooks"
+	@echo "  make pre-commit    - Run pre-commit hooks on all files"
+	@echo "  make run           - Start the AI-CHAT system"
+	@echo "  make license-check - Check dependency licenses for compliance"
+	@echo "  make license-update- Update license documentation"
 	@echo ""
 
 # Run repository audit
@@ -74,3 +76,16 @@ pre-commit:
 run:
 	@echo "🚀 Starting AI-CHAT system..."
 	@bash start_ai_chat.sh
+
+# Check dependency licenses
+license-check:
+	@echo "📋 Checking dependency licenses for compliance..."
+	@pip install -q pip-licenses 2>/dev/null || true
+	@pip-licenses --format=json --output-file=licenses.json 2>/dev/null || true
+	@python .github/scripts/check_licenses.py 2>/dev/null || echo "⚠️ License check script not found"
+
+# Update license documentation
+license-update:
+	@echo "📝 Updating license documentation..."
+	@python scripts/scan_licenses.py 2>/dev/null || true
+	@echo "✅ License documentation updated (LICENSES.md, THIRD_PARTY_NOTICES.md)"

@@ -76,8 +76,12 @@ class XRayAnalyzer:
             if entry_path.exists():
                 for py_file in entry_path.rglob("*.py"):
                     if '__pycache__' not in str(py_file):
-                        rel_path = py_file.relative_to(self.base_path)
-                        entry_points.add(str(rel_path))
+                        try:
+                            rel_path = py_file.relative_to(self.base_path)
+                            entry_points.add(str(rel_path))
+                        except ValueError:
+                            # If not relative to base, use absolute path
+                            entry_points.add(str(py_file))
 
         # Also check for common entry points
         common_entries = [

@@ -1,0 +1,40 @@
+[run]
+branch = True
+parallel = True
+source = .
+omit =
+    */.venv/*
+    */tests/*
+    */archive/*
+    */__pycache__/*
+    */htmlcov/*
+    */deployment/*
+    */docs/*
+    */reports/*
+    */scripts/*
+    .git/*
+concurrency = multiprocessing,thread
+
+[report]
+precision = 2
+show_missing = True
+skip_covered = False
+sort = Cover
+omit =
+    */.venv/*
+    */tests/*
+    */archive/*
+    */__pycache__/*
+    */htmlcov/*
+    */deployment/*
+    */docs/*
+    */reports/*
+    */scripts/*
+    .git/*
+
+[html]
+directory = htmlcov
+title = AI-CHAT Coverage Report
+
+[xml]
+output = reports/xray/coverage.xml

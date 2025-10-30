@@ -1,0 +1,38 @@
+[Unit]
+Description=AI-CHAT Backend API (FastAPI)
+After=network.target
+Documentation=https://github.com/namjunsu/TEST-GOOD
+
+[Service]
+Type=simple
+User=ai-chat
+Group=ai-chat
+WorkingDirectory=/opt/ai-chat
+
+# 환경변수 로드 (보안: .env를 시스템 측에서 관리)
+EnvironmentFile=/opt/ai-chat/.env
+
+# FastAPI 서버 시작
+ExecStart=/opt/ai-chat/.venv/bin/uvicorn app.api.main:app \
+    --host ${FASTAPI_HOST:-127.0.0.1} \
+    --port ${FASTAPI_PORT:-7860} \
+    --workers 2 \
+    --log-level info
+
+# 재시작 정책
+Restart=on-failure
+RestartSec=5s
+StartLimitInterval=60s
+StartLimitBurst=3
+
+# 리소스 제한
+LimitNOFILE=65536
+MemoryLimit=8G
+
+# 로깅
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ai-chat-backend
+
+[Install]
+WantedBy=multi-user.target

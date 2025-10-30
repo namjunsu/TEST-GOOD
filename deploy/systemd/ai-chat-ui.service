@@ -1,0 +1,40 @@
+[Unit]
+Description=AI-CHAT Web UI (Streamlit)
+After=network.target ai-chat-backend.service
+Requires=ai-chat-backend.service
+Documentation=https://github.com/namjunsu/TEST-GOOD
+
+[Service]
+Type=simple
+User=ai-chat
+Group=ai-chat
+WorkingDirectory=/opt/ai-chat
+
+# 환경변수 로드
+EnvironmentFile=/opt/ai-chat/.env
+
+# Streamlit 서버 시작
+ExecStart=/opt/ai-chat/.venv/bin/streamlit run web_interface.py \
+    --server.address ${STREAMLIT_HOST:-127.0.0.1} \
+    --server.port ${STREAMLIT_PORT:-8501} \
+    --server.headless true \
+    --browser.gatherUsageStats false \
+    --theme.base dark
+
+# 재시작 정책
+Restart=on-failure
+RestartSec=5s
+StartLimitInterval=60s
+StartLimitBurst=3
+
+# 리소스 제한
+LimitNOFILE=65536
+MemoryLimit=4G
+
+# 로깅
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ai-chat-ui
+
+[Install]
+WantedBy=multi-user.target

@@ -140,6 +140,39 @@ SEARCH_BM25_TOP_K=20
 SEARCH_VEC_TOP_K=20
 ```
 
+### 3.4 보안 설정 (프로덕션 필수)
+
+```bash
+# API 인증
+API_KEY=your-secret-key-here  # 32자 이상 강력한 키 사용
+API_KEY_HEADER=X-API-Key  # 커스텀 헤더명 (선택)
+
+# CORS 허용 도메인 (화이트리스트)
+ALLOWED_ORIGINS=https://yourdomain.com,https://internal.company.com
+
+# 레이트 리미트 (요청/분/사용자)
+RATE_LIMIT_PER_MINUTE=10
+RATE_LIMIT_PER_HOUR=100
+
+# 동시성 제한
+MAX_CONCURRENT_REQUESTS=4
+
+# 네트워크 바인딩 (내부 전용)
+FASTAPI_HOST=127.0.0.1  # 외부 노출 금지
+FASTAPI_PORT=7860
+STREAMLIT_HOST=127.0.0.1
+STREAMLIT_PORT=8501
+
+# 외부 노출은 Nginx 리버스 프록시 사용 (TLS/SSL)
+```
+
+**보안 체크리스트**:
+- [ ] API_KEY를 Git에 커밋하지 않음 (.gitignore 확인)
+- [ ] ALLOWED_ORIGINS를 실제 도메인으로 제한
+- [ ] Nginx에서 TLS 인증서 적용
+- [ ] /admin/* 엔드포인트는 별도 인증 적용
+- [ ] 로그에 API_KEY/토큰 노출 방지
+
 ---
 
 ## 4. 프롬프트 구성
@@ -489,5 +522,346 @@ python test_8_scenarios.py
 
 ---
 
+## 12. SLO 및 모니터링 지표
+
+### 12.1 Service Level Objectives (SLO)
+
+| 지표 | 목표 | 경보 임계값 | 측정 방법 |
+|------|------|------------|----------|
+| **p95 응답시간** | < 5초 | > 8초 | 모든 요청 집계 |
+| **RAG 인용률** | > 95% | < 80% | RAG 모드 한정 |
+| **RAG 비율** | 30-70% | <10% or >90% | 라우팅 이상 감지 |
+| **오류율** | < 1% | > 5% | HTTP 5xx 기준 |
+| **GPU 메모리** | < 7.0 GB | > 7.5 GB | RTX 4060 8GB 기준 |
+| **가용성** | > 99.5% | < 99% | Uptime 월간 |
+
+### 12.2 Prometheus 지표 (제안)
+
+```yaml
+# /metrics 엔드포인트에서 노출
+- rag_query_duration_seconds (histogram)
+- rag_mode_total{mode="chat|rag"} (counter)
+- rag_top_score (histogram)
+- rag_citation_rate (gauge)
+- rag_errors_total{type="search|llm|timeout"} (counter)
+- gpu_memory_used_bytes (gauge)
+```
+
+### 12.3 알람 규칙 예시
+
+```yaml
+# Prometheus Alert Rules
+groups:
+  - name: ai_chat
+    rules:
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, rag_query_duration_seconds) > 8
+        for: 5m
+        annotations:
+          summary: "p95 응답시간 초과: {{ $value }}초"
+
+      - alert: LowCitationRate
+        expr: rag_citation_rate < 0.80
+        for: 10m
+        annotations:
+          summary: "RAG 인용률 저하: {{ $value }}"
+
+      - alert: AbnormalRAGRatio
+        expr: rate(rag_mode_total{mode="rag"}[1h]) / rate(rag_mode_total[1h]) < 0.1 OR > 0.9
+        for: 15m
+        annotations:
+          summary: "RAG 모드 비율 이상: {{ $value }}"
+
+      - alert: HighErrorRate
+        expr: rate(rag_errors_total[5m]) > 0.05
+        for: 5m
+        annotations:
+          summary: "오류율 상승: {{ $value }}"
+          severity: critical
+```
+
+---
+
+## 13. 장애 대응 가이드
+
+### 13.1 장애 패턴별 대응
+
+| 증상 | 원인 | 즉시 조치 | 근본 해결 |
+|------|------|----------|----------|
+| **응답 없음 (타임아웃)** | LLM 로드 실패, GPU OOM | 1) 서비스 재시작<br>2) GPU 메모리 확인 | N_CTX 감소, N_GPU_LAYERS 조정 |
+| **인용 누락 (RAG 모드)** | 프롬프트 문제, LLM 불안정 | REQUIRE_CITATIONS=true 확인 | 프롬프트 재작성, MAX_LLM_RETRY 증가 |
+| **검색 결과 없음** | 인덱스 손상, DB 락 | 1) 인덱스 재빌드<br>2) SQLite 락 해제 | 인덱스 백업 복원 |
+| **RAG 비율 0%** | RAG_MIN_SCORE 너무 높음 | RAG_MIN_SCORE=0.25로 임시 하향 | 검색 품질 개선, 가중치 재조정 |
+| **메모리 부족 (OOM)** | 컨텍스트 크기 과다, 동시 요청 | 1) N_CTX=4096으로 복원<br>2) MAX_CONCURRENT_REQUESTS=2 | 배치 크기 감소, GPU 레이어 조정 |
+| **느린 응답 (>10초)** | 문서 수 과다, CPU 병목 | DOC_TOPK=2, SEARCH_TOP_K=3 | BM25 인덱스 최적화, GPU 활용 증대 |
+
+### 13.2 긴급 연락 체계
+
+```
+1차: 온콜 엔지니어 (Slack DM)
+2차: 기술팀장 (전화)
+3차: CTO (중대 장애 시)
+
+장애 등급:
+- P0 (Critical): 서비스 전체 다운, 즉시 대응
+- P1 (High): 기능 일부 불능, 1시간 내 대응
+- P2 (Medium): 성능 저하, 4시간 내 대응
+- P3 (Low): 경미한 오류, 1일 내 대응
+```
+
+### 13.3 복구 명령어 치트시트
+
+```bash
+# 서비스 재시작 (systemd)
+sudo systemctl restart ai-chat-backend.service
+sudo systemctl restart ai-chat-ui.service
+
+# 로그 확인
+journalctl -u ai-chat-backend.service -n 100 --no-pager
+tail -100 /var/log/ai-chat/app.log
+
+# GPU 메모리 확인
+nvidia-smi
+
+# 프로세스 강제 종료
+pkill -f "uvicorn"
+pkill -f "streamlit"
+
+# 인덱스 재빌드 (비상시)
+python scripts/rebuild_indexes.py --force
+
+# 데이터베이스 백업 복원
+cp /backup/metadata.db.20251030 ./metadata.db
+
+# 설정 롤백 (.env)
+cp .env.backup .env
+sudo systemctl restart ai-chat-backend.service
+```
+
+---
+
+## 14. 보안 및 운영 필수 10항
+
+### 14.1 인증 및 권한
+
+- **구현**: FastAPI에서 API_KEY 헤더 검증 미들웨어
+- **적용 범위**: /rag/*, /admin/*, /metrics (읽기 전용 제외)
+- **키 관리**: systemd EnvironmentFile로 로드, Git 미추적
+
+```python
+# app/api/auth.py
+from fastapi import Header, HTTPException
+
+async def verify_api_key(x_api_key: str = Header(...)):
+    if x_api_key != os.getenv("API_KEY"):
+        raise HTTPException(status_code=403, detail="Invalid API key")
+```
+
+### 14.2 네트워크 보안
+
+- **내부 바인딩**: FastAPI/Streamlit은 127.0.0.1만
+- **외부 노출**: Nginx 리버스 프록시 (TLS 1.3)
+- **Nginx 설정**:
+  ```nginx
+  server {
+      listen 443 ssl http2;
+      server_name yourdomain.com;
+
+      ssl_certificate /etc/ssl/certs/your_cert.pem;
+      ssl_certificate_key /etc/ssl/private/your_key.pem;
+
+      client_max_body_size 100M;
+      proxy_read_timeout 300s;
+
+      location /api/ {
+          proxy_pass http://127.0.0.1:7860/;
+          proxy_set_header X-Real-IP $remote_addr;
+      }
+  }
+  ```
+
+### 14.3 비밀정보 관리
+
+- **.env 보호**: 0600 권한, Git 제외 (.gitignore 확인)
+- **CI/CD**: GitHub Secrets로 주입, gitleaks 프리커밋 훅
+- **감사**: `git log -- .env` 정기 확인
+
+```bash
+# .env 권한 설정
+chmod 600 .env
+chown ai-chat:ai-chat .env
+
+# gitleaks 설치 (프리커밋)
+pre-commit install
+# .pre-commit-config.yaml에 gitleaks 추가
+```
+
+### 14.4 감사 로그
+
+**로그 구조** (JSON):
+```json
+{
+  "timestamp": "2025-10-30T15:30:00Z",
+  "user_id": "user123",
+  "query_hash": "sha256(query)",
+  "mode": "rag",
+  "top_score": 0.87,
+  "docs_used": ["doc_id_1", "doc_id_2"],
+  "latency_ms": 3200,
+  "http_status": 200
+}
+```
+
+**저장 위치**: `/var/log/ai-chat/audit.jsonl`
+**보존 기간**: 30일 (logrotate)
+
+### 14.5 개인정보 및 기밀 보호
+
+- **소스 허용 목록**: `docs/`, `internal/` 경로만 허용
+- **외부 URL 차단**: 답변에 http:// 패턴 삽입 방지
+- **민감 키워드 마스킹**: "주민등록번호", "계좌번호" 등
+
+```python
+# app/rag/filters.py
+ALLOWED_PATHS = ["/var/docs", "/opt/internal"]
+SENSITIVE_PATTERNS = [r"\d{6}-\d{7}", r"\d{3}-\d{2}-\d{5}"]
+```
+
+### 14.6 레이트 리미트
+
+- **적용**: slowapi 미들웨어
+- **제한**: 10 req/min/IP, 100 req/hour/IP
+- **예외**: 내부 IP 대역 (10.0.0.0/8)
+
+```python
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+
+@app.post("/rag/query")
+@limiter.limit("10/minute")
+async def query(request: Request, ...):
+    ...
+```
+
+### 14.7 메트릭 및 알람
+
+- **Prometheus 노출**: /metrics (인증 필요)
+- **알람 채널**: Slack #ai-chat-alerts
+- **주간 리포트**: p95, 오류율, RAG 비율 Slack 자동 발송
+
+### 14.8 백업 및 복구
+
+**백업 대상**:
+- `var/index/` (BM25/FAISS 인덱스)
+- `metadata.db` (문서 메타데이터)
+- `.env` (설정)
+- `models/` (LLM 모델, 선택)
+
+**백업 주기**: 주 1회 (일요일 03:00)
+**복구 리허설**: 분기별 1회
+
+```bash
+# 백업 스크립트
+#!/bin/bash
+DATE=$(date +%Y%m%d)
+tar -czf /backup/ai-chat-$DATE.tar.gz var/index/ metadata.db .env
+
+# 복구 테스트
+tar -xzf /backup/ai-chat-latest.tar.gz -C /tmp/restore
+python scripts/verify_indexes.py --path /tmp/restore/var/index
+```
+
+### 14.9 데이터 보존 정책
+
+| 데이터 유형 | 보존 기간 | 처리 방법 |
+|------------|----------|----------|
+| 질의 로그 | 30일 | 익명화 후 폐기 |
+| 감사 로그 | 30일 | 익명화 후 폐기 |
+| 시나리오 리포트 | 90일 | 압축 보관 |
+| 메트릭 데이터 | 1년 | Prometheus TSDB |
+
+```bash
+# logrotate 설정
+# /etc/logrotate.d/ai-chat
+/var/log/ai-chat/*.log {
+    daily
+    rotate 30
+    compress
+    delaycompress
+    missingok
+    notifempty
+}
+```
+
+### 14.10 CI/CD 회귀 방지
+
+- **PR 게이트**: 8가지 시나리오 테스트 + 라이선스 스캔
+- **SBOM 생성**: `pip-licenses --format=json > sbom.json`
+- **취약점 스캔**: `pip-audit`
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+on: [pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run scenarios
+        run: python scripts/scenario_validation.py
+      - name: License check
+        run: pip-licenses --fail-on="GPL;AGPL"
+      - name: Security scan
+        run: pip-audit --fix
+```
+
+---
+
+## 15. 운영 컷오버 체크리스트
+
+### 15.1 사전 준비 (D-7)
+
+- [ ] 백업 정책 수립 및 백업 스크립트 테스트
+- [ ] Nginx 설정 및 TLS 인증서 적용
+- [ ] API_KEY 생성 및 EnvironmentFile 등록
+- [ ] Prometheus/Grafana 대시보드 구성
+- [ ] Slack 알람 채널 생성 및 테스트
+- [ ] 온콜 순번 및 연락처 공유
+
+### 15.2 컷오버 당일 (D-Day)
+
+**13:00 - 준비**
+- [ ] 백업 수행 (인덱스/DB/설정)
+- [ ] systemd 서비스 배포
+- [ ] ./start_ai_chat.sh 로컬 테스트 (8/8 시나리오 통과)
+
+**14:00 - 배포**
+- [ ] systemd 서비스 시작
+- [ ] /healthz, /version 200 응답 확인
+- [ ] Nginx 프록시 경유 테스트
+
+**14:30 - 검증**
+- [ ] scripts/scenario_validation.py 8/8 통과
+- [ ] 평균 응답 시간 < 5초 확인
+- [ ] Prometheus 메트릭 수집 확인
+
+**15:00 - 모니터링**
+- [ ] Grafana 대시보드 모니터링 시작
+- [ ] 알람 규칙 동작 테스트 (임계값 임시 하향)
+- [ ] 사용자 피드백 수집 시작
+
+### 15.3 사후 점검 (D+1)
+
+- [ ] 24시간 안정성 확인 (p95 < 5초, 오류율 < 1%)
+- [ ] 감사 로그 생성 확인
+- [ ] 백업 자동화 동작 확인
+- [ ] 운영 문서 최종 업데이트
+
+---
+
 **마지막 업데이트**: 2025-10-30
-**버전**: 1.0.0
+**버전**: 2.0.0 (프로덕션 준비 완료)

@@ -168,7 +168,30 @@ def main():
         logger.error("❌ 스왑 실패")
         return 1
 
-    # 4. 정합성 검증
+    # 4. 인덱스 버전 및 재색인 시각 기록
+    try:
+        var_dir = Path("var")
+        var_dir.mkdir(exist_ok=True)
+
+        # 버전 기록
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        import hashlib
+        cfg_hash = hashlib.md5(f"{timestamp}".encode()).hexdigest()[:6]
+        index_version = f"v{timestamp}_{cfg_hash}"
+
+        version_file = var_dir / "index_version.txt"
+        version_file.write_text(index_version)
+
+        # 재색인 시각 기록
+        reindex_time_file = var_dir / "last_reindex.txt"
+        reindex_time_file.write_text(datetime.now().isoformat())
+
+        logger.info(f"인덱스 버전 기록: {index_version}")
+
+    except Exception as e:
+        logger.warning(f"버전 기록 실패: {e}")
+
+    # 5. 정합성 검증
     logger.info("\n정합성 검증 실행 중...")
     import subprocess
     result = subprocess.run([
@@ -182,7 +205,7 @@ def main():
     else:
         logger.warning("⚠️ 재색인은 완료되었으나 정합성 검증 실패")
 
-    logger.info("\n[INDEX] swap done: old=v0, new=v1")
+    logger.info(f"\n[INDEX] swap done: old=v0, new={index_version}")
     logger.info("=" * 80)
 
     return 0

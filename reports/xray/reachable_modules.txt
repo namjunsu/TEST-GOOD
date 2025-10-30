@@ -1,0 +1,8 @@
+app/api/main.py
+app/core/logging.py
+modules/metadata_db.py
+modules/metadata_extractor.py
+modules/ocr_processor.py
+modules/response_formatter.py
+modules/search_module.py
+modules/search_module_hybrid.py

@@ -97,9 +97,12 @@ class QwenLLM:
     """Qwen 모델 래퍼 클래스"""
     
     def __init__(self, model_path: str, config: GenerationConfig = None):
-        self.model_path = Path(model_path)
-        self.config = config or GenerationConfig()
         self.logger = logging.getLogger(__name__)
+        self.logger.info(f"🔍 DEBUG QwenLLM.__init__: Received model_path={model_path}")
+        self.model_path = Path(model_path)
+        self.logger.info(f"🔍 DEBUG QwenLLM.__init__: Converted to Path={self.model_path}")
+        self.logger.info(f"🔍 DEBUG QwenLLM.__init__: File exists={self.model_path.exists()}")
+        self.config = config or GenerationConfig()
 
         # LLM 최적화 설정 로드
         self._load_optimization_config()
@@ -171,14 +174,47 @@ class QwenLLM:
         """모델 로드"""
         try:
             from llama_cpp import Llama
-            
-            # config.py에서 GPU 최적화 설정 가져오기
+
+            # 환경 변수 우선 폴백 헬퍼
+            def _env_int(name: str, default: int, *alts):
+                """환경변수 읽기 (int) with fallback"""
+                for key in (name, *alts):
+                    val = os.getenv(key)
+                    if val and val.strip():
+                        try:
+                            return int(val)
+                        except ValueError:
+                            pass
+                return default
+
+            def _env_bool(name: str, default: bool, *alts):
+                """환경변수 읽기 (bool) with fallback"""
+                for key in (name, *alts):
+                    val = os.getenv(key)
+                    if val and val.strip():
+                        return val.lower() in ('true', '1', 'yes', 'on')
+                return default
+
+            # config.py에서 GPU 최적화 설정 가져오기 (폴백용)
             try:
-                from config import N_THREADS, N_CTX, N_BATCH, USE_MLOCK, USE_MMAP, N_GPU_LAYERS, F16_KV
+                from config import N_THREADS as CFG_N_THREADS, N_CTX as CFG_N_CTX, N_BATCH as CFG_N_BATCH
+                from config import USE_MLOCK as CFG_USE_MLOCK, USE_MMAP as CFG_USE_MMAP
+                from config import N_GPU_LAYERS as CFG_N_GPU_LAYERS, F16_KV as CFG_F16_KV
             except ImportError:
                 # config.py 없을 때 기본값 (GPU 최적화)
-                N_THREADS, N_CTX, N_BATCH = 8, 8192, 512
-                USE_MLOCK, USE_MMAP, N_GPU_LAYERS, F16_KV = False, True, -1, True
+                CFG_N_THREADS, CFG_N_CTX, CFG_N_BATCH = 8, 4096, 768
+                CFG_USE_MLOCK, CFG_USE_MMAP, CFG_N_GPU_LAYERS, CFG_F16_KV = False, True, -1, True
+
+            # 환경변수 우선, config.py 폴백 (N_CTX, LLM_N_CTX 둘 다 지원)
+            N_THREADS = _env_int("N_THREADS", CFG_N_THREADS, "LLM_N_THREADS")
+            N_CTX = _env_int("N_CTX", CFG_N_CTX, "LLM_N_CTX")
+            N_BATCH = _env_int("N_BATCH", CFG_N_BATCH, "LLM_N_BATCH")
+            N_GPU_LAYERS = _env_int("N_GPU_LAYERS", CFG_N_GPU_LAYERS, "LLM_N_GPU_LAYERS")
+            USE_MLOCK = _env_bool("USE_MLOCK", CFG_USE_MLOCK)
+            USE_MMAP = _env_bool("USE_MMAP", CFG_USE_MMAP)
+            F16_KV = _env_bool("F16_KV", CFG_F16_KV)
+
+            self.logger.info(f"🔧 [LLM Config] n_ctx={N_CTX}, n_gpu_layers={N_GPU_LAYERS}, n_batch={N_BATCH}, n_threads={N_THREADS}")
             
             # GPU 설정: 잘못된 파라미터 제거 (offload_kqv, mul_mat_q 등이 GPU 사용 방해)
             # 기본 파라미터만 사용하여 GPU 오프로드가 제대로 작동하도록 함
@@ -195,6 +231,31 @@ class QwenLLM:
                 verbose=True,         # GPU 로딩 상태 확인
                 n_batch=N_BATCH       # config: 1024 (배치 크기 증가)
             )
+
+            # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            # 🔒 CRITICAL: n_ctx 불일치 가드 (재발 방지)
+            # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            requested_n_ctx = N_CTX
+            effective_n_ctx = getattr(self.llm, "n_ctx", lambda: None)()
+
+            # Effective config logging
+            self.logger.info(
+                f"🔧 [LLM Config] requested: n_ctx={requested_n_ctx}, n_batch={N_BATCH}, "
+                f"n_gpu_layers={N_GPU_LAYERS}, n_threads={N_THREADS}"
+            )
+            self.logger.info(
+                f"🔧 [LLM Config] effective: n_ctx={effective_n_ctx}"
+            )
+
+            # Mismatch guard
+            if effective_n_ctx and int(effective_n_ctx) != int(requested_n_ctx):
+                raise RuntimeError(
+                    f"❌ FATAL: n_ctx mismatch detected!\n"
+                    f"   Requested: {requested_n_ctx}\n"
+                    f"   Effective: {effective_n_ctx}\n"
+                    f"   This indicates stale LLM instance or environment variable loading failure.\n"
+                    f"   Please restart the process with clean environment."
+                )
 
             # 로드된 모델 메타데이터 로그
             self.logger.info(f"✅ LLM 모델 로드 완료: {self.model_path.name}")
@@ -424,10 +485,20 @@ A:"""
 
 답변 목표: 사용자가 문서 내용을 완전히 이해할 수 있는 유용한 요약 + [{filename}]"""
 
-    def generate_response(self, question: str, context_chunks: List[Dict[str, Any]], 
-                         max_retries: int = 2, enable_complex_processing: bool = True) -> RAGResponse:
+    def generate_response(self, question: str, context_chunks: List[Dict[str, Any]],
+                         max_retries: int = 2, enable_complex_processing: bool = True,
+                         mode: str = "rag") -> RAGResponse:
         """RAG 응답 생성 (복합 질문 처리 및 적응형 길이 조정 통합)"""
-        
+
+        # 모드별 토큰 예산 적용 (지연 최적화)
+        mode_token_budgets = {
+            "chat": int(os.getenv("CHAT_MAX_TOKENS", "64")),
+            "rag": int(os.getenv("RAG_MAX_TOKENS", "160")),
+            "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", "180")),
+        }
+        mode_max_tokens = mode_token_budgets.get(mode.lower(), self.config.max_tokens)
+        self.logger.info(f"🎯 Mode={mode}, max_tokens={mode_max_tokens} (budget: {mode_token_budgets.get(mode.lower(), 'N/A')})")
+
         # 0단계: 같은 문서의 모든 청크 우선 선택 (중간 단계 접근법)
         context_chunks = self._prioritize_same_document_chunks(context_chunks, max_chunks=10)
         
@@ -455,18 +526,20 @@ A:"""
                     {"role": "user", "content": user_prompt}
                 ]
                 
-                # 적응형 max_tokens 계산
+                # 적응형 max_tokens 계산 (모드별 예산 우선)
                 if self.config.enable_adaptive_length and length_recommendation:
                     adaptive_max_tokens = self._calculate_adaptive_max_tokens(length_recommendation)
                     self.logger.debug(f"적응형 토큰: {adaptive_max_tokens} (기본: {self.config.max_tokens})")
+                    # 모드 예산과 적응형 중 최소값 사용
+                    final_max_tokens = min(mode_max_tokens, adaptive_max_tokens)
                 else:
-                    adaptive_max_tokens = self.config.max_tokens
-                
+                    final_max_tokens = mode_max_tokens
+
                 # 생성
                 response = self.llm.create_chat_completion(
                     messages=messages,
                     temperature=self.config.temperature,
-                    max_tokens=adaptive_max_tokens,
+                    max_tokens=final_max_tokens,
                     top_p=self.config.top_p,
                     top_k=self.config.top_k,
                     repeat_penalty=self.config.repeat_penalty,

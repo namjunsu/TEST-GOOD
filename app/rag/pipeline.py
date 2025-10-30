@@ -24,6 +24,98 @@ from app.rag.query_router import QueryRouter, QueryMode
 logger = get_logger(__name__)
 
 
+# ============================================================================
+# 라우팅 헬퍼 함수들 (스몰토크/산술/도메인 키워드 감지)
+# ============================================================================
+
+import re
+
+# 스몰토크 패턴
+SMALLTALK_PATTERNS = {
+    '안녕', '안녕하세요', '안녕하십니까', 'hello', 'hi', 'hey',
+    '땡큐', '감사', '고마워', 'thanks', 'thank you',
+    '잘가', '안녕히', 'bye', 'goodbye',
+    '어떻게', '어떠', '어때', '뭐해', '무엇',
+}
+
+# 도메인 키워드 (장비/프로젝트/기술 용어)
+DOMAIN_KEYWORDS = {
+    # 장비
+    'nvr', 'sync', 'eco8000', 'lvm-180a', 'odin', 'vmix', 'faiss',
+    'tri-level', 'sdi', 'lut', 'intercom', 'di box', 'dibox',
+    '무선마이크', '마이크', '카메라', '렌즈', '삼각대', '케이블',
+    '건전지', '배터리', '소모품', '장비', '중계차',
+    # 프로젝트/프로그램
+    '돌직구쇼', '뉴스', '스튜디오', '광화문', '오픈스튜디오',
+    '중계', '방송', '채널에이',
+    # 기술/문서
+    '기안서', '구매', '수리', '교체', '검토', '기술검토',
+    '오버홀', '도입', '노후화', '단종',
+    # 작성자 (실제 기안자 이름)
+    '최새름', '유인혁', '남준수', '박준서', '이원구',
+    '최정은', '한건희', '김경현', '김수연', '김창수', '송경원',
+}
+
+
+def is_smalltalk(query: str) -> bool:
+    """스몰토크/인사/감탄사 감지"""
+    q_lower = query.lower().strip()
+    # 길이 체크
+    if len(q_lower) <= 3:
+        return True
+    # 패턴 매칭
+    for pattern in SMALLTALK_PATTERNS:
+        if pattern in q_lower:
+            return True
+    return False
+
+
+def is_simple_math(query: str) -> bool:
+    """단순 산술 질의 감지 (예: 1+1은?, 2*3=?)"""
+    q_stripped = query.strip()
+    # 정규식: 숫자 연산자 숫자 (옵션: = 결과)
+    math_pattern = r'^\s*\d+\s*[\+\-\*/]\s*\d+\s*(=\s*\d+)?\s*[은?]*\s*$'
+    return bool(re.match(math_pattern, q_stripped))
+
+
+def has_domain_keyword(query: str) -> bool:
+    """도메인 키워드 포함 여부 확인"""
+    q_lower = query.lower()
+    for keyword in DOMAIN_KEYWORDS:
+        if keyword in q_lower:
+            return True
+    return False
+
+
+def get_query_token_count(query: str) -> int:
+    """간이 토큰 카운트 (공백/한글 기준)"""
+    # 한글: 음절 단위, 영문: 단어 단위
+    korean_chars = len([c for c in query if '\uac00' <= c <= '\ud7a3'])
+    english_words = len(query.split())
+    return max(korean_chars, english_words)
+
+
+def force_chat_mode(query: str) -> tuple[bool, str]:
+    """강제 CHAT 모드 적용 여부 판단
+
+    Returns:
+        (should_force, reason)
+    """
+    # 1. 스몰토크
+    if is_smalltalk(query):
+        return True, "smalltalk"
+
+    # 2. 짧은 질의 (토큰 <4)
+    if get_query_token_count(query) < 4:
+        return True, "short_query"
+
+    # 3. 단순 산술
+    if is_simple_math(query):
+        return True, "simple_math"
+
+    return False, ""
+
+
 def _encode_file_ref(filename: str) -> Optional[str]:
     """파일명을 base64 ref로 인코딩 (docs 하위 경로 찾기)
 
@@ -182,13 +274,14 @@ class Compressor(Protocol):
 class Generator(Protocol):
     """LLM 생성기 인터페이스"""
 
-    def generate(self, query: str, context: str, temperature: float) -> str:
+    def generate(self, query: str, context: str, temperature: float, mode: str = "rag") -> str:
         """답변 생성
 
         Args:
             query: 사용자 질문
             context: 참고 문서
             temperature: 생성 온도
+            mode: 생성 모드 ("chat", "rag", "summarize") - 토큰 예산 제어
 
         Returns:
             생성된 답변
@@ -288,6 +381,11 @@ class RAGPipeline:
                 if DIAG_RAG:
                     diagnostics["mode"] = "no_results"
                     diagnostics["generate_path"] = "fallback_no_context"
+
+                # 검색 결과 없음 → CHAT 모드로 폴백
+                metrics["mode"] = "chat"
+                metrics["top_score"] = 0.0
+
                 return RAGResponse(
                     answer="관련 문서가 검색되지 않았다.",
                     success=True,
@@ -339,7 +437,67 @@ class RAGPipeline:
                         f"snippet={c.get('snippet', '')[:120]}..."
                     )
 
-            answer = self.generator.generate(query, context, temperature)
+            # 🎯 개선된 라우팅 로직: 스몰토크/산술 우선, 절대값 기반
+            # CRITICAL: Determine mode BEFORE generating to apply mode-aware token budgets
+            mode_env = os.getenv('MODE', 'AUTO').upper()
+            top_score = results[0].get('score', 0.0) if results else 0.0
+            metrics["top_score"] = top_score
+
+            if mode_env == 'AUTO':
+                # ━━━ 1. 강제 CHAT 모드 체크 (스몰토크/산술/짧은 질의) ━━━
+                should_force, force_reason = force_chat_mode(query)
+                if should_force:
+                    metrics["mode"] = "chat"
+                    metrics["force_chat_reason"] = force_reason
+                    logger.info(f"🎯 AUTO 모드: CHAT 강제 적용 (이유: {force_reason})")
+                else:
+                    # ━━━ 2. 도메인 키워드 + 절대값 임계값 기반 판단 ━━━
+                    has_keyword = has_domain_keyword(query)
+                    token_count = get_query_token_count(query)
+
+                    # 환경변수에서 절대값 임계값 읽기
+                    use_absolute = os.getenv('RAG_MIN_SCORE_POLICY', 'normalized') == 'absolute'
+                    bm25_min = float(os.getenv('BM25_MIN_ABS', '5.0'))
+                    vec_min = float(os.getenv('VEC_MIN_ABS', '0.25'))
+
+                    # 절대값 정책 사용 시 (권장)
+                    if use_absolute:
+                        # 실제 BM25/벡터 스코어를 results에서 추출 시도
+                        # (현재는 fused score만 있으므로 간소화)
+                        # 일단 top_score를 벡터 스코어로 간주
+                        pass_abs_threshold = top_score >= vec_min
+                        pass_domain = has_keyword
+                        pass_length = token_count >= 4
+
+                        should_use_rag = pass_abs_threshold and pass_domain and pass_length
+                        metrics["mode"] = "rag" if should_use_rag else "chat"
+
+                        logger.info(
+                            f"🎯 AUTO 모드 (절대값): top_score={top_score:.3f}, "
+                            f"has_keyword={has_keyword}, token_count={token_count}, "
+                            f"threshold={vec_min}, selected_mode={metrics['mode']}"
+                        )
+                    else:
+                        # 기존 정규화 정책 (fallback)
+                        rag_min_score = float(os.getenv('RAG_MIN_SCORE', '0.35'))
+                        metrics["mode"] = "rag" if top_score >= rag_min_score else "chat"
+                        logger.info(
+                            f"🎯 AUTO 모드 (정규화): top_score={top_score:.3f}, "
+                            f"threshold={rag_min_score}, selected_mode={metrics['mode']}"
+                        )
+
+            elif mode_env == 'CHAT':
+                metrics["mode"] = "chat"
+                metrics["top_score"] = 0.0
+            else:  # RAG, SUMMARIZE
+                metrics["mode"] = "rag"
+                metrics["top_score"] = results[0].get('score', 0.0) if results else 0.0
+
+            # 3. 생성: 결정된 모드를 generator에 전달하여 토큰 예산 제어
+            determined_mode = metrics.get("mode", "rag")
+            logger.info(f"🎯 모드={determined_mode} → 생성 시작")
+
+            answer = self.generator.generate(query, context, temperature, mode=determined_mode)
             metrics["generate_time"] = time.perf_counter() - gen_start
 
             # [DIAG] 생성 완료 진단
@@ -1898,15 +2056,24 @@ class RAGPipeline:
     def _create_legacy_adapter(self):
         """레거시 구현 어댑터 생성 (캡슐화)
 
-        QuickFixRAG를 래핑하여 기존 레거시 시스템과 연결합니다.
+        QwenLLM을 래핑하여 기존 레거시 시스템과 연결합니다.
         향후 이 메서드만 수정하여 신규 구현으로 점진 전환 가능.
 
         Returns:
-            QuickFixRAG: 레거시 RAG 인스턴스
+            _LLMAdapter: LLM 어댑터 인스턴스
         """
-        # QuickFixRAG 모듈이 제거됨 - None 반환
-        logger.warning("⚠️ QuickFixRAG 모듈이 제거됨 - 레거시 어댑터 사용 불가")
-        return None
+        try:
+            from rag_system.llm_singleton import LLMSingleton
+
+            model_path = os.getenv("MODEL_PATH", "./models/ggml-model-Q4_K_M.gguf")
+            logger.info(f"🔍 DEBUG: Attempting to load LLM with model_path={model_path}")
+            logger.info(f"🔍 DEBUG: Model file exists: {Path(model_path).exists()}")
+            llm = LLMSingleton.get_instance(model_path=model_path)
+            logger.info(f"✅ LLM adapter 생성 완료 (LLMSingleton 사용, model={model_path})")
+            return _LLMAdapter(llm)
+        except Exception as e:
+            logger.error(f"LLM adapter 생성 실패: {e}", exc_info=True)
+            return None
 
     def _load_known_drafters(self) -> set:
         """메타DB에서 고유 기안자 로드 (Closed-World Validation용)
@@ -1951,6 +2118,40 @@ class _NoOpCompressor:
         return chunks
 
 
+class _LLMAdapter:
+    """QwenLLM 어댑터 (LegacyAdapter 대체)
+
+    QwenLLM을 _QuickFixGenerator가 기대하는 인터페이스로 변환합니다.
+    """
+
+    def __init__(self, llm):
+        self.llm = llm
+
+    def generate_from_context(self, query: str, context: str, temperature: float = 0.1) -> str:
+        """컨텍스트 기반 답변 생성
+
+        Args:
+            query: 사용자 질문
+            context: 검색된 문서 컨텍스트 (텍스트 형식)
+            temperature: 생성 온도
+
+        Returns:
+            str: 생성된 답변
+        """
+        # Context를 청크 형식으로 변환
+        chunks = [{"snippet": context, "content": context}]
+
+        try:
+            response = self.llm.generate_response(query, chunks, max_retries=1)
+
+            if hasattr(response, "answer"):
+                return response.answer
+            return str(response)
+        except Exception as e:
+            logger.error(f"LLM 답변 생성 실패: {e}", exc_info=True)
+            return f"[E_GENERATE] {str(e)}"
+
+
 class _QuickFixGenerator:
     """QuickFixRAG 래퍼 (기존 구현 활용)"""
 
@@ -1958,7 +2159,7 @@ class _QuickFixGenerator:
         self.rag = rag
         self.compressed_chunks = None  # Store chunks for LLM
 
-    def generate(self, query: str, context: str, temperature: float) -> str:
+    def generate(self, query: str, context: str, temperature: float, mode: str = "rag") -> str:
         # 재검색 금지. 컨텍스트 기반 생성으로 우선 시도.
         try:
             # 1) QuickFixRAG에 전용 메서드가 있으면 사용
@@ -1978,10 +2179,10 @@ class _QuickFixGenerator:
                 if self.compressed_chunks:
                     # Use stored compressed chunks (preferred)
                     logger.debug(
-                        f"Using {len(self.compressed_chunks)} compressed chunks for generation"
+                        f"Using {len(self.compressed_chunks)} compressed chunks for generation (mode={mode})"
                     )
                     response = self.rag.llm.generate_response(
-                        query, self.compressed_chunks, max_retries=1
+                        query, self.compressed_chunks, max_retries=1, mode=mode
                     )
                 else:
                     # Fallback: convert context string to minimal chunks
@@ -1993,7 +2194,7 @@ class _QuickFixGenerator:
                         {"snippet": s, "content": s} for s in snippets if s.strip()
                     ]
                     response = self.rag.llm.generate_response(
-                        query, chunks, max_retries=1
+                        query, chunks, max_retries=1, mode=mode
                     )
 
                 # Extract answer from RAGResponse object
@@ -2135,6 +2336,6 @@ class _V2RetrieverAdapter:
 class _DummyGenerator:
     """더미 생성기 (폴백용)"""
 
-    def generate(self, query: str, context: str, temperature: float) -> str:
+    def generate(self, query: str, context: str, temperature: float, mode: str = "rag") -> str:
         logger.warning("Dummy generator: 기본 응답 반환")
         return "죄송합니다. 답변을 생성할 수 없습니다."

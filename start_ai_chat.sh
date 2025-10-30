@@ -14,12 +14,37 @@ set -euo pipefail  # 에러 발생 시 즉시 종료, 미정의 변수 사용 �
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="${SCRIPT_DIR}"
 
-# 설정 파일 로드 (있으면)
+# 1) 외부 상속 변수 차단 (충돌 위험 키만 우선 언셋)
+log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; }
+log "INFO 외부 환경변수 충돌 방지 - 핵심 변수 초기화 중..."
+unset MODEL_PATH CHAT_FORMAT N_CTX N_GPU_LAYERS LLM_MODEL_PATH QWEN_MODEL_PATH 2>/dev/null || true
+
+# 2) .env 로드 (권위화 - set -a로 모든 변수 export)
 CONFIG_FILE="${PROJECT_ROOT}/.env"
 if [ -f "$CONFIG_FILE" ]; then
+    log "INFO .env 파일 로드 및 권위화: $CONFIG_FILE"
+    set -a
     # shellcheck disable=SC1090
     source "$CONFIG_FILE"
+    set +a
+else
+    log "WARN .env 파일이 없습니다: $CONFIG_FILE"
 fi
+
+# 3) 실행 전 검증 (Fail-fast)
+if [[ -z "${MODEL_PATH:-}" ]]; then
+    log "FATAL MODEL_PATH가 설정되지 않았습니다. .env 파일을 확인하세요."
+    exit 2
+fi
+
+if [[ ! -f "$MODEL_PATH" ]]; then
+    log "FATAL MODEL_PATH 파일이 존재하지 않습니다: '$MODEL_PATH'"
+    log "FATAL 사용 가능한 모델 파일 확인: ls -lh ./models/*.gguf"
+    exit 2
+fi
+
+log "INFO ✅ Effective MODEL_PATH = $MODEL_PATH"
+log "INFO ✅ Effective CHAT_FORMAT = ${CHAT_FORMAT:-auto}"
 
 # 환경 변수 또는 기본값
 PORT="${AI_CHAT_PORT:-8501}"

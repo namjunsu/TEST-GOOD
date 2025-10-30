@@ -13,6 +13,9 @@ WorkingDirectory=/opt/ai-chat
 # 환경변수 로드
 EnvironmentFile=/opt/ai-chat/.env
 
+# 외부 환경변수 오염 차단
+UnsetEnvironment=MODEL_PATH CHAT_FORMAT N_CTX N_GPU_LAYERS LLM_MODEL_PATH QWEN_MODEL_PATH
+
 # Streamlit 서버 시작
 ExecStart=/opt/ai-chat/.venv/bin/streamlit run web_interface.py \
     --server.address ${STREAMLIT_HOST:-127.0.0.1} \

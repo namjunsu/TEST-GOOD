@@ -12,6 +12,14 @@ WorkingDirectory=/opt/ai-chat
 # 환경변수 로드 (보안: .env를 시스템 측에서 관리)
 EnvironmentFile=/opt/ai-chat/.env
 
+# 외부 환경변수 오염 차단 (systemd 격리)
+UnsetEnvironment=MODEL_PATH CHAT_FORMAT N_CTX N_GPU_LAYERS LLM_MODEL_PATH QWEN_MODEL_PATH
+
+# 실행 전 환경 검증 (Fail-fast)
+ExecStartPre=/bin/bash -c 'test -n "${MODEL_PATH:-}" || (echo "[FATAL] MODEL_PATH not set in .env" && exit 2)'
+ExecStartPre=/bin/bash -c 'test -f "${MODEL_PATH}" || (echo "[FATAL] MODEL_PATH file not found: ${MODEL_PATH}" && exit 2)'
+ExecStartPre=/bin/bash -c 'echo "[INFO] Effective MODEL_PATH=${MODEL_PATH}"'
+
 # FastAPI 서버 시작
 ExecStart=/opt/ai-chat/.venv/bin/uvicorn app.api.main:app \
     --host ${FASTAPI_HOST:-127.0.0.1} \

@@ -104,10 +104,19 @@ class QwenLLM:
         # LLM 최적화 설정 로드
         self._load_optimization_config()
 
-        # Qwen 전용 설정
-        self.chat_format = "qwen"  # qwen2 대신 qwen 사용
+        # Chat format 자동 감지 설정 (환경변수 우선)
+        chat_format_env = os.getenv('CHAT_FORMAT', 'auto').lower()
+        if chat_format_env == 'auto':
+            # auto: GGUF 메타데이터의 tokenizer.chat_template 사용
+            self.chat_format = None
+            self.logger.info("🔧 Chat format: auto (GGUF 메타데이터 사용)")
+        else:
+            # 명시적 지정: llama-2, chatml, qwen 등
+            self.chat_format = chat_format_env
+            self.logger.info(f"🔧 Chat format: {chat_format_env} (환경변수 강제 지정)")
+
         self.stop_tokens = ["</s>", "<|im_end|>", "<|endoftext|>"]
-        
+
         self.llm = None
         self._load_model()
         
@@ -186,9 +195,35 @@ class QwenLLM:
                 verbose=True,         # GPU 로딩 상태 확인
                 n_batch=N_BATCH       # config: 1024 (배치 크기 증가)
             )
-            
-            self.logger.info(f"Qwen 모델 로드 완료: {self.model_path}")
-            self.logger.info(f"최적화 모드: {'활성화' if self.use_optimized_prompts else '비활성화'}")
+
+            # 로드된 모델 메타데이터 로그
+            self.logger.info(f"✅ LLM 모델 로드 완료: {self.model_path.name}")
+
+            # GGUF 메타데이터에서 architecture 추출
+            try:
+                metadata = self.llm.metadata if hasattr(self.llm, 'metadata') else {}
+                architecture = metadata.get('general.architecture', 'unknown')
+                model_type = metadata.get('general.name', 'unknown')
+                vocab_type = metadata.get('tokenizer.ggml.model', 'unknown')
+
+                self.logger.info(f"📊 Model Architecture: {architecture}")
+                self.logger.info(f"📊 Model Type: {model_type}")
+                self.logger.info(f"📊 Vocab Type: {vocab_type}")
+
+                # Chat format 정보 (auto일 때 실제 사용된 템플릿)
+                chat_template = metadata.get('tokenizer.chat_template', '')
+                if self.chat_format is None and chat_template:
+                    self.logger.info(f"💬 Chat Template: Loaded from GGUF metadata")
+                    self.logger.debug(f"   Template preview: {chat_template[:100]}...")
+                elif self.chat_format:
+                    self.logger.info(f"💬 Chat Format: {self.chat_format} (override)")
+                else:
+                    self.logger.warning("⚠️  No chat template found, using llama-2 fallback")
+
+            except Exception as e:
+                self.logger.warning(f"메타데이터 추출 실패 (무시 가능): {e}")
+
+            self.logger.info(f"⚙️  최적화 모드: {'활성화' if self.use_optimized_prompts else '비활성화'}")
 
         except ImportError:
             self.logger.error("llama-cpp-python 패키지가 설치되지 않았습니다.")

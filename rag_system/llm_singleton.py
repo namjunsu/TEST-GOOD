@@ -7,7 +7,7 @@ import logging
 import time
 from typing import Optional, Dict, Any
 from datetime import datetime
-from rag_system.qwen_llm import QwenLLM
+from rag_system.llm_wrapper import QwenLLM
 
 class LLMSingleton:
     """LLM 인스턴스를 싱글톤으로 관리"""

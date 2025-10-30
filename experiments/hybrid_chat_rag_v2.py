@@ -16,7 +16,7 @@ from utils.error_handler import handle_errors
 logger = get_logger(__name__)
 
 try:
-    from rag_system.qwen_llm import QwenLLM
+    from rag_system.llm_wrapper import QwenLLM
     from config import QWEN_MODEL_PATH
     LLM_AVAILABLE = True
     logger.info("LLM 모듈 로드 성공")

@@ -195,7 +195,7 @@ class DefaultPaths:
     CACHE_SUBDIR: Final[str] = 'rag_system/cache'
     DB_SUBDIR: Final[str] = 'rag_system/db'
 
-    QWEN_MODEL_FILENAME: Final[str] = 'qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf'
+    QWEN_MODEL_FILENAME: Final[str] = 'ggml-model-Q4_K_M.gguf'
     SENTENCE_TRANSFORMERS_SUBDIR: Final[str] = 'sentence_transformers'
 
     CONFIG_FILENAME: Final[str] = 'config.json'

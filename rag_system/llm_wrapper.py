@@ -494,7 +494,7 @@ A:"""
         mode_token_budgets = {
             "chat": int(os.getenv("CHAT_MAX_TOKENS", "64")),
             "rag": int(os.getenv("RAG_MAX_TOKENS", "160")),
-            "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", "180")),
+            "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", "320")),
         }
         mode_max_tokens = mode_token_budgets.get(mode.lower(), self.config.max_tokens)
         self.logger.info(f"🎯 Mode={mode}, max_tokens={mode_max_tokens} (budget: {mode_token_budgets.get(mode.lower(), 'N/A')})")
@@ -534,6 +534,19 @@ A:"""
                     final_max_tokens = min(mode_max_tokens, adaptive_max_tokens)
                 else:
                     final_max_tokens = mode_max_tokens
+
+                # 🔒 ASSERTION: Ensure mode-aware budget is applied
+                expected_budgets = {
+                    "chat": int(os.getenv("CHAT_MAX_TOKENS", "64")),
+                    "rag": int(os.getenv("RAG_MAX_TOKENS", "160")),
+                    "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", "320")),
+                }
+                expected_budget = expected_budgets.get(mode.lower(), self.config.max_tokens)
+                if final_max_tokens != expected_budget and not (self.config.enable_adaptive_length and length_recommendation):
+                    self.logger.warning(
+                        f"⚠️ Token budget mismatch! mode={mode}, expected={expected_budget}, "
+                        f"got={final_max_tokens}. Using {final_max_tokens}."
+                    )
 
                 # 생성
                 response = self.llm.create_chat_completion(

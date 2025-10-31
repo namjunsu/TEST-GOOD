@@ -133,14 +133,70 @@ def render_sidebar_library(rag_instance) -> None:
         st.session_state.search_count = search_count
         st.session_state.unique_count = unique_count
 
-        # 카운트 불일치 체크 및 경고
-        if unique_count != search_count:
-            st.warning(f"⚠️ 지표 불일치: 라이브러리 {unique_count} / 검색 인덱스 {search_count}")
-            if st.button("🔄 전체 재색인", key="fix_mismatch"):
+        # [PATCH 3] 카운트 불일치 체크 및 경고 + stale 메트릭
+        stale_entries = 0
+        try:
+            import requests
+            # /metrics 엔드포인트에서 stale_index_entries 가져오기
+            resp = requests.get("http://localhost:7860/metrics", timeout=2)
+            if resp.status_code == 200:
+                metrics_data = resp.json()
+                stale_entries = metrics_data.get("stale_index_entries", 0)
+        except:
+            pass  # 백엔드가 실행되지 않았을 수 있음
+
+        # 불일치 또는 stale 항목 존재 시 경고
+        has_mismatch = (unique_count != search_count) or (stale_entries > 0)
+
+        if has_mismatch:
+            warning_msg = f"⚠️ 지표 불일치: 라이브러리 {unique_count} / 검색 인덱스 {search_count}"
+            if stale_entries > 0:
+                warning_msg += f" (삭제 필요: {stale_entries}건)"
+            st.warning(warning_msg)
+
+            # [PATCH 4] 안전 모드 재색인 옵션
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                drop_rebuild = st.checkbox("Drop & Rebuild (안전 모드)",
+                    help="전체 인덱스를 삭제 후 재구축 (가장 깔끔)",
+                    key="drop_rebuild_checkbox")
+            with col2:
+                reindex_button = st.button("🔄 전체 재색인", key="fix_mismatch")
+
+            if reindex_button:
                 if 'auto_indexer' in st.session_state:
-                    with st.spinner("전체 재인덱싱 중..."):
+                    with st.spinner("전체 재인덱싱 중..." + (" (Drop & Rebuild)" if drop_rebuild else "")):
+                        if drop_rebuild:
+                            # Drop & Rebuild 모드: everything_index.db 삭제 후 재생성
+                            import os
+                            import sqlite3
+                            try:
+                                if os.path.exists("everything_index.db"):
+                                    os.remove("everything_index.db")
+                                # 새 DB 생성 (자동 인덱서가 다시 만듦)
+                                conn = sqlite3.connect("everything_index.db")
+                                conn.execute("""
+                                    CREATE TABLE IF NOT EXISTS files (
+                                        filename TEXT,
+                                        path TEXT,
+                                        PRIMARY KEY (filename)
+                                    )
+                                """)
+                                conn.commit()
+                                conn.close()
+                                st.info("🗑️ 기존 인덱스 삭제 완료")
+                            except Exception as e:
+                                st.error(f"Drop 실패: {e}")
+
                         result = st.session_state.auto_indexer.force_reindex()
                         st.success(f"✅ {result['total']}개 파일 재인덱싱 완료!")
+
+                        # 타임스탬프 기록
+                        from datetime import datetime
+                        from pathlib import Path
+                        Path("var").mkdir(exist_ok=True)
+                        Path("var/last_full_reindex.txt").write_text(datetime.now().isoformat())
+
                         if 'rag' in st.session_state:
                             del st.session_state.rag
                         st.rerun()

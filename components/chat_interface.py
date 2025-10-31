@@ -183,33 +183,42 @@ def render_doc_card(
     if file_path:
         col1, col2 = st.columns([1, 1])
 
+        # 안정적인 키 생성 (index 대신 filename 해시 사용)
+        import hashlib
+        file_hash = hashlib.md5(filename.encode()).hexdigest()[:8]
+        session_key = f"show_preview_{file_hash}"
+
         # 미리보기 버튼 (expander 토글)
         with col1:
-            preview_key = f"preview_btn_{index}_{filename[:10]}"
-            if st.button("🔎 미리보기", key=preview_key, width="stretch"):
+            preview_key = f"preview_btn_{file_hash}"
+            current_state = st.session_state.get(session_key, False)
+            button_label = "📖 미리보는중" if current_state else "🔎 미리보기"
+            button_type = "primary" if current_state else "secondary"
+
+            if st.button(button_label, key=preview_key, type=button_type, use_container_width=True):
                 # 세션 상태에 미리보기 정보 저장
-                session_key = f"show_preview_{index}_{filename}"
-                st.session_state[session_key] = not st.session_state.get(session_key, False)
+                st.session_state[session_key] = not current_state
                 st.rerun()
 
         # 다운로드 버튼 (표준 함수 사용)
         with col2:
             download_pdf_button(
                 file_path=str(file_path),
-                key=f"download_{index}_{filename[:10]}",
+                key=f"download_{file_hash}",
                 width="stretch"
             )
 
         # 5행: PDF 뷰어 (예외 처리 강화, 다운로드 fallback)
-        # 기본은 접힘 상태, 버튼 클릭 시에만 펼침
-        session_key = f"show_preview_{index}_{filename}"
+        # expander 없이 직접 표시하여 안정성 향상
         if st.session_state.get(session_key, False):
-            with st.expander("📄 PDF 미리보기", expanded=False):
-                render_pdf_preview(
-                    file_path=str(file_path),
-                    height=600,
-                    show_download_fallback=True
-                )
+            st.markdown("---")
+            st.markdown(f"**📄 PDF 미리보기: {filename}**")
+            render_pdf_preview(
+                file_path=str(file_path),
+                height=600,
+                show_download_fallback=True
+            )
+            st.markdown("---")
     else:
         st.warning("⚠️ 파일 경로가 제공되지 않았습니다")
 
@@ -606,12 +615,12 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                     # 답변 텍스트 표시
                     message_placeholder.markdown(response["text"])
 
-                    # Evidence 표시 (Top-K=5 제한, 고정 카드 레이아웃, 문서 라이브러리와 통일)
+                    # Evidence 표시 (Top-K=20 제한, 고정 카드 레이아웃, 문서 라이브러리와 통일)
                     if response.get("evidence"):
                         evidence_list = response["evidence"]
 
-                        # Top-K=5 제한
-                        MAX_DISPLAY = 5
+                        # Top-K=20 제한 (모든 문서 표시)
+                        MAX_DISPLAY = 20
                         display_evidence = evidence_list[:MAX_DISPLAY]
                         has_more = len(evidence_list) > MAX_DISPLAY
 

@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 import re
 from functools import lru_cache
+import threading
+from contextlib import contextmanager
 
 logger = get_logger(__name__)
 
@@ -19,108 +21,139 @@ class MetadataDB:
     """PDF 메타데이터 SQLite DB 관리"""
 
     def __init__(self, db_path: str = "metadata.db"):
-        self.db_path = db_path
-        self.conn = None
+        self._db_path = db_path
+        self._local = threading.local()
         self.init_database()
-        logger.info(f"MetadataDB 초기화: {db_path}")
+        logger.info(f"MetadataDB 초기화 (thread-safe): {db_path}")
+
+    def _new_conn(self) -> sqlite3.Connection:
+        """새 SQLite 연결 생성 (스레드별)"""
+        conn = sqlite3.connect(
+            f"file:{self._db_path}?cache=shared",
+            uri=True,
+            check_same_thread=False,
+            isolation_level=None,
+            timeout=30
+        )
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA busy_timeout=5000;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+        return conn
+
+    def _get_conn(self) -> sqlite3.Connection:
+        """현재 스레드의 연결 반환 (없으면 생성)"""
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            conn = self._new_conn()
+            self._local.conn = conn
+        return conn
+
+    @contextmanager
+    def _cursor(self):
+        """커서 컨텍스트 매니저 (안전한 commit/close)"""
+        conn = self._get_conn()
+        cur = conn.cursor()
+        try:
+            yield cur
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
 
     def init_database(self):
         """데이터베이스 초기화 및 테이블 생성"""
-        self.conn = sqlite3.connect(self.db_path, timeout=5.0)
-        self.conn.row_factory = sqlite3.Row  # 딕셔너리 형태로 결과 반환
+        # 초기 연결 생성 (스레드 로컬)
+        conn = self._get_conn()
+        logger.info(f"DB WAL mode enabled: {self._db_path}")
 
-        # WAL 모드 설정 (동시 읽기 지원)
-        self.conn.execute("PRAGMA journal_mode=WAL;")
-        self.conn.execute("PRAGMA busy_timeout=5000;")
-        self.conn.execute("PRAGMA synchronous=NORMAL;")
-        logger.info(f"DB WAL mode enabled: {self.db_path}")
-
-        # 메타데이터 테이블 생성
-        self.conn.execute(
+        with self._cursor() as cur:
+            # 메타데이터 테이블 생성
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS documents (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    path TEXT UNIQUE NOT NULL,
+                    filename TEXT NOT NULL,
+                    title TEXT,
+                    date TEXT,
+                    year TEXT,
+                    month TEXT,
+                    category TEXT,
+                    drafter TEXT,
+                    amount INTEGER,
+                    file_size INTEGER,
+                    page_count INTEGER,
+                    text_preview TEXT,
+                    keywords TEXT,  -- JSON array
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
             """
-            CREATE TABLE IF NOT EXISTS documents (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                path TEXT UNIQUE NOT NULL,
-                filename TEXT NOT NULL,
-                title TEXT,
-                date TEXT,
-                year TEXT,
-                month TEXT,
-                category TEXT,
-                drafter TEXT,
-                amount INTEGER,
-                file_size INTEGER,
-                page_count INTEGER,
-                text_preview TEXT,
-                keywords TEXT,  -- JSON array
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """
-        )
 
-        # 인덱스 생성 (검색 성능 향상)
-        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_year ON documents(year)")
-        self.conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_category ON documents(category)"
-        )
-        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_date ON documents(date)")
-        self.conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_filename ON documents(filename)"
-        )
-
-        # 전문 검색을 위한 FTS 테이블 (Full-Text Search)
-        self.conn.execute(
-            """
-            CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts
-            USING fts5(
-                path UNINDEXED,
-                title,
-                text_preview,
-                keywords,
-                content=documents,
-                content_rowid=id
+            # 인덱스 생성 (검색 성능 향상)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_year ON documents(year)")
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_category ON documents(category)"
             )
-        """
-        )
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_date ON documents(date)")
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_filename ON documents(filename)"
+            )
 
-        # FTS 트리거 설정 (자동 동기화)
-        self.conn.execute(
+            # 전문 검색을 위한 FTS 테이블 (Full-Text Search)
+            cur.execute(
+                """
+                CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts
+                USING fts5(
+                    path UNINDEXED,
+                    title,
+                    text_preview,
+                    keywords,
+                    content=documents,
+                    content_rowid=id
+                )
             """
-            CREATE TRIGGER IF NOT EXISTS documents_ai
-            AFTER INSERT ON documents
-            BEGIN
-                INSERT INTO documents_fts(rowid, path, title, text_preview, keywords)
-                VALUES (new.id, new.path, new.title, new.text_preview, new.keywords);
-            END
-        """
-        )
+            )
 
-        self.conn.execute(
+            # FTS 트리거 설정 (자동 동기화)
+            cur.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS documents_ai
+                AFTER INSERT ON documents
+                BEGIN
+                    INSERT INTO documents_fts(rowid, path, title, text_preview, keywords)
+                    VALUES (new.id, new.path, new.title, new.text_preview, new.keywords);
+                END
             """
-            CREATE TRIGGER IF NOT EXISTS documents_au
-            AFTER UPDATE ON documents
-            BEGIN
-                UPDATE documents_fts
-                SET title = new.title,
-                    text_preview = new.text_preview,
-                    keywords = new.keywords
-                WHERE rowid = new.id;
-            END
-        """
-        )
+            )
 
-        self.conn.execute(
+            cur.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS documents_au
+                AFTER UPDATE ON documents
+                BEGIN
+                    UPDATE documents_fts
+                    SET title = new.title,
+                        text_preview = new.text_preview,
+                        keywords = new.keywords
+                    WHERE rowid = new.id;
+                END
             """
-            CREATE TRIGGER IF NOT EXISTS documents_ad
-            AFTER DELETE ON documents
-            BEGIN
-                DELETE FROM documents_fts WHERE rowid = old.id;
-            END
-        """
-        )
+            )
 
-        self.conn.commit()
+            cur.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS documents_ad
+                AFTER DELETE ON documents
+                BEGIN
+                    DELETE FROM documents_fts WHERE rowid = old.id;
+                END
+            """
+            )
 
         # 스키마 마이그레이션: doctype, display_date, claimed_total, sum_match 컬럼 추가
         self._migrate_schema()
@@ -129,42 +162,40 @@ class MetadataDB:
         """스키마 마이그레이션: 신규 컬럼 추가"""
         try:
             # 백업 생성
-            backup_path = f"{self.db_path}.bak"
+            backup_path = f"{self._db_path}.bak"
             import shutil
 
-            if Path(self.db_path).exists() and not Path(backup_path).exists():
-                shutil.copy2(self.db_path, backup_path)
+            if Path(self._db_path).exists() and not Path(backup_path).exists():
+                shutil.copy2(self._db_path, backup_path)
                 logger.info(f"DB 백업 생성: {backup_path}")
 
-            # doctype 컬럼 추가 (존재 확인 후 추가)
-            cursor = self.conn.execute("PRAGMA table_info(documents)")
-            columns = [col[1] for col in cursor.fetchall()]
+            with self._cursor() as cur:
+                # doctype 컬럼 추가 (존재 확인 후 추가)
+                cur.execute("PRAGMA table_info(documents)")
+                columns = [col[1] for col in cur.fetchall()]
 
-            if "doctype" not in columns:
-                self.conn.execute(
-                    'ALTER TABLE documents ADD COLUMN doctype TEXT DEFAULT "proposal"'
-                )
-                logger.info("✓ doctype 컬럼 추가")
+                if "doctype" not in columns:
+                    cur.execute(
+                        'ALTER TABLE documents ADD COLUMN doctype TEXT DEFAULT "proposal"'
+                    )
+                    logger.info("✓ doctype 컬럼 추가")
 
-            if "display_date" not in columns:
-                self.conn.execute("ALTER TABLE documents ADD COLUMN display_date TEXT")
-                logger.info("✓ display_date 컬럼 추가")
+                if "display_date" not in columns:
+                    cur.execute("ALTER TABLE documents ADD COLUMN display_date TEXT")
+                    logger.info("✓ display_date 컬럼 추가")
 
-            if "claimed_total" not in columns:
-                self.conn.execute(
-                    "ALTER TABLE documents ADD COLUMN claimed_total INTEGER"
-                )
-                logger.info("✓ claimed_total 컬럼 추가")
+                if "claimed_total" not in columns:
+                    cur.execute(
+                        "ALTER TABLE documents ADD COLUMN claimed_total INTEGER"
+                    )
+                    logger.info("✓ claimed_total 컬럼 추가")
 
-            if "sum_match" not in columns:
-                self.conn.execute("ALTER TABLE documents ADD COLUMN sum_match BOOLEAN")
-                logger.info("✓ sum_match 컬럼 추가")
-
-            self.conn.commit()
+                if "sum_match" not in columns:
+                    cur.execute("ALTER TABLE documents ADD COLUMN sum_match BOOLEAN")
+                    logger.info("✓ sum_match 컬럼 추가")
 
         except Exception as e:
             logger.error(f"스키마 마이그레이션 실패: {e}")
-            self.conn.rollback()
 
     def add_document(self, metadata: Dict[str, Any]) -> int:
         """문서 메타데이터 추가"""
@@ -174,46 +205,45 @@ class MetadataDB:
             if isinstance(keywords, list):
                 keywords = json.dumps(keywords, ensure_ascii=False)
 
-            cursor = self.conn.execute(
-                """
-                INSERT OR REPLACE INTO documents (
-                    path, filename, title, date, year, month, category,
-                    drafter, amount, file_size, page_count, text_preview, keywords,
-                    doctype, display_date, claimed_total, sum_match
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-                (
-                    str(metadata.get("path", "")),
-                    metadata.get("filename", ""),
-                    metadata.get("title", ""),
-                    metadata.get("date", ""),
-                    metadata.get("year", ""),
-                    metadata.get("month", ""),
-                    metadata.get("category", ""),
-                    metadata.get("drafter", ""),
-                    metadata.get("amount", 0),
-                    metadata.get("file_size", 0),
-                    metadata.get("page_count", 0),
-                    metadata.get("text_preview", ""),
-                    keywords,
-                    metadata.get("doctype", "proposal"),
-                    metadata.get("display_date", ""),
-                    metadata.get("claimed_total", None),
-                    metadata.get("sum_match", None),
-                ),
-            )
-
-            self.conn.commit()
-            return cursor.lastrowid
+            with self._cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT OR REPLACE INTO documents (
+                        path, filename, title, date, year, month, category,
+                        drafter, amount, file_size, page_count, text_preview, keywords,
+                        doctype, display_date, claimed_total, sum_match
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        str(metadata.get("path", "")),
+                        metadata.get("filename", ""),
+                        metadata.get("title", ""),
+                        metadata.get("date", ""),
+                        metadata.get("year", ""),
+                        metadata.get("month", ""),
+                        metadata.get("category", ""),
+                        metadata.get("drafter", ""),
+                        metadata.get("amount", 0),
+                        metadata.get("file_size", 0),
+                        metadata.get("page_count", 0),
+                        metadata.get("text_preview", ""),
+                        keywords,
+                        metadata.get("doctype", "proposal"),
+                        metadata.get("display_date", ""),
+                        metadata.get("claimed_total", None),
+                        metadata.get("sum_match", None),
+                    ),
+                )
+                return cur.lastrowid
 
         except Exception as e:
             logger.error(f"문서 추가 실패: {e}")
-            self.conn.rollback()
             return -1
 
     def search_by_year(self, year: str) -> List[Dict[str, Any]]:
         """연도별 검색"""
-        cursor = self.conn.execute(
+        conn = self._get_conn()
+        cursor = conn.execute(
             "SELECT * FROM documents WHERE year = ? ORDER BY date DESC", (year,)
         )
         return [dict(row) for row in cursor.fetchall()]
@@ -249,7 +279,8 @@ class MetadataDB:
             query += " LIMIT ?"
             params.append(limit)
 
-        cursor = self.conn.execute(query, params)
+        conn = self._get_conn()
+        cursor = conn.execute(query, params)
         return [dict(row) for row in cursor.fetchall()]
 
     def count_documents(
@@ -277,13 +308,15 @@ class MetadataDB:
             params.append(f"{year}%")
             params.append(f"{year}%")
 
-        cursor = self.conn.execute(query, params)
+        conn = self._get_conn()
+        cursor = conn.execute(query, params)
         result = cursor.fetchone()
         return result["count"] if result else 0
 
     def search_by_category(self, category: str) -> List[Dict[str, Any]]:
         """카테고리별 검색"""
-        cursor = self.conn.execute(
+        conn = self._get_conn()
+        cursor = conn.execute(
             "SELECT * FROM documents WHERE category LIKE ? ORDER BY date DESC",
             (f"%{category}%",),
         )
@@ -291,7 +324,8 @@ class MetadataDB:
 
     def search_by_keyword(self, keyword: str) -> List[Dict[str, Any]]:
         """키워드 검색 (FTS 사용)"""
-        cursor = self.conn.execute(
+        conn = self._get_conn()
+        cursor = conn.execute(
             """
             SELECT d.* FROM documents d
             JOIN documents_fts f ON d.id = f.rowid
@@ -307,7 +341,8 @@ class MetadataDB:
         self, start_date: str, end_date: str
     ) -> List[Dict[str, Any]]:
         """날짜 범위 검색"""
-        cursor = self.conn.execute(
+        conn = self._get_conn()
+        cursor = conn.execute(
             "SELECT * FROM documents WHERE date BETWEEN ? AND ? ORDER BY date DESC",
             (start_date, end_date),
         )
@@ -315,7 +350,8 @@ class MetadataDB:
 
     def get_document_by_path(self, path: str) -> Optional[Dict[str, Any]]:
         """경로로 문서 조회"""
-        cursor = self.conn.execute(
+        conn = self._get_conn()
+        cursor = conn.execute(
             "SELECT * FROM documents WHERE path = ?", (str(path),)
         )
         row = cursor.fetchone()
@@ -324,7 +360,8 @@ class MetadataDB:
     def get_document(self, filename: str) -> Optional[Dict[str, Any]]:
         """파일명으로 문서 조회 (perfect_rag.py 호환용)"""
         # 파일명만으로 검색
-        cursor = self.conn.execute(
+        conn = self._get_conn()
+        cursor = conn.execute(
             "SELECT * FROM documents WHERE filename = ? LIMIT 1", (filename,)
         )
         row = cursor.fetchone()
@@ -339,7 +376,8 @@ class MetadataDB:
         Returns:
             문서 딕셔너리 (claimed_total 포함) 또는 None
         """
-        cursor = self.conn.execute(
+        conn = self._get_conn()
+        cursor = conn.execute(
             "SELECT * FROM documents WHERE filename = ? COLLATE NOCASE LIMIT 1",
             (filename,)
         )
@@ -372,7 +410,8 @@ class MetadataDB:
         if not s:
             return None
 
-        cur = self.conn.cursor()
+        conn = self._get_conn()
+        cur = conn.cursor()
         # SQL에서도 모든 특수문자 제거하여 비교
         cur.execute(
             """
@@ -397,7 +436,8 @@ class MetadataDB:
         Returns:
             text_preview 문자열 또는 None
         """
-        cursor = self.conn.execute(
+        conn = self._get_conn()
+        cursor = conn.execute(
             "SELECT text_preview FROM documents WHERE filename = ? COLLATE NOCASE LIMIT 1",
             (filename,)
         )
@@ -416,7 +456,8 @@ class MetadataDB:
         """
         try:
             # 문서 경로 조회
-            cursor = self.conn.execute(
+            conn = self._get_conn()
+            cursor = conn.execute(
                 "SELECT path FROM documents WHERE filename = ? OR path = ? LIMIT 1",
                 (doc_id, doc_id)
             )
@@ -495,23 +536,24 @@ class MetadataDB:
         if fields:
             values.append(doc["id"])
             query = f"UPDATE documents SET {', '.join(fields)}, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-            self.conn.execute(query, values)
-            self.conn.commit()
+            with self._cursor() as cur:
+                cur.execute(query, values)
 
     def update_text_preview(self, path: str, text_preview: str):
         """텍스트 미리보기 업데이트"""
-        self.conn.execute(
-            "UPDATE documents SET text_preview = ?, updated_at = CURRENT_TIMESTAMP WHERE path = ?",
-            (text_preview[:1000], str(path)),  # 최대 1000자
-        )
-        self.conn.commit()
+        with self._cursor() as cur:
+            cur.execute(
+                "UPDATE documents SET text_preview = ?, updated_at = CURRENT_TIMESTAMP WHERE path = ?",
+                (text_preview[:1000], str(path)),  # 최대 1000자
+            )
 
     def get_statistics(self) -> Dict[str, Any]:
         """DB 통계 정보"""
-        cursor = self.conn.execute("SELECT COUNT(*) as total FROM documents")
+        conn = self._get_conn()
+        cursor = conn.execute("SELECT COUNT(*) as total FROM documents")
         total = cursor.fetchone()["total"]
 
-        cursor = self.conn.execute(
+        cursor = conn.execute(
             """
             SELECT year, COUNT(*) as count
             FROM documents
@@ -521,7 +563,7 @@ class MetadataDB:
         )
         by_year = {row["year"]: row["count"] for row in cursor.fetchall()}
 
-        cursor = self.conn.execute(
+        cursor = conn.execute(
             """
             SELECT category, COUNT(*) as count
             FROM documents
@@ -539,8 +581,8 @@ class MetadataDB:
 
     def rebuild_fts_index(self):
         """FTS 인덱스 재구축"""
-        self.conn.execute('INSERT INTO documents_fts(documents_fts) VALUES("rebuild")')
-        self.conn.commit()
+        with self._cursor() as cur:
+            cur.execute('INSERT INTO documents_fts(documents_fts) VALUES("rebuild")')
         logger.info("FTS 인덱스 재구축 완료")
 
     def list_unique_drafters(self) -> set:
@@ -550,7 +592,8 @@ class MetadataDB:
             set: 고유 기안자 이름 집합
         """
         try:
-            cursor = self.conn.execute("""
+            conn = self._get_conn()
+            cursor = conn.execute("""
                 SELECT DISTINCT drafter
                 FROM documents
                 WHERE drafter IS NOT NULL
@@ -566,9 +609,11 @@ class MetadataDB:
             return set()
 
     def close(self):
-        """데이터베이스 연결 종료"""
-        if self.conn:
-            self.conn.close()
+        """데이터베이스 연결 종료 (모든 스레드 로컬 연결 종료)"""
+        conn = getattr(self._local, "conn", None)
+        if conn:
+            conn.close()
+            self._local.conn = None
 
     def count_unique_documents(self, allowed_ext=('pdf', 'txt')) -> int:
         """고유 문서 수 카운트 (중복 제거, 확장자 필터)
@@ -593,7 +638,8 @@ class MetadataDB:
                 WHERE {ext_where}
             """
 
-            cursor = self.conn.execute(query)
+            conn = self._get_conn()
+            cursor = conn.execute(query)
             result = cursor.fetchone()
             return result['count'] if result else 0
 
@@ -636,7 +682,8 @@ class MetadataDB:
                 # file_index.json이 없으면 DB에서 카운트
                 counts = {'pdf': 0, 'txt': 0, 'others': 0}
 
-                cursor = self.conn.execute("""
+                conn = self._get_conn()
+                cursor = conn.execute("""
                     SELECT
                         LOWER(filename) as fname
                     FROM documents

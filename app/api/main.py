@@ -424,6 +424,103 @@ def get_metrics():
     except Exception as e:
         print(f"인제스트 상태 확인 실패: {e}")
 
+    # 8. 코드 인덱스 통계 (model_codes 테이블)
+    try:
+        db_path = Path("metadata.db")
+        if db_path.exists():
+            conn = sqlite3.connect(str(db_path))
+            cursor = conn.cursor()
+
+            # 전체 레코드 수
+            cursor.execute("SELECT COUNT(*) FROM model_codes")
+            metrics["code_index_total"] = cursor.fetchone()[0]
+
+            # 고유 norm_code 수
+            cursor.execute("SELECT COUNT(DISTINCT norm_code) FROM model_codes")
+            metrics["code_index_unique"] = cursor.fetchone()[0]
+
+            conn.close()
+    except Exception as e:
+        print(f"코드 인덱스 통계 실패: {e}")
+        metrics["code_index_total"] = 0
+        metrics["code_index_unique"] = 0
+
+    # 8-1. [PATCH 2] 인덱스 위생 메트릭
+    try:
+        import os
+        from config.indexing import DOCS_FOLDER
+
+        # 물리 파일 수 (fs_file_count)
+        fs_count = 0
+        docs_path = Path(DOCS_FOLDER)
+        if docs_path.exists():
+            for root, _, files in os.walk(docs_path):
+                fs_count += sum(1 for f in files if f.lower().endswith('.pdf'))
+
+        metrics["fs_file_count"] = fs_count
+
+        # 검색 인덱스 파일 수 (index_file_count)
+        index_count = 0
+        stale_count = 0
+        index_db_path = Path("everything_index.db")
+        if index_db_path.exists():
+            conn = sqlite3.connect(str(index_db_path))
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM files")
+            index_count = cursor.fetchone()[0]
+
+            # stale 항목 계산: 인덱스에는 있지만 디스크에는 없는 파일
+            cursor.execute("SELECT filename, path FROM files")
+            rows = cursor.fetchall()
+            fs_names = set()
+            for root, _, files in os.walk(docs_path):
+                for f in files:
+                    if f.lower().endswith('.pdf'):
+                        fs_names.add(f)
+
+            for filename, path in rows:
+                exists = os.path.exists(path) if path and os.path.isabs(path) else (filename in fs_names)
+                if not exists:
+                    stale_count += 1
+
+            conn.close()
+
+        metrics["index_file_count"] = index_count
+        metrics["stale_index_entries"] = stale_count
+
+        # 마지막 전체 재색인 타임스탬프
+        last_reindex_file = Path("var/last_full_reindex.txt")
+        if last_reindex_file.exists():
+            metrics["last_full_reindex_ts"] = last_reindex_file.read_text().strip()
+        else:
+            metrics["last_full_reindex_ts"] = "unknown"
+
+    except Exception as e:
+        print(f"인덱스 위생 메트릭 실패: {e}")
+        metrics["fs_file_count"] = 0
+        metrics["index_file_count"] = 0
+        metrics["stale_index_entries"] = 0
+        metrics["last_full_reindex_ts"] = "unknown"
+
+    # 9. 코드 검색 메트릭 (런타임)
+    try:
+        from app.rag.metrics_collector import get_metrics_collector
+        code_metrics = get_metrics_collector().get_metrics()
+        metrics.update(code_metrics)
+    except Exception as e:
+        print(f"코드 검색 메트릭 조회 실패: {e}")
+        # 기본값 설정
+        metrics.update({
+            "code_queries_total": 0,
+            "exact_match_hits_total": 0,
+            "exact_match_hit_rate": 0.0,
+            "stage0_candidates_last": 0,
+            "stage1_candidates_last": 0,
+            "rrf_fusion_used_total": 0,
+            "retrieval_latency_ms_p50": 0,
+            "retrieval_latency_ms_p95": 0,
+        })
+
     return metrics
 
 

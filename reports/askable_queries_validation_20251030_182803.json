@@ -1,0 +1,440 @@
+{
+  "timestamp": "2025-10-30T18:28:03.222448",
+  "total": 20,
+  "passed": 14,
+  "failed": 6,
+  "errors": 0,
+  "success_rate": "70.0%",
+  "avg_latency": "8.95s",
+  "avg_score": "0.950",
+  "by_category": {
+    "일반 대화": {
+      "total": 2,
+      "passed": 0,
+      "failed": 2,
+      "errors": 0
+    },
+    "작성자 검색": {
+      "total": 3,
+      "passed": 3,
+      "failed": 0,
+      "errors": 0
+    },
+    "연도별 검색": {
+      "total": 3,
+      "passed": 0,
+      "failed": 3,
+      "errors": 0
+    },
+    "문서 요약": {
+      "total": 10,
+      "passed": 10,
+      "failed": 0,
+      "errors": 0
+    },
+    "무근거 방지": {
+      "total": 2,
+      "passed": 1,
+      "failed": 1,
+      "errors": 0
+    }
+  },
+  "results": [
+    {
+      "index": 1,
+      "query": "안녕하세요",
+      "category": "일반 대화",
+      "status": "FAIL",
+      "expected_mode": "chat",
+      "actual_mode": "chat",
+      "expected_citations": false,
+      "has_citations": true,
+      "top_score": 1.0,
+      "latency": 11.087780475616455,
+      "answer_length": 259,
+      "source_docs": [
+        "2025-09-11_돌직구쇼_백업_무선마이크_구매_건.pdf",
+        "2025-09-04_방송_프로그램_제작용_건전지_소모품_구매의_건.pdf",
+        "2025-08-26_뷰파인더_소모품_케이블_구매_건.pdf"
+      ],
+      "mode_match": true,
+      "citation_match": false
+    },
+    {
+      "index": 2,
+      "query": "1 + 1은?",
+      "category": "일반 대화",
+      "status": "FAIL",
+      "expected_mode": "chat",
+      "actual_mode": "chat",
+      "expected_citations": false,
+      "has_citations": true,
+      "top_score": 1.0,
+      "latency": 11.245625972747803,
+      "answer_length": 206,
+      "source_docs": [
+        "2025-09-11_돌직구쇼_백업_무선마이크_구매_건.pdf",
+        "2025-09-04_방송_프로그램_제작용_건전지_소모품_구매의_건.pdf",
+        "2025-08-26_뷰파인더_소모품_케이블_구매_건.pdf"
+      ],
+      "mode_match": true,
+      "citation_match": false
+    },
+    {
+      "index": 3,
+      "query": "최새름 작성 문서 요약해줘",
+      "category": "작성자 검색",
+      "status": "PASS",
+      "expected_mode": "rag",
+      "actual_mode": "rag",
+      "expected_citations": true,
+      "has_citations": true,
+      "top_score": 1.0,
+      "latency": 11.40554165840149,
+      "answer_length": 263,
+      "source_docs": [
+        "2025-09-11_돌직구쇼_백업_무선마이크_구매_건.pdf",
+        "2025-09-04_방송_프로그램_제작용_건전지_소모품_구매의_건.pdf",
+        "2025-08-26_뷰파인더_소모품_케이블_구매_건.pdf"
+      ],
+      "mode_match": true,
+      "citation_match": true
+    },
+    {
+      "index": 4,
+      "query": "유인혁 작성 문서 요약해줘",
+      "category": "작성자 검색",
+      "status": "PASS",
+      "expected_mode": "rag",
+      "actual_mode": "rag",
+      "expected_citations": true,
+      "has_citations": true,
+      "top_score": 1.0,
+      "latency": 11.051135540008545,
+      "answer_length": 241,
+      "source_docs": [
+        "2023-11-03_영상취재팀_Wide_Lens_수리_건.pdf",
+        "2023-11-05_영상취재팀_X70수리_및_Wireless_소모품_구매_건.pdf",
+        "2023-11-02_영상취재팀_트라이포드_수리_건.pdf"
+      ],
+      "mode_match": true,
+      "citation_match": true
+    },
+    {
+      "index": 5,
+      "query": "남준수 작성 문서 요약해줘",
+      "category": "작성자 검색",
+      "status": "PASS",
+      "expected_mode": "rag",
+      "actual_mode": "rag",
+      "expected_citations": true,
+      "has_citations": true,
+      "top_score": 1.0,
+      "latency": 11.01576852798462,
+      "answer_length": 305,
+      "source_docs": [
+        "2025-07-17_미러클랩_카메라_삼각대_기술검토서.pdf",
+        "2025-03-04_방송_영상_보존용_DVR_교체_검토의_건.pdf",
+        "2025-01-09_광화문_스튜디오_모니터_&_스탠드_교체_검토서.pdf"
+      ],
+      "mode_match": true,
+      "citation_match": true
+    },
+    {
+      "index": 6,
+      "query": "2025년 작성된 문서 리스트",
+      "category": "연도별 검색",
+      "status": "FAIL",
+      "expected_mode": "rag",
+      "actual_mode": "chat",
+      "expected_citations": true,
+      "has_citations": true,
+      "top_score": 1.0,
+      "latency": 10.628400802612305,
+      "answer_length": 223,
+      "source_docs": [
+        "2025-09-11_돌직구쇼_백업_무선마이크_구매_건.pdf",
+        "2025-09-04_방송_프로그램_제작용_건전지_소모품_구매의_건.pdf",
+        "2025-08-26_뷰파인더_소모품_케이블_구매_건.pdf"
+      ],
+      "mode_match": false,
+      "citation_match": true
+    },
+    {
+      "index": 7,
+      "query": "2024년 작성된 문서 리스트",
+      "category": "연도별 검색",
+      "status": "FAIL",
+      "expected_mode": "rag",
+      "actual_mode": "chat",
+      "expected_citations": true,
+      "has_citations": true,
+      "top_score": 1.0,
+      "latency": 7.070054769515991,
+      "answer_length": 160,
+      "source_docs": [
+        "2024-12-16_방송_프로그램_제작용_건전지_소모품_구매의_건.pdf",
+        "2024-11-14_뉴스_스튜디오_지미집_Control_Box_수리_건.pdf",
+        "2024-10-24_2024_채널에이_중계차_노후_보수건.pdf"
+      ],
+      "mode_match": false,
+      "citation_match": true
+    },
+    {
+      "index": 8,
+      "query": "2023년 작성된 문서 리스트",
+      "category": "연도별 검색",
+      "status": "FAIL",
+      "expected_mode": "rag",
+      "actual_mode": "chat",
+      "expected_citations": true,
+      "has_citations": true,
+      "top_score": 1.0,
+      "latency": 9.207827091217041,
+      "answer_length": 218,
+      "source_docs": [
+        "2023-12-28_오픈스튜디오_카메라_케이블_수리.pdf",
+        "2023-12-19_다이나믹_마이크_수리_및_예비용_구매_건.pdf",
+        "2023-12-06_오픈스튜디오_무선마이크_수신_장애_조치_기안서.pdf"
+      ],
+      "mode_match": false,
+      "citation_match": true
+    },
+    {
+      "index": 9,
+      "query": "돌직구쇼 백업 무선마이크 구매 건 관련 문서 요약해줘",
+      "category": "문서 요약",
+      "status": "PASS",
+      "expected_mode": "rag",
+      "actual_mode": "rag",
+      "expected_citations": true,
+      "has_citations": true,
+      "top_score": 1.0,
+      "latency": 6.944112539291382,
+      "answer_length": 127,
+      "source_docs": [
+        "2025-09-11_돌직구쇼_백업_무선마이크_구매_건.pdf",
+        "2025-09-04_방송_프로그램_제작용_건전지_소모품_구매의_건.pdf",
+        "2025-08-26_뷰파인더_소모품_케이블_구매_건.pdf"
+      ],
+      "mode_match": true,
+      "citation_match": true
+    },
+    {
+      "index": 10,
+      "query": "방송 프로그램 제작용 건전지 소모품 구매의 건 관련 문서 요약해줘",
+      "category": "문서 요약",
+      "status": "PASS",
+      "expected_mode": "rag",
+      "actual_mode": "rag",
+      "expected_citations": true,
+      "has_citations": true,
+      "top_score": 1.0,
+      "latency": 8.10307002067566,
+      "answer_length": 165,
+      "source_docs": [
+        "2025-09-11_돌직구쇼_백업_무선마이크_구매_건.pdf",
+        "2025-09-04_방송_프로그램_제작용_건전지_소모품_구매의_건.pdf",
+        "2025-08-26_뷰파인더_소모품_케이블_구매_건.pdf"
+      ],
+      "mode_match": true,
+      "citation_match": true
+    },
+    {
+      "index": 11,
+      "query": "뷰파인더 소모품 케이블 구매 건 관련 문서 요약해줘",
+      "category": "문서 요약",
+      "status": "PASS",
+      "expected_mode": "rag",
+      "actual_mode": "rag",
+      "expected_citations": true,
+      "has_citations": true,
+      "top_score": 1.0,
+      "latency": 7.177052736282349,
+      "answer_length": 175,
+      "source_docs": [
+        "2025-09-11_돌직구쇼_백업_무선마이크_구매_건.pdf",
+        "2025-09-04_방송_프로그램_제작용_건전지_소모품_구매의_건.pdf",
+        "2025-08-26_뷰파인더_소모품_케이블_구매_건.pdf"
+      ],
+      "mode_match": true,
+      "citation_match": true
+    },
+    {
+      "index": 12,
+      "query": "중계 DI BOX 도입 건 관련 문서 요약해줘",
+      "category": "문서 요약",
+      "status": "PASS",
+      "expected_mode": "rag",
+      "actual_mode": "rag",
+      "expected_citations": true,
+      "has_citations": true,
+      "top_score": 1.0,
+      "latency": 10.552089214324951,
+      "answer_length": 278,
+      "source_docs": [
+        "2025-09-11_돌직구쇼_백업_무선마이크_구매_건.pdf",
+        "2025-09-04_방송_프로그램_제작용_건전지_소모품_구매의_건.pdf",
+        "2025-08-26_뷰파인더_소모품_케이블_구매_건.pdf"
+      ],
+      "mode_match": true,
+      "citation_match": true
+    },
+    {
+      "index": 13,
+      "query": "중계차 카메라 렌즈 오버홀 관련 문서 요약해줘",
+      "category": "문서 요약",
+      "status": "PASS",
+      "expected_mode": "rag",
+      "actual_mode": "rag",
+      "expected_citations": true,
+      "has_citations": true,
+      "top_score": 1.0,
+      "latency": 10.153299331665039,
+      "answer_length": 291,
+      "source_docs": [
+        "2025-09-11_돌직구쇼_백업_무선마이크_구매_건.pdf",
+        "2025-09-04_방송_프로그램_제작용_건전지_소모품_구매의_건.pdf",
+        "2025-08-26_뷰파인더_소모품_케이블_구매_건.pdf"
+      ],
+      "mode_match": true,
+      "citation_match": true
+    },
+    {
+      "index": 14,
+      "query": "미러클랩 카메라 삼각대 기술검토서 관련 문서 요약해줘",
+      "category": "문서 요약",
+      "status": "PASS",
+      "expected_mode": "rag",
+      "actual_mode": "rag",
+      "expected_citations": true,
+      "has_citations": true,
+      "top_score": 1.0,
+      "latency": 10.12889289855957,
+      "answer_length": 247,
+      "source_docs": [
+        "2025-09-11_돌직구쇼_백업_무선마이크_구매_건.pdf",
+        "2025-09-04_방송_프로그램_제작용_건전지_소모품_구매의_건.pdf",
+        "2025-08-26_뷰파인더_소모품_케이블_구매_건.pdf"
+      ],
+      "mode_match": true,
+      "citation_match": true
+    },
+    {
+      "index": 15,
+      "query": "광화문 무선 마이크 노후화 및 단종으로 인한 장비 교체 건 1 관련 문서 요약해줘",
+      "category": "문서 요약",
+      "status": "PASS",
+      "expected_mode": "rag",
+      "actual_mode": "rag",
+      "expected_citations": true,
+      "has_citations": true,
+      "top_score": 1.0,
+      "latency": 9.065493822097778,
+      "answer_length": 157,
+      "source_docs": [
+        "2025-09-11_돌직구쇼_백업_무선마이크_구매_건.pdf",
+        "2025-09-04_방송_프로그램_제작용_건전지_소모품_구매의_건.pdf",
+        "2025-08-26_뷰파인더_소모품_케이블_구매_건.pdf"
+      ],
+      "mode_match": true,
+      "citation_match": true
+    },
+    {
+      "index": 16,
+      "query": "광화문 무선 마이크 노후화 및 단종으로 인한 장비 교체 건 관련 문서 요약해줘",
+      "category": "문서 요약",
+      "status": "PASS",
+      "expected_mode": "rag",
+      "actual_mode": "rag",
+      "expected_citations": true,
+      "has_citations": true,
+      "top_score": 1.0,
+      "latency": 6.337575435638428,
+      "answer_length": 170,
+      "source_docs": [
+        "2025-09-11_돌직구쇼_백업_무선마이크_구매_건.pdf",
+        "2025-09-04_방송_프로그램_제작용_건전지_소모품_구매의_건.pdf",
+        "2025-08-26_뷰파인더_소모품_케이블_구매_건.pdf"
+      ],
+      "mode_match": true,
+      "citation_match": true
+    },
+    {
+      "index": 17,
+      "query": "광화문 사옥 방송 소모품 구매 건 관련 문서 요약해줘",
+      "category": "문서 요약",
+      "status": "PASS",
+      "expected_mode": "rag",
+      "actual_mode": "rag",
+      "expected_citations": true,
+      "has_citations": true,
+      "top_score": 1.0,
+      "latency": 8.279484272003174,
+      "answer_length": 109,
+      "source_docs": [
+        "2025-09-11_돌직구쇼_백업_무선마이크_구매_건.pdf",
+        "2025-09-04_방송_프로그램_제작용_건전지_소모품_구매의_건.pdf",
+        "2025-08-26_뷰파인더_소모품_케이블_구매_건.pdf"
+      ],
+      "mode_match": true,
+      "citation_match": true
+    },
+    {
+      "index": 18,
+      "query": "방송 프로그램 제작용 건전지 소모품 구매의 건 관련 문서 요약해줘",
+      "category": "문서 요약",
+      "status": "PASS",
+      "expected_mode": "rag",
+      "actual_mode": "rag",
+      "expected_citations": true,
+      "has_citations": true,
+      "top_score": 1.0,
+      "latency": 8.413931608200073,
+      "answer_length": 115,
+      "source_docs": [
+        "2025-09-11_돌직구쇼_백업_무선마이크_구매_건.pdf",
+        "2025-09-04_방송_프로그램_제작용_건전지_소모품_구매의_건.pdf",
+        "2025-08-26_뷰파인더_소모품_케이블_구매_건.pdf"
+      ],
+      "mode_match": true,
+      "citation_match": true
+    },
+    {
+      "index": 19,
+      "query": "APEX 중계 동시통역 라우팅 정확한 연결 도면?",
+      "category": "무근거 방지",
+      "status": "FAIL",
+      "expected_mode": "chat",
+      "actual_mode": "rag",
+      "expected_citations": false,
+      "has_citations": true,
+      "top_score": 1.0,
+      "latency": 11.200929403305054,
+      "answer_length": 235,
+      "source_docs": [
+        "2025-09-11_돌직구쇼_백업_무선마이크_구매_건.pdf",
+        "2025-09-04_방송_프로그램_제작용_건전지_소모품_구매의_건.pdf",
+        "2025-08-26_뷰파인더_소모품_케이블_구매_건.pdf"
+      ],
+      "mode_match": false,
+      "citation_match": false
+    },
+    {
+      "index": 20,
+      "query": "존재하지_않는_장비_12345의 구매 이력은?",
+      "category": "무근거 방지",
+      "status": "PASS",
+      "expected_mode": "chat",
+      "actual_mode": "chat",
+      "expected_citations": false,
+      "has_citations": false,
+      "top_score": 0.0,
+      "latency": 0.0032291412353515625,
+      "answer_length": 16,
+      "source_docs": [],
+      "mode_match": true,
+      "citation_match": true
+    }
+  ]
+}

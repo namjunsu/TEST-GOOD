@@ -448,14 +448,14 @@ def get_metrics():
     # 8-1. [PATCH 2] 인덱스 위생 메트릭
     try:
         import os
-        from config.indexing import DOCS_FOLDER
+        from app.config.settings import DOCS_DIR
 
         # 물리 파일 수 (fs_file_count)
         fs_count = 0
-        docs_path = Path(DOCS_FOLDER)
+        docs_path = Path(DOCS_DIR)
         if docs_path.exists():
             for root, _, files in os.walk(docs_path):
-                fs_count += sum(1 for f in files if f.lower().endswith('.pdf'))
+                fs_count += sum(1 for f in files if f.lower().endswith(('.pdf', '.txt')))
 
         metrics["fs_file_count"] = fs_count
 
@@ -475,7 +475,7 @@ def get_metrics():
             fs_names = set()
             for root, _, files in os.walk(docs_path):
                 for f in files:
-                    if f.lower().endswith('.pdf'):
+                    if f.lower().endswith(('.pdf', '.txt')):
                         fs_names.add(f)
 
             for filename, path in rows:

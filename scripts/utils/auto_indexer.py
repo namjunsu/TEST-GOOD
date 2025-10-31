@@ -4,6 +4,7 @@
 """
 
 import time
+import os
 import hashlib
 from pathlib import Path
 from datetime import datetime

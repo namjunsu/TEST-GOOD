@@ -1,0 +1,139 @@
+# RAG Pipeline Test Suite
+# 카테고리별 가중치 및 임계치 정의
+
+metadata:
+  version: "1.0.0"
+  created: "2025-10-31"
+  description: "RAG 파이프라인 품질 보증 테스트 스위트"
+
+thresholds:
+  hit_at_3: 0.90        # Hit@3 ≥ 90%
+  mrr_at_10: 0.80       # MRR@10 ≥ 80%
+  citation_rate: 1.00   # 인용률 100% (요약/QA)
+  schema_failure_rate: 0.015  # JSON 스키마 실패율 ≤ 1.5%
+  parsing_coverage: 0.90      # 파싱 커버리지 ≥ 90%
+  min_chunks_used: 5          # 사용 청크 최소 개수
+
+categories:
+  - name: "일반 질의 (요약/QA)"
+    weight: 0.30
+    description: "일반적인 문서 요약 및 질의응답"
+    has_code: false
+    expected_mode: "rag"
+    min_citation_count: 1
+
+  - name: "코드 질의 (has_code=True)"
+    weight: 0.25
+    description: "특정 코드번호를 포함한 검색"
+    has_code: true
+    expected_mode: "rag"
+    min_citation_count: 1
+
+  - name: "비용/결정 문서"
+    weight: 0.20
+    description: "검토서, 기안서 등 의사결정 문서"
+    keywords: ["검토서", "기안서", "결재", "승인"]
+    expected_mode: "rag"
+    min_citation_count: 1
+
+  - name: "연도별 검색"
+    weight: 0.15
+    description: "특정 연도 문서 검색"
+    year_filter: true
+    expected_mode: "rag"
+
+  - name: "작성자 검색"
+    weight: 0.10
+    description: "특정 기안자 문서 검색"
+    drafter_filter: true
+    expected_mode: "rag"
+
+failure_injection_scenarios:
+  - name: "빈 PDF"
+    description: "내용이 없는 PDF (0 페이지)"
+    expected_behavior: "graceful_failure"
+    error_message_contains: "내용 없음"
+
+  - name: "표 전용 PDF"
+    description: "텍스트 없이 표만 있는 PDF"
+    expected_behavior: "table_extraction"
+    min_extracted_rows: 1
+
+  - name: "OCR 전용 PDF"
+    description: "스캔 이미지만 있는 PDF (OCR 필요)"
+    expected_behavior: "ocr_fallback"
+    ocr_triggered: true
+
+  - name: "대용량 PDF (>40p)"
+    description: "40페이지 초과 문서"
+    expected_behavior: "chunking"
+    min_chunks_created: 10
+    max_processing_time_sec: 120
+
+schema_validation:
+  required_fields:
+    summary:
+      - "title"
+      - "drafter"
+      - "date"
+      - "main_content"
+    qa:
+      - "answer"
+      - "sources"
+
+  optional_fields:
+    summary:
+      - "budget"
+      - "decision"
+      - "background"
+    qa:
+      - "confidence"
+      - "related_queries"
+
+  partial_success_allowed: true
+  missing_field_threshold: 0.10  # 10% 이하 누락 허용
+
+performance_targets:
+  p50_latency_ms: 3000
+  p95_latency_ms: 10000
+  p99_latency_ms: 15000
+
+  search_latency_ms: 100
+  hydrate_latency_ms: 50
+  generate_latency_ms: 8000
+
+quality_metrics:
+  # Hit@K metrics
+  hit_at_1: 0.70
+  hit_at_3: 0.90
+  hit_at_5: 0.95
+
+  # MRR metrics
+  mrr_at_5: 0.75
+  mrr_at_10: 0.80
+
+  # Citation metrics
+  citation_precision: 0.95  # 인용된 소스의 정확도
+  citation_recall: 1.00     # 관련 소스의 인용률
+
+  # Parsing coverage
+  avg_chunks_used: 5.0
+  coverage_p50: 0.80
+  coverage_p95: 0.95
+
+alerts:
+  - condition: "stale_index_entries > 0"
+    severity: "high"
+    action: "send_warning"
+
+  - condition: "coverage_p50 < 0.80"
+    severity: "medium"
+    action: "send_warning"
+
+  - condition: "json_schema_failure_rate > 0.02"
+    severity: "medium"
+    action: "send_warning"
+
+  - condition: "p95_latency_ms > 12000"
+    severity: "low"
+    action: "log_only"

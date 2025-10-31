@@ -1,0 +1,645 @@
+{
+  "timestamp": "2025-10-31T15:22:44.758035",
+  "total_tests": 20,
+  "thresholds": {
+    "hit_at_3": 0.9,
+    "mrr_at_10": 0.8,
+    "citation_rate": 1.0,
+    "schema_failure_rate": 0.015,
+    "parsing_coverage": 0.9,
+    "min_chunks_used": 5
+  },
+  "metrics": {
+    "hit_at_3": 0.6,
+    "mrr_at_10": 0.45666666666666667,
+    "citation_rate": 0.95,
+    "schema_failure_rate": 0.050000000000000044,
+    "coverage_pass_rate": 0.9,
+    "p50_latency_ms": 8950.0,
+    "p95_latency_ms": 9895.0,
+    "avg_chunks_used": 4.8
+  },
+  "passed": false,
+  "results": [
+    {
+      "query": "test query 0",
+      "mode": "rag",
+      "chunks_used": 5,
+      "sources_count": 3,
+      "rank": 1,
+      "latency_ms": 8000,
+      "response_data": {
+        "title": "Test 0",
+        "drafter": "Test Drafter",
+        "date": "2025-10-31",
+        "main_content": "Test content"
+      },
+      "validation": {
+        "coverage": {
+          "chunks_used": 5,
+          "sources_count": 3,
+          "meets_threshold": true,
+          "coverage_ratio": 1.0
+        },
+        "schema": {
+          "valid": true,
+          "schema_score": 0.5714285714285714,
+          "missing_required": [],
+          "present_optional": [],
+          "missing_rate": 0.0
+        },
+        "latency_ok": true,
+        "latency_ms": 8000
+      }
+    },
+    {
+      "query": "test query 1",
+      "mode": "rag",
+      "chunks_used": 5,
+      "sources_count": 3,
+      "rank": 2,
+      "latency_ms": 8100,
+      "response_data": {
+        "title": "Test 1",
+        "drafter": "Test Drafter",
+        "date": "2025-10-31",
+        "main_content": "Test content"
+      },
+      "validation": {
+        "coverage": {
+          "chunks_used": 5,
+          "sources_count": 3,
+          "meets_threshold": true,
+          "coverage_ratio": 1.0
+        },
+        "schema": {
+          "valid": true,
+          "schema_score": 0.5714285714285714,
+          "missing_required": [],
+          "present_optional": [],
+          "missing_rate": 0.0
+        },
+        "latency_ok": true,
+        "latency_ms": 8100
+      }
+    },
+    {
+      "query": "test query 2",
+      "mode": "rag",
+      "chunks_used": 5,
+      "sources_count": 3,
+      "rank": 3,
+      "latency_ms": 8200,
+      "response_data": {
+        "title": "Test 2",
+        "drafter": "Test Drafter",
+        "date": "2025-10-31",
+        "main_content": "Test content"
+      },
+      "validation": {
+        "coverage": {
+          "chunks_used": 5,
+          "sources_count": 3,
+          "meets_threshold": true,
+          "coverage_ratio": 1.0
+        },
+        "schema": {
+          "valid": true,
+          "schema_score": 0.5714285714285714,
+          "missing_required": [],
+          "present_optional": [],
+          "missing_rate": 0.0
+        },
+        "latency_ok": true,
+        "latency_ms": 8200
+      }
+    },
+    {
+      "query": "test query 3",
+      "mode": "rag",
+      "chunks_used": 5,
+      "sources_count": 3,
+      "rank": 4,
+      "latency_ms": 8300,
+      "response_data": {
+        "title": "Test 3",
+        "drafter": "Test Drafter",
+        "date": "2025-10-31",
+        "main_content": "Test content"
+      },
+      "validation": {
+        "coverage": {
+          "chunks_used": 5,
+          "sources_count": 3,
+          "meets_threshold": true,
+          "coverage_ratio": 1.0
+        },
+        "schema": {
+          "valid": true,
+          "schema_score": 0.5714285714285714,
+          "missing_required": [],
+          "present_optional": [],
+          "missing_rate": 0.0
+        },
+        "latency_ok": true,
+        "latency_ms": 8300
+      }
+    },
+    {
+      "query": "test query 4",
+      "mode": "rag",
+      "chunks_used": 5,
+      "sources_count": 3,
+      "rank": 5,
+      "latency_ms": 8400,
+      "response_data": {
+        "title": "Test 4",
+        "drafter": "Test Drafter",
+        "date": "2025-10-31",
+        "main_content": "Test content"
+      },
+      "validation": {
+        "coverage": {
+          "chunks_used": 5,
+          "sources_count": 3,
+          "meets_threshold": true,
+          "coverage_ratio": 1.0
+        },
+        "schema": {
+          "valid": true,
+          "schema_score": 0.5714285714285714,
+          "missing_required": [],
+          "present_optional": [],
+          "missing_rate": 0.0
+        },
+        "latency_ok": true,
+        "latency_ms": 8400
+      }
+    },
+    {
+      "query": "test query 5",
+      "mode": "rag",
+      "chunks_used": 5,
+      "sources_count": 3,
+      "rank": 1,
+      "latency_ms": 8500,
+      "response_data": {
+        "title": "Test 5",
+        "drafter": "Test Drafter",
+        "date": "2025-10-31",
+        "main_content": "Test content"
+      },
+      "validation": {
+        "coverage": {
+          "chunks_used": 5,
+          "sources_count": 3,
+          "meets_threshold": true,
+          "coverage_ratio": 1.0
+        },
+        "schema": {
+          "valid": true,
+          "schema_score": 0.5714285714285714,
+          "missing_required": [],
+          "present_optional": [],
+          "missing_rate": 0.0
+        },
+        "latency_ok": true,
+        "latency_ms": 8500
+      }
+    },
+    {
+      "query": "test query 6",
+      "mode": "rag",
+      "chunks_used": 5,
+      "sources_count": 3,
+      "rank": 2,
+      "latency_ms": 8600,
+      "response_data": {
+        "title": "Test 6",
+        "drafter": "Test Drafter",
+        "date": "2025-10-31",
+        "main_content": "Test content"
+      },
+      "validation": {
+        "coverage": {
+          "chunks_used": 5,
+          "sources_count": 3,
+          "meets_threshold": true,
+          "coverage_ratio": 1.0
+        },
+        "schema": {
+          "valid": true,
+          "schema_score": 0.5714285714285714,
+          "missing_required": [],
+          "present_optional": [],
+          "missing_rate": 0.0
+        },
+        "latency_ok": true,
+        "latency_ms": 8600
+      }
+    },
+    {
+      "query": "test query 7",
+      "mode": "rag",
+      "chunks_used": 5,
+      "sources_count": 3,
+      "rank": 3,
+      "latency_ms": 8700,
+      "response_data": {
+        "title": "Test 7",
+        "drafter": "Test Drafter",
+        "date": "2025-10-31",
+        "main_content": "Test content"
+      },
+      "validation": {
+        "coverage": {
+          "chunks_used": 5,
+          "sources_count": 3,
+          "meets_threshold": true,
+          "coverage_ratio": 1.0
+        },
+        "schema": {
+          "valid": true,
+          "schema_score": 0.5714285714285714,
+          "missing_required": [],
+          "present_optional": [],
+          "missing_rate": 0.0
+        },
+        "latency_ok": true,
+        "latency_ms": 8700
+      }
+    },
+    {
+      "query": "test query 8",
+      "mode": "rag",
+      "chunks_used": 5,
+      "sources_count": 3,
+      "rank": 4,
+      "latency_ms": 8800,
+      "response_data": {
+        "title": "Test 8",
+        "drafter": "Test Drafter",
+        "date": "2025-10-31",
+        "main_content": "Test content"
+      },
+      "validation": {
+        "coverage": {
+          "chunks_used": 5,
+          "sources_count": 3,
+          "meets_threshold": true,
+          "coverage_ratio": 1.0
+        },
+        "schema": {
+          "valid": true,
+          "schema_score": 0.5714285714285714,
+          "missing_required": [],
+          "present_optional": [],
+          "missing_rate": 0.0
+        },
+        "latency_ok": true,
+        "latency_ms": 8800
+      }
+    },
+    {
+      "query": "test query 9",
+      "mode": "rag",
+      "chunks_used": 5,
+      "sources_count": 3,
+      "rank": 5,
+      "latency_ms": 8900,
+      "response_data": {
+        "title": "Test 9",
+        "drafter": "Test Drafter",
+        "date": "2025-10-31",
+        "main_content": "Test content"
+      },
+      "validation": {
+        "coverage": {
+          "chunks_used": 5,
+          "sources_count": 3,
+          "meets_threshold": true,
+          "coverage_ratio": 1.0
+        },
+        "schema": {
+          "valid": true,
+          "schema_score": 0.5714285714285714,
+          "missing_required": [],
+          "present_optional": [],
+          "missing_rate": 0.0
+        },
+        "latency_ok": true,
+        "latency_ms": 8900
+      }
+    },
+    {
+      "query": "test query 10",
+      "mode": "rag",
+      "chunks_used": 5,
+      "sources_count": 3,
+      "rank": 1,
+      "latency_ms": 9000,
+      "response_data": {
+        "title": "Test 10",
+        "drafter": "Test Drafter",
+        "date": "2025-10-31",
+        "main_content": "Test content"
+      },
+      "validation": {
+        "coverage": {
+          "chunks_used": 5,
+          "sources_count": 3,
+          "meets_threshold": true,
+          "coverage_ratio": 1.0
+        },
+        "schema": {
+          "valid": true,
+          "schema_score": 0.5714285714285714,
+          "missing_required": [],
+          "present_optional": [],
+          "missing_rate": 0.0
+        },
+        "latency_ok": true,
+        "latency_ms": 9000
+      }
+    },
+    {
+      "query": "test query 11",
+      "mode": "rag",
+      "chunks_used": 5,
+      "sources_count": 3,
+      "rank": 2,
+      "latency_ms": 9100,
+      "response_data": {
+        "title": "Test 11",
+        "drafter": "Test Drafter",
+        "date": "2025-10-31",
+        "main_content": "Test content"
+      },
+      "validation": {
+        "coverage": {
+          "chunks_used": 5,
+          "sources_count": 3,
+          "meets_threshold": true,
+          "coverage_ratio": 1.0
+        },
+        "schema": {
+          "valid": true,
+          "schema_score": 0.5714285714285714,
+          "missing_required": [],
+          "present_optional": [],
+          "missing_rate": 0.0
+        },
+        "latency_ok": true,
+        "latency_ms": 9100
+      }
+    },
+    {
+      "query": "test query 12",
+      "mode": "rag",
+      "chunks_used": 5,
+      "sources_count": 3,
+      "rank": 3,
+      "latency_ms": 9200,
+      "response_data": {
+        "title": "Test 12",
+        "drafter": "Test Drafter",
+        "date": "2025-10-31",
+        "main_content": "Test content"
+      },
+      "validation": {
+        "coverage": {
+          "chunks_used": 5,
+          "sources_count": 3,
+          "meets_threshold": true,
+          "coverage_ratio": 1.0
+        },
+        "schema": {
+          "valid": true,
+          "schema_score": 0.5714285714285714,
+          "missing_required": [],
+          "present_optional": [],
+          "missing_rate": 0.0
+        },
+        "latency_ok": true,
+        "latency_ms": 9200
+      }
+    },
+    {
+      "query": "test query 13",
+      "mode": "rag",
+      "chunks_used": 5,
+      "sources_count": 3,
+      "rank": 4,
+      "latency_ms": 9300,
+      "response_data": {
+        "title": "Test 13",
+        "drafter": "Test Drafter",
+        "date": "2025-10-31",
+        "main_content": "Test content"
+      },
+      "validation": {
+        "coverage": {
+          "chunks_used": 5,
+          "sources_count": 3,
+          "meets_threshold": true,
+          "coverage_ratio": 1.0
+        },
+        "schema": {
+          "valid": true,
+          "schema_score": 0.5714285714285714,
+          "missing_required": [],
+          "present_optional": [],
+          "missing_rate": 0.0
+        },
+        "latency_ok": true,
+        "latency_ms": 9300
+      }
+    },
+    {
+      "query": "test query 14",
+      "mode": "rag",
+      "chunks_used": 5,
+      "sources_count": 3,
+      "rank": 5,
+      "latency_ms": 9400,
+      "response_data": {
+        "title": "Test 14",
+        "drafter": "Test Drafter",
+        "date": "2025-10-31",
+        "main_content": "Test content"
+      },
+      "validation": {
+        "coverage": {
+          "chunks_used": 5,
+          "sources_count": 3,
+          "meets_threshold": true,
+          "coverage_ratio": 1.0
+        },
+        "schema": {
+          "valid": true,
+          "schema_score": 0.5714285714285714,
+          "missing_required": [],
+          "present_optional": [],
+          "missing_rate": 0.0
+        },
+        "latency_ok": true,
+        "latency_ms": 9400
+      }
+    },
+    {
+      "query": "test query 15",
+      "mode": "rag",
+      "chunks_used": 5,
+      "sources_count": 3,
+      "rank": 1,
+      "latency_ms": 9500,
+      "response_data": {
+        "title": "Test 15",
+        "drafter": "Test Drafter",
+        "date": "2025-10-31",
+        "main_content": "Test content"
+      },
+      "validation": {
+        "coverage": {
+          "chunks_used": 5,
+          "sources_count": 3,
+          "meets_threshold": true,
+          "coverage_ratio": 1.0
+        },
+        "schema": {
+          "valid": true,
+          "schema_score": 0.5714285714285714,
+          "missing_required": [],
+          "present_optional": [],
+          "missing_rate": 0.0
+        },
+        "latency_ok": true,
+        "latency_ms": 9500
+      }
+    },
+    {
+      "query": "test query 16",
+      "mode": "rag",
+      "chunks_used": 5,
+      "sources_count": 3,
+      "rank": 2,
+      "latency_ms": 9600,
+      "response_data": {
+        "title": "Test 16",
+        "drafter": "Test Drafter",
+        "date": "2025-10-31",
+        "main_content": "Test content"
+      },
+      "validation": {
+        "coverage": {
+          "chunks_used": 5,
+          "sources_count": 3,
+          "meets_threshold": true,
+          "coverage_ratio": 1.0
+        },
+        "schema": {
+          "valid": true,
+          "schema_score": 0.5714285714285714,
+          "missing_required": [],
+          "present_optional": [],
+          "missing_rate": 0.0
+        },
+        "latency_ok": true,
+        "latency_ms": 9600
+      }
+    },
+    {
+      "query": "test query 17",
+      "mode": "rag",
+      "chunks_used": 5,
+      "sources_count": 3,
+      "rank": 3,
+      "latency_ms": 9700,
+      "response_data": {
+        "title": "Test 17",
+        "drafter": "Test Drafter",
+        "date": "2025-10-31",
+        "main_content": "Test content"
+      },
+      "validation": {
+        "coverage": {
+          "chunks_used": 5,
+          "sources_count": 3,
+          "meets_threshold": true,
+          "coverage_ratio": 1.0
+        },
+        "schema": {
+          "valid": true,
+          "schema_score": 0.5714285714285714,
+          "missing_required": [],
+          "present_optional": [],
+          "missing_rate": 0.0
+        },
+        "latency_ok": true,
+        "latency_ms": 9700
+      }
+    },
+    {
+      "query": "test query 18",
+      "mode": "rag",
+      "chunks_used": 3,
+      "sources_count": 3,
+      "rank": 4,
+      "latency_ms": 9800,
+      "response_data": {
+        "title": "Test 18",
+        "drafter": "Test Drafter",
+        "date": "2025-10-31",
+        "main_content": "Test content"
+      },
+      "validation": {
+        "coverage": {
+          "chunks_used": 3,
+          "sources_count": 3,
+          "meets_threshold": false,
+          "coverage_ratio": 0.6
+        },
+        "schema": {
+          "valid": true,
+          "schema_score": 0.5714285714285714,
+          "missing_required": [],
+          "present_optional": [],
+          "missing_rate": 0.0
+        },
+        "latency_ok": true,
+        "latency_ms": 9800
+      }
+    },
+    {
+      "query": "test query 19",
+      "mode": "rag",
+      "chunks_used": 3,
+      "sources_count": 0,
+      "rank": 5,
+      "latency_ms": 9900,
+      "response_data": {},
+      "validation": {
+        "coverage": {
+          "chunks_used": 3,
+          "sources_count": 0,
+          "meets_threshold": false,
+          "coverage_ratio": 0.6
+        },
+        "schema": {
+          "valid": false,
+          "schema_score": 0.0,
+          "missing_required": [
+            "title",
+            "drafter",
+            "date",
+            "main_content"
+          ],
+          "present_optional": [],
+          "missing_rate": 1.0
+        },
+        "latency_ok": true,
+        "latency_ms": 9900
+      }
+    }
+  ]
+}

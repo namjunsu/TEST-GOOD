@@ -1,0 +1,5 @@
+path,reason,restore_method,quarantine_date,status
+# Cleanup Plan - Safe File Quarantine Tracker
+# Status values: pending, quarantined, deleted, restored
+# Quarantine period: 7 days from quarantine_date
+# Use 'make cleanup-isolate' to quarantine, 'make cleanup-apply' to delete after 7 days

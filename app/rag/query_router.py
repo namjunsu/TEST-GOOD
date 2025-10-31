@@ -9,6 +9,7 @@
 - 파일명만 있고 Q&A 의도가 없으면 미리보기 모드
 """
 
+import os
 import re
 from enum import Enum
 from pathlib import Path
@@ -48,6 +49,7 @@ class QueryMode(Enum):
     COST_SUM = "cost_sum"  # 비용 합계 직접 조회 모드 (최우선)
     PREVIEW = "preview"  # 문서 미리보기 모드 (파일 전문)
     LIST = "list"  # 목록 검색 모드 (다건 카드 표시)
+    LIST_FIRST = "list_first"  # 낮은 신뢰도 → 목록 우선 표시 모드
     SUMMARY = "summary"  # 내용 요약 모드 (5줄 섹션)
     QA = "qa"  # 질답 모드 (RAG 파이프라인, 기본)
 
@@ -113,8 +115,13 @@ class QueryRouter:
             "filename_pattern", r"\S+\.pdf"
         )
 
+        # Low-confidence 가드레일 설정 (환경 변수)
+        self.low_conf_delta = float(os.getenv("LOW_CONF_DELTA", "0.05"))
+        self.low_conf_min_hits = int(os.getenv("LOW_CONF_MIN_HITS", "1"))
+
         logger.info(
-            f"📋 모드 라우터 초기화: QA 키워드 {len(self.qa_keywords)}개, 미리보기 키워드 {len(self.preview_keywords)}개"
+            f"📋 모드 라우터 초기화: QA 키워드 {len(self.qa_keywords)}개, 미리보기 키워드 {len(self.preview_keywords)}개, "
+            f"Low-conf delta={self.low_conf_delta}, min_hits={self.low_conf_min_hits}"
         )
 
     def _load_config(self, config_path: str) -> Dict[str, Any]:
@@ -140,6 +147,31 @@ class QueryRouter:
         except Exception as e:
             logger.error(f"❌ 설정 로드 실패: {e}")
             return {}
+
+    def _is_low_confidence(self, retrieval_results: Any) -> bool:
+        """검색 결과가 낮은 신뢰도인지 판단
+
+        Args:
+            retrieval_results: HybridRetriever.search() 결과 (score_stats 속성 포함 가능)
+
+        Returns:
+            True if low confidence, False otherwise
+        """
+        # score_stats 추출 (duck typing)
+        score_stats = getattr(retrieval_results, "score_stats", {}) or {}
+
+        hits = score_stats.get("hits", 0)
+        delta12 = score_stats.get("delta12", 0.0)
+
+        # 조건: hits가 충분하고, delta12가 임계값보다 작으면 low-confidence
+        if hits >= self.low_conf_min_hits and delta12 < self.low_conf_delta:
+            logger.warning(
+                f"⚠️ Low-confidence 감지: delta12={delta12:.3f} < {self.low_conf_delta}, "
+                f"hits={hits} → LIST_FIRST 모드 활성화"
+            )
+            return True
+
+        return False
 
     def classify_mode(self, query: str) -> QueryMode:
         """쿼리 모드 분류 (우선순위: COST_SUM > PREVIEW > LIST > SUMMARY > QA)
@@ -265,6 +297,27 @@ class QueryRouter:
             reason_parts.append("default_qa")
 
         return "|".join(reason_parts)
+
+    def classify_mode_with_retrieval(
+        self,
+        query: str,
+        retrieval_results: Any = None
+    ) -> QueryMode:
+        """검색 결과를 고려한 모드 분류 (low-confidence 가드레일 포함)
+
+        Args:
+            query: 사용자 질의
+            retrieval_results: HybridRetriever.search() 결과 (score_stats 속성 포함 가능)
+
+        Returns:
+            QueryMode (COST_SUM, PREVIEW, LIST, LIST_FIRST, SUMMARY, QA 중 하나)
+        """
+        # Low-confidence 체크 (우선순위: 기본 모드 분류 전)
+        if retrieval_results is not None and self._is_low_confidence(retrieval_results):
+            return QueryMode.LIST_FIRST
+
+        # 기본 모드 분류
+        return self.classify_mode(query)
 
     def classify_mode_with_hits(
         self,

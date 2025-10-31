@@ -1609,13 +1609,13 @@ class RAGPipeline:
                     else:
                         normal_chunks.append(chunk)
 
-                # 우선순위 청크 + 일반 청크 순서로 재조합, 최대 6개
-                sorted_chunks = (priority_chunks + normal_chunks)[:6]
+                # 우선순위 청크 + 일반 청크 순서로 재조합, 최대 10개 (검토서 상세 정보 포함)
+                sorted_chunks = (priority_chunks + normal_chunks)[:10]
 
                 for i, chunk in enumerate(sorted_chunks, 1):
                     chunk_text = chunk.get('text') or chunk.get('snippet') or chunk.get('content') or ""
                     if chunk_text:
-                        parts.append(f"=== [문서 청크 {i}] ===\n" + chunk_text[:1500])
+                        parts.append(f"=== [문서 청크 {i}] ===\n" + chunk_text[:2000])
 
                 if sorted_chunks:
                     logger.info(f"✓ 문서 고정 청크 {len(sorted_chunks)}개 추출 (우선순위: {len(priority_chunks)}개)")
@@ -1638,12 +1638,12 @@ class RAGPipeline:
                     else:
                         normal_hits.append(h)
 
-                sorted_hits = (priority_hits + normal_hits)[:6]
+                sorted_hits = (priority_hits + normal_hits)[:10]
 
                 for i, h in enumerate(sorted_hits, 1):
                     chunk_text = h.get('text') or h.get('snippet') or h.get('content') or ""
                     if chunk_text:
-                        parts.append(f"=== [관련 청크 {i}] ===\n" + chunk_text[:1500])
+                        parts.append(f"=== [관련 청크 {i}] ===\n" + chunk_text[:2000])
 
                 if sorted_hits:
                     logger.info(f"✓ RAG 청크 {len(sorted_hits)}개 추출 (우선순위: {len(priority_hits)}개)")
@@ -1657,8 +1657,8 @@ class RAGPipeline:
         #     if full and len(full) > 1000:
         #         parts.append("=== [원문 스냅샷] ===\n" + full[:3000])
 
-        # 결합 및 길이 제한 (약 1.8k 토큰 ~ 3600자)
-        context = "\n\n".join(parts)[:3600]
+        # 결합 및 길이 제한 (약 3k 토큰 ~ 6000자, 검토서 상세 정보 포함)
+        context = "\n\n".join(parts)[:6000]
         logger.info(f"📋 최종 컨텍스트 길이: {len(context)}자 (청크 수: {len(parts)})")
         return context
 
@@ -1718,13 +1718,40 @@ class RAGPipeline:
                 )
             # 2. 확장자 없으면 키워드 기반 검색
             elif not filename_match:
-                # 불용어 제거 (요약, 이문서, 내용 등)
+                # 불용어 제거 (요약, 이문서, 내용 등) + 이모지/특수문자 제거
                 stopwords = ["요약", "요약해", "요약헤줘", "정리", "정리해", "이문서", "이 문서", "해당 문서",
-                             "내용", "해줘", "헤줘", "알려줘", "알려", "보여줘", "보여"]
+                             "내용", "해줘", "헤줘", "알려줘", "알려", "보여줘", "보여",
+                             "proposal", "기안서", "검토서", "보고서"]  # 문서 타입 키워드 추가
                 keywords = query
+
+                # 이모지 및 특수 기호 제거 (🏷 📅 ✍ · 등)
+                import unicodedata
+                # 이모지 범위 제거
+                keywords = re.sub(r'[\U0001F300-\U0001F9FF]', ' ', keywords)  # 이모지
+                keywords = re.sub(r'[\u2600-\u26FF\u2700-\u27BF]', ' ', keywords)  # 기타 기호
+                # 특수 문자 제거 (· 등)
+                keywords = re.sub(r'[·•◦▪▫]', ' ', keywords)
+                # 날짜 패턴 제거 (YYYY-MM-DD 형식)
+                keywords = re.sub(r'\d{4}-\d{2}-\d{2}', ' ', keywords)
+                # 날짜 패턴 제거 (YYYY.MM.DD, YYYY/MM/DD 형식)
+                keywords = re.sub(r'\d{4}[./]\d{2}[./]\d{2}', ' ', keywords)
+
+                # 불용어 제거
                 for word in stopwords:
                     keywords = keywords.replace(word, " ")
                 keywords = " ".join(keywords.split())  # 공백 정리
+
+                # 한글 이름 패턴 제거 (2-4자 한글로만 구성된 단어, 단 "뉴스", "수리" 같은 일반 단어는 보존)
+                # 마지막에 나오는 한글 이름만 제거 (보통 기안자 이름이 맨 끝에 위치)
+                parts = keywords.split()
+                if len(parts) > 1:
+                    last_word = parts[-1]
+                    # 마지막 단어가 2-4자 순수 한글이고, 일반 명사가 아니면 제거
+                    common_words = {'뉴스', '스튜디오', '수리', '교체', '구매', '검토', '기안', '설치', '제작', '관리', '운영', '보수', '점검'}
+                    if (re.match(r'^[가-힣]{2,4}$', last_word) and
+                        last_word not in common_words):
+                        keywords = ' '.join(parts[:-1])
+                        logger.info(f"🔧 이름 제거: '{last_word}' -> 최종 키워드: '{keywords}'")
 
                 if not keywords or len(keywords) < 3:
                     return {
@@ -1740,7 +1767,16 @@ class RAGPipeline:
 
                 # 키워드로 문서 검색 (파일명에서 검색)
                 # 공백을 % 와일드카드로 변경 (파일명은 언더스코어 사용)
-                keywords_wildcard = keywords.replace(' ', '%')
+                # 각 단어를 개별적으로 검색하여 매칭률 높이기
+                keyword_parts = keywords.split()
+                if len(keyword_parts) > 0:
+                    # 각 키워드를 %로 감싸서 순서 무관하게 검색
+                    keywords_wildcard = '%'.join([f"%{part}%" for part in keyword_parts])
+                else:
+                    keywords_wildcard = keywords.replace(' ', '%')
+
+                logger.info(f"🔍 키워드 검색: '{keywords}' -> 패턴: '{keywords_wildcard}'")
+
                 conn = sqlite3.connect("metadata.db")
                 cursor = conn.cursor()
                 cursor.execute(
@@ -1752,7 +1788,7 @@ class RAGPipeline:
                     ORDER BY date DESC
                     LIMIT 1
                 """,
-                    (f"%{keywords_wildcard}%",),
+                    (keywords_wildcard,),
                 )
             else:
                 # 파일명으로 검색

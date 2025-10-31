@@ -173,8 +173,16 @@ class DocumentIngester:
 
             full_text = "\n\n".join(text_pages)
 
-            if not full_text and self.ocr_enabled:
-                logger.warning(f"pdfplumber 실패, OCR 폴백: {pdf_path.name}")
+            # OCR 폴백 조건: 텍스트가 없거나, 페이지당 평균 300자 미만
+            page_count = metadata.get("page_count", 1)
+            avg_chars_per_page = len(full_text) / page_count if page_count > 0 else 0
+            needs_ocr = (not full_text or avg_chars_per_page < 300) and self.ocr_enabled
+
+            if needs_ocr:
+                if not full_text:
+                    logger.warning(f"pdfplumber 실패, OCR 폴백: {pdf_path.name}")
+                else:
+                    logger.warning(f"텍스트 부족 ({avg_chars_per_page:.0f}자/페이지), OCR 폴백: {pdf_path.name}")
                 full_text = self._ocr_extract(pdf_path)
 
             return full_text, metadata

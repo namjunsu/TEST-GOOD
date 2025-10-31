@@ -139,18 +139,20 @@ def extract_amounts_from_text(text: str) -> list:
 
     amounts = []
 
-    # 다양한 금액 패턴
+    # 다양한 금액 패턴 (우선순위 순서)
     patterns = [
+        # 총액, 합계 (가장 중요)
+        r'(?:총액|합계|총금액|총\s*액)[:\s]*([\d,]+)',
+        # 단가 (명시적)
+        r'(?:단가|단위\s*가격)[:\s]*([\d,]+)',
+        # 금액 (일반)
+        r'금액[:\s]*([\d,]+)',
         # ₩1,234,567 형태
         r'₩\s*([\d,]+)',
         # 1,234,567원 형태
         r'([\d,]+)\s*원',
-        # 금액: 1,234,567 형태
-        r'금액[:\s]*([\d,]+)',
-        # 총액, 합계 등
-        r'(?:총액|합계|총금액)[:\s]*([\d,]+)',
-        # 숫자만 (백만 이상)
-        r'\b(\d{7,})\b',
+        # 숫자만 (천 단위 구분 있음, 만원 이상)
+        r'\b(\d{1,3}(?:,\d{3})+)\b',
     ]
 
     for pattern in patterns:
@@ -186,21 +188,82 @@ def validate_numeric_fields(json_data: Dict[str, Any], source_text: str) -> Dict
         source_text: 원문 텍스트
 
     Returns:
-        검증된 JSON 데이터 (원문에 없는 수치는 제거)
+        검증된 JSON 데이터 (원문에 없는 수치는 제거 또는 교정)
     """
+    import re
+    from app.core.logging import get_logger
+    logger = get_logger(__name__)
+
     # 원문에서 금액 추출
     source_amounts = extract_amounts_from_text(source_text)
     source_values = {amount for amount, _ in source_amounts}
 
-    # JSON의 금액 필드 검증
+    # 디버깅: 원문에서 추출된 금액 로깅
+    logger.info(f"📊 원문에서 추출된 금액: {sorted(source_values)}")
+
+    # 1. 구매/소모품 문서 ("details" 필드)
     if "details" in json_data and "금액" in json_data["details"]:
         claimed_amount_str = json_data["details"]["금액"]
-        # 숫자만 추출
-        claimed_amount = int(re.sub(r'[^\d]', '', str(claimed_amount_str)))
+        try:
+            claimed_amount = int(re.sub(r'[^\d]', '', str(claimed_amount_str)))
+            if claimed_amount not in source_values:
+                logger.warning(f"⚠️ 원문에 없는 금액 제거: {claimed_amount}")
+                json_data["details"]["금액"] = "정보 없음"
+        except (ValueError, TypeError):
+            pass
 
-        # 원문에 없으면 제거
-        if claimed_amount not in source_values:
-            logger.warning(f"⚠️ 원문에 없는 금액 제거: {claimed_amount}")
-            json_data["details"]["금액"] = "정보 없음"
+    # 2. 수리 문서 ("비용상세" 필드)
+    if "비용상세" in json_data:
+        cost_detail = json_data["비용상세"]
+
+        # 총액 검증
+        if "총액" in cost_detail:
+            claimed_total_str = str(cost_detail["총액"])
+            try:
+                claimed_total = int(re.sub(r'[^\d]', '', claimed_total_str))
+
+                if claimed_total not in source_values:
+                    # 원문에서 총액/합계 키워드로 재검색
+                    total_pattern = r'(?:총액|합계|총\s*액)[:\s]*([\d,]+)'
+                    total_matches = re.findall(total_pattern, source_text)
+                    if total_matches:
+                        correct_total = int(total_matches[-1].replace(',', ''))  # 마지막 총액 사용
+                        logger.warning(f"⚠️ 금액 교정: {claimed_total} → {correct_total}")
+                        json_data["비용상세"]["총액"] = correct_total
+                    else:
+                        logger.warning(f"⚠️ 원문에 없는 총액 제거: {claimed_total}")
+                        json_data["비용상세"]["총액"] = "정보 없음"
+            except (ValueError, TypeError):
+                pass
+
+        # 단가 검증
+        if "단가" in cost_detail:
+            claimed_unit_str = str(cost_detail["단가"])
+            try:
+                claimed_unit = int(re.sub(r'[^\d]', '', claimed_unit_str))
+
+                if claimed_unit not in source_values:
+                    # 원문에서 단가 키워드로 재검색
+                    unit_pattern = r'(?:단가|단위\s*가격)[:\s]*([\d,]+)'
+                    unit_matches = re.findall(unit_pattern, source_text)
+                    if unit_matches:
+                        correct_unit = int(unit_matches[0].replace(',', ''))
+                        logger.warning(f"⚠️ 단가 교정: {claimed_unit} → {correct_unit}")
+                        json_data["비용상세"]["단가"] = f"{correct_unit:,}원"
+                    else:
+                        logger.warning(f"⚠️ 원문에 없는 단가: {claimed_unit} (유지)")
+            except (ValueError, TypeError):
+                pass
+
+    # 3. 검토서 문서 ("예산합계" 필드)
+    if "예산합계" in json_data:
+        budget_str = str(json_data["예산합계"])
+        try:
+            budget = int(re.sub(r'[^\d]', '', budget_str))
+            if budget not in source_values:
+                logger.warning(f"⚠️ 원문에 없는 예산 제거: {budget}")
+                json_data["예산합계"] = "정보 없음"
+        except (ValueError, TypeError):
+            pass
 
     return json_data

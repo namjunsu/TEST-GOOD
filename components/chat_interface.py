@@ -198,6 +198,7 @@ def render_doc_card(
             if st.button(button_label, key=preview_key, type=button_type, use_container_width=True):
                 # 세션 상태에 미리보기 정보 저장
                 st.session_state[session_key] = not current_state
+                # rerun으로 상태 반영
                 st.rerun()
 
         # 다운로드 버튼 (표준 함수 사용)
@@ -624,8 +625,9 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                         display_evidence = evidence_list[:MAX_DISPLAY]
                         has_more = len(evidence_list) > MAX_DISPLAY
 
-                        # 기본은 접힘 상태 (버튼 클릭 필요)
-                        auto_expand = False
+                        # expander를 기본적으로 열린 상태로 표시 (UX 개선)
+                        # 사용자가 미리보기를 클릭했을 때 문서가 사라지는 문제 해결
+                        auto_expand = True  # 항상 열린 상태
 
                         with st.expander(f"📚 출처 문서 ({len(display_evidence)}건)", expanded=auto_expand):
                             for i, ev in enumerate(display_evidence, 1):

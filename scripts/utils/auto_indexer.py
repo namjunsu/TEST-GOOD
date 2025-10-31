@@ -160,10 +160,15 @@ class AutoIndexer:
         modified_files = []
         deleted_files = []
 
-        # [PATCH] 삭제된 파일 정리 단계: everything_index.db 동기화
+        # [PATCH] 삭제된 파일 정리 단계 1: everything_index.db 동기화
         stale_count = self._purge_missing_files_from_index()
         if stale_count > 0:
-            print(f"🧹 [CLEANUP] deleted_stale_entries={stale_count}")
+            print(f"🧹 [CLEANUP] deleted_stale_entries={stale_count} (index)")
+
+        # [PATCH] 삭제된 파일 정리 단계 2: metadata.db 동기화
+        metadata_stale_count = self._purge_missing_files_from_metadata()
+        if metadata_stale_count > 0:
+            print(f"🧹 [CLEANUP] deleted_stale_entries={metadata_stale_count} (metadata)")
 
         # 현재 파일 목록
         current_files = {}
@@ -500,6 +505,64 @@ class AutoIndexer:
 
         except Exception as e:
             print(f"⚠️ 인덱스 정리 실패: {e}")
+            return 0
+
+    def _purge_missing_files_from_metadata(self) -> int:
+        """metadata.db에서 물리적으로 존재하지 않는 파일 레코드 삭제
+
+        Returns:
+            삭제된 항목 수
+        """
+        try:
+            import sqlite3
+
+            db_path = "metadata.db"
+            if not os.path.exists(db_path):
+                return 0
+
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            # 모든 문서 조회
+            cursor.execute("""
+                SELECT id, filename, path
+                FROM documents
+                WHERE LOWER(filename) LIKE '%.pdf' OR LOWER(filename) LIKE '%.txt'
+            """)
+
+            all_docs = cursor.fetchall()
+            stale_ids = []
+
+            # 파일 존재 여부 확인
+            for row in all_docs:
+                doc_id = row['id']
+                path = row['path']
+
+                # 경로 확인
+                if path:
+                    file_path = Path(path)
+                else:
+                    file_path = Path('docs') / row['filename']
+
+                # 파일이 존재하지 않으면 stale 목록에 추가
+                if not file_path.exists():
+                    stale_ids.append(doc_id)
+
+            # 삭제 실행
+            if stale_ids:
+                placeholders = ','.join(['?'] * len(stale_ids))
+                cursor.execute(f"""
+                    DELETE FROM documents
+                    WHERE id IN ({placeholders})
+                """, stale_ids)
+                conn.commit()
+
+            conn.close()
+            return len(stale_ids)
+
+        except Exception as e:
+            print(f"⚠️ metadata.db 정리 실패: {e}")
             return 0
 
     def force_reindex(self):

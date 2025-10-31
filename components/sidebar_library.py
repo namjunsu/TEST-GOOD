@@ -203,7 +203,6 @@ def render_sidebar_library(rag_instance) -> None:
 
                                 # 타임스탬프 기록
                                 from datetime import datetime
-                                from pathlib import Path
                                 Path("var").mkdir(exist_ok=True)
                                 Path("var/last_full_reindex.txt").write_text(datetime.now().isoformat())
 

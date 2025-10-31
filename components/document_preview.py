@@ -55,11 +55,11 @@ def render_document_preview(rag_instance: Any, config_module: Any) -> None:
                 )
 
         with col4:
-            if st.button("❌ 닫기", width="stretch"):
+            if st.button("❌ 닫기", key="close_preview_btn", use_container_width=True):
                 st.session_state.show_doc_preview = False
                 if 'selected_doc' in st.session_state:
                     del st.session_state.selected_doc
-                st.rerun()
+                # st.rerun() 제거 - 버튼 클릭 시 자동 재렌더링 (버그 수정 2025-10-31)
 
         # 탭 구성: 질문/답변과 PDF 미리보기
         doc_tab1, doc_tab2 = st.tabs(["💬 문서 질문하기", "📖 PDF 미리보기"])
@@ -114,13 +114,13 @@ def render_document_preview(rag_instance: Any, config_module: Any) -> None:
             with col1:
                 if st.button("👁️ PDF 미리보기 표시", type="primary", disabled=st.session_state.pdf_preview_shown):
                     st.session_state.pdf_preview_shown = True
-                    st.rerun()
+                    # st.rerun() 제거 - Streamlit 자동 재렌더링 사용 (버그 수정 2025-10-31)
 
             with col2:
                 if st.session_state.pdf_preview_shown:
                     if st.button("🔄 미리보기 숨기기"):
                         st.session_state.pdf_preview_shown = False
-                        st.rerun()
+                        # st.rerun() 제거 - session_state 안정성 향상 (버그 수정 2025-10-31)
 
             with col3:
                 # 미리보기 높이 조절

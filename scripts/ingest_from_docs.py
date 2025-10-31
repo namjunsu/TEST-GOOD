@@ -226,8 +226,9 @@ class DocumentIngester:
         # ...
 
         # 정규화된 파일명 기반 중복 체크
-        cursor = self.db.conn.execute("SELECT filename, path FROM documents")
-        for row in cursor.fetchall():
+        conn = self.db._get_conn()
+        rows = conn.execute("SELECT filename, path FROM documents").fetchall()
+        for row in rows:
             existing_filename = row[0]
             existing_norm = self._normalize_filename(existing_filename)
             if existing_norm == norm_filename:

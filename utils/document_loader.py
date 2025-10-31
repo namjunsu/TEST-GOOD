@@ -204,37 +204,39 @@ class DocumentLoader:
             if metadata_drafters:
                 print(f"📋 metadata.db에서 {len(metadata_drafters)}개 기안자 정보 로드")
 
-            # 2. everything_index.db 연결
-            if not self.everything_db.exists():
-                print(f"❌ {self.everything_db} 파일이 없습니다")
+            # 2. metadata.db 연결 (everything_index.db 대신)
+            metadata_db_path = Path("metadata.db")
+            if not metadata_db_path.exists():
+                print(f"❌ metadata.db 파일이 없습니다")
                 return pd.DataFrame()
 
-            conn = sqlite3.connect(str(self.everything_db))
+            conn = sqlite3.connect(str(metadata_db_path))
             cursor = conn.cursor()
 
-            # 3. 문서 목록 조회
+            # 3. 문서 목록 조회 (documents 테이블 사용)
             cursor.execute("""
-                SELECT filename, path, date, year, category, department, keywords
-                FROM files
+                SELECT filename, path, date, year, category, drafter, keywords
+                FROM documents
                 ORDER BY year DESC, filename ASC
             """)
 
             rows = cursor.fetchall()
-            print(f"📊 everything_index.db에서 {len(rows)}개 문서 로드됨")
+            print(f"📊 metadata.db에서 {len(rows)}개 문서 로드됨")
 
             # 4. 문서 정보 처리
             documents: List[Dict[str, str]] = []
 
-            for filename, path, date, year, category, department, keywords in rows:
+            for filename, path, date, year, category, drafter, keywords in rows:
                 # 카테고리 분류
                 doc_category = self._classify_category(filename, category)
 
-                # 기안자 결정
-                drafter = self._determine_drafter(
-                    filename,
-                    metadata_drafters,
-                    department
-                )
+                # 기안자는 이미 metadata.db에서 가져옴 (department 필요 없음)
+                if not drafter:
+                    drafter = self._determine_drafter(
+                        filename,
+                        metadata_drafters,
+                        None
+                    )
 
                 # 문서 정보 구성
                 documents.append({

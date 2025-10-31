@@ -502,6 +502,26 @@ def get_metrics():
         metrics["stale_index_entries"] = 0
         metrics["last_full_reindex_ts"] = "unknown"
 
+    # 8-2. [ALERTS] 인덱스 위생 임계치 평가
+    try:
+        from app.alerts import send_warning
+
+        threshold_gap = 5
+        fs_count = metrics.get("fs_file_count", 0)
+        idx_count = metrics.get("index_file_count", 0)
+        stale = metrics.get("stale_index_entries", 0)
+
+        # 임계치 초과 시 알림
+        if stale > 0 or abs(fs_count - idx_count) > threshold_gap:
+            send_warning("인덱스 정합성 경고", {
+                "fs_file_count": fs_count,
+                "index_file_count": idx_count,
+                "stale_index_entries": stale,
+                "threshold_gap": threshold_gap
+            })
+    except Exception as e:
+        print(f"알림 전송 실패: {e}")
+
     # 9. 코드 검색 메트릭 (런타임)
     try:
         from app.rag.metrics_collector import get_metrics_collector

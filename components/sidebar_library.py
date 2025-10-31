@@ -8,6 +8,7 @@ import pandas as pd
 from pathlib import Path
 from typing import Optional
 from utils.year_utils import safe_year_to_int, normalize_year_list, compare_year
+from scripts.utils.lock import reindexing_lock, is_reindexing
 
 
 def display_document_list(
@@ -148,6 +149,11 @@ def render_sidebar_library(rag_instance) -> None:
         # 불일치 또는 stale 항목 존재 시 경고
         has_mismatch = (unique_count != search_count) or (stale_entries > 0)
 
+        # [LOCK] 재색인 진행 중 체크
+        if is_reindexing():
+            st.warning("⚙️ 재색인 진행 중… 잠시 후 재시도해주세요")
+            st.stop()
+
         if has_mismatch:
             warning_msg = f"⚠️ 지표 불일치: 라이브러리 {unique_count} / 검색 인덱스 {search_count}"
             if stale_entries > 0:
@@ -165,41 +171,47 @@ def render_sidebar_library(rag_instance) -> None:
 
             if reindex_button:
                 if 'auto_indexer' in st.session_state:
-                    with st.spinner("전체 재인덱싱 중..." + (" (Drop & Rebuild)" if drop_rebuild else "")):
-                        if drop_rebuild:
-                            # Drop & Rebuild 모드: everything_index.db 삭제 후 재생성
-                            import os
-                            import sqlite3
-                            try:
-                                if os.path.exists("everything_index.db"):
-                                    os.remove("everything_index.db")
-                                # 새 DB 생성 (자동 인덱서가 다시 만듦)
-                                conn = sqlite3.connect("everything_index.db")
-                                conn.execute("""
-                                    CREATE TABLE IF NOT EXISTS files (
-                                        filename TEXT,
-                                        path TEXT,
-                                        PRIMARY KEY (filename)
-                                    )
-                                """)
-                                conn.commit()
-                                conn.close()
-                                st.info("🗑️ 기존 인덱스 삭제 완료")
-                            except Exception as e:
-                                st.error(f"Drop 실패: {e}")
+                    try:
+                        with reindexing_lock(timeout_sec=3.0):
+                            with st.spinner("전체 재인덱싱 중..." + (" (Drop & Rebuild)" if drop_rebuild else "")):
+                                st.info("🔒 락 획득, 안전 재색인 시작")
 
-                        result = st.session_state.auto_indexer.force_reindex()
-                        st.success(f"✅ {result['total']}개 파일 재인덱싱 완료!")
+                                if drop_rebuild:
+                                    # Drop & Rebuild 모드: everything_index.db 삭제 후 재생성
+                                    import os
+                                    import sqlite3
+                                    try:
+                                        if os.path.exists("everything_index.db"):
+                                            os.remove("everything_index.db")
+                                        # 새 DB 생성 (자동 인덱서가 다시 만듦)
+                                        conn = sqlite3.connect("everything_index.db")
+                                        conn.execute("""
+                                            CREATE TABLE IF NOT EXISTS files (
+                                                filename TEXT,
+                                                path TEXT,
+                                                PRIMARY KEY (filename)
+                                            )
+                                        """)
+                                        conn.commit()
+                                        conn.close()
+                                        st.info("🗑️ 기존 인덱스 삭제 완료")
+                                    except Exception as e:
+                                        st.error(f"Drop 실패: {e}")
 
-                        # 타임스탬프 기록
-                        from datetime import datetime
-                        from pathlib import Path
-                        Path("var").mkdir(exist_ok=True)
-                        Path("var/last_full_reindex.txt").write_text(datetime.now().isoformat())
+                                result = st.session_state.auto_indexer.force_reindex()
+                                st.success(f"✅ {result['total']}개 파일 재인덱싱 완료!")
 
-                        if 'rag' in st.session_state:
-                            del st.session_state.rag
-                        st.rerun()
+                                # 타임스탬프 기록
+                                from datetime import datetime
+                                from pathlib import Path
+                                Path("var").mkdir(exist_ok=True)
+                                Path("var/last_full_reindex.txt").write_text(datetime.now().isoformat())
+
+                                if 'rag' in st.session_state:
+                                    del st.session_state.rag
+                                st.rerun()
+                    except RuntimeError as e:
+                        st.error(f"❌ 동시 작업으로 대기 초과: {e}")
 
         # 최근 문서 (expander)
         with st.expander("최근 10건", expanded=False):
@@ -247,13 +259,17 @@ def render_sidebar_library(rag_instance) -> None:
 
         with col2:
             if st.button("♻️ 전체재인덱싱", key="force_reindex", width="stretch"):
-                with st.spinner("전체 재인덱싱 중..."):
-                    result = st.session_state.auto_indexer.force_reindex()
-                    st.success(f"✅ {result['total']}개 파일 재인덱싱 완료!")
-                    # RAG 시스템 리로드
-                    if 'rag' in st.session_state:
-                        del st.session_state.rag
-                    st.rerun()
+                try:
+                    with reindexing_lock(timeout_sec=3.0):
+                        with st.spinner("전체 재인덱싱 중..."):
+                            result = st.session_state.auto_indexer.force_reindex()
+                            st.success(f"✅ {result['total']}개 파일 재인덱싱 완료!")
+                            # RAG 시스템 리로드
+                            if 'rag' in st.session_state:
+                                del st.session_state.rag
+                            st.rerun()
+                except RuntimeError as e:
+                    st.error(f"❌ 동시 작업으로 대기 초과: {e}")
 
     st.markdown("---")
     st.markdown("### 📂 문서 라이브러리")

@@ -11,6 +11,7 @@ from datetime import datetime
 import json
 import threading
 from typing import Dict, Set
+from scripts.utils.lock import is_reindexing
 
 class AutoIndexer:
     """자동 인덱싱 클래스 - 성능 최적화 버전"""
@@ -149,6 +150,11 @@ class AutoIndexer:
 
     def check_new_files(self) -> Dict:
         """새 파일 체크 (성능 최적화)"""
+        # [LOCK] 동시 재색인 보호
+        if is_reindexing():
+            print("⏭️  Skip scan: reindex lock present")
+            return {"new": [], "modified": [], "deleted": []}
+
         start_time = time.time()
         new_files = []
         modified_files = []

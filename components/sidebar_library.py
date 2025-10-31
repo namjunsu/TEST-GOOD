@@ -122,13 +122,21 @@ def render_sidebar_library(rag_instance) -> None:
         # 통합 카운트 API 사용 - 고유 문서 수 (중복 제외, 허용 확장자만)
         allowed_ext_list = [ext.replace(".", "") for ext in ALLOWED_EXTS]
         unique_count = db.count_unique_documents(allowed_ext=tuple(allowed_ext_list))
-        st.metric("총 문서", f"{unique_count}건")
+        st.metric("총 문서", f"{unique_count}건", help="MetadataDB 기준")
 
         # 확장자별 카운트 (물리 파일 기준)
         ext_counts = db.count_by_extension()
 
-        # 검색 인덱스 카운트
-        search_count = db.count_search_index()
+        # 검색 인덱스 카운트 (패치 2025-10-31: MetadataDB 단일 소스 강제)
+        import os
+        index_source = os.getenv("INDEX_SOURCE", "metadata")
+
+        if index_source == "metadata":
+            # MetadataDB를 단일 소스로 사용 (권장)
+            search_count = db.count_unique_documents(allowed_ext=tuple(allowed_ext_list))
+        else:
+            # 레거시 BM25 인덱스 참조 (deprecated)
+            search_count = db.count_search_index()
 
         # session_state에 저장하여 아래에서도 사용 가능하게 함
         st.session_state.search_count = search_count

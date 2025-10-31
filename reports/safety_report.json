@@ -1,0 +1,3262 @@
+
+
++===========================================================================================================================================================================================+
+
+
+DEPRECATED: this command (`check`) has been DEPRECATED, and will be unsupported beyond 01 June 2024.
+
+
+We highly encourage switching to the new `scan` command which is easier to use, more powerful, and can be set up to mimic the deprecated command if required.
+
+
++===========================================================================================================================================================================================+
+
+
+/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages/safety/safety.py:1857: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+{
+    "report_meta": {
+        "scan_target": "environment",
+        "scanned": [
+            "/usr/lib/python312.zip",
+            "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages",
+            "/usr/lib/python3.12",
+            "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages/setuptools/_vendor",
+            "/usr/lib/python3.12/lib-dynload",
+            "/home/wnstn4647/AI-CHAT/.venv/bin"
+        ],
+        "scanned_full_path": [
+            "/home/wnstn4647/AI-CHAT/.venv/bin",
+            "/usr/lib/python312.zip",
+            "/usr/lib/python3.12",
+            "/usr/lib/python3.12/lib-dynload",
+            "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages",
+            "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages/setuptools/_vendor"
+        ],
+        "target_languages": [
+            "python"
+        ],
+        "policy_file": null,
+        "policy_file_source": "local",
+        "audit_and_monitor": false,
+        "api_key": false,
+        "account": "",
+        "local_database_path": null,
+        "safety_version": "3.6.2",
+        "timestamp": "2025-10-31 15:06:56",
+        "packages_found": 196,
+        "vulnerabilities_found": 2,
+        "vulnerabilities_ignored": 0,
+        "remediations_recommended": 0,
+        "telemetry": {
+            "safety_options": {
+                "json": {
+                    "--json": 1
+                }
+            },
+            "safety_version": "3.6.2",
+            "safety_source": "cli",
+            "os_type": "Linux",
+            "os_release": "6.6.87.2-microsoft-standard-WSL2",
+            "os_description": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+            "python_version": "3.12.3",
+            "safety_command": "check"
+        },
+        "git": {
+            "branch": "chore/repo-audit-20251031",
+            "tag": "",
+            "commit": "126925211574ad845321168916ca439e2c5c8941",
+            "dirty": "True",
+            "origin": "git@github.com:namjunsu/TEST-GOOD.git"
+        },
+        "project": null,
+        "json_version": "1.1",
+        "remediations_attempted": 0,
+        "remediations_completed": 0,
+        "remediation_mode": "NON_INTERACTIVE"
+    },
+    "scanned_packages": {
+        "altair": {
+            "name": "altair",
+            "version": "5.5.0",
+            "requirements": [
+                {
+                    "raw": "altair==5.5.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "altair",
+                    "specifier": "==5.5.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "annotated-doc": {
+            "name": "annotated-doc",
+            "version": "0.0.3",
+            "requirements": [
+                {
+                    "raw": "annotated-doc==0.0.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "annotated-doc",
+                    "specifier": "==0.0.3",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "annotated-types": {
+            "name": "annotated-types",
+            "version": "0.7.0",
+            "requirements": [
+                {
+                    "raw": "annotated-types==0.7.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "annotated-types",
+                    "specifier": "==0.7.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "anyio": {
+            "name": "anyio",
+            "version": "4.11.0",
+            "requirements": [
+                {
+                    "raw": "anyio==4.11.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "anyio",
+                    "specifier": "==4.11.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "attrs": {
+            "name": "attrs",
+            "version": "25.4.0",
+            "requirements": [
+                {
+                    "raw": "attrs==25.4.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "attrs",
+                    "specifier": "==25.4.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "authlib": {
+            "name": "authlib",
+            "version": "1.6.5",
+            "requirements": [
+                {
+                    "raw": "authlib==1.6.5",
+                    "extras": [],
+                    "marker": null,
+                    "name": "authlib",
+                    "specifier": "==1.6.5",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "backoff": {
+            "name": "backoff",
+            "version": "2.2.1",
+            "requirements": [
+                {
+                    "raw": "backoff==2.2.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "backoff",
+                    "specifier": "==2.2.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "bcrypt": {
+            "name": "bcrypt",
+            "version": "5.0.0",
+            "requirements": [
+                {
+                    "raw": "bcrypt==5.0.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "bcrypt",
+                    "specifier": "==5.0.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "black": {
+            "name": "black",
+            "version": "25.9.0",
+            "requirements": [
+                {
+                    "raw": "black==25.9.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "black",
+                    "specifier": "==25.9.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "blinker": {
+            "name": "blinker",
+            "version": "1.9.0",
+            "requirements": [
+                {
+                    "raw": "blinker==1.9.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "blinker",
+                    "specifier": "==1.9.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "boolean-py": {
+            "name": "boolean-py",
+            "version": "5.0",
+            "requirements": [
+                {
+                    "raw": "boolean-py==5.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "boolean-py",
+                    "specifier": "==5.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "build": {
+            "name": "build",
+            "version": "1.3.0",
+            "requirements": [
+                {
+                    "raw": "build==1.3.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "build",
+                    "specifier": "==1.3.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "cachecontrol": {
+            "name": "cachecontrol",
+            "version": "0.14.3",
+            "requirements": [
+                {
+                    "raw": "cachecontrol==0.14.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "cachecontrol",
+                    "specifier": "==0.14.3",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "cachetools": {
+            "name": "cachetools",
+            "version": "6.2.1",
+            "requirements": [
+                {
+                    "raw": "cachetools==6.2.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "cachetools",
+                    "specifier": "==6.2.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "certifi": {
+            "name": "certifi",
+            "version": "2025.10.5",
+            "requirements": [
+                {
+                    "raw": "certifi==2025.10.5",
+                    "extras": [],
+                    "marker": null,
+                    "name": "certifi",
+                    "specifier": "==2025.10.5",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "cffi": {
+            "name": "cffi",
+            "version": "2.0.0",
+            "requirements": [
+                {
+                    "raw": "cffi==2.0.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "cffi",
+                    "specifier": "==2.0.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "charset-normalizer": {
+            "name": "charset-normalizer",
+            "version": "3.4.4",
+            "requirements": [
+                {
+                    "raw": "charset-normalizer==3.4.4",
+                    "extras": [],
+                    "marker": null,
+                    "name": "charset-normalizer",
+                    "specifier": "==3.4.4",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "chromadb": {
+            "name": "chromadb",
+            "version": "1.2.1",
+            "requirements": [
+                {
+                    "raw": "chromadb==1.2.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "chromadb",
+                    "specifier": "==1.2.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "click": {
+            "name": "click",
+            "version": "8.3.0",
+            "requirements": [
+                {
+                    "raw": "click==8.3.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "click",
+                    "specifier": "==8.3.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "coloredlogs": {
+            "name": "coloredlogs",
+            "version": "15.0.1",
+            "requirements": [
+                {
+                    "raw": "coloredlogs==15.0.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "coloredlogs",
+                    "specifier": "==15.0.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "coverage": {
+            "name": "coverage",
+            "version": "7.11.0",
+            "requirements": [
+                {
+                    "raw": "coverage==7.11.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "coverage",
+                    "specifier": "==7.11.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "cryptography": {
+            "name": "cryptography",
+            "version": "46.0.3",
+            "requirements": [
+                {
+                    "raw": "cryptography==46.0.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "cryptography",
+                    "specifier": "==46.0.3",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "cyclonedx-python-lib": {
+            "name": "cyclonedx-python-lib",
+            "version": "9.1.0",
+            "requirements": [
+                {
+                    "raw": "cyclonedx-python-lib==9.1.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "cyclonedx-python-lib",
+                    "specifier": "==9.1.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "defusedxml": {
+            "name": "defusedxml",
+            "version": "0.7.1",
+            "requirements": [
+                {
+                    "raw": "defusedxml==0.7.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "defusedxml",
+                    "specifier": "==0.7.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "diskcache": {
+            "name": "diskcache",
+            "version": "5.6.3",
+            "requirements": [
+                {
+                    "raw": "diskcache==5.6.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "diskcache",
+                    "specifier": "==5.6.3",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "distro": {
+            "name": "distro",
+            "version": "1.9.0",
+            "requirements": [
+                {
+                    "raw": "distro==1.9.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "distro",
+                    "specifier": "==1.9.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "dparse": {
+            "name": "dparse",
+            "version": "0.6.4",
+            "requirements": [
+                {
+                    "raw": "dparse==0.6.4",
+                    "extras": [],
+                    "marker": null,
+                    "name": "dparse",
+                    "specifier": "==0.6.4",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "durationpy": {
+            "name": "durationpy",
+            "version": "0.10",
+            "requirements": [
+                {
+                    "raw": "durationpy==0.10",
+                    "extras": [],
+                    "marker": null,
+                    "name": "durationpy",
+                    "specifier": "==0.10",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "faiss-cpu": {
+            "name": "faiss-cpu",
+            "version": "1.12.0",
+            "requirements": [
+                {
+                    "raw": "faiss-cpu==1.12.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "faiss-cpu",
+                    "specifier": "==1.12.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "fastapi": {
+            "name": "fastapi",
+            "version": "0.120.0",
+            "requirements": [
+                {
+                    "raw": "fastapi==0.120.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "fastapi",
+                    "specifier": "==0.120.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "filelock": {
+            "name": "filelock",
+            "version": "3.20.0",
+            "requirements": [
+                {
+                    "raw": "filelock==3.20.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "filelock",
+                    "specifier": "==3.20.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "flatbuffers": {
+            "name": "flatbuffers",
+            "version": "25.9.23",
+            "requirements": [
+                {
+                    "raw": "flatbuffers==25.9.23",
+                    "extras": [],
+                    "marker": null,
+                    "name": "flatbuffers",
+                    "specifier": "==25.9.23",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "fsspec": {
+            "name": "fsspec",
+            "version": "2025.9.0",
+            "requirements": [
+                {
+                    "raw": "fsspec==2025.9.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "fsspec",
+                    "specifier": "==2025.9.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "gitdb": {
+            "name": "gitdb",
+            "version": "4.0.12",
+            "requirements": [
+                {
+                    "raw": "gitdb==4.0.12",
+                    "extras": [],
+                    "marker": null,
+                    "name": "gitdb",
+                    "specifier": "==4.0.12",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "gitpython": {
+            "name": "gitpython",
+            "version": "3.1.45",
+            "requirements": [
+                {
+                    "raw": "gitpython==3.1.45",
+                    "extras": [],
+                    "marker": null,
+                    "name": "gitpython",
+                    "specifier": "==3.1.45",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "google-auth": {
+            "name": "google-auth",
+            "version": "2.41.1",
+            "requirements": [
+                {
+                    "raw": "google-auth==2.41.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "google-auth",
+                    "specifier": "==2.41.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "googleapis-common-protos": {
+            "name": "googleapis-common-protos",
+            "version": "1.71.0",
+            "requirements": [
+                {
+                    "raw": "googleapis-common-protos==1.71.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "googleapis-common-protos",
+                    "specifier": "==1.71.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "graphviz": {
+            "name": "graphviz",
+            "version": "0.21",
+            "requirements": [
+                {
+                    "raw": "graphviz==0.21",
+                    "extras": [],
+                    "marker": null,
+                    "name": "graphviz",
+                    "specifier": "==0.21",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "grpcio": {
+            "name": "grpcio",
+            "version": "1.76.0",
+            "requirements": [
+                {
+                    "raw": "grpcio==1.76.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "grpcio",
+                    "specifier": "==1.76.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "h11": {
+            "name": "h11",
+            "version": "0.16.0",
+            "requirements": [
+                {
+                    "raw": "h11==0.16.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "h11",
+                    "specifier": "==0.16.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "hf-xet": {
+            "name": "hf-xet",
+            "version": "1.1.10",
+            "requirements": [
+                {
+                    "raw": "hf-xet==1.1.10",
+                    "extras": [],
+                    "marker": null,
+                    "name": "hf-xet",
+                    "specifier": "==1.1.10",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "httpcore": {
+            "name": "httpcore",
+            "version": "1.0.9",
+            "requirements": [
+                {
+                    "raw": "httpcore==1.0.9",
+                    "extras": [],
+                    "marker": null,
+                    "name": "httpcore",
+                    "specifier": "==1.0.9",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "httptools": {
+            "name": "httptools",
+            "version": "0.7.1",
+            "requirements": [
+                {
+                    "raw": "httptools==0.7.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "httptools",
+                    "specifier": "==0.7.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "httpx": {
+            "name": "httpx",
+            "version": "0.28.1",
+            "requirements": [
+                {
+                    "raw": "httpx==0.28.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "httpx",
+                    "specifier": "==0.28.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "huggingface-hub": {
+            "name": "huggingface-hub",
+            "version": "0.35.3",
+            "requirements": [
+                {
+                    "raw": "huggingface-hub==0.35.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "huggingface-hub",
+                    "specifier": "==0.35.3",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "humanfriendly": {
+            "name": "humanfriendly",
+            "version": "10.0",
+            "requirements": [
+                {
+                    "raw": "humanfriendly==10.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "humanfriendly",
+                    "specifier": "==10.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "idna": {
+            "name": "idna",
+            "version": "3.11",
+            "requirements": [
+                {
+                    "raw": "idna==3.11",
+                    "extras": [],
+                    "marker": null,
+                    "name": "idna",
+                    "specifier": "==3.11",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "importlib-metadata": {
+            "name": "importlib-metadata",
+            "version": "8.7.0",
+            "requirements": [
+                {
+                    "raw": "importlib-metadata==8.7.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "importlib-metadata",
+                    "specifier": "==8.7.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "importlib-resources": {
+            "name": "importlib-resources",
+            "version": "6.5.2",
+            "requirements": [
+                {
+                    "raw": "importlib-resources==6.5.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "importlib-resources",
+                    "specifier": "==6.5.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "iniconfig": {
+            "name": "iniconfig",
+            "version": "2.3.0",
+            "requirements": [
+                {
+                    "raw": "iniconfig==2.3.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "iniconfig",
+                    "specifier": "==2.3.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "jinja2": {
+            "name": "jinja2",
+            "version": "3.1.6",
+            "requirements": [
+                {
+                    "raw": "jinja2==3.1.6",
+                    "extras": [],
+                    "marker": null,
+                    "name": "jinja2",
+                    "specifier": "==3.1.6",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "joblib": {
+            "name": "joblib",
+            "version": "1.5.2",
+            "requirements": [
+                {
+                    "raw": "joblib==1.5.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "joblib",
+                    "specifier": "==1.5.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "jsonschema": {
+            "name": "jsonschema",
+            "version": "4.25.1",
+            "requirements": [
+                {
+                    "raw": "jsonschema==4.25.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "jsonschema",
+                    "specifier": "==4.25.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "jsonschema-specifications": {
+            "name": "jsonschema-specifications",
+            "version": "2025.9.1",
+            "requirements": [
+                {
+                    "raw": "jsonschema-specifications==2025.9.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "jsonschema-specifications",
+                    "specifier": "==2025.9.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "kubernetes": {
+            "name": "kubernetes",
+            "version": "34.1.0",
+            "requirements": [
+                {
+                    "raw": "kubernetes==34.1.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "kubernetes",
+                    "specifier": "==34.1.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "license-expression": {
+            "name": "license-expression",
+            "version": "30.4.4",
+            "requirements": [
+                {
+                    "raw": "license-expression==30.4.4",
+                    "extras": [],
+                    "marker": null,
+                    "name": "license-expression",
+                    "specifier": "==30.4.4",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "llama-cpp-python": {
+            "name": "llama-cpp-python",
+            "version": "0.3.16",
+            "requirements": [
+                {
+                    "raw": "llama-cpp-python==0.3.16",
+                    "extras": [],
+                    "marker": null,
+                    "name": "llama-cpp-python",
+                    "specifier": "==0.3.16",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "loguru": {
+            "name": "loguru",
+            "version": "0.7.3",
+            "requirements": [
+                {
+                    "raw": "loguru==0.7.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "loguru",
+                    "specifier": "==0.7.3",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "markdown-it-py": {
+            "name": "markdown-it-py",
+            "version": "4.0.0",
+            "requirements": [
+                {
+                    "raw": "markdown-it-py==4.0.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "markdown-it-py",
+                    "specifier": "==4.0.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "markupsafe": {
+            "name": "markupsafe",
+            "version": "3.0.3",
+            "requirements": [
+                {
+                    "raw": "markupsafe==3.0.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "markupsafe",
+                    "specifier": "==3.0.3",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "marshmallow": {
+            "name": "marshmallow",
+            "version": "4.0.1",
+            "requirements": [
+                {
+                    "raw": "marshmallow==4.0.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "marshmallow",
+                    "specifier": "==4.0.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "mdurl": {
+            "name": "mdurl",
+            "version": "0.1.2",
+            "requirements": [
+                {
+                    "raw": "mdurl==0.1.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "mdurl",
+                    "specifier": "==0.1.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "mmh3": {
+            "name": "mmh3",
+            "version": "5.2.0",
+            "requirements": [
+                {
+                    "raw": "mmh3==5.2.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "mmh3",
+                    "specifier": "==5.2.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "mpmath": {
+            "name": "mpmath",
+            "version": "1.3.0",
+            "requirements": [
+                {
+                    "raw": "mpmath==1.3.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "mpmath",
+                    "specifier": "==1.3.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "msgpack": {
+            "name": "msgpack",
+            "version": "1.1.2",
+            "requirements": [
+                {
+                    "raw": "msgpack==1.1.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "msgpack",
+                    "specifier": "==1.1.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "mypy": {
+            "name": "mypy",
+            "version": "1.18.2",
+            "requirements": [
+                {
+                    "raw": "mypy==1.18.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "mypy",
+                    "specifier": "==1.18.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "mypy-extensions": {
+            "name": "mypy-extensions",
+            "version": "1.1.0",
+            "requirements": [
+                {
+                    "raw": "mypy-extensions==1.1.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "mypy-extensions",
+                    "specifier": "==1.1.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "narwhals": {
+            "name": "narwhals",
+            "version": "2.9.0",
+            "requirements": [
+                {
+                    "raw": "narwhals==2.9.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "narwhals",
+                    "specifier": "==2.9.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "networkx": {
+            "name": "networkx",
+            "version": "3.5",
+            "requirements": [
+                {
+                    "raw": "networkx==3.5",
+                    "extras": [],
+                    "marker": null,
+                    "name": "networkx",
+                    "specifier": "==3.5",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "nltk": {
+            "name": "nltk",
+            "version": "3.9.2",
+            "requirements": [
+                {
+                    "raw": "nltk==3.9.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "nltk",
+                    "specifier": "==3.9.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "numpy": {
+            "name": "numpy",
+            "version": "2.3.4",
+            "requirements": [
+                {
+                    "raw": "numpy==2.3.4",
+                    "extras": [],
+                    "marker": null,
+                    "name": "numpy",
+                    "specifier": "==2.3.4",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "nvidia-cublas-cu12": {
+            "name": "nvidia-cublas-cu12",
+            "version": "12.8.4.1",
+            "requirements": [
+                {
+                    "raw": "nvidia-cublas-cu12==12.8.4.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "nvidia-cublas-cu12",
+                    "specifier": "==12.8.4.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "nvidia-cuda-cupti-cu12": {
+            "name": "nvidia-cuda-cupti-cu12",
+            "version": "12.8.90",
+            "requirements": [
+                {
+                    "raw": "nvidia-cuda-cupti-cu12==12.8.90",
+                    "extras": [],
+                    "marker": null,
+                    "name": "nvidia-cuda-cupti-cu12",
+                    "specifier": "==12.8.90",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "nvidia-cuda-nvrtc-cu12": {
+            "name": "nvidia-cuda-nvrtc-cu12",
+            "version": "12.8.93",
+            "requirements": [
+                {
+                    "raw": "nvidia-cuda-nvrtc-cu12==12.8.93",
+                    "extras": [],
+                    "marker": null,
+                    "name": "nvidia-cuda-nvrtc-cu12",
+                    "specifier": "==12.8.93",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "nvidia-cuda-runtime-cu12": {
+            "name": "nvidia-cuda-runtime-cu12",
+            "version": "12.8.90",
+            "requirements": [
+                {
+                    "raw": "nvidia-cuda-runtime-cu12==12.8.90",
+                    "extras": [],
+                    "marker": null,
+                    "name": "nvidia-cuda-runtime-cu12",
+                    "specifier": "==12.8.90",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "nvidia-cudnn-cu12": {
+            "name": "nvidia-cudnn-cu12",
+            "version": "9.10.2.21",
+            "requirements": [
+                {
+                    "raw": "nvidia-cudnn-cu12==9.10.2.21",
+                    "extras": [],
+                    "marker": null,
+                    "name": "nvidia-cudnn-cu12",
+                    "specifier": "==9.10.2.21",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "nvidia-cufft-cu12": {
+            "name": "nvidia-cufft-cu12",
+            "version": "11.3.3.83",
+            "requirements": [
+                {
+                    "raw": "nvidia-cufft-cu12==11.3.3.83",
+                    "extras": [],
+                    "marker": null,
+                    "name": "nvidia-cufft-cu12",
+                    "specifier": "==11.3.3.83",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "nvidia-cufile-cu12": {
+            "name": "nvidia-cufile-cu12",
+            "version": "1.13.1.3",
+            "requirements": [
+                {
+                    "raw": "nvidia-cufile-cu12==1.13.1.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "nvidia-cufile-cu12",
+                    "specifier": "==1.13.1.3",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "nvidia-curand-cu12": {
+            "name": "nvidia-curand-cu12",
+            "version": "10.3.9.90",
+            "requirements": [
+                {
+                    "raw": "nvidia-curand-cu12==10.3.9.90",
+                    "extras": [],
+                    "marker": null,
+                    "name": "nvidia-curand-cu12",
+                    "specifier": "==10.3.9.90",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "nvidia-cusolver-cu12": {
+            "name": "nvidia-cusolver-cu12",
+            "version": "11.7.3.90",
+            "requirements": [
+                {
+                    "raw": "nvidia-cusolver-cu12==11.7.3.90",
+                    "extras": [],
+                    "marker": null,
+                    "name": "nvidia-cusolver-cu12",
+                    "specifier": "==11.7.3.90",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "nvidia-cusparse-cu12": {
+            "name": "nvidia-cusparse-cu12",
+            "version": "12.5.8.93",
+            "requirements": [
+                {
+                    "raw": "nvidia-cusparse-cu12==12.5.8.93",
+                    "extras": [],
+                    "marker": null,
+                    "name": "nvidia-cusparse-cu12",
+                    "specifier": "==12.5.8.93",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "nvidia-cusparselt-cu12": {
+            "name": "nvidia-cusparselt-cu12",
+            "version": "0.7.1",
+            "requirements": [
+                {
+                    "raw": "nvidia-cusparselt-cu12==0.7.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "nvidia-cusparselt-cu12",
+                    "specifier": "==0.7.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "nvidia-nccl-cu12": {
+            "name": "nvidia-nccl-cu12",
+            "version": "2.27.5",
+            "requirements": [
+                {
+                    "raw": "nvidia-nccl-cu12==2.27.5",
+                    "extras": [],
+                    "marker": null,
+                    "name": "nvidia-nccl-cu12",
+                    "specifier": "==2.27.5",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "nvidia-nvjitlink-cu12": {
+            "name": "nvidia-nvjitlink-cu12",
+            "version": "12.8.93",
+            "requirements": [
+                {
+                    "raw": "nvidia-nvjitlink-cu12==12.8.93",
+                    "extras": [],
+                    "marker": null,
+                    "name": "nvidia-nvjitlink-cu12",
+                    "specifier": "==12.8.93",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "nvidia-nvshmem-cu12": {
+            "name": "nvidia-nvshmem-cu12",
+            "version": "3.3.20",
+            "requirements": [
+                {
+                    "raw": "nvidia-nvshmem-cu12==3.3.20",
+                    "extras": [],
+                    "marker": null,
+                    "name": "nvidia-nvshmem-cu12",
+                    "specifier": "==3.3.20",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "nvidia-nvtx-cu12": {
+            "name": "nvidia-nvtx-cu12",
+            "version": "12.8.90",
+            "requirements": [
+                {
+                    "raw": "nvidia-nvtx-cu12==12.8.90",
+                    "extras": [],
+                    "marker": null,
+                    "name": "nvidia-nvtx-cu12",
+                    "specifier": "==12.8.90",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "oauthlib": {
+            "name": "oauthlib",
+            "version": "3.3.1",
+            "requirements": [
+                {
+                    "raw": "oauthlib==3.3.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "oauthlib",
+                    "specifier": "==3.3.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "onnxruntime": {
+            "name": "onnxruntime",
+            "version": "1.23.2",
+            "requirements": [
+                {
+                    "raw": "onnxruntime==1.23.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "onnxruntime",
+                    "specifier": "==1.23.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "opentelemetry-api": {
+            "name": "opentelemetry-api",
+            "version": "1.38.0",
+            "requirements": [
+                {
+                    "raw": "opentelemetry-api==1.38.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "opentelemetry-api",
+                    "specifier": "==1.38.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "opentelemetry-exporter-otlp-proto-common": {
+            "name": "opentelemetry-exporter-otlp-proto-common",
+            "version": "1.38.0",
+            "requirements": [
+                {
+                    "raw": "opentelemetry-exporter-otlp-proto-common==1.38.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "opentelemetry-exporter-otlp-proto-common",
+                    "specifier": "==1.38.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "opentelemetry-exporter-otlp-proto-grpc": {
+            "name": "opentelemetry-exporter-otlp-proto-grpc",
+            "version": "1.38.0",
+            "requirements": [
+                {
+                    "raw": "opentelemetry-exporter-otlp-proto-grpc==1.38.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "opentelemetry-exporter-otlp-proto-grpc",
+                    "specifier": "==1.38.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "opentelemetry-proto": {
+            "name": "opentelemetry-proto",
+            "version": "1.38.0",
+            "requirements": [
+                {
+                    "raw": "opentelemetry-proto==1.38.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "opentelemetry-proto",
+                    "specifier": "==1.38.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "opentelemetry-sdk": {
+            "name": "opentelemetry-sdk",
+            "version": "1.38.0",
+            "requirements": [
+                {
+                    "raw": "opentelemetry-sdk==1.38.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "opentelemetry-sdk",
+                    "specifier": "==1.38.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "opentelemetry-semantic-conventions": {
+            "name": "opentelemetry-semantic-conventions",
+            "version": "0.59b0",
+            "requirements": [
+                {
+                    "raw": "opentelemetry-semantic-conventions==0.59b0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "opentelemetry-semantic-conventions",
+                    "specifier": "==0.59b0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "orjson": {
+            "name": "orjson",
+            "version": "3.11.3",
+            "requirements": [
+                {
+                    "raw": "orjson==3.11.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "orjson",
+                    "specifier": "==3.11.3",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "overrides": {
+            "name": "overrides",
+            "version": "7.7.0",
+            "requirements": [
+                {
+                    "raw": "overrides==7.7.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "overrides",
+                    "specifier": "==7.7.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "packageurl-python": {
+            "name": "packageurl-python",
+            "version": "0.17.5",
+            "requirements": [
+                {
+                    "raw": "packageurl-python==0.17.5",
+                    "extras": [],
+                    "marker": null,
+                    "name": "packageurl-python",
+                    "specifier": "==0.17.5",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "packaging": {
+            "name": "packaging",
+            "version": "25.0",
+            "requirements": [
+                {
+                    "raw": "packaging==25.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "packaging",
+                    "specifier": "==25.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pandas": {
+            "name": "pandas",
+            "version": "2.3.3",
+            "requirements": [
+                {
+                    "raw": "pandas==2.3.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pandas",
+                    "specifier": "==2.3.3",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pathspec": {
+            "name": "pathspec",
+            "version": "0.12.1",
+            "requirements": [
+                {
+                    "raw": "pathspec==0.12.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pathspec",
+                    "specifier": "==0.12.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pdf2image": {
+            "name": "pdf2image",
+            "version": "1.17.0",
+            "requirements": [
+                {
+                    "raw": "pdf2image==1.17.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pdf2image",
+                    "specifier": "==1.17.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pdfminer-six": {
+            "name": "pdfminer-six",
+            "version": "20250506",
+            "requirements": [
+                {
+                    "raw": "pdfminer-six==20250506",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pdfminer-six",
+                    "specifier": "==20250506",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pdfplumber": {
+            "name": "pdfplumber",
+            "version": "0.11.7",
+            "requirements": [
+                {
+                    "raw": "pdfplumber==0.11.7",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pdfplumber",
+                    "specifier": "==0.11.7",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pillow": {
+            "name": "pillow",
+            "version": "11.3.0",
+            "requirements": [
+                {
+                    "raw": "pillow==11.3.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pillow",
+                    "specifier": "==11.3.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pip": {
+            "name": "pip",
+            "version": "25.2",
+            "requirements": [
+                {
+                    "raw": "pip==25.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pip",
+                    "specifier": "==25.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pip-api": {
+            "name": "pip-api",
+            "version": "0.0.34",
+            "requirements": [
+                {
+                    "raw": "pip-api==0.0.34",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pip-api",
+                    "specifier": "==0.0.34",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pip-audit": {
+            "name": "pip-audit",
+            "version": "2.9.0",
+            "requirements": [
+                {
+                    "raw": "pip-audit==2.9.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pip-audit",
+                    "specifier": "==2.9.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pip-requirements-parser": {
+            "name": "pip-requirements-parser",
+            "version": "32.0.1",
+            "requirements": [
+                {
+                    "raw": "pip-requirements-parser==32.0.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pip-requirements-parser",
+                    "specifier": "==32.0.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "platformdirs": {
+            "name": "platformdirs",
+            "version": "4.5.0",
+            "requirements": [
+                {
+                    "raw": "platformdirs==4.5.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "platformdirs",
+                    "specifier": "==4.5.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pluggy": {
+            "name": "pluggy",
+            "version": "1.6.0",
+            "requirements": [
+                {
+                    "raw": "pluggy==1.6.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pluggy",
+                    "specifier": "==1.6.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "posthog": {
+            "name": "posthog",
+            "version": "5.4.0",
+            "requirements": [
+                {
+                    "raw": "posthog==5.4.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "posthog",
+                    "specifier": "==5.4.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "protobuf": {
+            "name": "protobuf",
+            "version": "6.33.0",
+            "requirements": [
+                {
+                    "raw": "protobuf==6.33.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "protobuf",
+                    "specifier": "==6.33.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "psutil": {
+            "name": "psutil",
+            "version": "7.1.1",
+            "requirements": [
+                {
+                    "raw": "psutil==7.1.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "psutil",
+                    "specifier": "==7.1.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "py-serializable": {
+            "name": "py-serializable",
+            "version": "2.1.0",
+            "requirements": [
+                {
+                    "raw": "py-serializable==2.1.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "py-serializable",
+                    "specifier": "==2.1.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pyarrow": {
+            "name": "pyarrow",
+            "version": "21.0.0",
+            "requirements": [
+                {
+                    "raw": "pyarrow==21.0.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pyarrow",
+                    "specifier": "==21.0.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pyasn1": {
+            "name": "pyasn1",
+            "version": "0.6.1",
+            "requirements": [
+                {
+                    "raw": "pyasn1==0.6.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pyasn1",
+                    "specifier": "==0.6.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pyasn1-modules": {
+            "name": "pyasn1-modules",
+            "version": "0.4.2",
+            "requirements": [
+                {
+                    "raw": "pyasn1-modules==0.4.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pyasn1-modules",
+                    "specifier": "==0.4.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pybase64": {
+            "name": "pybase64",
+            "version": "1.4.2",
+            "requirements": [
+                {
+                    "raw": "pybase64==1.4.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pybase64",
+                    "specifier": "==1.4.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pycparser": {
+            "name": "pycparser",
+            "version": "2.23",
+            "requirements": [
+                {
+                    "raw": "pycparser==2.23",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pycparser",
+                    "specifier": "==2.23",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pydantic": {
+            "name": "pydantic",
+            "version": "2.12.3",
+            "requirements": [
+                {
+                    "raw": "pydantic==2.12.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pydantic",
+                    "specifier": "==2.12.3",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pydantic-core": {
+            "name": "pydantic-core",
+            "version": "2.41.4",
+            "requirements": [
+                {
+                    "raw": "pydantic-core==2.41.4",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pydantic-core",
+                    "specifier": "==2.41.4",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pydeck": {
+            "name": "pydeck",
+            "version": "0.9.1",
+            "requirements": [
+                {
+                    "raw": "pydeck==0.9.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pydeck",
+                    "specifier": "==0.9.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pygments": {
+            "name": "pygments",
+            "version": "2.19.2",
+            "requirements": [
+                {
+                    "raw": "pygments==2.19.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pygments",
+                    "specifier": "==2.19.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pymupdf": {
+            "name": "pymupdf",
+            "version": "1.26.5",
+            "requirements": [
+                {
+                    "raw": "pymupdf==1.26.5",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pymupdf",
+                    "specifier": "==1.26.5",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pyparsing": {
+            "name": "pyparsing",
+            "version": "3.2.5",
+            "requirements": [
+                {
+                    "raw": "pyparsing==3.2.5",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pyparsing",
+                    "specifier": "==3.2.5",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pypdf": {
+            "name": "pypdf",
+            "version": "6.1.3",
+            "requirements": [
+                {
+                    "raw": "pypdf==6.1.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pypdf",
+                    "specifier": "==6.1.3",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pypdfium2": {
+            "name": "pypdfium2",
+            "version": "4.30.0",
+            "requirements": [
+                {
+                    "raw": "pypdfium2==4.30.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pypdfium2",
+                    "specifier": "==4.30.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pypika": {
+            "name": "pypika",
+            "version": "0.48.9",
+            "requirements": [
+                {
+                    "raw": "pypika==0.48.9",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pypika",
+                    "specifier": "==0.48.9",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pyproject-hooks": {
+            "name": "pyproject-hooks",
+            "version": "1.2.0",
+            "requirements": [
+                {
+                    "raw": "pyproject-hooks==1.2.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pyproject-hooks",
+                    "specifier": "==1.2.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pytesseract": {
+            "name": "pytesseract",
+            "version": "0.3.13",
+            "requirements": [
+                {
+                    "raw": "pytesseract==0.3.13",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pytesseract",
+                    "specifier": "==0.3.13",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pytest": {
+            "name": "pytest",
+            "version": "8.4.2",
+            "requirements": [
+                {
+                    "raw": "pytest==8.4.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pytest",
+                    "specifier": "==8.4.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pytest-cov": {
+            "name": "pytest-cov",
+            "version": "7.0.0",
+            "requirements": [
+                {
+                    "raw": "pytest-cov==7.0.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pytest-cov",
+                    "specifier": "==7.0.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "python-dateutil": {
+            "name": "python-dateutil",
+            "version": "2.9.0.post0",
+            "requirements": [
+                {
+                    "raw": "python-dateutil==2.9.0.post0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "python-dateutil",
+                    "specifier": "==2.9.0.post0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "python-dotenv": {
+            "name": "python-dotenv",
+            "version": "1.1.1",
+            "requirements": [
+                {
+                    "raw": "python-dotenv==1.1.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "python-dotenv",
+                    "specifier": "==1.1.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pytokens": {
+            "name": "pytokens",
+            "version": "0.2.0",
+            "requirements": [
+                {
+                    "raw": "pytokens==0.2.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pytokens",
+                    "specifier": "==0.2.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pytz": {
+            "name": "pytz",
+            "version": "2025.2",
+            "requirements": [
+                {
+                    "raw": "pytz==2025.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pytz",
+                    "specifier": "==2025.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "pyyaml": {
+            "name": "pyyaml",
+            "version": "6.0.3",
+            "requirements": [
+                {
+                    "raw": "pyyaml==6.0.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "pyyaml",
+                    "specifier": "==6.0.3",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "rank-bm25": {
+            "name": "rank-bm25",
+            "version": "0.2.2",
+            "requirements": [
+                {
+                    "raw": "rank-bm25==0.2.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "rank-bm25",
+                    "specifier": "==0.2.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "referencing": {
+            "name": "referencing",
+            "version": "0.37.0",
+            "requirements": [
+                {
+                    "raw": "referencing==0.37.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "referencing",
+                    "specifier": "==0.37.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "regex": {
+            "name": "regex",
+            "version": "2025.10.23",
+            "requirements": [
+                {
+                    "raw": "regex==2025.10.23",
+                    "extras": [],
+                    "marker": null,
+                    "name": "regex",
+                    "specifier": "==2025.10.23",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "requests": {
+            "name": "requests",
+            "version": "2.32.5",
+            "requirements": [
+                {
+                    "raw": "requests==2.32.5",
+                    "extras": [],
+                    "marker": null,
+                    "name": "requests",
+                    "specifier": "==2.32.5",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "requests-oauthlib": {
+            "name": "requests-oauthlib",
+            "version": "2.0.0",
+            "requirements": [
+                {
+                    "raw": "requests-oauthlib==2.0.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "requests-oauthlib",
+                    "specifier": "==2.0.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "rich": {
+            "name": "rich",
+            "version": "14.2.0",
+            "requirements": [
+                {
+                    "raw": "rich==14.2.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "rich",
+                    "specifier": "==14.2.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "rpds-py": {
+            "name": "rpds-py",
+            "version": "0.28.0",
+            "requirements": [
+                {
+                    "raw": "rpds-py==0.28.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "rpds-py",
+                    "specifier": "==0.28.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "rsa": {
+            "name": "rsa",
+            "version": "4.9.1",
+            "requirements": [
+                {
+                    "raw": "rsa==4.9.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "rsa",
+                    "specifier": "==4.9.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "ruamel.yaml": {
+            "name": "ruamel.yaml",
+            "version": "0.18.16",
+            "requirements": [
+                {
+                    "raw": "ruamel.yaml==0.18.16",
+                    "extras": [],
+                    "marker": null,
+                    "name": "ruamel.yaml",
+                    "specifier": "==0.18.16",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "ruamel.yaml.clib": {
+            "name": "ruamel.yaml.clib",
+            "version": "0.2.14",
+            "requirements": [
+                {
+                    "raw": "ruamel.yaml.clib==0.2.14",
+                    "extras": [],
+                    "marker": null,
+                    "name": "ruamel.yaml.clib",
+                    "specifier": "==0.2.14",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "ruff": {
+            "name": "ruff",
+            "version": "0.14.2",
+            "requirements": [
+                {
+                    "raw": "ruff==0.14.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "ruff",
+                    "specifier": "==0.14.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "safetensors": {
+            "name": "safetensors",
+            "version": "0.6.2",
+            "requirements": [
+                {
+                    "raw": "safetensors==0.6.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "safetensors",
+                    "specifier": "==0.6.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "safety": {
+            "name": "safety",
+            "version": "3.6.2",
+            "requirements": [
+                {
+                    "raw": "safety==3.6.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "safety",
+                    "specifier": "==3.6.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "safety-schemas": {
+            "name": "safety-schemas",
+            "version": "0.0.16",
+            "requirements": [
+                {
+                    "raw": "safety-schemas==0.0.16",
+                    "extras": [],
+                    "marker": null,
+                    "name": "safety-schemas",
+                    "specifier": "==0.0.16",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "scikit-learn": {
+            "name": "scikit-learn",
+            "version": "1.7.2",
+            "requirements": [
+                {
+                    "raw": "scikit-learn==1.7.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "scikit-learn",
+                    "specifier": "==1.7.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "scipy": {
+            "name": "scipy",
+            "version": "1.16.2",
+            "requirements": [
+                {
+                    "raw": "scipy==1.16.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "scipy",
+                    "specifier": "==1.16.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "sentence-transformers": {
+            "name": "sentence-transformers",
+            "version": "5.1.2",
+            "requirements": [
+                {
+                    "raw": "sentence-transformers==5.1.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "sentence-transformers",
+                    "specifier": "==5.1.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "setuptools": {
+            "name": "setuptools",
+            "version": "80.9.0",
+            "requirements": [
+                {
+                    "raw": "setuptools==80.9.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "setuptools",
+                    "specifier": "==80.9.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "shellingham": {
+            "name": "shellingham",
+            "version": "1.5.4",
+            "requirements": [
+                {
+                    "raw": "shellingham==1.5.4",
+                    "extras": [],
+                    "marker": null,
+                    "name": "shellingham",
+                    "specifier": "==1.5.4",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "six": {
+            "name": "six",
+            "version": "1.17.0",
+            "requirements": [
+                {
+                    "raw": "six==1.17.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "six",
+                    "specifier": "==1.17.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "smmap": {
+            "name": "smmap",
+            "version": "5.0.2",
+            "requirements": [
+                {
+                    "raw": "smmap==5.0.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "smmap",
+                    "specifier": "==5.0.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "sniffio": {
+            "name": "sniffio",
+            "version": "1.3.1",
+            "requirements": [
+                {
+                    "raw": "sniffio==1.3.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "sniffio",
+                    "specifier": "==1.3.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "sortedcontainers": {
+            "name": "sortedcontainers",
+            "version": "2.4.0",
+            "requirements": [
+                {
+                    "raw": "sortedcontainers==2.4.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "sortedcontainers",
+                    "specifier": "==2.4.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "starlette": {
+            "name": "starlette",
+            "version": "0.48.0",
+            "requirements": [
+                {
+                    "raw": "starlette==0.48.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "starlette",
+                    "specifier": "==0.48.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "streamlit": {
+            "name": "streamlit",
+            "version": "1.50.0",
+            "requirements": [
+                {
+                    "raw": "streamlit==1.50.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "streamlit",
+                    "specifier": "==1.50.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "sympy": {
+            "name": "sympy",
+            "version": "1.14.0",
+            "requirements": [
+                {
+                    "raw": "sympy==1.14.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "sympy",
+                    "specifier": "==1.14.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "tenacity": {
+            "name": "tenacity",
+            "version": "9.1.2",
+            "requirements": [
+                {
+                    "raw": "tenacity==9.1.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "tenacity",
+                    "specifier": "==9.1.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "threadpoolctl": {
+            "name": "threadpoolctl",
+            "version": "3.6.0",
+            "requirements": [
+                {
+                    "raw": "threadpoolctl==3.6.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "threadpoolctl",
+                    "specifier": "==3.6.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "tokenizers": {
+            "name": "tokenizers",
+            "version": "0.22.1",
+            "requirements": [
+                {
+                    "raw": "tokenizers==0.22.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "tokenizers",
+                    "specifier": "==0.22.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "toml": {
+            "name": "toml",
+            "version": "0.10.2",
+            "requirements": [
+                {
+                    "raw": "toml==0.10.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "toml",
+                    "specifier": "==0.10.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "tomlkit": {
+            "name": "tomlkit",
+            "version": "0.13.3",
+            "requirements": [
+                {
+                    "raw": "tomlkit==0.13.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "tomlkit",
+                    "specifier": "==0.13.3",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "torch": {
+            "name": "torch",
+            "version": "2.9.0",
+            "requirements": [
+                {
+                    "raw": "torch==2.9.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "torch",
+                    "specifier": "==2.9.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "tornado": {
+            "name": "tornado",
+            "version": "6.5.2",
+            "requirements": [
+                {
+                    "raw": "tornado==6.5.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "tornado",
+                    "specifier": "==6.5.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "tqdm": {
+            "name": "tqdm",
+            "version": "4.67.1",
+            "requirements": [
+                {
+                    "raw": "tqdm==4.67.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "tqdm",
+                    "specifier": "==4.67.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "transformers": {
+            "name": "transformers",
+            "version": "4.57.1",
+            "requirements": [
+                {
+                    "raw": "transformers==4.57.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "transformers",
+                    "specifier": "==4.57.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "triton": {
+            "name": "triton",
+            "version": "3.5.0",
+            "requirements": [
+                {
+                    "raw": "triton==3.5.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "triton",
+                    "specifier": "==3.5.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "typer": {
+            "name": "typer",
+            "version": "0.20.0",
+            "requirements": [
+                {
+                    "raw": "typer==0.20.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "typer",
+                    "specifier": "==0.20.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "typing-extensions": {
+            "name": "typing-extensions",
+            "version": "4.15.0",
+            "requirements": [
+                {
+                    "raw": "typing-extensions==4.15.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "typing-extensions",
+                    "specifier": "==4.15.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "typing-inspection": {
+            "name": "typing-inspection",
+            "version": "0.4.2",
+            "requirements": [
+                {
+                    "raw": "typing-inspection==0.4.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "typing-inspection",
+                    "specifier": "==0.4.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "tzdata": {
+            "name": "tzdata",
+            "version": "2025.2",
+            "requirements": [
+                {
+                    "raw": "tzdata==2025.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "tzdata",
+                    "specifier": "==2025.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "urllib3": {
+            "name": "urllib3",
+            "version": "2.3.0",
+            "requirements": [
+                {
+                    "raw": "urllib3==2.3.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "urllib3",
+                    "specifier": "==2.3.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "uvicorn": {
+            "name": "uvicorn",
+            "version": "0.38.0",
+            "requirements": [
+                {
+                    "raw": "uvicorn==0.38.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "uvicorn",
+                    "specifier": "==0.38.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "uvloop": {
+            "name": "uvloop",
+            "version": "0.22.1",
+            "requirements": [
+                {
+                    "raw": "uvloop==0.22.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "uvloop",
+                    "specifier": "==0.22.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "watchdog": {
+            "name": "watchdog",
+            "version": "6.0.0",
+            "requirements": [
+                {
+                    "raw": "watchdog==6.0.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "watchdog",
+                    "specifier": "==6.0.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "watchfiles": {
+            "name": "watchfiles",
+            "version": "1.1.1",
+            "requirements": [
+                {
+                    "raw": "watchfiles==1.1.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "watchfiles",
+                    "specifier": "==1.1.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "websocket-client": {
+            "name": "websocket-client",
+            "version": "1.9.0",
+            "requirements": [
+                {
+                    "raw": "websocket-client==1.9.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "websocket-client",
+                    "specifier": "==1.9.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "websockets": {
+            "name": "websockets",
+            "version": "15.0.1",
+            "requirements": [
+                {
+                    "raw": "websockets==15.0.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "websockets",
+                    "specifier": "==15.0.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "wheel": {
+            "name": "wheel",
+            "version": "0.45.1",
+            "requirements": [
+                {
+                    "raw": "wheel==0.45.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "wheel",
+                    "specifier": "==0.45.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "zipp": {
+            "name": "zipp",
+            "version": "3.23.0",
+            "requirements": [
+                {
+                    "raw": "zipp==3.23.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "zipp",
+                    "specifier": "==3.23.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ]
+        },
+        "autocommand": {
+            "name": "autocommand",
+            "version": "2.2.2",
+            "requirements": [
+                {
+                    "raw": "autocommand==2.2.2",
+                    "extras": [],
+                    "marker": null,
+                    "name": "autocommand",
+                    "specifier": "==2.2.2",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages/setuptools/_vendor"
+                }
+            ]
+        },
+        "backports.tarfile": {
+            "name": "backports.tarfile",
+            "version": "1.2.0",
+            "requirements": [
+                {
+                    "raw": "backports.tarfile==1.2.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "backports.tarfile",
+                    "specifier": "==1.2.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages/setuptools/_vendor"
+                }
+            ]
+        },
+        "inflect": {
+            "name": "inflect",
+            "version": "7.3.1",
+            "requirements": [
+                {
+                    "raw": "inflect==7.3.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "inflect",
+                    "specifier": "==7.3.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages/setuptools/_vendor"
+                }
+            ]
+        },
+        "jaraco.collections": {
+            "name": "jaraco.collections",
+            "version": "5.1.0",
+            "requirements": [
+                {
+                    "raw": "jaraco.collections==5.1.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "jaraco.collections",
+                    "specifier": "==5.1.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages/setuptools/_vendor"
+                }
+            ]
+        },
+        "jaraco.context": {
+            "name": "jaraco.context",
+            "version": "5.3.0",
+            "requirements": [
+                {
+                    "raw": "jaraco.context==5.3.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "jaraco.context",
+                    "specifier": "==5.3.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages/setuptools/_vendor"
+                }
+            ]
+        },
+        "jaraco.functools": {
+            "name": "jaraco.functools",
+            "version": "4.0.1",
+            "requirements": [
+                {
+                    "raw": "jaraco.functools==4.0.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "jaraco.functools",
+                    "specifier": "==4.0.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages/setuptools/_vendor"
+                }
+            ]
+        },
+        "jaraco.text": {
+            "name": "jaraco.text",
+            "version": "3.12.1",
+            "requirements": [
+                {
+                    "raw": "jaraco.text==3.12.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "jaraco.text",
+                    "specifier": "==3.12.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages/setuptools/_vendor"
+                }
+            ]
+        },
+        "more-itertools": {
+            "name": "more-itertools",
+            "version": "10.3.0",
+            "requirements": [
+                {
+                    "raw": "more-itertools==10.3.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "more-itertools",
+                    "specifier": "==10.3.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages/setuptools/_vendor"
+                }
+            ]
+        },
+        "tomli": {
+            "name": "tomli",
+            "version": "2.0.1",
+            "requirements": [
+                {
+                    "raw": "tomli==2.0.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "tomli",
+                    "specifier": "==2.0.1",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages/setuptools/_vendor"
+                }
+            ]
+        },
+        "typeguard": {
+            "name": "typeguard",
+            "version": "4.3.0",
+            "requirements": [
+                {
+                    "raw": "typeguard==4.3.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "typeguard",
+                    "specifier": "==4.3.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages/setuptools/_vendor"
+                }
+            ]
+        }
+    },
+    "affected_packages": {
+        "urllib3": {
+            "name": "urllib3",
+            "version": "2.3.0",
+            "requirements": [
+                {
+                    "raw": "urllib3==2.3.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "urllib3",
+                    "specifier": "==2.3.0",
+                    "url": null,
+                    "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                }
+            ],
+            "found": null,
+            "insecure_versions": [
+                "0.2",
+                "0.3",
+                "0.3.1",
+                "0.4.0",
+                "0.4.1",
+                "1.0",
+                "1.0.1",
+                "1.0.2",
+                "1.1",
+                "1.10",
+                "1.10.1",
+                "1.10.2",
+                "1.10.3",
+                "1.10.4",
+                "1.11",
+                "1.12",
+                "1.13",
+                "1.13.1",
+                "1.14",
+                "1.15",
+                "1.15.1",
+                "1.16",
+                "1.17",
+                "1.18",
+                "1.18.1",
+                "1.19",
+                "1.19.1",
+                "1.2",
+                "1.20",
+                "1.21",
+                "1.2.1",
+                "1.21.1",
+                "1.22",
+                "1.2.2",
+                "1.23",
+                "1.24",
+                "1.24.1",
+                "1.24.2",
+                "1.24.3",
+                "1.25",
+                "1.25.1",
+                "1.25.10",
+                "1.25.11",
+                "1.25.2",
+                "1.25.3",
+                "1.25.4",
+                "1.25.5",
+                "1.25.6",
+                "1.25.7",
+                "1.25.8",
+                "1.25.9",
+                "1.26.0",
+                "1.26.1",
+                "1.26.10",
+                "1.26.11",
+                "1.26.12",
+                "1.26.13",
+                "1.26.14",
+                "1.26.15",
+                "1.26.16",
+                "1.26.17",
+                "1.26.18",
+                "1.26.19",
+                "1.26.2",
+                "1.26.20",
+                "1.26.3",
+                "1.26.4",
+                "1.26.5",
+                "1.26.6",
+                "1.26.7",
+                "1.26.8",
+                "1.26.9",
+                "1.3",
+                "1.4",
+                "1.5",
+                "1.6",
+                "1.7",
+                "1.7.1",
+                "1.8",
+                "1.8.2",
+                "1.8.3",
+                "1.9",
+                "1.9.1",
+                "2.0.0",
+                "2.0.0a1",
+                "2.0.0a2",
+                "2.0.0a3",
+                "2.0.0a4",
+                "2.0.1",
+                "2.0.2",
+                "2.0.3",
+                "2.0.4",
+                "2.0.5",
+                "2.0.6",
+                "2.0.7",
+                "2.1.0",
+                "2.2.0",
+                "2.2.1",
+                "2.2.2",
+                "2.2.3",
+                "2.3.0",
+                "2.4.0"
+            ],
+            "secure_versions": [
+                "2.5.0"
+            ],
+            "latest_version_without_known_vulnerabilities": "2.5.0",
+            "latest_version": "2.5.0",
+            "more_info_url": "https://data.safetycli.com/p/pypi/urllib3/97c/"
+        }
+    },
+    "announcements": [],
+    "vulnerabilities": [
+        {
+            "vulnerability_id": "77745",
+            "package_name": "urllib3",
+            "ignored": {},
+            "ignored_reason": null,
+            "ignored_expires": null,
+            "vulnerable_spec": [
+                ">=2.2.0,<2.5.0"
+            ],
+            "all_vulnerable_specs": [
+                ">=2.2.0,<2.5.0"
+            ],
+            "analyzed_version": "2.3.0",
+            "analyzed_requirement": {
+                "raw": "urllib3==2.3.0",
+                "extras": [],
+                "marker": null,
+                "name": "urllib3",
+                "specifier": "==2.3.0",
+                "url": null,
+                "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+            },
+            "advisory": "Urllib3 is a user-friendly HTTP client library for Python. Starting in version 2.2.0 and before 2.5.0, urllib3 does not control redirects in browsers and Node.js. urllib3 supports being used in a Pyodide runtime, utilizing the JavaScript Fetch API or falling back on XMLHttpRequest. This means Python libraries can be used to make HTTP requests from a browser or Node.js. Additionally, urllib3 provides a mechanism to control redirects, but the retries and redirect parameters are ignored with Pyodide; the runtime itself determines redirect behaviour. This issue has been patched in version 2.5.0.",
+            "is_transitive": false,
+            "published_date": null,
+            "fixed_versions": [],
+            "closest_versions_without_known_vulnerabilities": [],
+            "resources": [],
+            "CVE": "CVE-2025-50182",
+            "severity": null,
+            "affected_versions": [],
+            "more_info_url": "https://data.safetycli.com/v/77745/97c"
+        },
+        {
+            "vulnerability_id": "77744",
+            "package_name": "urllib3",
+            "ignored": {},
+            "ignored_reason": null,
+            "ignored_expires": null,
+            "vulnerable_spec": [
+                "<2.5.0"
+            ],
+            "all_vulnerable_specs": [
+                "<2.5.0"
+            ],
+            "analyzed_version": "2.3.0",
+            "analyzed_requirement": {
+                "raw": "urllib3==2.3.0",
+                "extras": [],
+                "marker": null,
+                "name": "urllib3",
+                "specifier": "==2.3.0",
+                "url": null,
+                "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+            },
+            "advisory": "urllib3 is a user-friendly HTTP client library for Python. Prior to 2.5.0, it is possible to disable redirects for all requests by instantiating a PoolManager and specifying retries in a way that disable redirects. By default, requests and botocore users are not affected. An application attempting to mitigate SSRF or open redirect vulnerabilities by disabling redirects at the PoolManager level will remain vulnerable. This issue has been patched in version 2.5.0.",
+            "is_transitive": false,
+            "published_date": null,
+            "fixed_versions": [],
+            "closest_versions_without_known_vulnerabilities": [],
+            "resources": [],
+            "CVE": "CVE-2025-50181",
+            "severity": null,
+            "affected_versions": [],
+            "more_info_url": "https://data.safetycli.com/v/77744/97c"
+        }
+    ],
+    "ignored_vulnerabilities": [],
+    "remediations": {
+        "urllib3": {
+            "requirements": {
+                "==2.3.0": {
+                    "vulnerabilities_found": 2,
+                    "version": "2.3.0",
+                    "requirement": {
+                        "raw": "urllib3==2.3.0",
+                        "extras": [],
+                        "marker": null,
+                        "name": "urllib3",
+                        "specifier": "==2.3.0",
+                        "url": null,
+                        "found": "/home/wnstn4647/AI-CHAT/.venv/lib/python3.12/site-packages"
+                    },
+                    "more_info_url": "https://data.safetycli.com/p/pypi/urllib3/97c/"
+                }
+            },
+            "current_version": null,
+            "vulnerabilities_found": null,
+            "recommended_version": null,
+            "other_recommended_versions": [],
+            "more_info_url": null
+        }
+    },
+    "remediations_results": {
+        "vulnerabilities_fixed": [],
+        "remediations_applied": {},
+        "remediations_skipped": {}
+    }
+}
+
+
++===========================================================================================================================================================================================+
+
+
+DEPRECATED: this command (`check`) has been DEPRECATED, and will be unsupported beyond 01 June 2024.
+
+
+We highly encourage switching to the new `scan` command which is easier to use, more powerful, and can be set up to mimic the deprecated command if required.
+
+
++===========================================================================================================================================================================================+
+
+

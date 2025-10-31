@@ -1,0 +1,37 @@
+[Unit]
+Description=AI-CHAT RAG FastAPI Backend
+Documentation=https://github.com/namjunsu/TEST-GOOD
+After=network.target
+Requires=network.target
+
+[Service]
+Type=simple
+User=ai-chat
+Group=ai-chat
+WorkingDirectory=/opt/ai-chat
+Environment="PATH=/opt/ai-chat/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONPATH=/opt/ai-chat"
+EnvironmentFile=/opt/ai-chat/.env
+ExecStartPre=/bin/bash -c 'source /opt/ai-chat/.venv/bin/activate && pip list | grep -q fastapi'
+ExecStart=/opt/ai-chat/.venv/bin/python -m uvicorn app.api.main:app --host 0.0.0.0 --port 7860 --workers 2
+ExecStop=/bin/kill -TERM $MAINPID
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/var/log/ai-chat/backend.log
+StandardError=append:/var/log/ai-chat/backend-error.log
+
+# Performance and Security
+LimitNOFILE=65535
+LimitNPROC=4096
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/ai-chat/logs /opt/ai-chat/*.db /var/log/ai-chat
+
+# Health check
+ExecStartPost=/bin/bash -c 'sleep 5 && curl -f http://localhost:7860/_healthz || exit 1'
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,280 @@
+test_cases:
+- id: auto_001
+  query: CHANNELA-MT 관련 문서
+  expect_norm_code: CHANNELAMT
+  expect_contains: CHANNELAMT
+  min_hits_at_3: 1
+  description: CHANNELAMT 기본 검색 (50개 문서)
+- id: auto_002
+  query: CHANNELA-MT 정보
+  expect_norm_code: CHANNELAMT
+  expect_contains: CHANNELAMT
+  min_hits_at_3: 1
+  description: CHANNELAMT 수식어 검색 (정보)
+- id: auto_003
+  query: channela-mt 사양
+  expect_norm_code: CHANNELAMT
+  expect_contains: CHANNELAMT
+  min_hits_at_3: 1
+  description: CHANNELAMT 소문자+수식어 검색 (사양)
+- id: auto_004
+  query: COM/GROUPWARE/APPROVAL/APPROVAL 관련 문서
+  expect_norm_code: COMGROUPWAREAPPROVALAPPROVAL
+  expect_contains: COMGROUPWAREAPPROVALAPPROVAL
+  min_hits_at_3: 1
+  description: COMGROUPWAREAPPROVALAPPROVAL 기본 검색 (47개 문서)
+- id: auto_005
+  query: COM/GROUPWARE/APPROVAL/APPROVAL 정보
+  expect_norm_code: COMGROUPWAREAPPROVALAPPROVAL
+  expect_contains: COMGROUPWAREAPPROVALAPPROVAL
+  min_hits_at_3: 1
+  description: COMGROUPWAREAPPROVALAPPROVAL 수식어 검색 (정보)
+- id: auto_006
+  query: com/groupware/approval/approval 사양
+  expect_norm_code: COMGROUPWAREAPPROVALAPPROVAL
+  expect_contains: COMGROUPWAREAPPROVALAPPROVAL
+  min_hits_at_3: 1
+  description: COMGROUPWAREAPPROVALAPPROVAL 소문자+수식어 검색 (사양)
+- id: auto_007
+  query: CHANNEL400 관련 문서
+  expect_norm_code: CHANNEL400
+  expect_contains: CHANNEL400
+  min_hits_at_3: 1
+  description: CHANNEL400 기본 검색 (27개 문서)
+- id: auto_008
+  query: CHANNEL400 정보
+  expect_norm_code: CHANNEL400
+  expect_contains: CHANNEL400
+  min_hits_at_3: 1
+  description: CHANNEL400 수식어 검색 (정보)
+- id: auto_009
+  query: channel400 사양
+  expect_norm_code: CHANNEL400
+  expect_contains: CHANNEL400
+  min_hits_at_3: 1
+  description: CHANNEL400 소문자+수식어 검색 (사양)
+- id: auto_010
+  query: INTERRUPTIBLEFOLDBACK 관련 문서
+  expect_norm_code: INTERRUPTIBLEFOLDBACK
+  expect_contains: INTERRUPTIBLEFOLDBACK
+  min_hits_at_3: 1
+  description: INTERRUPTIBLEFOLDBACK 기본 검색 (25개 문서)
+- id: auto_011
+  query: INTERRUPTIBLEFOLDBACK 정보
+  expect_norm_code: INTERRUPTIBLEFOLDBACK
+  expect_contains: INTERRUPTIBLEFOLDBACK
+  min_hits_at_3: 1
+  description: INTERRUPTIBLEFOLDBACK 수식어 검색 (정보)
+- id: auto_012
+  query: interruptiblefoldback 사양
+  expect_norm_code: INTERRUPTIBLEFOLDBACK
+  expect_contains: INTERRUPTIBLEFOLDBACK
+  min_hits_at_3: 1
+  description: INTERRUPTIBLEFOLDBACK 소문자+수식어 검색 (사양)
+- id: auto_013
+  query: CHANNELXX 관련 문서
+  expect_norm_code: CHANNELXX
+  expect_contains: CHANNELXX
+  min_hits_at_3: 1
+  description: CHANNELXX 기본 검색 (17개 문서)
+- id: auto_014
+  query: CHANNELXX 정보
+  expect_norm_code: CHANNELXX
+  expect_contains: CHANNELXX
+  min_hits_at_3: 1
+  description: CHANNELXX 수식어 검색 (정보)
+- id: auto_015
+  query: channelxx 사양
+  expect_norm_code: CHANNELXX
+  expect_contains: CHANNELXX
+  min_hits_at_3: 1
+  description: CHANNELXX 소문자+수식어 검색 (사양)
+- id: auto_016
+  query: AZWAE 관련 문서
+  expect_norm_code: AZWAE
+  expect_contains: AZWAE
+  min_hits_at_3: 1
+  description: AZWAE 기본 검색 (15개 문서)
+- id: auto_017
+  query: AZWAE 정보
+  expect_norm_code: AZWAE
+  expect_contains: AZWAE
+  min_hits_at_3: 1
+  description: AZWAE 수식어 검색 (정보)
+- id: auto_018
+  query: azwae 사양
+  expect_norm_code: AZWAE
+  expect_contains: AZWAE
+  min_hits_at_3: 1
+  description: AZWAE 소문자+수식어 검색 (사양)
+- id: auto_019
+  query: AEWE 관련 문서
+  expect_norm_code: AEWE
+  expect_contains: AEWE
+  min_hits_at_3: 1
+  description: AEWE 기본 검색 (13개 문서)
+- id: auto_020
+  query: AEWE 정보
+  expect_norm_code: AEWE
+  expect_contains: AEWE
+  min_hits_at_3: 1
+  description: AEWE 수식어 검색 (정보)
+- id: auto_021
+  query: aewe 사양
+  expect_norm_code: AEWE
+  expect_contains: AEWE
+  min_hits_at_3: 1
+  description: AEWE 소문자+수식어 검색 (사양)
+- id: auto_022
+  query: CHANNELRY 관련 문서
+  expect_norm_code: CHANNELRY
+  expect_contains: CHANNELRY
+  min_hits_at_3: 1
+  description: CHANNELRY 기본 검색 (11개 문서)
+- id: auto_023
+  query: CHANNELRY 정보
+  expect_norm_code: CHANNELRY
+  expect_contains: CHANNELRY
+  min_hits_at_3: 1
+  description: CHANNELRY 수식어 검색 (정보)
+- id: auto_024
+  query: channelry 사양
+  expect_norm_code: CHANNELRY
+  expect_contains: CHANNELRY
+  min_hits_at_3: 1
+  description: CHANNELRY 소문자+수식어 검색 (사양)
+- id: auto_025
+  query: CHANNELYANI 관련 문서
+  expect_norm_code: CHANNELYANI
+  expect_contains: CHANNELYANI
+  min_hits_at_3: 1
+  description: CHANNELYANI 기본 검색 (11개 문서)
+- id: auto_026
+  query: CHANNELYANI 정보
+  expect_norm_code: CHANNELYANI
+  expect_contains: CHANNELYANI
+  min_hits_at_3: 1
+  description: CHANNELYANI 수식어 검색 (정보)
+- id: auto_027
+  query: channelyani 사양
+  expect_norm_code: CHANNELYANI
+  expect_contains: CHANNELYANI
+  min_hits_at_3: 1
+  description: CHANNELYANI 소문자+수식어 검색 (사양)
+- id: auto_028
+  query: CHANNELRN 관련 문서
+  expect_norm_code: CHANNELRN
+  expect_contains: CHANNELRN
+  min_hits_at_3: 1
+  description: CHANNELRN 기본 검색 (10개 문서)
+- id: auto_029
+  query: CHANNELRN 정보
+  expect_norm_code: CHANNELRN
+  expect_contains: CHANNELRN
+  min_hits_at_3: 1
+  description: CHANNELRN 수식어 검색 (정보)
+- id: auto_030
+  query: channelrn 사양
+  expect_norm_code: CHANNELRN
+  expect_contains: CHANNELRN
+  min_hits_at_3: 1
+  description: CHANNELRN 소문자+수식어 검색 (사양)
+- id: auto_031
+  query: BLRE 관련 문서
+  expect_norm_code: BLRE
+  expect_contains: BLRE
+  min_hits_at_3: 1
+  description: BLRE 기본 검색 (9개 문서)
+- id: auto_032
+  query: BLRE 정보
+  expect_norm_code: BLRE
+  expect_contains: BLRE
+  min_hits_at_3: 1
+  description: BLRE 수식어 검색 (정보)
+- id: auto_033
+  query: blre 사양
+  expect_norm_code: BLRE
+  expect_contains: BLRE
+  min_hits_at_3: 1
+  description: BLRE 소문자+수식어 검색 (사양)
+- id: auto_034
+  query: CHANNEL7 관련 문서
+  expect_norm_code: CHANNEL7
+  expect_contains: CHANNEL7
+  min_hits_at_3: 1
+  description: CHANNEL7 기본 검색 (9개 문서)
+- id: auto_035
+  query: CHANNEL7 정보
+  expect_norm_code: CHANNEL7
+  expect_contains: CHANNEL7
+  min_hits_at_3: 1
+  description: CHANNEL7 수식어 검색 (정보)
+- id: auto_036
+  query: channel7 사양
+  expect_norm_code: CHANNEL7
+  expect_contains: CHANNEL7
+  min_hits_at_3: 1
+  description: CHANNEL7 소문자+수식어 검색 (사양)
+- id: auto_037
+  query: EX-3 관련 문서
+  expect_norm_code: EX3
+  expect_contains: EX3
+  min_hits_at_3: 1
+  description: EX3 기본 검색 (9개 문서)
+- id: auto_038
+  query: EX-3 정보
+  expect_norm_code: EX3
+  expect_contains: EX3
+  min_hits_at_3: 1
+  description: EX3 수식어 검색 (정보)
+- id: auto_039
+  query: ex-3 사양
+  expect_norm_code: EX3
+  expect_contains: EX3
+  min_hits_at_3: 1
+  description: EX3 소문자+수식어 검색 (사양)
+- id: auto_040
+  query: LEE1 관련 문서
+  expect_norm_code: LEE1
+  expect_contains: LEE1
+  min_hits_at_3: 1
+  description: LEE1 기본 검색 (9개 문서)
+- id: auto_041
+  query: LEE1 정보
+  expect_norm_code: LEE1
+  expect_contains: LEE1
+  min_hits_at_3: 1
+  description: LEE1 수식어 검색 (정보)
+- id: auto_042
+  query: lee1 사양
+  expect_norm_code: LEE1
+  expect_contains: LEE1
+  min_hits_at_3: 1
+  description: LEE1 소문자+수식어 검색 (사양)
+- id: auto_043
+  query: ATEYAA 관련 문서
+  expect_norm_code: ATEYAA
+  expect_contains: ATEYAA
+  min_hits_at_3: 1
+  description: ATEYAA 기본 검색 (8개 문서)
+- id: auto_044
+  query: ATEYAA 정보
+  expect_norm_code: ATEYAA
+  expect_contains: ATEYAA
+  min_hits_at_3: 1
+  description: ATEYAA 수식어 검색 (정보)
+- id: auto_045
+  query: ateyaa 사양
+  expect_norm_code: ATEYAA
+  expect_contains: ATEYAA
+  min_hits_at_3: 1
+  description: ATEYAA 소문자+수식어 검색 (사양)
+performance_criteria:
+  hit_at_3_min: 0.9
+  mrr_at_10_min: 0.8
+  citation_rate_min: 1.0
+  p95_latency_max_ms: 5000
+validation_options:
+  top_k: 10
+  check_citations: true
+  measure_latency: true

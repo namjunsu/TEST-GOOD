@@ -1,0 +1,8 @@
+{
+  "model": "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+  "dimension": 768,
+  "normalization": "L2",
+  "metric": "cosine_similarity",
+  "error_count": 0,
+  "note": "Embedding not performed in dryrun mode"
+}

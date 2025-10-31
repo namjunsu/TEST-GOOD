@@ -1,0 +1,9 @@
+{
+  "total_modules": 40,
+  "total_dependencies": 37,
+  "entry_points": 5,
+  "total_functions": 326,
+  "total_classes": 47,
+  "total_lines": 11695,
+  "isolated_modules": 11
+}

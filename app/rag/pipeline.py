@@ -24,6 +24,128 @@ from app.rag.query_router import QueryRouter, QueryMode
 logger = get_logger(__name__)
 
 
+# ============================================================================
+# 라우팅 헬퍼 함수들 (스몰토크/산술/도메인 키워드 감지)
+# ============================================================================
+
+import re
+
+# 스몰토크 패턴
+SMALLTALK_PATTERNS = {
+    '안녕', '안녕하세요', '안녕하십니까', 'hello', 'hi', 'hey',
+    '땡큐', '감사', '고마워', 'thanks', 'thank you',
+    '잘가', '안녕히', 'bye', 'goodbye',
+    '어떻게', '어떠', '어때', '뭐해', '무엇',
+}
+
+# 도메인 키워드 (장비/프로젝트/기술 용어)
+DOMAIN_KEYWORDS = {
+    # 장비
+    'nvr', 'sync', 'eco8000', 'lvm-180a', 'odin', 'vmix', 'faiss',
+    'tri-level', 'sdi', 'lut', 'intercom', 'di box', 'dibox',
+    '무선마이크', '마이크', '카메라', '렌즈', '삼각대', '케이블',
+    '건전지', '배터리', '소모품', '장비', '중계차',
+    # 프로젝트/프로그램
+    '돌직구쇼', '뉴스', '스튜디오', '광화문', '오픈스튜디오',
+    '중계', '방송', '채널에이',
+    # 기술/문서
+    '기안서', '구매', '수리', '교체', '검토', '기술검토',
+    '오버홀', '도입', '노후화', '단종',
+    '작성', '작성된', '문서', '리스트', '목록',
+    # 작성자 (실제 기안자 이름)
+    '최새름', '유인혁', '남준수', '박준서', '이원구',
+    '최정은', '한건희', '김경현', '김수연', '김창수', '송경원',
+}
+
+
+def is_smalltalk(query: str) -> bool:
+    """스몰토크/인사/감탄사 감지"""
+    q_lower = query.lower().strip()
+    # 길이 체크
+    if len(q_lower) <= 3:
+        return True
+    # 패턴 매칭
+    for pattern in SMALLTALK_PATTERNS:
+        if pattern in q_lower:
+            return True
+    return False
+
+
+def is_simple_math(query: str) -> bool:
+    """단순 산술 질의 감지 (예: 1+1은?, 2*3=?)"""
+    q_stripped = query.strip()
+    # 정규식: 숫자 연산자 숫자 (옵션: = 결과)
+    math_pattern = r'^\s*\d+\s*[\+\-\*/]\s*\d+\s*(=\s*\d+)?\s*[은?]*\s*$'
+    return bool(re.match(math_pattern, q_stripped))
+
+
+def has_domain_keyword(query: str) -> bool:
+    """도메인 키워드 포함 여부 확인"""
+    q_lower = query.lower()
+    for keyword in DOMAIN_KEYWORDS:
+        if keyword in q_lower:
+            return True
+    return False
+
+
+def get_query_token_count(query: str) -> int:
+    """간이 토큰 카운트 (공백/한글 기준)"""
+    # 한글: 음절 단위, 영문: 단어 단위
+    korean_chars = len([c for c in query if '\uac00' <= c <= '\ud7a3'])
+    english_words = len(query.split())
+    return max(korean_chars, english_words)
+
+
+def get_keyword_coverage(query: str, results: list) -> int:
+    """쿼리와 검색 결과 간 도메인 키워드 교집합 개수 계산
+
+    Args:
+        query: 사용자 질문
+        results: 검색 결과 리스트
+
+    Returns:
+        교집합된 키워드 개수
+    """
+    q_lower = query.lower()
+    # 쿼리에서 매칭된 키워드
+    query_keywords = {kw for kw in DOMAIN_KEYWORDS if kw in q_lower}
+
+    if not query_keywords:
+        return 0
+
+    # 검색 결과 청크에서 발견된 키워드
+    found_keywords = set()
+    for result in results[:5]:  # 상위 5개만 체크
+        chunk_text = result.get('snippet', '') + ' ' + result.get('content', '')
+        chunk_lower = chunk_text.lower()
+        for kw in query_keywords:
+            if kw in chunk_lower:
+                found_keywords.add(kw)
+
+    return len(found_keywords)
+
+
+def force_chat_mode(query: str) -> tuple[bool, str]:
+    """강제 CHAT 모드 적용 여부 판단
+
+    Returns:
+        (should_force, reason)
+    """
+    # 1. 스몰토크
+    if is_smalltalk(query):
+        return True, "smalltalk"
+
+    # 2. 짧은 질의 (토큰 <4)
+    if get_query_token_count(query) < 4:
+        return True, "short_query"
+
+    # 3. 단순 산술
+    if is_simple_math(query):
+        return True, "simple_math"
+
+    return False, ""
+
+
 def _encode_file_ref(filename: str) -> Optional[str]:
     """파일명을 base64 ref로 인코딩 (docs 하위 경로 찾기)
 
@@ -182,13 +304,14 @@ class Compressor(Protocol):
 class Generator(Protocol):
     """LLM 생성기 인터페이스"""
 
-    def generate(self, query: str, context: str, temperature: float) -> str:
+    def generate(self, query: str, context: str, temperature: float, mode: str = "rag") -> str:
         """답변 생성
 
         Args:
             query: 사용자 질문
             context: 참고 문서
             temperature: 생성 온도
+            mode: 생성 모드 ("chat", "rag", "summarize") - 토큰 예산 제어
 
         Returns:
             생성된 답변
@@ -233,7 +356,10 @@ class RAGPipeline:
         self.generator = generator or self._create_default_generator()
         self.query_router = QueryRouter()  # 🎯 모드 라우터 초기화
 
-        logger.info("RAG Pipeline initialized")
+        # 🔒 Closed-World Validation: 고유 기안자 캐싱
+        self.known_drafters = self._load_known_drafters()
+
+        logger.info(f"RAG Pipeline initialized (known_drafters: {len(self.known_drafters)}명)")
 
     def query(
         self,
@@ -285,6 +411,11 @@ class RAGPipeline:
                 if DIAG_RAG:
                     diagnostics["mode"] = "no_results"
                     diagnostics["generate_path"] = "fallback_no_context"
+
+                # 검색 결과 없음 → CHAT 모드로 폴백
+                metrics["mode"] = "chat"
+                metrics["top_score"] = 0.0
+
                 return RAGResponse(
                     answer="관련 문서가 검색되지 않았다.",
                     success=True,
@@ -307,7 +438,7 @@ class RAGPipeline:
                         f"[DIAG] 압축 완료: {len(results)} → {len(compressed)}개 문서"
                     )
 
-            # 3. 생성: 컨텍스트는 스니펫 집합으로 구성
+            # 3. 생성: 모드 결정 → 컨텍스트 최적화 → 생성
             gen_start = time.perf_counter()
 
             # CRITICAL: Inject compressed chunks into generator for proper LLM context
@@ -316,15 +447,6 @@ class RAGPipeline:
                 logger.debug(
                     f"Injected {len(compressed)} compressed chunks into generator"
                 )
-
-            # 🔥 HOTFIX: Use Context Hydrator instead of simple snippet join
-            from app.rag.utils.context_hydrator import hydrate_context
-            context, hydrator_metrics = hydrate_context(compressed, max_len=10000)
-            logger.info(
-                f"LLM_CTX len={len(context)}; "
-                f"parts=[chunks:{hydrator_metrics['chunks_used']}, "
-                f"pdf_tail:{hydrator_metrics['pdf_tail_pages']}]"
-            )
 
             # [DIAG] 생성 전 컨텍스트 스냅샷
             if DIAG_RAG and DIAG_LOG_LEVEL == "DEBUG":
@@ -336,8 +458,86 @@ class RAGPipeline:
                         f"snippet={c.get('snippet', '')[:120]}..."
                     )
 
-            answer = self.generator.generate(query, context, temperature)
-            metrics["generate_time"] = time.perf_counter() - gen_start
+            # 🎯 STEP 1: 모드 결정 (컨텍스트 최적화보다 먼저)
+            # CRITICAL: Determine mode BEFORE context hydration to apply mode-aware context limits
+            mode_env = os.getenv('MODE', 'AUTO').upper()
+            top_score = results[0].get('score', 0.0) if results else 0.0
+            metrics["top_score"] = top_score
+
+            if mode_env == 'AUTO':
+                # ━━━ 1. 강제 CHAT 모드 체크 (스몰토크/산술/짧은 질의) ━━━
+                should_force, force_reason = force_chat_mode(query)
+                if should_force:
+                    metrics["mode"] = "chat"
+                    metrics["force_chat_reason"] = force_reason
+                    logger.info(f"🎯 AUTO 모드: CHAT 강제 적용 (이유: {force_reason})")
+                else:
+                    # ━━━ 2. 도메인 키워드 + 절대값 임계값 기반 판단 ━━━
+                    has_keyword = has_domain_keyword(query)
+                    token_count = get_query_token_count(query)
+
+                    # 환경변수에서 절대값 임계값 읽기
+                    use_absolute = os.getenv('RAG_MIN_SCORE_POLICY', 'normalized') == 'absolute'
+                    bm25_min = float(os.getenv('BM25_MIN_ABS', '5.0'))
+                    vec_min = float(os.getenv('VEC_MIN_ABS', '0.25'))
+
+                    # 절대값 정책 사용 시 (권장)
+                    if use_absolute:
+                        # 실제 BM25/벡터 스코어를 results에서 추출 시도
+                        # (현재는 fused score만 있으므로 간소화)
+                        # 일단 top_score를 벡터 스코어로 간주
+                        pass_abs_threshold = top_score >= vec_min
+                        pass_domain = has_keyword
+                        pass_length = token_count >= 4
+
+                        # 🔒 Coverage Gate: 검색 결과에서 실제로 키워드가 발견되는지 확인
+                        keyword_coverage = get_keyword_coverage(query, results)
+                        min_coverage = int(os.getenv('MIN_KEYWORD_COVERAGE', '2'))
+                        pass_coverage = keyword_coverage >= min_coverage
+
+                        should_use_rag = pass_abs_threshold and pass_domain and pass_length and pass_coverage
+                        metrics["mode"] = "rag" if should_use_rag else "chat"
+                        metrics["keyword_coverage"] = keyword_coverage
+
+                        logger.info(
+                            f"🎯 AUTO 모드 (절대값): top_score={top_score:.3f}, "
+                            f"has_keyword={has_keyword}, token_count={token_count}, "
+                            f"coverage={keyword_coverage}/{min_coverage}, "
+                            f"threshold={vec_min}, selected_mode={metrics['mode']}"
+                        )
+                    else:
+                        # 기존 정규화 정책 (fallback)
+                        rag_min_score = float(os.getenv('RAG_MIN_SCORE', '0.35'))
+                        metrics["mode"] = "rag" if top_score >= rag_min_score else "chat"
+                        logger.info(
+                            f"🎯 AUTO 모드 (정규화): top_score={top_score:.3f}, "
+                            f"threshold={rag_min_score}, selected_mode={metrics['mode']}"
+                        )
+
+            elif mode_env == 'CHAT':
+                metrics["mode"] = "chat"
+                metrics["top_score"] = 0.0
+            else:  # RAG, SUMMARIZE
+                metrics["mode"] = "rag"
+                metrics["top_score"] = results[0].get('score', 0.0) if results else 0.0
+
+            # 🎯 STEP 2: 모드 기반 컨텍스트 최적화
+            determined_mode = metrics.get("mode", "rag")
+            logger.info(f"🎯 모드={determined_mode} → 컨텍스트 최적화 시작")
+
+            # Context Hydrator with mode-aware optimization
+            from app.rag.utils.context_hydrator import hydrate_context
+            hydrate_start = time.perf_counter()
+            context, hydrator_metrics = hydrate_context(compressed, max_len=10000, mode=determined_mode)
+            metrics["hydrate_time"] = time.perf_counter() - hydrate_start
+            # Merge hydrator metrics into main metrics
+            metrics.update({f"ctx_{k}": v for k, v in hydrator_metrics.items()})
+
+            # 🎯 STEP 3: 생성 (모드별 토큰 예산 적용)
+            logger.info(f"🎯 모드={determined_mode} → 생성 시작")
+            llm_gen_start = time.perf_counter()
+            answer = self.generator.generate(query, context, temperature, mode=determined_mode)
+            metrics["generate_time"] = time.perf_counter() - llm_gen_start
 
             # [DIAG] 생성 완료 진단
             if DIAG_RAG:
@@ -358,6 +558,7 @@ class RAGPipeline:
                     f"⚠️  SLOW_QUERY (>10s): {total_latency:.2f}s | "
                     f"query='{query[:50]}...' | "
                     f"search={metrics['search_time']:.2f}s, "
+                    f"hydrate={metrics.get('hydrate_time', 0):.3f}s, "
                     f"generate={metrics['generate_time']:.2f}s"
                 )
             elif total_latency > 3.0:
@@ -370,13 +571,18 @@ class RAGPipeline:
                 f"RAG query completed in {total_latency:.2f}s "
                 f"(search={metrics['search_time']:.2f}s, "
                 f"compress={metrics['compress_time']:.2f}s, "
+                f"hydrate={metrics.get('hydrate_time', 0):.3f}s, "
                 f"generate={metrics['generate_time']:.2f}s)"
             )
 
+            # CHAT 모드일 경우 출처 제거 (일반 대화는 문서 인용 불필요)
+            final_source_docs = [] if determined_mode == "chat" else [c.get("doc_id") for c in results[:3]]
+            final_evidence_chunks = [] if determined_mode == "chat" else compressed
+
             return RAGResponse(
                 answer=answer,
-                source_docs=[c.get("doc_id") for c in results[:3]],
-                evidence_chunks=compressed,  # UI용 근거
+                source_docs=final_source_docs,
+                evidence_chunks=final_evidence_chunks,  # UI용 근거
                 raw_results=results,  # Evidence 최소 보장용
                 latency=total_latency,
                 success=True,
@@ -693,39 +899,24 @@ class RAGPipeline:
                         logger.error(f"❌ metadata 조회 실패: {e}")
                         # 오류 시 일반 검색으로 폴백
 
-            # 기안자 검색 패턴 감지 (실제 질문에서만)
-            author_patterns = [
-                r"([가-힣]{2,4})\s*(문서|기안서|검토서)",
-                r"([가-힣]{2,4})가?\s*(작성한|작성안|기안한|쓴|만든)",
-                r"(기안자|작성자|제안자)[:\s]+([가-힣]{2,4})",
-            ]
-            # 날짜 검색 패턴 감지
-            year_pattern = r"(\d{4})\s*년"
-
-            is_author_query = any(re.search(p, actual_query) for p in author_patterns)
-            is_year_query = re.search(year_pattern, actual_query)
-
-            if is_author_query or is_year_query:
-                logger.info(
-                    f"🎯 특수 검색 모드 감지: author={is_author_query}, year={is_year_query}"
-                )
-                # QuickFixRAG.answer()로 직접 처리 (실제 질문 전달)
-                answer_text = self.generator.rag.answer(
-                    actual_query, use_llm_summary=False
-                )
-
-                # 표준 응답 형식으로 변환
-                return {
-                    "text": answer_text,
-                    "citations": [],  # QuickFixRAG 응답에서 추출 어려움
-                    "evidence": [],
-                    "status": {
-                        "retrieved_count": 0,
-                        "selected_count": 0,
-                        "found": "관련 문서" not in answer_text
-                        and "없습니다" not in answer_text,
-                    },
-                }
+            # LEGACY CODE - DISABLED (구현 미완성, self.generator.rag 미존재)
+            # 기안자/날짜 검색 패턴은 너무 광범위하여 오탐 발생
+            # 예: "미러클랩 카메라 검토서"가 author 패턴에 매칭되어 오류 발생
+            # TODO: 정확한 기안자 검색이 필요하면 metadata 기반 필터링 활용
+            pass
+            # author_patterns = [
+            #     r"([가-힣]{2,4})\s*(문서|기안서|검토서)",
+            #     r"([가-힣]{2,4})가?\s*(작성한|작성안|기안한|쓴|만든)",
+            #     r"(기안자|작성자|제안자)[:\s]+([가-힣]{2,4})",
+            # ]
+            # year_pattern = r"(\d{4})\s*년"
+            # is_author_query = any(re.search(p, actual_query) for p in author_patterns)
+            # is_year_query = re.search(year_pattern, actual_query)
+            # if is_author_query or is_year_query:
+            #     logger.info(f"🎯 특수 검색 모드 감지: author={is_author_query}, year={is_year_query}")
+            #     # QuickFixRAG.answer()로 직접 처리 (self.generator.rag 미존재로 오류)
+            #     answer_text = self.generator.rag.answer(actual_query, use_llm_summary=False)
+            #     return {...}
 
         # 일반 쿼리는 기존 로직 사용
         response = self.query(query, top_k=top_k or 5)
@@ -839,35 +1030,50 @@ class RAGPipeline:
         return result["text"]
 
     def _answer_list(self, query: str) -> dict:
-        """목록 검색 (2줄 카드 형식)
+        """목록 검색 (2줄 카드 형식) - Closed-World Validation 적용
 
         Args:
-            query: 사용자 질의 (예: "2024년 남준수 문서 찾아줘")
+            query: 사용자 질의 (예: "2024년 남준수 문서 찾아줘", "year:2024 drafter:최새름")
 
         Returns:
             dict: 표준 응답 구조 (2줄 카드 목록)
         """
-        import re
         from modules.metadata_db import MetadataDB
+        from app.rag.query_parser import QueryParser
 
         try:
-            # 연도 추출 (예: "2024년" → "2024")
-            year_match = re.search(r"(\d{4})년?", query)
-            year = year_match.group(1) if year_match else None
+            # 🔒 Closed-World Validation: 쿼리 파싱
+            parser = QueryParser(self.known_drafters)
+            filters = parser.parse_filters(query)
 
-            # 기안자 추출 (예: "남준수")
-            drafter_match = re.search(r"([가-힣]{2,4})(가|이)?", query)
-            drafter = drafter_match.group(1) if drafter_match else None
+            year = filters['year']
+            drafter = filters['drafter']
+            source = filters['source']
 
-            logger.info(f"📋 목록 검색: year={year}, drafter={drafter}")
+            # '전부', '전체' 등 명시 시 limit 확장
+            if any(keyword in query for keyword in ['전부', '전체', '모든', '모두']):
+                limit = 200  # 전체 표시 (최대 200개)
+                display_limit = 200  # Evidence도 200개까지
+            else:
+                limit = 20  # 기본 페이지 크기
+                display_limit = 20
+
+            logger.info(f"📋 목록 검색: year={year}, drafter={drafter}, source={source}, limit={limit}, display={display_limit}")
 
             # DB 검색
             db = MetadataDB()
-            docs = db.search_documents(drafter=drafter, year=year, limit=20)
+            docs = db.search_documents(drafter=drafter, year=year, limit=limit)
+
+            # 전체 카운트 조회
+            total_count = db.count_documents(drafter=drafter, year=year)
 
             if not docs:
                 return {
+                    "mode": "LIST",
                     "text": f"검색 결과가 없습니다. (year={year}, drafter={drafter})",
+                    "files": [],
+                    "count": 0,
+                    "total_count": 0,
                     "citations": [],
                     "evidence": [],
                     "status": {
@@ -898,11 +1104,11 @@ class RAGPipeline:
                 card = f"**{title}**\n🏷 {doctype} · 📅 {date} · ✍ {drafter_name}"
                 cards.append(card)
 
-            answer_text = "\n\n".join(cards[:10])  # 최대 10개
+            answer_text = "\n\n".join(cards[:display_limit])  # display_limit 적용
 
             # Evidence 구성 (파일명 기반 요약 + 실제 파일 경로)
             evidence = []
-            for doc in docs[:10]:
+            for doc in docs[:display_limit]:
                 filename = doc.get("filename", "")
 
                 # 파일명에서 핵심 내용 추출 (답변 텍스트와 동일한 방식)
@@ -937,16 +1143,28 @@ class RAGPipeline:
                     }
                 })
 
+            # 파일 목록 추출
+            file_list = [doc.get("filename") for doc in docs if doc.get("filename")]
+
             # 품질 방어선 로그 (재현 용이성)
             logger.info({
                 "mode": "LIST",
-                "files": [doc.get("filename") for doc in docs[:3]],
+                "files": file_list[:3],
                 "count": len(docs),
+                "total_count": total_count,
                 "llm": os.getenv("LLM_ENABLED", "false").lower() == "true"
             })
 
+            # total_count 정보 추가
+            if total_count > len(docs):
+                answer_text = f"📊 **전체 {total_count}건 중 {len(docs)}건 표시**\n\n" + answer_text
+
             return {
+                "mode": "LIST",
                 "text": answer_text,
+                "files": file_list,
+                "count": len(docs),
+                "total_count": total_count,
                 "citations": evidence,
                 "evidence": evidence,
                 "status": {
@@ -1204,6 +1422,71 @@ class RAGPipeline:
                 }
             }
 
+    def _safe_fname(self, meta: dict = None, doc_path: str = None) -> str:
+        """파일명 안전 추출 (다양한 소스에서 시도)
+
+        Args:
+            meta: 메타데이터 딕셔너리
+            doc_path: 문서 경로
+
+        Returns:
+            안전하게 추출된 파일명 (기본값: '미상 문서')
+        """
+        import os
+
+        meta = meta or {}
+
+        # 다양한 필드에서 파일명 시도
+        fname = (
+            meta.get("fname")
+            or meta.get("filename")
+            or meta.get("doc_id")
+            or (os.path.basename(doc_path) if doc_path else None)
+            or "미상 문서"
+        )
+
+        return fname
+
+    def _make_chunks_for_doc(self, filename: str) -> list:
+        """특정 문서의 청크만 로드 (문서 고정 모드용)
+
+        Args:
+            filename: 문서 파일명
+
+        Returns:
+            해당 문서의 청크 리스트
+        """
+        try:
+            # HybridRetriever를 사용하여 해당 문서의 청크 검색
+            # 파일명을 쿼리로 사용하여 검색
+            search_query = filename.replace('.pdf', '').replace('_', ' ')
+            results = self.retriever.search(search_query, top_k=20)
+
+            # 검색 결과를 해당 문서로 필터링
+            chunks = []
+            for result in results:
+                # doc_id 또는 meta.filename이 일치하는 경우만 포함
+                doc_id = result.get('doc_id', '')
+                meta_filename = result.get('meta', {}).get('filename', '')
+
+                if filename in doc_id or filename in meta_filename:
+                    chunks.append({
+                        'doc_id': result.get('doc_id', filename),
+                        'page': result.get('page', 1),
+                        'text': result.get('snippet', result.get('text', '')),
+                        'score': result.get('score', 0.0),
+                        'filename': filename
+                    })
+
+            if not chunks:
+                logger.warning(f"⚠️ 문서 청크 없음: {filename}")
+
+            return chunks
+
+        except Exception as e:
+            logger.error(f"❌ 문서 청크 로드 실패: {e}")
+            return []
+
     def _extract_with_ocr(self, pdf_path: str, start_page: int, total_pages: int) -> str:
         """OCR을 사용하여 PDF에서 텍스트 추출 (pytesseract 우선, paddleocr 폴백)
 
@@ -1268,57 +1551,102 @@ class RAGPipeline:
             logger.error(f"❌ OCR 추출 실패: {e}")
             return ""
 
-    def _gather_summary_context(self, filename: str, pdf_path: str) -> str:
-        """요약용 컨텍스트 수집 (PDF 끝 + RAG 청크 + 스냅샷)
+    def _gather_summary_context(self, filename: str, pdf_path: str, doc_locked: bool = False) -> str:
+        """요약용 컨텍스트 수집 (인덱스 청크 기반, PDF tail 비활성)
 
         Args:
             filename: 파일명
             pdf_path: PDF 파일 경로
+            doc_locked: True면 해당 문서 청크만 사용 (다른 문서 검색 금지)
 
         Returns:
-            수집된 컨텍스트 텍스트 (최대 10,000자)
+            수집된 컨텍스트 텍스트 (최대 ~3600자, 약 1.8k 토큰)
         """
         import pdfplumber
+        import re
         parts = []
 
-        # 1) PDF 끝 2~3페이지 추출 (결론이 보통 여기 있음)
+        # 1) PDF 끝 2~3페이지 추출 → 비활성화 (인덱스 청크 우선 전략)
+        # 사유: 개요/배경/검토사유/대안/견적 등 핵심 정보가 끝부분이 아닌 중간에 위치하는 경우 다수
+        # 인덱스된 청크로 전체 문서를 커버하도록 변경
+        logger.info("📋 요약 컨텍스트: PDF tail 추출 비활성 (인덱스 청크 기반 전략)")
+        # try:
+        #     with pdfplumber.open(pdf_path) as pdf:
+        #         total_pages = len(pdf.pages)
+        #         start_page = max(0, total_pages - 3)  # 끝 3페이지
+        #         tail = ""
+        #         for page in pdf.pages[start_page:]:
+        #             tail += (page.extract_text() or "")
+        #
+        #         # OCR 폴백 (텍스트가 너무 짧을 경우)
+        #         if len(tail.strip()) < 50:
+        #             logger.warning(f"⚠️ PDF 텍스트 부족 ({len(tail)}자), OCR 시도...")
+        #             tail = self._extract_with_ocr(pdf_path, start_page, total_pages)
+        #
+        #         if tail.strip():
+        #             parts.append("=== [문서 결론/말미] ===\n" + tail)
+        #             logger.info(f"✓ PDF 끝 {total_pages - start_page}페이지 추출: {len(tail)}자")
+        # except Exception as e:
+        #     logger.warning(f"⚠️ PDF 끝부분 추출 실패: {e}")
+
+        # 2) 인덱스 청크 기반 컨텍스트 수집 (섹션 가중치 적용)
+        # 우선순위 키워드: 개요, 배경, 검토사유, 대안, 견적, 결론, 비용, 도입사유
+        priority_keywords = r'(개요|배경|검토사유|검토\s*사유|대안|견적|결론|비용|도입사유|도입\s*사유|구매목적|구매\s*목적|선정|권고|총액|합계)'
+
         try:
-            with pdfplumber.open(pdf_path) as pdf:
-                total_pages = len(pdf.pages)
-                start_page = max(0, total_pages - 3)  # 끝 3페이지
-                tail = ""
-                for page in pdf.pages[start_page:]:
-                    tail += (page.extract_text() or "")
+            if doc_locked:
+                # 문서 고정 모드: 해당 문서의 청크만 로드
+                logger.info(f"🔒 문서 고정 모드: {filename}의 청크만 사용")
+                chunks = self._make_chunks_for_doc(filename)
 
-                # OCR 폴백 (텍스트가 너무 짧을 경우)
-                if len(tail.strip()) < 50:
-                    logger.warning(f"⚠️ PDF 텍스트 부족 ({len(tail)}자), OCR 시도...")
-                    tail = self._extract_with_ocr(pdf_path, start_page, total_pages)
+                # 섹션 가중치 적용: 우선순위 키워드 포함 청크를 앞으로
+                priority_chunks = []
+                normal_chunks = []
+                for chunk in chunks:
+                    chunk_text = chunk.get('text') or chunk.get('snippet') or chunk.get('content') or ""
+                    if re.search(priority_keywords, chunk_text):
+                        priority_chunks.append(chunk)
+                    else:
+                        normal_chunks.append(chunk)
 
-                if tail.strip():
-                    parts.append("=== [문서 결론/말미] ===\n" + tail)
-                    logger.info(f"✓ PDF 끝 {total_pages - start_page}페이지 추출: {len(tail)}자")
-        except Exception as e:
-            logger.warning(f"⚠️ PDF 끝부분 추출 실패: {e}")
+                # 우선순위 청크 + 일반 청크 순서로 재조합, 최대 6개
+                sorted_chunks = (priority_chunks + normal_chunks)[:6]
 
-        # 2) RAG 상위 청크 (같은 파일만)
-        try:
-            import re
-            # 파일명에서 핵심 키워드 추출
-            search_keywords = re.sub(r'^\d{4}-\d{2}-\d{2}_', '', filename)  # 날짜 제거
-            search_keywords = re.sub(r'\.pdf$', '', search_keywords, flags=re.IGNORECASE)
-            search_keywords = search_keywords.replace('_', ' ')
+                for i, chunk in enumerate(sorted_chunks, 1):
+                    chunk_text = chunk.get('text') or chunk.get('snippet') or chunk.get('content') or ""
+                    if chunk_text:
+                        parts.append(f"=== [문서 청크 {i}] ===\n" + chunk_text[:1500])
 
-            hits = self.retriever.search(search_keywords, top_k=5)
-            same_file_hits = [h for h in hits if h.get("filename") == filename][:3]
+                if sorted_chunks:
+                    logger.info(f"✓ 문서 고정 청크 {len(sorted_chunks)}개 추출 (우선순위: {len(priority_chunks)}개)")
+            else:
+                # 일반 모드: 키워드 검색 후 같은 파일 필터링
+                search_keywords = re.sub(r'^\d{4}-\d{2}-\d{2}_', '', filename)  # 날짜 제거
+                search_keywords = re.sub(r'\.pdf$', '', search_keywords, flags=re.IGNORECASE)
+                search_keywords = search_keywords.replace('_', ' ')
 
-            for i, h in enumerate(same_file_hits, 1):
-                chunk_text = h.get('text') or h.get('snippet') or h.get('content') or ""
-                if chunk_text:
-                    parts.append(f"=== [관련 청크 {i}] ===\n" + chunk_text[:2000])
+                hits = self.retriever.search(search_keywords, top_k=10)
+                same_file_hits = [h for h in hits if h.get("filename") == filename]
 
-            if same_file_hits:
-                logger.info(f"✓ RAG 청크 {len(same_file_hits)}개 추출")
+                # 섹션 가중치 적용
+                priority_hits = []
+                normal_hits = []
+                for h in same_file_hits:
+                    chunk_text = h.get('text') or h.get('snippet') or h.get('content') or ""
+                    if re.search(priority_keywords, chunk_text):
+                        priority_hits.append(h)
+                    else:
+                        normal_hits.append(h)
+
+                sorted_hits = (priority_hits + normal_hits)[:6]
+
+                for i, h in enumerate(sorted_hits, 1):
+                    chunk_text = h.get('text') or h.get('snippet') or h.get('content') or ""
+                    if chunk_text:
+                        parts.append(f"=== [관련 청크 {i}] ===\n" + chunk_text[:1500])
+
+                if sorted_hits:
+                    logger.info(f"✓ RAG 청크 {len(sorted_hits)}개 추출 (우선순위: {len(priority_hits)}개)")
         except Exception as e:
             logger.warning(f"⚠️ RAG 청크 추출 실패: {e}")
 
@@ -1329,9 +1657,9 @@ class RAGPipeline:
         #     if full and len(full) > 1000:
         #         parts.append("=== [원문 스냅샷] ===\n" + full[:3000])
 
-        # 결합 및 길이 제한
-        context = "\n\n".join(parts)[:10000]
-        logger.info(f"📋 최종 컨텍스트 길이: {len(context)}자")
+        # 결합 및 길이 제한 (약 1.8k 토큰 ~ 3600자)
+        context = "\n\n".join(parts)[:3600]
+        logger.info(f"📋 최종 컨텍스트 길이: {len(context)}자 (청크 수: {len(parts)})")
         return context
 
     def _answer_summary(self, query: str) -> dict:
@@ -1352,13 +1680,44 @@ class RAGPipeline:
             parse_summary_json,
             format_summary_output
         )
+        from app.rag.utils.json_utils import (
+            parse_summary_json_robust,
+            ensure_citations,
+            validate_numeric_fields
+        )
 
         try:
-            # 1. .pdf 확장자 포함 파일명 추출 시도
-            filename_match = re.search(r"(\S+\.pdf)", query, re.IGNORECASE)
+            # 0. doc=<파일명> 또는 [DOC]<파일명> 패턴 확인 (정확 참조 토큰)
+            doc_ref = None
+            doc_locked = False
+            doc_exact_match = re.search(r"(?:doc=|DOC])\s*([^\s]+\.pdf)", query, re.IGNORECASE)
+            if not doc_exact_match:
+                doc_exact_match = re.search(r"\[DOC\]\s*([^\s]+\.pdf)", query, re.IGNORECASE)
 
+            if doc_exact_match:
+                doc_ref = doc_exact_match.group(1)
+                doc_locked = True
+                logger.info(f"🔒 정확 참조 모드: doc={doc_ref}")
+
+            # 1. .pdf 확장자 포함 파일명 추출 시도
+            filename_match = re.search(r"(\S+\.pdf)", query, re.IGNORECASE) if not doc_ref else None
+
+            # doc_ref가 있으면 직접 사용
+            if doc_ref:
+                conn = sqlite3.connect("metadata.db")
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT filename, drafter, date, display_date, category,
+                           text_preview, claimed_total, doctype
+                    FROM documents
+                    WHERE filename = ?
+                    LIMIT 1
+                """,
+                    (doc_ref,),
+                )
             # 2. 확장자 없으면 키워드 기반 검색
-            if not filename_match:
+            elif not filename_match:
                 # 불용어 제거 (요약, 이문서, 내용 등)
                 stopwords = ["요약", "요약해", "요약헤줘", "정리", "정리해", "이문서", "이 문서", "해당 문서",
                              "내용", "해줘", "헤줘", "알려줘", "알려", "보여줘", "보여"]
@@ -1414,8 +1773,13 @@ class RAGPipeline:
             result = cursor.fetchone()
             conn.close()
 
-            # 🔍 퍼지 매칭 Fallback (정확 매칭 실패 시)
-            if not result:
+            # 직접 검색 성공 시 doc_locked 설정 (키워드/파일명 검색이 정확 매칭)
+            if result and not doc_locked:
+                doc_locked = True
+                logger.info(f"🔒 직접 검색 성공 → doc_locked=True로 전환")
+
+            # 🔍 퍼지 매칭 Fallback (정확 매칭 실패 시, doc_locked이 아닌 경우만)
+            if not result and not doc_locked:
                 from modules.metadata_db import MetadataDB
 
                 search_term = filename if filename_match else keywords
@@ -1439,6 +1803,9 @@ class RAGPipeline:
                         fuzzy_doc.get('claimed_total'),
                         fuzzy_doc.get('doctype', 'proposal')
                     )
+                    # 퍼지 매칭 성공 시 문서 고정 모드로 전환
+                    doc_locked = True
+                    logger.info(f"🔒 퍼지 매칭 성공 → doc_locked=True로 전환")
                 else:
                     logger.warning(f"❌ 퍼지 매칭 실패: {search_term}")
                     return {
@@ -1452,6 +1819,20 @@ class RAGPipeline:
                         }
                     }
 
+            # doc_locked 모드에서 문서를 찾지 못한 경우
+            if doc_locked and not result:
+                logger.warning(f"❌ 정확 참조 문서 없음: {doc_ref}")
+                return {
+                    "text": f"'{doc_ref}' 문서를 찾을 수 없습니다.",
+                    "citations": [],
+                    "evidence": [],
+                    "status": {
+                        "retrieved_count": 0,
+                        "selected_count": 0,
+                        "found": False
+                    }
+                }
+
             fname, drafter, date, display_date, category, text_preview, claimed_total, doctype = result
 
             # PDF 경로 확인
@@ -1463,8 +1844,8 @@ class RAGPipeline:
                 pdf_path = f"docs/{fname}"
 
             # 🔥 새 구조: 컨텍스트 수집 (PDF 끝 + RAG + 스냅샷)
-            logger.info(f"📋 컨텍스트 수집 시작: {fname}")
-            context_text = self._gather_summary_context(fname, pdf_path)
+            logger.info(f"📋 컨텍스트 수집 시작: {fname} (doc_locked={doc_locked})")
+            context_text = self._gather_summary_context(fname, pdf_path, doc_locked=doc_locked)
 
             # Fallback: 컨텍스트가 비어있으면 text_preview 사용
             if not context_text or len(context_text.strip()) < 100:
@@ -1512,15 +1893,21 @@ class RAGPipeline:
                         llm_response = self.generator.generate(
                             query=prompt,
                             context="",  # 프롬프트에 이미 포함됨
-                            temperature=0.2  # 낮은 temperature로 일관성 향상
+                            temperature=0.2,  # 낮은 temperature로 일관성 향상
+                            mode="summary"  # 요약 모드 명시
                         )
 
                         logger.info(f"✓ LLM 응답 수신: {len(llm_response)}자")
 
-                        # JSON 파싱 시도
-                        parsed_json = parse_summary_json(llm_response)
+                        # JSON 파싱 시도 (강건한 버전)
+                        parsed_json = parse_summary_json_robust(llm_response)
 
                         if parsed_json:
+                            # 인용 보강 (doc_locked 모드에서)
+                            if doc_locked:
+                                parsed_json = ensure_citations(parsed_json, doc_ref=fname)
+                            # 수치 필드 검증 (원문 대조)
+                            parsed_json = validate_numeric_fields(parsed_json, context_text)
                             logger.info(f"✓ JSON 파싱 성공 (시도 {attempt}회)")
                             break
                         else:
@@ -1554,7 +1941,7 @@ class RAGPipeline:
 핵심 내용, 목적, 금액(있으면), 결론 등을 간결하게 포함하세요.
 마크다운 형식으로 작성하세요.
 
-**문서명**: {filename}
+**문서명**: {fname}
 **기안자**: {drafter or '정보 없음'}
 **날짜**: {display_date or '정보 없음'}
 
@@ -1566,7 +1953,8 @@ class RAGPipeline:
                         free_summary = self.generator.generate(
                             query=free_form_prompt,
                             context="",
-                            temperature=0.3
+                            temperature=0.3,
+                            mode="summary"  # 요약 모드 명시
                         )
 
                         # 배너 + 자유 요약
@@ -1736,20 +2124,43 @@ class RAGPipeline:
     def _create_legacy_adapter(self):
         """레거시 구현 어댑터 생성 (캡슐화)
 
-        QuickFixRAG를 래핑하여 기존 레거시 시스템과 연결합니다.
+        QwenLLM을 래핑하여 기존 레거시 시스템과 연결합니다.
         향후 이 메서드만 수정하여 신규 구현으로 점진 전환 가능.
 
         Returns:
-            QuickFixRAG: 레거시 RAG 인스턴스
+            _LLMAdapter: LLM 어댑터 인스턴스
         """
-        from quick_fix_rag import QuickFixRAG
+        try:
+            from rag_system.llm_singleton import LLMSingleton
 
-        # 레거시 시스템 초기화
-        logger.info("Loading legacy QuickFixRAG adapter...")
-        rag = QuickFixRAG(use_hybrid=True)
-        logger.info("Legacy adapter loaded successfully")
+            model_path = os.getenv("MODEL_PATH", "./models/ggml-model-Q4_K_M.gguf")
+            logger.info(f"🔍 DEBUG: Attempting to load LLM with model_path={model_path}")
+            logger.info(f"🔍 DEBUG: Model file exists: {Path(model_path).exists()}")
+            llm = LLMSingleton.get_instance(model_path=model_path)
+            logger.info(f"✅ LLM adapter 생성 완료 (LLMSingleton 사용, model={model_path})")
+            return _LLMAdapter(llm)
+        except Exception as e:
+            logger.error(f"LLM adapter 생성 실패: {e}", exc_info=True)
+            return None
 
-        return rag
+    def _load_known_drafters(self) -> set:
+        """메타DB에서 고유 기안자 로드 (Closed-World Validation용)
+
+        Returns:
+            set: 고유 기안자 이름 집합
+        """
+        try:
+            from modules.metadata_db import MetadataDB
+
+            db = MetadataDB()
+            drafters = db.list_unique_drafters()
+            db.close()
+
+            logger.info(f"✅ 고유 기안자 {len(drafters)}명 캐싱 완료")
+            return drafters
+        except Exception as e:
+            logger.error(f"기안자 로드 실패: {e}")
+            return set()
 
 
 # ============================================================================
@@ -1775,6 +2186,43 @@ class _NoOpCompressor:
         return chunks
 
 
+class _LLMAdapter:
+    """QwenLLM 어댑터 (LegacyAdapter 대체)
+
+    QwenLLM을 _QuickFixGenerator가 기대하는 인터페이스로 변환합니다.
+    """
+
+    def __init__(self, llm):
+        self.llm = llm
+
+    def generate_from_context(self, query: str, context: str, temperature: float = 0.1, mode: str = "rag") -> str:
+        """컨텍스트 기반 답변 생성
+
+        Args:
+            query: 사용자 질문
+            context: 검색된 문서 컨텍스트 (텍스트 형식)
+            temperature: 생성 온도
+            mode: 생성 모드 (chat/rag/summarize)
+
+        Returns:
+            str: 생성된 답변
+        """
+        # Context를 청크 형식으로 변환
+        chunks = [{"snippet": context, "content": context}]
+
+        try:
+            # 🎯 모드별 토큰 예산 적용
+            logger.info(f"🎯 generate_from_context: mode={mode}")
+            response = self.llm.generate_response(query, chunks, max_retries=1, mode=mode)
+
+            if hasattr(response, "answer"):
+                return response.answer
+            return str(response)
+        except Exception as e:
+            logger.error(f"LLM 답변 생성 실패: {e}", exc_info=True)
+            return f"[E_GENERATE] {str(e)}"
+
+
 class _QuickFixGenerator:
     """QuickFixRAG 래퍼 (기존 구현 활용)"""
 
@@ -1782,13 +2230,13 @@ class _QuickFixGenerator:
         self.rag = rag
         self.compressed_chunks = None  # Store chunks for LLM
 
-    def generate(self, query: str, context: str, temperature: float) -> str:
+    def generate(self, query: str, context: str, temperature: float, mode: str = "rag") -> str:
         # 재검색 금지. 컨텍스트 기반 생성으로 우선 시도.
         try:
             # 1) QuickFixRAG에 전용 메서드가 있으면 사용
             if hasattr(self.rag, "generate_from_context"):
                 return self.rag.generate_from_context(
-                    query, context, temperature=temperature
+                    query, context, temperature=temperature, mode=mode
                 )
 
             # 2) 내부 LLM 직접 접근 경로가 있으면 사용
@@ -1802,10 +2250,10 @@ class _QuickFixGenerator:
                 if self.compressed_chunks:
                     # Use stored compressed chunks (preferred)
                     logger.debug(
-                        f"Using {len(self.compressed_chunks)} compressed chunks for generation"
+                        f"Using {len(self.compressed_chunks)} compressed chunks for generation (mode={mode})"
                     )
                     response = self.rag.llm.generate_response(
-                        query, self.compressed_chunks, max_retries=1
+                        query, self.compressed_chunks, max_retries=1, mode=mode
                     )
                 else:
                     # Fallback: convert context string to minimal chunks
@@ -1817,7 +2265,7 @@ class _QuickFixGenerator:
                         {"snippet": s, "content": s} for s in snippets if s.strip()
                     ]
                     response = self.rag.llm.generate_response(
-                        query, chunks, max_retries=1
+                        query, chunks, max_retries=1, mode=mode
                     )
 
                 # Extract answer from RAGResponse object
@@ -1827,6 +2275,9 @@ class _QuickFixGenerator:
 
             # 3) 폴백: 재검색이 포함된 answer는 최후 수단으로만
             logger.warning("generate_from_context 미지원 → 폴백(answer) 사용")
+            if self.rag is None:
+                logger.error("LegacyAdapter: QuickFixRAG가 없어 답변 생성 불가")
+                return "죄송합니다. 현재 답변 생성 기능이 비활성화되어 있습니다."
             return self.rag.answer(query, use_llm_summary=True)
         except Exception as e:
             logger.error(f"Generation 실패: {e}", exc_info=True)
@@ -1956,6 +2407,6 @@ class _V2RetrieverAdapter:
 class _DummyGenerator:
     """더미 생성기 (폴백용)"""
 
-    def generate(self, query: str, context: str, temperature: float) -> str:
+    def generate(self, query: str, context: str, temperature: float, mode: str = "rag") -> str:
         logger.warning("Dummy generator: 기본 응답 반환")
         return "죄송합니다. 답변을 생성할 수 없습니다."

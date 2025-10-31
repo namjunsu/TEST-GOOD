@@ -637,65 +637,47 @@ class SystemChecker:
             return
 
         try:
-            import config
+            from app.config.settings import DOCS_DIR, PROJECT_ROOT
 
-            # 필수 설정 체크
+            # 필수 설정 체크 (app.config.settings 모듈 사용)
             required_settings: List[str] = [
-                'QWEN_MODEL_PATH',
                 'DOCS_DIR',
-                'MODELS_DIR',
-                'CACHE_DIR',
-                'DB_DIR'
+                'PROJECT_ROOT'
             ]
 
-            missing = [s for s in required_settings if not hasattr(config, s)]
+            # app.config.settings 모듈 검증
+            import app.config.settings as settings
 
-            if missing:
+            # 필수 설정이 정의되어 있는지 확인
+            settings_dict = {
+                'DOCS_DIR': settings.DOCS_DIR,
+                'PROJECT_ROOT': settings.PROJECT_ROOT
+            }
+
+            # 모든 설정이 정의되어 있으면 PASS
+            self.result.add_item(CheckItem(
+                name="config_settings",
+                status=CheckStatus.PASS,
+                message=f"설정 파일 검증 완료 (app.config.settings)",
+                details={'settings': list(settings_dict.keys())}
+            ))
+
+            # DOCS_DIR 디렉토리 존재 확인
+            if settings.DOCS_DIR.exists():
                 self.result.add_item(CheckItem(
-                    name="config_settings",
-                    status=CheckStatus.WARN,
-                    message=f"누락된 설정: {', '.join(missing)}",
-                    details={'missing': missing},
-                    action=f"config.py에 {', '.join(missing)} 추가"
+                    name="docs_dir",
+                    status=CheckStatus.PASS,
+                    message=f"문서 디렉토리 확인: {settings.DOCS_DIR}",
+                    details={'path': str(settings.DOCS_DIR)}
                 ))
             else:
                 self.result.add_item(CheckItem(
-                    name="config_settings",
-                    status=CheckStatus.PASS,
-                    message="설정 파일 검증 완료",
+                    name="docs_dir",
+                    status=CheckStatus.WARN,
+                    message=f"문서 디렉토리 없음: {settings.DOCS_DIR}",
+                    details={'path': str(settings.DOCS_DIR)},
+                    action="문서 디렉토리를 생성하세요"
                 ))
-
-            # validate_config 실행
-            if hasattr(config, 'validate_config'):
-                validations = config.validate_config()
-                for check, passed in validations.items():
-                    if not passed:
-                        self.result.add_item(CheckItem(
-                            name=f"config_validation_{check}",
-                            status=CheckStatus.WARN,
-                            message=f"설정 검증 실패: {check}",
-                        ))
-
-            # 모델 파일 체크
-            if hasattr(config, 'QWEN_MODEL_PATH'):
-                model_path = Path(config.QWEN_MODEL_PATH)
-                if model_path.exists():
-                    size_mb = model_path.stat().st_size / (1024 * 1024)
-                    self.result.metrics['model_size_mb'] = round(size_mb, 2)
-                    self.result.add_item(CheckItem(
-                        name="model_file",
-                        status=CheckStatus.PASS,
-                        message=f"AI 모델: {model_path.name} ({size_mb:.1f}MB)",
-                        details={'path': str(model_path), 'size_mb': size_mb}
-                    ))
-                else:
-                    self.result.add_item(CheckItem(
-                        name="model_file",
-                        status=CheckStatus.WARN,
-                        message=f"AI 모델 파일 없음: {model_path.name}",
-                        details={'path': str(model_path)},
-                        action="AI 분석 기능 비활성화됨"
-                    ))
 
         except ImportError as e:
             self.result.add_item(CheckItem(

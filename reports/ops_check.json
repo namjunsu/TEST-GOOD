@@ -1,0 +1,23 @@
+{
+  "timestamp": "Wed Oct 29 19:52:01 KST 2025",
+  "checks": {
+    "disk_space": "Check df -h output above",
+    "memory": "Check free -h output above",
+    "ports": {
+      "8501": "Check lsof output above",
+      "7860": "Check lsof output above"
+    },
+    "databases": {
+      "metadata.db": true,
+      "everything_index.db": true
+    },
+    "critical_files": {
+      "web_interface.py": true,
+      "app/api/main.py": true,
+      "app/rag/pipeline.py": true,
+      "config.py": true,
+      ".env": true,
+      "requirements.txt": true
+    }
+  }
+}

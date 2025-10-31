@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Module Dependency Graph</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { color: #333; }
+        .graph-container {
+            border: 1px solid #ccc;
+            padding: 20px;
+            background: #f9f9f9;
+            overflow: auto;
+        }
+        .stats {
+            background: #fff;
+            padding: 15px;
+            margin: 20px 0;
+            border-left: 4px solid #4CAF50;
+        }
+        .node-list {
+            columns: 3;
+            column-gap: 20px;
+        }
+        .node {
+            break-inside: avoid;
+            margin-bottom: 10px;
+            padding: 5px;
+            background: #fff;
+            border-left: 3px solid #ddd;
+        }
+        .entry-node {
+            border-left-color: #4CAF50;
+            font-weight: bold;
+        }
+        .edge-list {
+            max-height: 400px;
+            overflow-y: auto;
+            background: #fff;
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+        .edge {
+            padding: 3px;
+            margin: 2px 0;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>📊 Module Dependency Graph - RAG System</h1>
+
+    <div class="stats">
+        <h2>Statistics</h2>
+        <ul>
+            <li><strong>Total Modules:</strong> 36</li>
+            <li><strong>Total Dependencies:</strong> 37</li>
+            <li><strong>Entry Points:</strong> 27</li>
+        </ul>
+    </div>
+
+    <div class="graph-container">
+        <h2>🟢 Entry Points</h2>
+        <ul>
+            <li><code>app.__init__</code></li>
+            <li><code>app.api.__init__</code></li>
+            <li><code>app.api.main</code></li>
+            <li><code>app.config.__init__</code></li>
+            <li><code>app.config.settings</code></li>
+            <li><code>app.core.__init__</code></li>
+            <li><code>app.core.errors</code></li>
+            <li><code>app.core.logging</code></li>
+            <li><code>app.rag.__init__</code></li>
+            <li><code>app.rag.parse.__init__</code></li>
+            <li><code>app.rag.parse.doctype</code></li>
+            <li><code>app.rag.parse.parse_meta</code></li>
+            <li><code>app.rag.parse.parse_tables</code></li>
+            <li><code>app.rag.pipeline</code></li>
+            <li><code>app.rag.preprocess.__init__</code></li>
+            <li><code>app.rag.preprocess.clean_text</code></li>
+            <li><code>app.rag.query_parser</code></li>
+            <li><code>app.rag.query_router</code></li>
+            <li><code>app.rag.render.__init__</code></li>
+            <li><code>app.rag.render.list_postprocess</code></li>
+            <li><code>app.rag.render.summary_templates</code></li>
+            <li><code>app.rag.retrievers.__init__</code></li>
+            <li><code>app.rag.retrievers.hybrid</code></li>
+            <li><code>app.rag.summary_templates</code></li>
+            <li><code>app.rag.utils.__init__</code></li>
+            <li><code>app.rag.utils.context_hydrator</code></li>
+            <li><code>app.rag.utils.json_utils</code></li>
+        </ul>
+
+        <h2>📦 All Modules</h2>
+        <div class="node-list">
+            <div class="node entry-node">🟢 app.__init__</div>
+            <div class="node entry-node">🟢 app.api.__init__</div>
+            <div class="node entry-node">🟢 app.api.main</div>
+            <div class="node entry-node">🟢 app.config.__init__</div>
+            <div class="node entry-node">🟢 app.config.settings</div>
+            <div class="node entry-node">🟢 app.core.__init__</div>
+            <div class="node entry-node">🟢 app.core.errors</div>
+            <div class="node entry-node">🟢 app.core.logging</div>
+            <div class="node entry-node">🟢 app.rag.__init__</div>
+            <div class="node entry-node">🟢 app.rag.parse.__init__</div>
+            <div class="node entry-node">🟢 app.rag.parse.doctype</div>
+            <div class="node entry-node">🟢 app.rag.parse.parse_meta</div>
+            <div class="node entry-node">🟢 app.rag.parse.parse_tables</div>
+            <div class="node entry-node">🟢 app.rag.pipeline</div>
+            <div class="node entry-node">🟢 app.rag.preprocess.__init__</div>
+            <div class="node entry-node">🟢 app.rag.preprocess.clean_text</div>
+            <div class="node entry-node">🟢 app.rag.query_parser</div>
+            <div class="node entry-node">🟢 app.rag.query_router</div>
+            <div class="node entry-node">🟢 app.rag.render.__init__</div>
+            <div class="node entry-node">🟢 app.rag.render.list_postprocess</div>
+            <div class="node entry-node">🟢 app.rag.render.summary_templates</div>
+            <div class="node entry-node">🟢 app.rag.retrievers.__init__</div>
+            <div class="node entry-node">🟢 app.rag.retrievers.hybrid</div>
+            <div class="node entry-node">🟢 app.rag.summary_templates</div>
+            <div class="node entry-node">🟢 app.rag.utils.__init__</div>
+            <div class="node entry-node">🟢 app.rag.utils.context_hydrator</div>
+            <div class="node entry-node">🟢 app.rag.utils.json_utils</div>
+            <div class="node">⚪ modules.document_module</div>
+            <div class="node">⚪ modules.intent_module</div>
+            <div class="node">⚪ modules.llm_module</div>
+            <div class="node">⚪ modules.metadata_db</div>
+            <div class="node">⚪ modules.metadata_extractor</div>
+            <div class="node">⚪ modules.ocr_processor</div>
+            <div class="node">⚪ modules.reranker</div>
+            <div class="node">⚪ modules.search_module</div>
+            <div class="node">⚪ modules.search_module_hybrid</div>
+        </div>
+
+        <h2>🔗 Dependencies</h2>
+        <div class="edge-list">
+            <div class="edge">app.core.__init__ → app.core.errors</div>
+            <div class="edge">app.core.__init__ → app.core.logging</div>
+            <div class="edge">app.core.logging → app.core.logging</div>
+            <div class="edge">app.rag.__init__ → app.rag.pipeline</div>
+            <div class="edge">app.rag.parse.__init__ → app.rag.parse.parse_meta</div>
+            <div class="edge">app.rag.parse.__init__ → app.rag.parse.parse_tables</div>
+            <div class="edge">app.rag.parse.parse_meta → app.core.logging</div>
+            <div class="edge">app.rag.parse.parse_tables → app.core.logging</div>
+            <div class="edge">app.rag.pipeline → app.core.errors</div>
+            <div class="edge">app.rag.pipeline → app.core.logging</div>
+            <div class="edge">app.rag.pipeline → app.rag.query_parser</div>
+            <div class="edge">app.rag.pipeline → app.rag.query_router</div>
+            <div class="edge">app.rag.pipeline → app.rag.retrievers.hybrid</div>
+            <div class="edge">app.rag.pipeline → app.rag.summary_templates</div>
+            <div class="edge">app.rag.pipeline → app.rag.utils.context_hydrator</div>
+            <div class="edge">app.rag.pipeline → app.rag.utils.json_utils</div>
+            <div class="edge">app.rag.pipeline → modules.metadata_db</div>
+            <div class="edge">app.rag.preprocess.__init__ → app.rag.preprocess.clean_text</div>
+            <div class="edge">app.rag.preprocess.clean_text → app.core.logging</div>
+            <div class="edge">app.rag.query_router → app.core.logging</div>
+            <div class="edge">app.rag.render.__init__ → app.rag.render.summary_templates</div>
+            <div class="edge">app.rag.render.list_postprocess → app.rag.preprocess.clean_text</div>
+            <div class="edge">app.rag.render.summary_templates → app.core.logging</div>
+            <div class="edge">app.rag.retrievers.__init__ → app.rag.retrievers.hybrid</div>
+            <div class="edge">app.rag.retrievers.hybrid → app.core.logging</div>
+            <div class="edge">app.rag.retrievers.hybrid → app.rag.query_parser</div>
+            <div class="edge">app.rag.retrievers.hybrid → modules.metadata_db</div>
+            <div class="edge">modules.document_module → modules.ocr_processor</div>
+            <div class="edge">modules.intent_module → modules.llm_module</div>
+            <div class="edge">modules.metadata_db → app.core.logging</div>
+            <div class="edge">modules.metadata_extractor → app.core.logging</div>
+            <div class="edge">modules.reranker → app.core.logging</div>
+            <div class="edge">modules.search_module → app.core.logging</div>
+            <div class="edge">modules.search_module → modules.metadata_db</div>
+            <div class="edge">modules.search_module → modules.metadata_extractor</div>
+            <div class="edge">modules.search_module_hybrid → app.core.logging</div>
+            <div class="edge">modules.search_module_hybrid → modules.search_module</div>
+        </div>
+    </div>
+
+    <div style="margin-top: 20px; color: #666; font-size: 12px;">
+        <p>Generated from: reports/xray/IMPORT_GRAPH.dot</p>
+        <p>Note: For better visualization, install graphviz and run: <code>dot -Tsvg reports/xray/IMPORT_GRAPH.dot -o graph.svg</code></p>
+    </div>
+</body>
+</html>

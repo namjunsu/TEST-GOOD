@@ -4,12 +4,14 @@
 """
 
 import time
+import os
 import hashlib
 from pathlib import Path
 from datetime import datetime
 import json
 import threading
 from typing import Dict, Set
+from scripts.utils.lock import is_reindexing
 
 class AutoIndexer:
     """자동 인덱싱 클래스 - 성능 최적화 버전"""
@@ -148,10 +150,20 @@ class AutoIndexer:
 
     def check_new_files(self) -> Dict:
         """새 파일 체크 (성능 최적화)"""
+        # [LOCK] 동시 재색인 보호
+        if is_reindexing():
+            print("⏭️  Skip scan: reindex lock present")
+            return {"new": [], "modified": [], "deleted": []}
+
         start_time = time.time()
         new_files = []
         modified_files = []
         deleted_files = []
+
+        # [PATCH] 삭제된 파일 정리 단계: everything_index.db 동기화
+        stale_count = self._purge_missing_files_from_index()
+        if stale_count > 0:
+            print(f"🧹 [CLEANUP] deleted_stale_entries={stale_count}")
 
         # 현재 파일 목록
         current_files = {}
@@ -426,6 +438,69 @@ class AutoIndexer:
             'recent_errors': self.error_history[-5:] if self.error_history else [],
             'total_errors': len(self.error_history)
         }
+
+    def _purge_missing_files_from_index(self) -> int:
+        """디스크에 존재하지 않는 파일을 검색 인덱스에서 삭제
+
+        Returns:
+            삭제된 항목 수
+        """
+        try:
+            import sqlite3
+            from config.indexing import DB_PATHS
+
+            # everything_index.db 경로
+            index_db_path = DB_PATHS.get("everything_index", "everything_index.db")
+            if not os.path.exists(index_db_path):
+                return 0
+
+            # 현재 디스크의 모든 파일명 집합
+            fs_names = set()
+            search_paths = self._get_search_paths()
+            for path in search_paths:
+                for ext in ['*.pdf', '*.txt']:
+                    for file_path in path.glob(ext):
+                        fs_names.add(file_path.name)
+
+            # DB 연결
+            conn = sqlite3.connect(index_db_path)
+            cur = conn.cursor()
+
+            # files 테이블 스키마 점검
+            cur.execute("PRAGMA table_info(files)")
+            cols = {c[1] for c in cur.fetchall()}
+            has_path = "path" in cols
+
+            # DB 행 전체 조회
+            query = "SELECT rowid, filename{} FROM files".format(", path" if has_path else "")
+            cur.execute(query)
+            rows = cur.fetchall()
+
+            stale_ids = []
+            for row in rows:
+                if has_path:
+                    rowid, filename, path = row
+                    # path 존재 여부 확인
+                    exists = os.path.exists(path) if os.path.isabs(path) else os.path.exists(os.path.join(os.getcwd(), path))
+                    if not exists and filename not in fs_names:
+                        stale_ids.append(rowid)
+                else:
+                    rowid, filename = row
+                    if filename not in fs_names:
+                        stale_ids.append(rowid)
+
+            # 삭제 실행
+            if stale_ids:
+                qmarks = ",".join(["?"] * len(stale_ids))
+                cur.execute(f"DELETE FROM files WHERE rowid IN ({qmarks})", stale_ids)
+                conn.commit()
+
+            conn.close()
+            return len(stale_ids)
+
+        except Exception as e:
+            print(f"⚠️ 인덱스 정리 실패: {e}")
+            return 0
 
     def force_reindex(self):
         """강제 재인덱싱"""

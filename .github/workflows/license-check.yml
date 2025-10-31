@@ -1,0 +1,66 @@
+name: License Compliance Check
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main ]
+  schedule:
+    # Weekly scan on Monday at 09:00 UTC
+    - cron: '0 9 * * 1'
+
+jobs:
+  license-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pip-licenses
+
+    - name: Check licenses
+      id: license_check
+      run: |
+        # Generate license report
+        pip-licenses --format=json --output-file=licenses.json
+
+        # Run license gate script
+        python .github/scripts/check_licenses.py
+
+    - name: Upload license report
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: license-report
+        path: |
+          licenses.json
+          license-check-report.txt
+
+    - name: Comment on PR
+      if: failure() && github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const report = fs.readFileSync('license-check-report.txt', 'utf8');
+
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `## ⚠️ License Compliance Issue\n\n${report}`
+          });
+
+    - name: Fail on blocked licenses
+      if: steps.license_check.outcome == 'failure'
+      run: |
+        echo "❌ Blocked licenses detected. See report above."
+        exit 1

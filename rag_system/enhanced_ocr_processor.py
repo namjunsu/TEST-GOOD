@@ -127,7 +127,148 @@ class EnhancedOCRProcessor:
     def _get_file_hash(self, pdf_path: str) -> str:
         """파일 해시 생성 (캐시 키용)"""
         return hashlib.md5(pdf_path.encode()).hexdigest()
-    
+
+    def has_text_layer(self, pdf_path: str) -> bool:
+        """PDF에 텍스트 레이어가 있는지 확인
+
+        Args:
+            pdf_path: PDF 파일 경로
+
+        Returns:
+            텍스트 레이어가 있으면 True, 없으면 False (스캔 이미지 전용 PDF)
+        """
+        try:
+            import pdfplumber
+            with pdfplumber.open(pdf_path) as pdf:
+                # 첫 3페이지만 샘플링하여 텍스트 존재 여부 확인
+                for page in pdf.pages[:3]:
+                    text = page.extract_text()
+                    if text and len(text.strip()) > 50:  # 최소 50자 이상 텍스트가 있으면 텍스트 레이어 존재
+                        return True
+            return False
+        except Exception as e:
+            logger.warning(f"텍스트 레이어 체크 실패: {pdf_path} - {e}")
+            return False  # 실패 시 스캔 PDF로 간주하여 OCR 시도
+
+    def process_pdf_with_ocr(self, pdf_path: str, page_num: Optional[int] = None, lang: str = "kor+eng") -> Dict:
+        """OCR을 사용한 PDF 처리 (UI 호출용)
+
+        Args:
+            pdf_path: PDF 파일 경로
+            page_num: 특정 페이지만 처리 (None이면 전체)
+            lang: Tesseract 언어 설정
+
+        Returns:
+            {
+                "ok": bool,
+                "text": str,
+                "pages": int,
+                "engine": "tesseract|skip",
+                "why": "skip:has_text_layer|fail:missing_binary|success|..."
+            }
+        """
+        result = {
+            "ok": False,
+            "text": "",
+            "pages": 0,
+            "engine": "unknown",
+            "why": ""
+        }
+
+        try:
+            # Tesseract 사용 가능 여부 확인
+            if not TESSERACT_AVAILABLE:
+                result["why"] = "fail:missing_binary"
+                result["engine"] = "none"
+                logger.error("[OCR] decision=fail, reason=missing_binary (pytesseract/pdf2image not installed)")
+                return result
+
+            # 텍스트 레이어 확인
+            if self.has_text_layer(pdf_path):
+                # 텍스트 레이어가 있으면 pdfplumber로 추출 (OCR 스킵)
+                import pdfplumber
+                with pdfplumber.open(pdf_path) as pdf:
+                    result["pages"] = len(pdf.pages)
+
+                    if page_num is not None:
+                        # 특정 페이지만 추출
+                        if 1 <= page_num <= len(pdf.pages):
+                            page = pdf.pages[page_num - 1]
+                            text = page.extract_text() or ""
+                            result["text"] = self._post_process_text(text)
+                        else:
+                            result["why"] = f"fail:invalid_page_num (requested={page_num}, total={len(pdf.pages)})"
+                            return result
+                    else:
+                        # 전체 페이지 추출
+                        text_pages = []
+                        for i, page in enumerate(pdf.pages, 1):
+                            text = page.extract_text()
+                            if text:
+                                text_pages.append(f"[페이지 {i}]\n{self._post_process_text(text)}")
+                        result["text"] = "\n\n".join(text_pages)
+
+                result["ok"] = True
+                result["engine"] = "skip"
+                result["why"] = "skip:has_text_layer"
+                logger.info(f"[OCR] decision=skip, reason=has_text_layer, pages={result['pages']}, lang={lang}")
+                return result
+
+            # 스캔 PDF인 경우 OCR 수행
+            logger.info(f"[OCR] decision=run, reason=no_text_layer, lang={lang}")
+
+            # PDF → 이미지 변환
+            from pdf2image import convert_from_path
+            import pdfplumber
+
+            with pdfplumber.open(pdf_path) as pdf:
+                result["pages"] = len(pdf.pages)
+
+            if page_num is not None:
+                # 특정 페이지만 OCR
+                images = convert_from_path(pdf_path, dpi=self.OCR_DPI, first_page=page_num, last_page=page_num)
+            else:
+                # 전체 페이지 OCR
+                images = convert_from_path(pdf_path, dpi=self.OCR_DPI)
+
+            # OCR 처리
+            text_pages = []
+            for i, image in enumerate(images, page_num if page_num else 1):
+                try:
+                    text = pytesseract.image_to_string(
+                        image,
+                        lang=lang,
+                        config=self.tesseract_config
+                    )
+                    if text.strip():
+                        processed_text = self._post_process_text(text)
+                        text_pages.append(f"[OCR 페이지 {i}]\n{processed_text}")
+                except Exception as e:
+                    logger.warning(f"[OCR] 페이지 {i} OCR 실패: {e}")
+
+            result["text"] = "\n\n".join(text_pages)
+            result["ok"] = len(text_pages) > 0
+            result["engine"] = "tesseract"
+            result["why"] = "success" if result["ok"] else "fail:no_text_extracted"
+
+            if result["ok"]:
+                logger.info(f"[OCR] OCR 완료: pages={result['pages']}, extracted_pages={len(text_pages)}")
+            else:
+                logger.warning(f"[OCR] OCR 실패: 추출된 텍스트 없음")
+
+            return result
+
+        except ImportError as e:
+            result["why"] = f"fail:missing_binary ({str(e)})"
+            result["engine"] = "none"
+            logger.error(f"[OCR] decision=fail, reason=missing_binary, detail={e}")
+            return result
+        except Exception as e:
+            result["why"] = f"fail:exception ({str(e)[:100]})"
+            result["engine"] = "error"
+            logger.error(f"[OCR] decision=fail, reason=exception, detail={e}")
+            return result
+
     def extract_text_with_ocr(self, pdf_path: str) -> Tuple[str, Dict]:
         """
         PDF에서 텍스트 추출 (텍스트 레이어 + OCR 이미지)

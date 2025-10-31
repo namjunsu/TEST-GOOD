@@ -1,0 +1,25 @@
+{
+  "include": [
+    "apps",
+    "src",
+    "scripts",
+    "tests"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    ".venv",
+    "archive",
+    "build",
+    "dist",
+    "htmlcov"
+  ],
+  "typeCheckingMode": "basic",
+  "reportMissingTypeStubs": false,
+  "reportMissingImports": true,
+  "reportUndefinedVariable": true,
+  "reportGeneralTypeIssues": true,
+  "pythonVersion": "3.12",
+  "pythonPlatform": "Linux",
+  "venvPath": ".",
+  "venv": ".venv"
+}

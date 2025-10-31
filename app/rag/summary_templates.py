@@ -23,17 +23,18 @@ def detect_doc_kind(filename: str, text: str) -> str:
     """
     s = f"{filename}\n{text[:2000]}".lower()
 
-    # 소모품/구매 문서 (우선 검사 - 구매 검토서와 구분)
+    # 구매/교체 검토서 (최우선 검사 - 기술검토서, 구매검토서 등을 proposal로 분류)
+    # 우선순위 키워드: 기술검토서, 검토서, 구매 검토서, 견적 비교, 구매의뢰, proposal
+    if re.search(r"(기술검토서|기술\s*검토서|구매\s*검토서|구매검토서|검토서|검토의\s*건|견적\s*비교|구매의뢰|proposal|교체\s*검토서|도입\s*검토|비교\s*검토)", s):
+        return "proc_eval"
+
+    # 소모품/구매 문서 (검토서 이후 검사 - 단순 소모품 구매 건)
     if re.search(r"(소모품|consumable|구매\s*건|구매의\s*건|납품|발주)", s):
         return "consumables"
 
     # 수리/장애 문서
     if re.search(r"(수리|수리건|수리\s*내역|불량|고장|장애|as\b|a/s)", s):
         return "repair"
-
-    # 구매/교체 검토서
-    if re.search(r"(교체|교체\s*검토서|도입|구매|검토서|검토의\s*건|견적|비교)", s):
-        return "proc_eval"
 
     # 폐기 문서
     if re.search(r"(폐기|불용|scrap|disposal|폐기의\s*건)", s):
@@ -103,7 +104,11 @@ def build_prompt(
     common_header = f"""너는 회사 내부 문서를 **추측 없이** 정확히 요약하는 보조자다.
 반드시 문서에 있는 정보만 쓰고, 각 항목은 1~2문장으로 간결하게.
 없으면 '없음'이라고 쓰되, 본문을 꼼꼼히 읽은 후 정말 없을 때만 '없음'을 쓰세요.
-JSON만 반환하세요.
+
+**중요 출력 형식**:
+- 반드시 ```json ... ``` fenced code 블록 안에 JSON을 작성하세요.
+- JSON 외 다른 설명이나 주석은 절대 포함하지 마세요.
+- 순수 JSON 객체만 출력하세요.
 
 **문서명**: {filename}
 **기안자**: {drafter or '정보 없음'}

@@ -309,6 +309,241 @@ def get_api_config(request: Request):
     }
 
 
+@app.get("/metrics")
+def get_metrics():
+    """RAG 인덱스 메트릭 엔드포인트 (단일 진실원, SoT)
+
+    Returns:
+        dict: {
+            "docstore_count": int,  # metadata.db 문서 수
+            "faiss_count": int,     # FAISS 벡터 수
+            "bm25_count": int,      # BM25 문서 수
+            "unindexed_count": int, # docstore - max(faiss, bm25)
+            "index_version": str,   # 예: "v20251030_abc123"
+            "last_reindex_at": str, # ISO8601
+            "ingest_status": str    # idle|running|failed
+        }
+    """
+    import sqlite3
+    import pickle
+    import hashlib
+
+    metrics = {
+        "docstore_count": 0,
+        "faiss_count": 0,
+        "bm25_count": 0,
+        "unindexed_count": 0,
+        "index_version": "unknown",
+        "last_reindex_at": "unknown",
+        "ingest_status": "idle"
+    }
+
+    # 1. DocStore 카운트 (metadata.db)
+    try:
+        db_path = Path("metadata.db")
+        if db_path.exists():
+            conn = sqlite3.connect(str(db_path))
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM documents")
+            metrics["docstore_count"] = cursor.fetchone()[0]
+            conn.close()
+    except Exception as e:
+        print(f"DocStore 카운트 실패: {e}")
+
+    # 2. FAISS 카운트
+    try:
+        faiss_path = Path("rag_system/db/faiss.index")
+        if faiss_path.exists():
+            import faiss
+            index = faiss.read_index(str(faiss_path))
+            metrics["faiss_count"] = index.ntotal
+    except Exception as e:
+        print(f"FAISS 카운트 실패: {e}")
+
+    # 3. BM25 카운트
+    try:
+        bm25_path = Path("rag_system/db/bm25_index.pkl")
+        if bm25_path.exists():
+            with open(bm25_path, 'rb') as f:
+                bm25_data = pickle.load(f)
+
+            if isinstance(bm25_data, dict):
+                metadata = bm25_data.get('metadata', [])
+            else:
+                metadata = getattr(bm25_data, 'metadata', [])
+
+            metrics["bm25_count"] = len(metadata)
+    except Exception as e:
+        print(f"BM25 카운트 실패: {e}")
+
+    # 4. Unindexed 카운트 (docstore - max(faiss, bm25))
+    indexed_max = max(metrics["faiss_count"], metrics["bm25_count"])
+    metrics["unindexed_count"] = max(0, metrics["docstore_count"] - indexed_max)
+
+    # 5. 인덱스 버전 (파일 수정 시각 기반)
+    try:
+        version_file = Path("var/index_version.txt")
+        if version_file.exists():
+            metrics["index_version"] = version_file.read_text().strip()
+        else:
+            # 버전 파일 없으면 BM25 수정 시각 기반으로 생성
+            bm25_path = Path("rag_system/db/bm25_index.pkl")
+            if bm25_path.exists():
+                mtime = bm25_path.stat().st_mtime
+                timestamp = datetime.fromtimestamp(mtime).strftime("%Y%m%d%H%M%S")
+
+                # cfg_hash (간이 버전)
+                cfg_str = f"{metrics['docstore_count']}_{metrics['bm25_count']}"
+                cfg_hash = hashlib.md5(cfg_str.encode()).hexdigest()[:6]
+
+                metrics["index_version"] = f"v{timestamp}_{cfg_hash}"
+    except Exception as e:
+        print(f"인덱스 버전 확인 실패: {e}")
+
+    # 6. 최근 재색인 시각
+    try:
+        reindex_log = Path("var/last_reindex.txt")
+        if reindex_log.exists():
+            metrics["last_reindex_at"] = reindex_log.read_text().strip()
+        else:
+            # 로그 없으면 BM25 수정 시각 사용
+            bm25_path = Path("rag_system/db/bm25_index.pkl")
+            if bm25_path.exists():
+                mtime = bm25_path.stat().st_mtime
+                metrics["last_reindex_at"] = datetime.fromtimestamp(mtime).isoformat()
+    except Exception as e:
+        print(f"재색인 시각 확인 실패: {e}")
+
+    # 7. 인제스트 상태
+    try:
+        status_file = Path("var/ingest_status.txt")
+        if status_file.exists():
+            status = status_file.read_text().strip()
+            if status in ["idle", "running", "failed"]:
+                metrics["ingest_status"] = status
+    except Exception as e:
+        print(f"인제스트 상태 확인 실패: {e}")
+
+    # 8. 코드 인덱스 통계 (model_codes 테이블)
+    try:
+        db_path = Path("metadata.db")
+        if db_path.exists():
+            conn = sqlite3.connect(str(db_path))
+            cursor = conn.cursor()
+
+            # 전체 레코드 수
+            cursor.execute("SELECT COUNT(*) FROM model_codes")
+            metrics["code_index_total"] = cursor.fetchone()[0]
+
+            # 고유 norm_code 수
+            cursor.execute("SELECT COUNT(DISTINCT norm_code) FROM model_codes")
+            metrics["code_index_unique"] = cursor.fetchone()[0]
+
+            conn.close()
+    except Exception as e:
+        print(f"코드 인덱스 통계 실패: {e}")
+        metrics["code_index_total"] = 0
+        metrics["code_index_unique"] = 0
+
+    # 8-1. [PATCH 2] 인덱스 위생 메트릭
+    try:
+        import os
+        from app.config.settings import DOCS_DIR
+
+        # 물리 파일 수 (fs_file_count)
+        fs_count = 0
+        docs_path = Path(DOCS_DIR)
+        if docs_path.exists():
+            for root, _, files in os.walk(docs_path):
+                fs_count += sum(1 for f in files if f.lower().endswith(('.pdf', '.txt')))
+
+        metrics["fs_file_count"] = fs_count
+
+        # 검색 인덱스 파일 수 (index_file_count)
+        index_count = 0
+        stale_count = 0
+        index_db_path = Path("everything_index.db")
+        if index_db_path.exists():
+            conn = sqlite3.connect(str(index_db_path))
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM files")
+            index_count = cursor.fetchone()[0]
+
+            # stale 항목 계산: 인덱스에는 있지만 디스크에는 없는 파일
+            cursor.execute("SELECT filename, path FROM files")
+            rows = cursor.fetchall()
+            fs_names = set()
+            for root, _, files in os.walk(docs_path):
+                for f in files:
+                    if f.lower().endswith(('.pdf', '.txt')):
+                        fs_names.add(f)
+
+            for filename, path in rows:
+                exists = os.path.exists(path) if path and os.path.isabs(path) else (filename in fs_names)
+                if not exists:
+                    stale_count += 1
+
+            conn.close()
+
+        metrics["index_file_count"] = index_count
+        metrics["stale_index_entries"] = stale_count
+
+        # 마지막 전체 재색인 타임스탬프
+        last_reindex_file = Path("var/last_full_reindex.txt")
+        if last_reindex_file.exists():
+            metrics["last_full_reindex_ts"] = last_reindex_file.read_text().strip()
+        else:
+            metrics["last_full_reindex_ts"] = "unknown"
+
+    except Exception as e:
+        print(f"인덱스 위생 메트릭 실패: {e}")
+        metrics["fs_file_count"] = 0
+        metrics["index_file_count"] = 0
+        metrics["stale_index_entries"] = 0
+        metrics["last_full_reindex_ts"] = "unknown"
+
+    # 8-2. [ALERTS] 인덱스 위생 임계치 평가
+    try:
+        from app.alerts import send_warning
+
+        threshold_gap = 5
+        fs_count = metrics.get("fs_file_count", 0)
+        idx_count = metrics.get("index_file_count", 0)
+        stale = metrics.get("stale_index_entries", 0)
+
+        # 임계치 초과 시 알림
+        if stale > 0 or abs(fs_count - idx_count) > threshold_gap:
+            send_warning("인덱스 정합성 경고", {
+                "fs_file_count": fs_count,
+                "index_file_count": idx_count,
+                "stale_index_entries": stale,
+                "threshold_gap": threshold_gap
+            })
+    except Exception as e:
+        print(f"알림 전송 실패: {e}")
+
+    # 9. 코드 검색 메트릭 (런타임)
+    try:
+        from app.rag.metrics_collector import get_metrics_collector
+        code_metrics = get_metrics_collector().get_metrics()
+        metrics.update(code_metrics)
+    except Exception as e:
+        print(f"코드 검색 메트릭 조회 실패: {e}")
+        # 기본값 설정
+        metrics.update({
+            "code_queries_total": 0,
+            "exact_match_hits_total": 0,
+            "exact_match_hit_rate": 0.0,
+            "stage0_candidates_last": 0,
+            "stage1_candidates_last": 0,
+            "rrf_fusion_used_total": 0,
+            "retrieval_latency_ms_p50": 0,
+            "retrieval_latency_ms_p95": 0,
+        })
+
+    return metrics
+
+
 @app.get("/_debug/llm")
 def debug_llm():
     """LLM 로딩 디버그 엔드포인트"""

@@ -25,7 +25,8 @@ warnings.filterwarnings("ignore")
 project_root = Path(__file__).parent.absolute()
 sys.path.insert(0, str(project_root))
 
-import config
+from app.config.settings import DOCS_DIR, ALLOWED_EXTS, PROJECT_ROOT  # 프로젝트 설정
+import app.config.settings as config  # config 모듈 이름으로도 사용 (하위 호환성)
 from app.rag.pipeline import RAGPipeline  # 파사드 패턴: 단일 진입점
 from app.core.errors import ErrorCode, ERROR_MESSAGES  # 에러 코드
 from utils.css_loader import load_all_css  # CSS 로더 임포트
@@ -138,7 +139,7 @@ def render_document_card(title, info):
                 if 'path' in info:
                     file_path = Path(info['path'])
                 else:
-                    file_path = Path(config.DOCS_DIR) / info['filename']
+                    file_path = Path(DOCS_DIR) / info['filename']
 
                 if file_path.exists():
                     # 미리보기 버튼 (토글 방식) - 경로 포함하여 유니크 키 생성
@@ -149,7 +150,7 @@ def render_document_card(title, info):
                     if st.button(
                         "🔍 미리보기" if not current_state else "📖 미리보는중",
                         key=preview_key,
-                        use_container_width=True,
+                        width="stretch",
                         type="secondary" if not current_state else "primary"
                     ):
                         st.session_state[f'show_preview_{preview_key}'] = not current_state
@@ -162,7 +163,7 @@ def render_document_card(title, info):
                 if 'path' in info:
                     file_path = Path(info['path'])
                 else:
-                    file_path = Path(config.DOCS_DIR) / info['filename']
+                    file_path = Path(DOCS_DIR) / info['filename']
 
                 if file_path.exists():
                     try:
@@ -183,7 +184,7 @@ def render_document_card(title, info):
                             file_name=info['filename'],
                             mime="application/pdf",
                             key=f"dl_{hashlib.md5(unique_id.encode()).hexdigest()}",
-                            use_container_width=True,
+                            width="stretch",
                             help=f"클릭하여 {info['filename']} 파일을 다운로드합니다"
                         )
                     except MemoryError:
@@ -202,7 +203,7 @@ def render_document_card(title, info):
             if 'path' in info:
                 file_path = Path(info['path'])
             else:
-                file_path = Path(config.DOCS_DIR) / info['filename']
+                file_path = Path(DOCS_DIR) / info['filename']
 
             unique_id = str(file_path) if 'path' in info else info['filename']
             preview_key = f"preview_{hashlib.md5(unique_id.encode()).hexdigest()}"
@@ -219,7 +220,7 @@ def render_document_card(title, info):
                     if 'path' in info:
                         file_path = Path(info['path'])
                     else:
-                        file_path = Path(config.DOCS_DIR) / info['filename']
+                        file_path = Path(DOCS_DIR) / info['filename']
 
                     if file_path.exists():
                         try:
@@ -241,7 +242,8 @@ def generate_statistics_report(df, year=None, month=None):
     # 필터링
     filtered_df = df.copy()
     if year:
-        filtered_df = filtered_df[filtered_df['year'] == str(year)]
+        # year 필드가 문자열이므로 비교 시 문자열로 변환
+        filtered_df = filtered_df[(filtered_df['year'] == str(year)) | (filtered_df['year'] == year)]
     if month:
         filtered_df = filtered_df[filtered_df['month'] == month]
     
@@ -279,9 +281,9 @@ def main():
     with col2:
         # 로고 이미지 표시 (흰색 버전)
         if Path('channel_a_logo_inverted.png').exists():
-            st.image('channel_a_logo_inverted.png', use_container_width=True)
+            st.image('channel_a_logo_inverted.png')
         elif Path('channel_a_logo.png').exists():
-            st.image('channel_a_logo.png', use_container_width=True)
+            st.image('channel_a_logo.png')
         
         # 제목
         st.markdown("""
@@ -297,7 +299,7 @@ def main():
     st.markdown("<hr style='border: 1px solid rgba(255,255,255,0.3); margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.2);'>", unsafe_allow_html=True)
     
     # 문서 개수 동적 계산 (하드코딩 제거)
-    docs_path = Path(config.DOCS_DIR)
+    docs_path = Path(DOCS_DIR)
     pdf_count = len(list(docs_path.glob("*.pdf")))
     txt_count = len(list(docs_path.glob("*.txt")))
     

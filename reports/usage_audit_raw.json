@@ -1,0 +1,1508 @@
+[
+  {
+    "filepath": "./test_code_routing.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./web_interface.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": true,
+    "status": "USED"
+  },
+  {
+    "filepath": "./test_config_simple.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./config.py",
+    "imported_in": [
+      "web_interface.py",
+      "utils/system_checker.py"
+    ],
+    "import_count": 2,
+    "is_cli": false,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./test_qa_simple.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./debug_config.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./test_new_model.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./test_model_direct.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./test_model_loading.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./modules/search_module.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./modules/metadata_db.py",
+    "imported_in": [
+      "scripts/apply_archive.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./modules/search_module_hybrid.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./modules/metadata_extractor.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./experiments/hybrid_chat_rag_v2.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./experiments/claude/20251026/test_refactoring_final.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./experiments/claude/20251026/diagnose_rag.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./experiments/claude/20251026/test_author_fix.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./ui/components/index_status_panel.py",
+    "imported_in": [
+      "ui/components/index_status_panel.py"
+    ],
+    "import_count": 1,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./config/indexing.py",
+    "imported_in": [
+      "components/sidebar_library.py",
+      "scripts/utils/auto_indexer.py"
+    ],
+    "import_count": 2,
+    "is_cli": false,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./config/__init__.py",
+    "imported_in": [
+      "scripts/xray_used_unused.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": true,
+    "status": "USED"
+  },
+  {
+    "filepath": "./app/alerts.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./app/__init__.py",
+    "imported_in": [
+      "scripts/xray_used_unused.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": true,
+    "status": "USED"
+  },
+  {
+    "filepath": "./app/rag/query_router.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./app/rag/query_parser.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./app/rag/pipeline.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./app/rag/metrics_collector.py",
+    "imported_in": [
+      "app/api/main.py",
+      "app/rag/retrievers/hybrid.py"
+    ],
+    "import_count": 2,
+    "is_cli": false,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./app/rag/summary_templates.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./app/rag/__init__.py",
+    "imported_in": [
+      "scripts/xray_used_unused.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": true,
+    "status": "USED"
+  },
+  {
+    "filepath": "./app/rag/retrievers/hybrid.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./app/rag/retrievers/exact_match.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./app/rag/retrievers/__init__.py",
+    "imported_in": [
+      "scripts/xray_used_unused.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": true,
+    "status": "USED"
+  },
+  {
+    "filepath": "./app/rag/preprocess/clean_text.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./app/rag/preprocess/__init__.py",
+    "imported_in": [
+      "scripts/xray_used_unused.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": true,
+    "status": "USED"
+  },
+  {
+    "filepath": "./app/rag/render/list_postprocess.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./app/rag/render/summary_templates.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./app/rag/render/__init__.py",
+    "imported_in": [
+      "scripts/xray_used_unused.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": true,
+    "status": "USED"
+  },
+  {
+    "filepath": "./app/rag/parse/parse_meta.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./app/rag/parse/doctype.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./app/rag/parse/parse_tables.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./app/rag/parse/__init__.py",
+    "imported_in": [
+      "scripts/xray_used_unused.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": true,
+    "status": "USED"
+  },
+  {
+    "filepath": "./app/rag/utils/context_hydrator.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./app/rag/utils/json_utils.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./app/rag/utils/__init__.py",
+    "imported_in": [
+      "scripts/xray_used_unused.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": true,
+    "status": "USED"
+  },
+  {
+    "filepath": "./app/core/logging.py",
+    "imported_in": [
+      "utils/performance.py",
+      "utils/error_handler.py",
+      "utils/session_manager.py",
+      "rag_system/hybrid_search.py",
+      "rag_system/document_compression.py",
+      "rag_system/metadata_extractor.py",
+      "rag_system/llm_singleton.py",
+      "rag_system/korean_reranker.py",
+      "rag_system/korean_vector_store.py",
+      "rag_system/query_expansion.py",
+      "rag_system/llm_wrapper.py",
+      "rag_system/enhanced_ocr_processor.py",
+      "rag_system/bm25_store.py",
+      "app/core/logging.py",
+      "app/rag/utils/json_utils.py",
+      "scripts/ingest_dryrun.py",
+      "app/rag/utils/context_hydrator.py",
+      "scripts/reindex_atomic.py",
+      "app/rag/query_parser.py",
+      "scripts/quick_rebuild_bm25.py",
+      "scripts/utils/auto_index_watcher.py"
+    ],
+    "import_count": 21,
+    "is_cli": false,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./app/core/errors.py",
+    "imported_in": [
+      "experiments/hybrid_chat_rag_v2.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./app/core/__init__.py",
+    "imported_in": [
+      "scripts/xray_used_unused.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": true,
+    "status": "USED"
+  },
+  {
+    "filepath": "./app/config/settings.py",
+    "imported_in": [
+      "web_interface.py",
+      "utils/system_checker.py"
+    ],
+    "import_count": 2,
+    "is_cli": false,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./app/config/__init__.py",
+    "imported_in": [
+      "scripts/xray_used_unused.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": true,
+    "status": "USED"
+  },
+  {
+    "filepath": "./app/textproc/normalizer.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./app/api/main.py",
+    "imported_in": [
+      "scripts/apply_archive.py"
+    ],
+    "import_count": 1,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./app/api/__init__.py",
+    "imported_in": [
+      "scripts/xray_used_unused.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": true,
+    "status": "USED"
+  },
+  {
+    "filepath": "./archive/20251030/verify_golden_queries.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./archive/20251030/test_e2e_validation.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./archive/20251030/check_db_content.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./archive/20251030/fix_metadata_db.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./archive/20251030/everything_like_search.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./archive/20251030/test_final_validation.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./archive/20251030/rebuild_metadata.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./archive/20251030/rebuild_rag_indexes.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./archive/20251030/diagnose_qa_flow.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./archive/20251030/health_check.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./archive/20251030/modules/intent_module.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./archive/20251030/modules/cache_module.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./archive/20251030/modules/optimized_llm.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./archive/20251030/modules/reranker.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./archive/20251030/modules/llm_module.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./archive/20251030/modules/ocr_processor.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./archive/20251030/modules/response_formatter.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./archive/20251030/modules/document_module.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./archive/20251030/modules/statistics_module.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./archive/20251030/app/rag/summary_templates.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./archive/20251026/root_duplicates/auto_index_watcher.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./archive/20251026/root_duplicates/auto_indexer.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./archive/20251026/app/indexer/__init__.py",
+    "imported_in": [
+      "scripts/xray_used_unused.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": true,
+    "status": "USED"
+  },
+  {
+    "filepath": "./archive/20251026/app/ops/__init__.py",
+    "imported_in": [
+      "scripts/xray_used_unused.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": true,
+    "status": "USED"
+  },
+  {
+    "filepath": "./archive/20251026/app/rag/index_vec.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./archive/20251026/app/rag/index_bm25.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./archive/20251026/app/rag/metrics.py",
+    "imported_in": [
+      "app/api/main.py",
+      "app/rag/retrievers/hybrid.py"
+    ],
+    "import_count": 2,
+    "is_cli": false,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./archive/20251026/app/rag/retriever_v2.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./archive/20251026/app/rag/db.py",
+    "imported_in": [
+      "scripts/apply_archive.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./archive/20251026/app/rag/retrievers/hybrid.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./archive/20251026/app/ui/__init__.py",
+    "imported_in": [
+      "scripts/xray_used_unused.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": true,
+    "status": "USED"
+  },
+  {
+    "filepath": "./archive/20251026/app/data/__init__.py",
+    "imported_in": [
+      "scripts/xray_used_unused.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": true,
+    "status": "USED"
+  },
+  {
+    "filepath": "./archive/20251026/app/data/metadata/db_compat.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./archive/20251026/app/data/metadata/db.py",
+    "imported_in": [
+      "scripts/apply_archive.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./archive/20251026/app/data/metadata/__init__.py",
+    "imported_in": [
+      "scripts/xray_used_unused.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": true,
+    "status": "USED"
+  },
+  {
+    "filepath": "./archive/20251026/scripts/rebuild_indexes_v2.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./tests/test_results_list_postprocess.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./tests/test_parse_meta.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./tests/test_e2e_validation.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./tests/test_4mode_smoke.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./tests/test_clean_text.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./tests/test_page_text_api.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./tests/test_l2_rag.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./tests/test_ingest_from_docs.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./tests/test_cost_routing.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./tests/test_e2e_app.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./tests/test_filename_matching.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./tests/test_sidebar_counts.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./tests/test_claimed_total.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./tests/test_summary_and_list.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./tests/test_scenarios.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./tests/test_smoke.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./tests/test_consumables_summary.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./tests/test_chunk_contract.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./tests/test_parse_table.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./tests/test_chat_format_auto.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./tests/__init__.py",
+    "imported_in": [
+      "scripts/xray_used_unused.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": true,
+    "status": "USED"
+  },
+  {
+    "filepath": "./.github/scripts/check_licenses.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./components/chat_interface_before_improvement.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./components/chat_interface.py",
+    "imported_in": [
+      "components/__init__.py",
+      "web_interface.py"
+    ],
+    "import_count": 2,
+    "is_cli": false,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./components/pdf_viewer.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./components/sidebar_library.py",
+    "imported_in": [
+      "web_interface.py",
+      "components/__init__.py"
+    ],
+    "import_count": 2,
+    "is_cli": false,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./components/document_preview.py",
+    "imported_in": [
+      "web_interface.py",
+      "components/__init__.py"
+    ],
+    "import_count": 2,
+    "is_cli": false,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./components/__init__.py",
+    "imported_in": [
+      "scripts/xray_used_unused.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": true,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/migrate_model_codes.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/smoke_test.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/generate_askable_queries.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/check_index_consistency.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/audit_usage.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/test_phase1_smoke.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/build_codemap.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/audit_missing_content.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/test_exact_match.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/run_smoke_test.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/ingest_dryrun.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/ingest_from_docs.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/test_hybrid_rrf.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/xray_corrected.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/apply_archive.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/reorganize_structure.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/bench_rag.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/validate_codes.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/db_dedupe.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/verify_imports.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/reindex_atomic.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/reclassify_doctype.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/xray_used_unused.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/db_verify.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/generate_code_tests.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/validate_askable_queries.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/test_queries.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/backfill_model_codes.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/scenario_validation.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/ingest_content.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/analyze_usage.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/dot_to_svg_html.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/list_documents.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/scan_licenses.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/test_edge_cases.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/verify_env_integrity.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./scripts/quick_rebuild_bm25.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/utils/lock.py",
+    "imported_in": [
+      "components/sidebar_library.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/utils/auto_index_watcher.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./scripts/utils/auto_indexer.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./rag_system/bm25_store.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./rag_system/query_optimizer.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./rag_system/enhanced_ocr_processor.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./rag_system/llm_wrapper.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./rag_system/query_expansion.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./rag_system/korean_vector_store.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./rag_system/korean_reranker.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./rag_system/llm_singleton.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./rag_system/metadata_extractor.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./rag_system/document_compression.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./rag_system/multilevel_filter.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./rag_system/hybrid_search.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./rag_system/__init__.py",
+    "imported_in": [
+      "scripts/xray_used_unused.py"
+    ],
+    "import_count": 1,
+    "is_cli": false,
+    "is_special": true,
+    "status": "USED"
+  },
+  {
+    "filepath": "./utils/system_checker.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": true,
+    "is_special": false,
+    "status": "USED"
+  },
+  {
+    "filepath": "./utils/pdf_utils.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./utils/session_manager.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./utils/document_loader.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./utils/error_handler.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./utils/css_loader.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./utils/year_utils.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  },
+  {
+    "filepath": "./utils/performance.py",
+    "imported_in": [],
+    "import_count": 0,
+    "is_cli": false,
+    "is_special": false,
+    "status": "UNUSED"
+  }
+]

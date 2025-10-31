@@ -7,6 +7,8 @@ import streamlit as st
 import pandas as pd
 from pathlib import Path
 from typing import Optional
+from utils.year_utils import safe_year_to_int, normalize_year_list, compare_year
+from scripts.utils.lock import reindexing_lock, is_reindexing
 
 
 def display_document_list(
@@ -26,8 +28,15 @@ def display_document_list(
     """
     if isinstance(filtered_df, pd.DataFrame) and not filtered_df.empty:
         doc_counter = 0  # 전역 고유 카운터
-        for year in sorted(filtered_df['year'].unique(), reverse=True):
-            year_docs = filtered_df[filtered_df['year'] == year]
+        # year 필드를 정수로 변환하여 정렬 (year_utils 사용)
+        years = filtered_df['year'].unique()
+        valid_years = normalize_year_list(years)
+
+        for year in valid_years:
+            # year_utils의 compare_year 함수를 사용하여 안전하게 비교
+            year_docs = filtered_df[
+                filtered_df['year'].apply(lambda x: compare_year(x, year))
+            ]
 
             # 연도 구분선
             st.markdown(f"### {year}년 ({len(year_docs)}개)")
@@ -83,8 +92,8 @@ def render_sidebar_library(rag_instance) -> None:
         st.image('logo.png', width=200)
     st.markdown("---")
 
-    # 자동 인덱싱 상태 표시
-    st.markdown("### 자동 인덱싱")
+    # 자동 인덱싱 상태 표시 (물리 파일 수)
+    st.markdown("### 📁 파일 스캔 (물리)")
     if 'auto_indexer' in st.session_state:
         stats = st.session_state.auto_indexer.get_statistics()
         col1, col2 = st.columns(2)
@@ -92,6 +101,9 @@ def render_sidebar_library(rag_instance) -> None:
             st.metric("PDF", f"{stats['pdf_count']}개")
         with col2:
             st.metric("TXT", f"{stats['txt_count']}개")
+        # 물리 파일 총 개수 표시
+        physical_total = stats['pdf_count'] + stats['txt_count']
+        st.caption(f"물리 파일 총계: {physical_total}개")
 
         # 마지막 업데이트
         if stats['last_update'] != 'Never':
@@ -103,11 +115,103 @@ def render_sidebar_library(rag_instance) -> None:
     st.markdown("### 📚 문서 라이브러리")
     try:
         from modules.metadata_db import MetadataDB
+        from config.indexing import ALLOWED_EXTS
+
         db = MetadataDB()
 
-        # 총 문서 수
-        stats = db.get_statistics()
-        st.metric("총 문서", f"{stats['total_documents']}건")
+        # 통합 카운트 API 사용 - 고유 문서 수 (중복 제외, 허용 확장자만)
+        allowed_ext_list = [ext.replace(".", "") for ext in ALLOWED_EXTS]
+        unique_count = db.count_unique_documents(allowed_ext=tuple(allowed_ext_list))
+        st.metric("총 문서", f"{unique_count}건")
+
+        # 확장자별 카운트 (물리 파일 기준)
+        ext_counts = db.count_by_extension()
+
+        # 검색 인덱스 카운트
+        search_count = db.count_search_index()
+
+        # session_state에 저장하여 아래에서도 사용 가능하게 함
+        st.session_state.search_count = search_count
+        st.session_state.unique_count = unique_count
+
+        # [PATCH 3] 카운트 불일치 체크 및 경고 + stale 메트릭
+        stale_entries = 0
+        try:
+            import requests
+            # /metrics 엔드포인트에서 stale_index_entries 가져오기
+            resp = requests.get("http://localhost:7860/metrics", timeout=2)
+            if resp.status_code == 200:
+                metrics_data = resp.json()
+                stale_entries = metrics_data.get("stale_index_entries", 0)
+        except:
+            pass  # 백엔드가 실행되지 않았을 수 있음
+
+        # 불일치 또는 stale 항목 존재 시 경고
+        has_mismatch = (unique_count != search_count) or (stale_entries > 0)
+
+        # [LOCK] 재색인 진행 중 체크
+        if is_reindexing():
+            st.warning("⚙️ 재색인 진행 중… 잠시 후 재시도해주세요")
+            st.stop()
+
+        if has_mismatch:
+            warning_msg = f"⚠️ 지표 불일치: 라이브러리 {unique_count} / 검색 인덱스 {search_count}"
+            if stale_entries > 0:
+                warning_msg += f" (삭제 필요: {stale_entries}건)"
+            st.warning(warning_msg)
+
+            # [PATCH 4] 안전 모드 재색인 옵션
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                drop_rebuild = st.checkbox("Drop & Rebuild (안전 모드)",
+                    help="전체 인덱스를 삭제 후 재구축 (가장 깔끔)",
+                    key="drop_rebuild_checkbox")
+            with col2:
+                reindex_button = st.button("🔄 전체 재색인", key="fix_mismatch")
+
+            if reindex_button:
+                if 'auto_indexer' in st.session_state:
+                    try:
+                        with reindexing_lock(timeout_sec=3.0):
+                            with st.spinner("전체 재인덱싱 중..." + (" (Drop & Rebuild)" if drop_rebuild else "")):
+                                st.info("🔒 락 획득, 안전 재색인 시작")
+
+                                if drop_rebuild:
+                                    # Drop & Rebuild 모드: everything_index.db 삭제 후 재생성
+                                    import os
+                                    import sqlite3
+                                    try:
+                                        if os.path.exists("everything_index.db"):
+                                            os.remove("everything_index.db")
+                                        # 새 DB 생성 (자동 인덱서가 다시 만듦)
+                                        conn = sqlite3.connect("everything_index.db")
+                                        conn.execute("""
+                                            CREATE TABLE IF NOT EXISTS files (
+                                                filename TEXT,
+                                                path TEXT,
+                                                PRIMARY KEY (filename)
+                                            )
+                                        """)
+                                        conn.commit()
+                                        conn.close()
+                                        st.info("🗑️ 기존 인덱스 삭제 완료")
+                                    except Exception as e:
+                                        st.error(f"Drop 실패: {e}")
+
+                                result = st.session_state.auto_indexer.force_reindex()
+                                st.success(f"✅ {result['total']}개 파일 재인덱싱 완료!")
+
+                                # 타임스탬프 기록
+                                from datetime import datetime
+                                from pathlib import Path
+                                Path("var").mkdir(exist_ok=True)
+                                Path("var/last_full_reindex.txt").write_text(datetime.now().isoformat())
+
+                                if 'rag' in st.session_state:
+                                    del st.session_state.rag
+                                st.rerun()
+                    except RuntimeError as e:
+                        st.error(f"❌ 동시 작업으로 대기 초과: {e}")
 
         # 최근 문서 (expander)
         with st.expander("최근 10건", expanded=False):
@@ -155,13 +259,17 @@ def render_sidebar_library(rag_instance) -> None:
 
         with col2:
             if st.button("♻️ 전체재인덱싱", key="force_reindex", width="stretch"):
-                with st.spinner("전체 재인덱싱 중..."):
-                    result = st.session_state.auto_indexer.force_reindex()
-                    st.success(f"✅ {result['total']}개 파일 재인덱싱 완료!")
-                    # RAG 시스템 리로드
-                    if 'rag' in st.session_state:
-                        del st.session_state.rag
-                    st.rerun()
+                try:
+                    with reindexing_lock(timeout_sec=3.0):
+                        with st.spinner("전체 재인덱싱 중..."):
+                            result = st.session_state.auto_indexer.force_reindex()
+                            st.success(f"✅ {result['total']}개 파일 재인덱싱 완료!")
+                            # RAG 시스템 리로드
+                            if 'rag' in st.session_state:
+                                del st.session_state.rag
+                            st.rerun()
+                except RuntimeError as e:
+                    st.error(f"❌ 동시 작업으로 대기 초과: {e}")
 
     st.markdown("---")
     st.markdown("### 📂 문서 라이브러리")
@@ -178,10 +286,23 @@ def render_sidebar_library(rag_instance) -> None:
 
     # 문서 목록이 로드된 경우 탭 표시
     if not df.empty:
-        # 전체 문서 개수를 작게 표시
+        # 검색 인덱스 카운트를 session_state에서 가져오기
+        if 'search_count' in st.session_state:
+            search_count = st.session_state.search_count
+        else:
+            # session_state에 없으면 DB에서 조회
+            try:
+                from modules.metadata_db import MetadataDB
+                temp_db = MetadataDB()
+                search_count = temp_db.count_search_index()
+                st.session_state.search_count = search_count
+                temp_db.close()
+            except:
+                search_count = df['filename'].nunique() if 'filename' in df.columns else len(df)
+
         col1, col2 = st.columns([3, 1])
         with col1:
-            st.caption(f"전체 {len(df)}개 문서")
+            st.caption(f"검색 가능: {search_count}개 문서")
 
         # 탭 구성
         tab1, tab2 = st.tabs(["📁 문서 검색", "📅 연도별"])
@@ -218,11 +339,18 @@ def render_sidebar_library(rag_instance) -> None:
         with tab2:
             # 연도 선택
             if not df.empty and 'year' in df.columns:
-                years = sorted(df['year'].unique(), reverse=True)
+                # year_utils를 사용하여 year 필드 정규화
+                years_raw = df['year'].unique()
+                years = normalize_year_list(years_raw)
 
                 # 연도별 문서 개수 포함하여 표시
-                year_counts = df['year'].value_counts().to_dict()
-                year_options = [f"{year}년 ({year_counts.get(year, 0)}개)" for year in years]
+                year_counts = {}
+                for year in years:
+                    # compare_year를 사용하여 정확한 카운트
+                    count = len(df[df['year'].apply(lambda x: compare_year(x, year))])
+                    year_counts[year] = count
+
+                year_options = [f"{year}년 ({year_counts[year]}개)" for year in years]
 
                 selected_year_str = st.selectbox(
                     "연도 선택",
@@ -231,13 +359,13 @@ def render_sidebar_library(rag_instance) -> None:
                     key="year_select"
                 )
 
-                # 선택된 연도 추출 (연도없음 처리)
-                if selected_year_str == "연도없음":
-                    selected_year = 0
-                    filtered_df = df[df['year'] == 0]
-                else:
+                # 선택된 연도 추출
+                if selected_year_str:
                     selected_year = int(selected_year_str.split("년")[0])
-                    filtered_df = df[df['year'] == selected_year]
+                    # compare_year를 사용하여 안전하게 필터링
+                    filtered_df = df[df['year'].apply(lambda x: compare_year(x, selected_year))]
+                else:
+                    filtered_df = pd.DataFrame()
 
                 # 선택된 연도 정보
                 if selected_year == 0:
@@ -256,7 +384,12 @@ def render_sidebar_library(rag_instance) -> None:
     st.markdown("---")
     st.markdown("### 시스템 정보")
     if not df.empty and 'year' in df.columns:
-        year_range = f"{df['year'].min()}년 ~ {df['year'].max()}년"
+        # year_utils를 사용하여 안전하게 min/max 계산
+        years = normalize_year_list(df['year'].unique())
+        if years:
+            year_range = f"{min(years)}년 ~ {max(years)}년"
+        else:
+            year_range = "데이터 없음"
     else:
         year_range = "데이터 없음"
 

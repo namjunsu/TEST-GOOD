@@ -269,7 +269,7 @@ class PDFViewer:
                 img_display = img
 
             # 이미지 표시
-            st.image(img_display, use_container_width=True)
+            st.image(img_display)
 
             # 페이지 네비게이션 버튼
             if total_pages > 1:
@@ -367,19 +367,30 @@ class PDFViewer:
             ocr = st.session_state.ocr_processor
 
             with st.spinner("OCR 처리 중... 시간이 걸릴 수 있습니다"):
-                ocr_text = ocr.process_pdf_with_ocr(str(self.file_path), page_num)
+                ocr_result = ocr.process_pdf_with_ocr(str(self.file_path), page_num)
 
-            if ocr_text and ocr_text.strip():
-                st.success("✅ OCR 처리 성공!")
+            if ocr_result.get("ok") and ocr_result.get("text", "").strip():
+                # 성공 메시지 (OCR 스킵 또는 성공)
+                if ocr_result.get("engine") == "skip":
+                    st.info(f"ℹ️ 텍스트 레이어가 있어 OCR을 스킵했습니다 (총 {ocr_result.get('pages', 0)}페이지)")
+                else:
+                    st.success(f"✅ OCR 처리 성공! (엔진: {ocr_result.get('engine', 'tesseract')})")
+
                 st.text_area(
-                    "OCR 추출 내용",
-                    ocr_text,
+                    "추출된 내용",
+                    ocr_result["text"],
                     height=500,
                     key=f"ocr_content_{self.file_path}"
                 )
                 return True
             else:
-                st.warning("⚠️ OCR 처리 후에도 텍스트를 추출할 수 없습니다")
+                # 실패 메시지
+                why = ocr_result.get("why", "unknown")
+                if "missing_binary" in why:
+                    st.warning("⚠️ Tesseract OCR이 설치되지 않았거나 라이브러리가 없습니다")
+                    st.info("💡 설치: pip install pytesseract pdf2image")
+                else:
+                    st.warning(f"⚠️ OCR 처리 후에도 텍스트를 추출할 수 없습니다 (사유: {why})")
                 return False
 
         except ImportError:

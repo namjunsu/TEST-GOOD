@@ -165,6 +165,12 @@ class QueryRouter:
         # 2. 문서 지시어 체크 (이문서, 해당 문서 등)
         has_doc_reference = self.DOC_REFERENCE_PATTERN.search(query) is not None
 
+        # 2.1. 문서 타입 키워드 체크 (검토서, 기안서, 견적서 등)
+        has_doc_type_keyword = bool(re.search(
+            r"(검토서|기안서|견적서|제안서|보고서|계획서|공문|발주서|납품서|영수증)",
+            query, re.IGNORECASE
+        ))
+
         # 3. 미리보기 전용 키워드 체크
         has_preview_intent = any(
             keyword in query_lower for keyword in self.preview_keywords
@@ -180,8 +186,9 @@ class QueryRouter:
             logger.info("🎯 모드 결정: LIST (목록 검색)")
             return QueryMode.LIST
 
-        # 6. SUMMARY 모드 (파일명 또는 문서 지시어 + 요약 의도)
-        if (has_filename or has_doc_reference) and self.SUMMARY_INTENT_PATTERN.search(query):
+        # 6. SUMMARY 모드 (파일명/문서지시어/문서타입 + 요약 의도)
+        # 수정: 문서 타입 키워드도 문서 참조로 인정
+        if (has_filename or has_doc_reference or has_doc_type_keyword) and self.SUMMARY_INTENT_PATTERN.search(query):
             logger.info("🎯 모드 결정: SUMMARY (내용 요약)")
             return QueryMode.SUMMARY
 

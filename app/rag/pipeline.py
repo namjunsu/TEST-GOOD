@@ -485,8 +485,12 @@ class RAGPipeline:
             query_mode = self.query_router.classify_mode_with_retrieval(query, results)
             logger.info(f"🔀 QueryRouter 분류: mode={query_mode.value}")
 
-            # 🎯 DOC_ANCHORED 모드: Top-1 문서만 사용, 전체 텍스트 보장
+            # 🎯 DOC_ANCHORED 모드: Top-1 문서만 사용, 전체 텍스트 보장 + 구조화된 추출
             if query_mode == QueryMode.DOC_ANCHORED:
+                from app.extractors.device_fields import extract_fields_rule_based
+                from app.extractors.merge import merge_device_fields
+                import json
+
                 top_doc = results[0]
                 doc_id = top_doc.get('meta', {}).get('filename') or top_doc.get('doc_id', 'unknown')
                 snippet = top_doc.get('snippet', '')
@@ -494,25 +498,74 @@ class RAGPipeline:
                 # 스니펫 보강: 짧으면 data/extracted에서 전체 텍스트 로드
                 full_text = self._load_full_text_if_short(doc_id, snippet)
 
-                # DOC_ANCHORED 전용 컨텍스트
-                # 문서 내용을 그대로 제공하여 LLM이 직접 인용하도록 함
-                doc_query = f"""{query}
+                # 1) 규칙 기반 추출 (정규식, 확실한 패턴)
+                rule_fields = extract_fields_rule_based(full_text)
+                logger.info(f"🔍 규칙 추출: {rule_fields}")
 
-다음 문서의 내용을 바탕으로 답변하세요. 반드시 구체적인 정보를 포함하세요:
-- 현재 DVR: 제조사와 모델명
-- IP 주소
-- 사용 기간 (몇 년)
-- 교체 검토 안 (1안, 2안)
+                # 2) LLM JSON 스키마 추출
+                json_schema_prompt = f"""다음 문서에서 장비 정보를 추출하여 JSON으로 출력하세요.
 
-출처: {doc_id}"""
+**문서:**
+{full_text}
 
-                # LLM 생성 (DOC_ANCHORED는 충분한 토큰 예산 필요)
-                answer = self.generator.generate(
-                    query=doc_query,
-                    context=full_text,  # 원본 텍스트 그대로 제공
-                    temperature=0.1,
-                    mode="summarize"  # summarize 모드로 설정하여 더 긴 토큰 예산 확보 (320 tokens)
+**추출 필드:**
+- model: 모델명 (예: "HRD-442")
+- manufacturer: 제조사 (예: "Hanwha Techwin")
+- ip_address: IP 주소 (예: "10.120.10.153")
+- reason: 교체 사유 (문서에서 그대로 인용)
+- duration_years: 사용 기간 (숫자만, 예: 7)
+
+**출력 형식:**
+오직 JSON만 출력하세요. 다른 텍스트는 포함하지 마세요.
+문서에 없는 필드는 null로 표시하세요.
+
+JSON:"""
+
+                # LLM 생성 (저온도로 정확성 향상)
+                llm_response = self.generator.generate(
+                    query=json_schema_prompt,
+                    context="",  # 프롬프트에 이미 문서 포함
+                    temperature=0.05,
+                    mode="summarize"  # 충분한 토큰 예산
                 )
+
+                # JSON 파싱 시도
+                llm_fields = {}
+                try:
+                    # LLM 응답에서 JSON 부분만 추출
+                    json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', llm_response, re.DOTALL)
+                    if json_match:
+                        llm_fields = json.loads(json_match.group(0))
+                        logger.info(f"🤖 LLM 추출: {llm_fields}")
+                except Exception as e:
+                    logger.warning(f"⚠️ LLM JSON 파싱 실패: {e}, response={llm_response[:200]}")
+
+                # 3) 병합 및 검증
+                merged_fields = merge_device_fields(rule_fields, llm_fields)
+                logger.info(f"✅ 최종 필드: {merged_fields}")
+
+                # 4) 사용자 친화적 답변 생성
+                answer_parts = []
+                answer_parts.append(f"**문서:** {doc_id}\n")
+
+                if merged_fields.get("model") or merged_fields.get("manufacturer"):
+                    answer_parts.append("**현재 장비:**")
+                    if merged_fields.get("manufacturer"):
+                        answer_parts.append(f"- 제조사: {merged_fields['manufacturer']}")
+                    if merged_fields.get("model"):
+                        answer_parts.append(f"- 모델명: {merged_fields['model']}")
+                    if merged_fields.get("ip_address"):
+                        answer_parts.append(f"- IP 주소: {merged_fields['ip_address']}")
+
+                if merged_fields.get("duration_years") or merged_fields.get("reason"):
+                    answer_parts.append("\n**교체 검토 배경:**")
+                    if merged_fields.get("duration_years"):
+                        answer_parts.append(f"- 사용 기간: {merged_fields['duration_years']}년")
+                    if merged_fields.get("reason"):
+                        answer_parts.append(f"- 사유: {merged_fields['reason']}")
+
+                answer_parts.append(f"\n출처: {doc_id}")
+                answer = "\n".join(answer_parts)
 
                 metrics["mode"] = "doc_anchored"
                 metrics["top_score"] = top_doc.get('score', 0.0)

@@ -361,6 +361,28 @@ class RAGPipeline:
 
         logger.info(f"RAG Pipeline initialized (known_drafters: {len(self.known_drafters)}명)")
 
+    def _load_full_text_if_short(self, filename: str, snippet: str) -> str:
+        """스니펫이 짧으면 data/extracted에서 전체 텍스트 로드"""
+        EXTRACTED_DIR = Path(os.getenv("EXTRACTED_DIR", "data/extracted"))
+        MIN_SNIPPET_LEN = int(os.getenv("DOC_ANCHOR_MIN_SNIPPET", "1200"))
+
+        if len(snippet) >= MIN_SNIPPET_LEN:
+            return snippet
+
+        # 파일명에서 확장자 제거 후 .txt 찾기
+        stem = os.path.splitext(filename)[0]
+        txt_path = EXTRACTED_DIR / f"{stem}.txt"
+
+        if txt_path.exists():
+            try:
+                full_text = txt_path.read_text(encoding="utf-8", errors="ignore")
+                logger.info(f"📄 DOC_ANCHORED: {filename} 전체 텍스트 로드 ({len(full_text)}자)")
+                return full_text[:5000]  # 최대 5000자
+            except Exception as e:
+                logger.warning(f"⚠️ 전체 텍스트 로드 실패: {e}")
+
+        return snippet
+
     def query(
         self,
         query: str,
@@ -458,7 +480,67 @@ class RAGPipeline:
                         f"snippet={c.get('snippet', '')[:120]}..."
                     )
 
-            # 🎯 STEP 1: 모드 결정 (컨텍스트 최적화보다 먼저)
+            # 🎯 STEP 1: QueryRouter 모드 분류 (DOC_ANCHORED 최우선 체크)
+            # CRITICAL: 검색 결과를 고려한 지능형 라우팅
+            query_mode = self.query_router.classify_mode_with_retrieval(query, results)
+            logger.info(f"🔀 QueryRouter 분류: mode={query_mode.value}")
+
+            # 🎯 DOC_ANCHORED 모드: Top-1 문서만 사용, 전체 텍스트 보장
+            if query_mode == QueryMode.DOC_ANCHORED:
+                top_doc = results[0]
+                doc_id = top_doc.get('meta', {}).get('filename') or top_doc.get('doc_id', 'unknown')
+                snippet = top_doc.get('snippet', '')
+
+                # 스니펫 보강: 짧으면 data/extracted에서 전체 텍스트 로드
+                full_text = self._load_full_text_if_short(doc_id, snippet)
+
+                # DOC_ANCHORED 전용 컨텍스트
+                # 문서 내용을 그대로 제공하여 LLM이 직접 인용하도록 함
+                doc_query = f"""{query}
+
+다음 문서의 내용을 바탕으로 답변하세요. 반드시 구체적인 정보를 포함하세요:
+- 현재 DVR: 제조사와 모델명
+- IP 주소
+- 사용 기간 (몇 년)
+- 교체 검토 안 (1안, 2안)
+
+출처: {doc_id}"""
+
+                # LLM 생성 (DOC_ANCHORED는 충분한 토큰 예산 필요)
+                answer = self.generator.generate(
+                    query=doc_query,
+                    context=full_text,  # 원본 텍스트 그대로 제공
+                    temperature=0.1,
+                    mode="summarize"  # summarize 모드로 설정하여 더 긴 토큰 예산 확보 (320 tokens)
+                )
+
+                metrics["mode"] = "doc_anchored"
+                metrics["top_score"] = top_doc.get('score', 0.0)
+                metrics["generate_time"] = time.perf_counter() - gen_start
+                metrics["total_time"] = time.perf_counter() - start_time
+
+                # 출처 정보 구성
+                evidence_chunks = [{
+                    "doc_id": doc_id,
+                    "score": top_doc.get('score', 0.0),
+                    "snippet": full_text[:500],  # 미리보기용
+                    "page": top_doc.get('page', 1),
+                    "meta": top_doc.get('meta', {})
+                }]
+
+                logger.info(f"✅ DOC_ANCHORED 답변 생성 완료: {doc_id} ({len(full_text)}자)")
+
+                return RAGResponse(
+                    answer=answer,
+                    success=True,
+                    source_docs=[doc_id],
+                    evidence_chunks=evidence_chunks,
+                    latency=metrics["total_time"],
+                    metrics=metrics,
+                    diagnostics={"mode": "doc_anchored", "doc_id": doc_id}
+                )
+
+            # 🎯 STEP 2: 기존 모드 결정 로직 (DOC_ANCHORED 아닌 경우)
             # CRITICAL: Determine mode BEFORE context hydration to apply mode-aware context limits
             mode_env = os.getenv('MODE', 'AUTO').upper()
             top_score = results[0].get('score', 0.0) if results else 0.0

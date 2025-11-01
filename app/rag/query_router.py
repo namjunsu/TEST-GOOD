@@ -1,12 +1,13 @@
 """
 쿼리 모드 라우터
-2025-10-26
+2025-11-01
 
 질의 의도를 분석하여 Q&A 모드 vs 문서 미리보기 모드를 결정합니다.
 
 규칙:
 - Q&A 의도 키워드가 있으면 파일명이 있어도 Q&A 모드 우선
 - 파일명만 있고 Q&A 의도가 없으면 미리보기 모드
+- 고신뢰 + 장비 용어 → DOC_ANCHORED 모드 (단일 문서 앵커)
 """
 
 import os
@@ -15,11 +16,36 @@ from enum import Enum
 from pathlib import Path
 import yaml
 from typing import Dict, Any
+from dataclasses import dataclass
 
 from app.core.logging import get_logger
 from typing import List, Tuple, Optional
 
 logger = get_logger(__name__)
+
+
+@dataclass
+class ScoreStats:
+    """검색 결과 점수 통계"""
+    top1: float
+    top2: float
+    top3: float
+    delta12: float
+    delta13: float
+    ratio12: float  # top1 / max(top2, 1e-9)
+    hits: int
+
+
+# 장비/사양 도메인 용어 (DVR, 카메라 등)
+DEVICE_TERMS = (
+    "dvr", "hrd-", "hrd442", "hrd-442", "hanwha", "한화", "nvr",
+    "녹화", "모니터", "교체", "ip ", "카메라", "eng", "마이크"
+)
+
+# 환경변수로 조정 가능한 임계값
+FORCE_TOP1_MIN = float(os.getenv("ROUTER_FORCE_DOC_TOP1_MIN", "15.0"))
+FORCE_DELTA12_MIN = float(os.getenv("ROUTER_FORCE_DOC_DELTA12_MIN", "3.0"))
+FORCE_RATIO12_MIN = float(os.getenv("ROUTER_FORCE_DOC_RATIO12_MIN", "1.35"))
 
 
 # 헬퍼 함수: 파일명 정규화 (공백/특수문자 제거)
@@ -43,6 +69,43 @@ def _score(qn: str, tn: str) -> float:
     return min(1.0, base + length_bonus)
 
 
+def _has_device_terms(query: str) -> bool:
+    """장비/사양 도메인 용어 포함 여부 체크"""
+    ql = query.lower()
+    return any(term in ql for term in DEVICE_TERMS)
+
+
+def _should_force_doc_anchor(query: str, score_stats: dict) -> bool:
+    """DOC_ANCHORED 모드 강제 조건 체크
+
+    Args:
+        query: 사용자 질의
+        score_stats: 검색 결과 점수 통계 dict
+
+    Returns:
+        True if should force DOC_ANCHORED mode
+    """
+    # 장비 용어 포함 시 무조건 DOC_ANCHORED
+    if _has_device_terms(query):
+        logger.info(f"🎯 DOC_ANCHORED 강제: 장비 용어 감지")
+        return True
+
+    # 고신뢰 점수 조건 (Top-1 우세)
+    top1 = score_stats.get("top1", 0.0)
+    delta12 = score_stats.get("delta12", 0.0)
+    top2 = score_stats.get("top2", 0.0)
+    ratio12 = top1 / max(top2, 1e-9)
+
+    if top1 >= FORCE_TOP1_MIN and (delta12 >= FORCE_DELTA12_MIN or ratio12 >= FORCE_RATIO12_MIN):
+        logger.info(
+            f"🎯 DOC_ANCHORED 강제: 고신뢰 점수 "
+            f"(top1={top1:.2f}, delta12={delta12:.2f}, ratio12={ratio12:.2f})"
+        )
+        return True
+
+    return False
+
+
 class QueryMode(Enum):
     """쿼리 모드"""
 
@@ -50,6 +113,7 @@ class QueryMode(Enum):
     PREVIEW = "preview"  # 문서 미리보기 모드 (파일 전문)
     LIST = "list"  # 목록 검색 모드 (다건 카드 표시)
     LIST_FIRST = "list_first"  # 낮은 신뢰도 → 목록 우선 표시 모드
+    DOC_ANCHORED = "doc_anchored"  # 단일 문서 앵커 모드 (Top-1 고정)
     SUMMARY = "summary"  # 내용 요약 모드 (5줄 섹션)
     QA = "qa"  # 질답 모드 (RAG 파이프라인, 기본)
 
@@ -303,20 +367,27 @@ class QueryRouter:
         query: str,
         retrieval_results: Any = None
     ) -> QueryMode:
-        """검색 결과를 고려한 모드 분류 (low-confidence 가드레일 포함)
+        """검색 결과를 고려한 모드 분류 (DOC_ANCHORED + low-confidence 가드레일 포함)
 
         Args:
             query: 사용자 질의
             retrieval_results: HybridRetriever.search() 결과 (score_stats 속성 포함 가능)
 
         Returns:
-            QueryMode (COST_SUM, PREVIEW, LIST, LIST_FIRST, SUMMARY, QA 중 하나)
+            QueryMode (COST_SUM, PREVIEW, LIST, LIST_FIRST, DOC_ANCHORED, SUMMARY, QA 중 하나)
         """
-        # Low-confidence 체크 (우선순위: 기본 모드 분류 전)
+        # score_stats 추출
+        score_stats = getattr(retrieval_results, "score_stats", {}) or {}
+
+        # 1. DOC_ANCHORED 강제 체크 (최우선)
+        if retrieval_results is not None and _should_force_doc_anchor(query, score_stats):
+            return QueryMode.DOC_ANCHORED
+
+        # 2. Low-confidence 체크
         if retrieval_results is not None and self._is_low_confidence(retrieval_results):
             return QueryMode.LIST_FIRST
 
-        # 기본 모드 분류
+        # 3. 기본 모드 분류
         return self.classify_mode(query)
 
     def classify_mode_with_hits(

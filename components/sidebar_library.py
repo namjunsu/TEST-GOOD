@@ -60,10 +60,12 @@ def display_document_list(
                 doc_counter += 1
 
                 # 심플한 버튼으로 문서 선택
-                if st.button(button_text, key=unique_key, width="stretch"):
+                if st.button(button_text, key=unique_key, use_container_width=True):
                     st.session_state.selected_doc = row
                     st.session_state.show_doc_preview = True
-                    st.rerun()
+                    # pdf_preview_shown 초기화 (새 문서 선택 시)
+                    st.session_state.pdf_preview_shown = False
+                    # st.rerun() 제거 - Streamlit 자동 재렌더링 (버그 수정 2025-10-31)
     else:
         # 문서가 없거나 데이터프레임이 비어있을 때
         if not isinstance(filtered_df, pd.DataFrame):

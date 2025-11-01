@@ -67,7 +67,7 @@ if [[ "$RETRIEVER_BACKEND" == "bm25" ]]; then
   # 1. 인덱스 파일 존재 확인
   if [[ ! -f "${BM25_INDEX_PATH}" ]]; then
     log WARN "BM25 인덱스가 없어 재인덱싱을 수행합니다"
-    python -m app.index.build --input data/extracted --output "${BM25_INDEX_PATH}" --force || {
+    python scripts/reindex_atomic.py || {
       log ERROR "재인덱싱 실패"
       exit 1
     }
@@ -93,7 +93,7 @@ PYCHECK
   rc=$?
   if [[ $rc -eq 2 ]]; then
     log WARN "인덱스 드리프트 감지 → 재인덱싱"
-    python -m app.index.build --input data/extracted --output "${BM25_INDEX_PATH}" --force || {
+    python scripts/reindex_atomic.py || {
       log ERROR "재인덱싱 실패"
       exit 1
     }

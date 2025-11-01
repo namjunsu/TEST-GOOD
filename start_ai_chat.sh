@@ -79,8 +79,9 @@ import sqlite3, os, sys
 from app.index.bm25_store import BM25Store
 
 try:
-    bm = BM25Store.load(os.environ.get("BM25_INDEX_PATH", "var/index/bm25_index.pkl"))
-    b = bm.size()
+    index_path = os.environ.get("BM25_INDEX_PATH", "var/index/bm25_index.pkl")
+    bm = BM25Store(index_path=index_path)
+    b = bm.N
     c = sqlite3.connect("metadata.db").execute("SELECT COUNT(*) FROM documents").fetchone()[0]
     thr = max(int(c * 0.05), 10)
     print(f"BM25={b}, META={c}, THR={thr}", flush=True)

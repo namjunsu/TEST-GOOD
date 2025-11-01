@@ -417,10 +417,26 @@ class RAGPipeline:
         diagnostics = {}  # 진단 정보 수집
 
         try:
+            # 0. 검색 전 pre-routing: 장비 질의 감지 (DOC_ANCHORED 필터링용)
+            # QueryRouter의 device term 감지 로직 활용
+            preliminary_mode = "chat"
+            if hasattr(self, 'query_router') and hasattr(self.query_router, '_has_device_terms'):
+                if self.query_router._has_device_terms(query):
+                    preliminary_mode = "doc_anchored"
+                    logger.info("🎯 검색 전 DOC_ANCHORED 모드 감지 (장비 용어)")
+
             # 1. 검색: 정규화된 청크(dict) 리스트 기대
             search_start = time.perf_counter()
-            results = self.retriever.search(query, top_k)
+            results = self.retriever.search(query, top_k, mode=preliminary_mode)
             metrics["search_time"] = time.perf_counter() - search_start
+
+            # [검색 결과 Top-N 진단 로그]
+            logger.info(f"RETRIEVE_TOPN mode={preliminary_mode}")
+            for i, doc in enumerate(results[:10], 1):
+                score = doc.get('score', 0.0)
+                doc_id = doc.get('doc_id', 'unknown')
+                snippet_preview = doc.get('snippet', '')[:60].replace('\n', ' ')
+                logger.info(f"  #{i} score={score:.4f} doc={doc_id} preview={snippet_preview}...")
 
             # [DIAG] 검색 결과 진단
             if DIAG_RAG:

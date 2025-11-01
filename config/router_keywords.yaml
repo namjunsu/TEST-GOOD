@@ -1,0 +1,49 @@
+# ============================================================================
+# 라우터 키워드 설정 (DOC_ANCHORED 필터링)
+# ============================================================================
+# 2025-11-01: 장비 질의 검색 정확도 향상 (운영 중 실시간 수정 가능)
+#
+# 목적:
+#   - DOC_ANCHORED 모드에서 장비 관련 문서만 상위 랭킹
+#   - 비장비 문서(media port, 짐벌 등) 오탐 억제
+#   - 운영자가 YAML 수정만으로 즉시 반영 가능
+
+doc_anchored:
+  # 허용 패턴 (이 패턴 중 하나라도 매칭되면 통과)
+  allow:
+    - "\\bHRD[-\\s]?\\d{3,4}\\b"                # HRD-442, HRD 1234, HRD-1234
+    - "\\bDVR\\b"                                # DVR (Digital Video Recorder)
+    - "\\bNVR\\b"                                # NVR (Network Video Recorder)
+    - "Hanwha(?:\\s+(?:Techwin|Vision))?"       # Hanwha, Hanwha Techwin, Hanwha Vision
+    - "보존용|녹화용|교체|노후|장비|카메라|모니터"  # 장비 관련 한글 키워드
+
+  # 차단 패턴 (이 패턴 매칭 시 점수 하향 또는 제외)
+  deny:
+    - "지미집|지미짚"                             # 짐벌 장비 (비검색 대상)
+    - "control\\s*box"                           # 컨트롤 박스
+    - "틸트|짐벌"                                 # 카메라 보조 장비
+
+  # 부스팅 키워드 (매칭 시 점수 가중)
+  boost:
+    - "HRD-442"
+    - "DVR"
+    - "Hanwha"
+    - "보존|녹화|교체|노후"
+
+# ============================================================================
+# 사용 예시 (app/rag/retrievers/hybrid.py)
+# ============================================================================
+# import yaml
+# from pathlib import Path
+#
+# # 로드
+# config_path = Path("config/router_keywords.yaml")
+# config = yaml.safe_load(config_path.read_text())
+# allow_patterns = config["doc_anchored"]["allow"]
+# device_pattern = "|".join(allow_patterns)
+#
+# # 검색 후 필터링
+# for result in bm25_results:
+#     text = result.get("snippet", "") + " " + result.get("doc_id", "")
+#     if re.search(device_pattern, text, re.IGNORECASE):
+#         filtered.append(result)

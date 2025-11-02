@@ -10,12 +10,13 @@
 
 doc_anchored:
   # 허용 패턴 (이 패턴 중 하나라도 매칭되면 통과)
+  # 주의: DVR/NVR 특화 패턴만 포함. 일반 "장비" 키워드는 너무 광범위하므로 제외
   allow:
     - "\\bHRD[-\\s]?\\d{3,4}\\b"                # HRD-442, HRD 1234, HRD-1234
     - "\\bDVR\\b"                                # DVR (Digital Video Recorder)
     - "\\bNVR\\b"                                # NVR (Network Video Recorder)
     - "Hanwha(?:\\s+(?:Techwin|Vision))?"       # Hanwha, Hanwha Techwin, Hanwha Vision
-    - "보존용|녹화용|교체|노후|장비|카메라|모니터"  # 장비 관련 한글 키워드
+    - "방송.*보존용|영상.*보존용|녹화용"         # DVR 용도 특화 (보존용/녹화용)
 
   # 차단 패턴 (이 패턴 매칭 시 점수 하향 또는 제외)
   deny:

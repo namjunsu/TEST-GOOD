@@ -74,6 +74,7 @@ if [[ "$RETRIEVER_BACKEND" == "bm25" ]]; then
   fi
 
   # 2. 메타DB vs BM25 문서 수 정합성 (허용 편차 5% 또는 10문서 중 큰 값)
+  set +e  # 일시적으로 exit-on-error 비활성화
   python - <<'PYCHECK'
 import sqlite3, os, sys
 from app.index.bm25_store import BM25Store
@@ -91,6 +92,8 @@ except Exception as e:
     sys.exit(1)
 PYCHECK
   rc=$?
+  set -e  # exit-on-error 재활성화
+
   if [[ $rc -eq 2 ]]; then
     log WARN "인덱스 드리프트 감지 → 재인덱싱"
     python scripts/reindex_atomic.py || {

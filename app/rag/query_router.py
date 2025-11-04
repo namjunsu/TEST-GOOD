@@ -115,6 +115,7 @@ class QueryMode(Enum):
     LIST_FIRST = "list_first"  # 낮은 신뢰도 → 목록 우선 표시 모드
     DOC_ANCHORED = "doc_anchored"  # 단일 문서 앵커 모드 (Top-1 고정)
     SUMMARY = "summary"  # 내용 요약 모드 (5줄 섹션)
+    SEARCH = "search"  # 문서 검색 모드 (문서 리스트 반환)
     QA = "qa"  # 질답 모드 (RAG 파이프라인, 기본)
 
 
@@ -153,6 +154,16 @@ class QueryRouter:
     # 요약 패턴 (요약/정리/개요 + 다양한 변형)
     SUMMARY_INTENT_PATTERN = re.compile(
         r"(요약|정리|개요|내용.*요약|요약해|요약헤줘|정리해|개요.*알려)",
+        re.IGNORECASE,
+    )
+
+    # 검색 패턴 (문서 찾기 요청)
+    SEARCH_INTENT_PATTERN = re.compile(
+        r"(관련\s*(문서|파일|기안서)|"  # "XX 관련 문서"
+        r"문서\s*(찾|검색)|"            # "문서 찾아줘", "문서 검색"
+        r"파일\s*(찾|검색|있)|"          # "파일 찾아", "파일 있어?"
+        r"기안서\s*(찾|검색|있)|"        # "기안서 찾아"
+        r"(있어\??|있나요|있는지))",     # "있어?", "있나요"
         re.IGNORECASE,
     )
 

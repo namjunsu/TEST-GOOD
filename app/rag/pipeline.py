@@ -1812,7 +1812,7 @@ JSON:"""
                 for i, chunk in enumerate(sorted_chunks, 1):
                     chunk_text = chunk.get('text') or chunk.get('snippet') or chunk.get('content') or ""
                     if chunk_text:
-                        parts.append(f"=== [문서 청크 {i}] ===\n" + chunk_text[:2000])
+                        parts.append(f"=== [문서 청크 {i}] ===\n" + chunk_text[:5000])
 
                 if sorted_chunks:
                     logger.info(f"✓ 문서 고정 청크 {len(sorted_chunks)}개 추출 (우선순위: {len(priority_chunks)}개)")
@@ -1840,7 +1840,7 @@ JSON:"""
                 for i, h in enumerate(sorted_hits, 1):
                     chunk_text = h.get('text') or h.get('snippet') or h.get('content') or ""
                     if chunk_text:
-                        parts.append(f"=== [관련 청크 {i}] ===\n" + chunk_text[:2000])
+                        parts.append(f"=== [관련 청크 {i}] ===\n" + chunk_text[:5000])
 
                 if sorted_hits:
                     logger.info(f"✓ RAG 청크 {len(sorted_hits)}개 추출 (우선순위: {len(priority_hits)}개)")

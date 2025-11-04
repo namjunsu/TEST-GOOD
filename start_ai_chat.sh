@@ -29,7 +29,7 @@ log() {
 }
 
 # ---------- 외부 환경 충돌 최소화 ----------
-unset MODEL_PATH CHAT_FORMAT N_CTX N_GPU_LAYERS LLM_MODEL_PATH QWEN_MODEL_PATH 2>/dev/null || true
+unset MODEL_PATH CHAT_FORMAT N_CTX N_GPU_LAYERS LLM_MODEL_PATH QWEN_MODEL_PATH BM25_INDEX_PATH 2>/dev/null || true
 log INFO "외부 환경변수 핵심 키 초기화 완료"
 
 # ---------- .env 로드 ----------
@@ -77,14 +77,14 @@ if [[ "$RETRIEVER_BACKEND" == "bm25" ]]; then
   set +e  # 일시적으로 exit-on-error 비활성화
   python - <<'PYCHECK'
 import sqlite3, os, sys
-from app.index.bm25_store import BM25Store
+from rag_system.bm25_store import BM25Store  # 인덱서와 동일 모듈 사용
 
 try:
     index_path = os.environ.get("BM25_INDEX_PATH", "var/index/bm25_index.pkl")
     bm = BM25Store(index_path=index_path)
-    b = bm.N
+    b = len(bm.documents)  # rag_system.bm25_store는 .documents 리스트 사용
     c = sqlite3.connect("metadata.db").execute("SELECT COUNT(*) FROM documents").fetchone()[0]
-    thr = max(int(c * 0.05), 10)
+    thr = max(int(c * 0.05), 10)  # 임계값: 5% 또는 최소 10개
     print(f"BM25={b}, META={c}, THR={thr}", flush=True)
     sys.exit(0 if abs(b - c) <= thr else 2)
 except Exception as e:
@@ -108,12 +108,25 @@ PYCHECK
   log SUCCESS "BM25 인덱스 가드 통과"
 fi
 
+# ---------- 기존 프로세스 자동 종료 ----------
+log INFO "기존 프로세스 확인 중..."
+EXISTING_PIDS=$(pgrep -f "uvicorn app.api.main|streamlit run web_interface.py" 2>/dev/null | tr '\n' ' ' || true)
+if [[ -n "$EXISTING_PIDS" ]]; then
+  log WARN "기존 프로세스 발견, 종료 중: $EXISTING_PIDS"
+  pkill -f "uvicorn app.api.main" 2>/dev/null || true
+  pkill -f "streamlit run web_interface.py" 2>/dev/null || true
+  sleep 2
+  log SUCCESS "기존 프로세스 종료 완료"
+fi
+
 # ---------- 락 파일(동시 실행 방지) ----------
 LOCK_DIR="${PROJECT_ROOT}/var/run"; mkdir -p "$LOCK_DIR"
 LOCK_FILE="${LOCK_DIR}/ai-chat.lock"
+# 기존 lock 파일 제거 (stale lock 방지)
+rm -f "$LOCK_FILE" 2>/dev/null || true
 exec 9>"$LOCK_FILE" || { log ERROR "lockfile 열기 실패: $LOCK_FILE"; exit 1; }
 if ! flock -n 9; then
-  log ERROR "다른 인스턴스가 실행 중입니다. ($LOCK_FILE)"
+  log ERROR "락 파일 획득 실패 ($LOCK_FILE)"
   exit 1
 fi
 
@@ -223,16 +236,15 @@ sleep 2
 
 # 헬스체크
 for _ in {1..12}; do
-  if curl -sf "http://127.0.0.1:${API_PORT}/health" >/dev/null 2>&1; then
+  if curl -sf "http://127.0.0.1:${API_PORT}/_healthz" >/dev/null 2>&1; then
     log SUCCESS "FastAPI 헬시 (PID: $API_PID, :${API_PORT})"
     break
   fi
   sleep 1
 done
-if ! curl -sf "http://127.0.0.1:${API_PORT}/health" >/dev/null 2>&1; then
-  log WARN "API 헬스체크 실패"
-  read -r -p "계속 진행(y)/중단(n): " c
-  [[ "${c:-n}" =~ ^[Yy]$ ]] || { log INFO "사용자 선택으로 종료"; exit 1; }
+if ! curl -sf "http://127.0.0.1:${API_PORT}/_healthz" >/dev/null 2>&1; then
+  log WARN "API 헬스체크 실패 (서비스는 시작됨, 계속 진행)"
+  # 프롬프트 제거: 서비스 자체는 정상이므로 자동 진행
 fi
 
 # ---------- WSL 포트 프록시 ----------

@@ -11,7 +11,7 @@ from typing import List, Dict, Any
 from app.core.logging import get_logger
 from modules.metadata_db import MetadataDB
 from app.rag.query_parser import QueryParser
-from app.index.bm25_store import BM25Store
+from rag_system.bm25_store import BM25Store  # 인덱서와 동일 모듈 사용
 
 logger = get_logger(__name__)
 
@@ -40,7 +40,7 @@ class HybridRetriever:
                 index_path = os.getenv("BM25_INDEX_PATH", "var/index/bm25_index.pkl")
                 logger.info(f"🔍 DEBUG: BM25_INDEX_PATH={index_path} (exists={os.path.exists(index_path)})")
                 self.bm25 = BM25Store(index_path=index_path)
-                logger.info(f"✅ HybridRetriever 초기화 완료 (BM25 백엔드, {self.bm25.N}개 문서, path={self.bm25.path})")
+                logger.info(f"✅ HybridRetriever 초기화 완료 (BM25 백엔드, {len(self.bm25.documents)}개 문서, path={self.bm25.index_path})")
             else:
                 logger.info("✅ HybridRetriever 초기화 완료 (MetadataDB 폴백 모드)")
 
@@ -97,7 +97,7 @@ class HybridRetriever:
             index_path = os.getenv("BM25_INDEX_PATH", "var/index/bm25_index.pkl")
             self.bm25 = BM25Store(index_path=index_path)
             self._last_index_mtime = current_mtime
-            logger.info(f"✅ 인덱스 재로드 완료 ({self.bm25.N}개 문서)")
+            logger.info(f"✅ 인덱스 재로드 완료 ({len(self.bm25.documents)}개 문서)")
 
     def _calculate_relevance_score(self, query: str, doc: Dict[str, Any]) -> float:
         """쿼리와 문서 간 relevance 스코어 계산 (BM25 유사)
@@ -138,13 +138,14 @@ class HybridRetriever:
 
         return max(0.0, min(1.0, match_ratio))
 
-    def search(self, query: str, top_k: int, mode: str = "chat") -> List[Dict[str, Any]]:
+    def search(self, query: str, top_k: int, mode: str = "chat", selected_filename: Optional[str] = None) -> List[Dict[str, Any]]:
         """검색 수행
 
         Args:
             query: 검색 질의
             top_k: 상위 K개 결과
             mode: 검색 모드 ("chat", "doc_anchored" 등)
+            selected_filename: 선택된 문서 파일명 (우선 검색용, 선택사항)
 
         Returns:
             정규화된 검색 결과 리스트 (score_stats 속성 포함):
@@ -168,12 +169,30 @@ class HybridRetriever:
                 search_k = 50 if mode.lower() == "doc_anchored" else top_k
 
                 # BM25Store에서 직접 검색
-                bm25_results = self.bm25.search(query, k=search_k)
+                bm25_results = self.bm25.search(query, top_k=search_k)
+
+                # BM25 결과를 RAGPipeline 형식으로 변환 (doc_id, snippet 필드 추가)
+                converted_results = []
+                for result in bm25_results:
+                    converted_results.append({
+                        "doc_id": result.get("filename", "unknown"),
+                        "snippet": result.get("content", "")[:800],  # content -> snippet
+                        "score": result.get("score", 0.0),
+                        "page": 1,
+                        "filename": result.get("filename"),  # 원본 filename 유지
+                        "file_path": result.get("path"),  # path -> file_path
+                        "meta": {
+                            "filename": result.get("filename"),
+                            "date": result.get("date"),
+                            "drafter": result.get("drafter"),
+                            "category": result.get("category"),
+                        }
+                    })
 
                 # DOC_ANCHORED 필터링: 장비 관련 키워드만 통과
                 if mode.lower() == "doc_anchored":
                     filtered = []
-                    for result in bm25_results:
+                    for result in converted_results:
                         text = result.get("snippet", "") + " " + result.get("doc_id", "")
                         if re.search(self.device_pattern, text, re.IGNORECASE):
                             filtered.append(result)
@@ -181,12 +200,57 @@ class HybridRetriever:
                     # 필터 결과가 없으면 원본 상위 N*3 사용 (미탐 방지)
                     if not filtered:
                         logger.warning("⚠️ DOC_ANCHORED 필터링 결과 없음, 원본 상위 사용")
-                        normalized = bm25_results[:top_k * 3]
+                        normalized = converted_results[:top_k * 3]
                     else:
-                        logger.info(f"🎯 DOC_ANCHORED 필터링: {len(bm25_results)}개 → {len(filtered)}개")
+                        logger.info(f"🎯 DOC_ANCHORED 필터링: {len(converted_results)}개 → {len(filtered)}개")
                         normalized = filtered[:top_k]
                 else:
-                    normalized = bm25_results  # 이미 정규화된 형식
+                    normalized = converted_results
+
+                # 선택된 문서 강제 추가 (사용자 요청 우선 처리)
+                if selected_filename:
+                    selected_doc = None
+                    # 1. BM25 결과에서 먼저 찾기
+                    for result in converted_results:
+                        if result.get("filename") == selected_filename:
+                            selected_doc = result
+                            break
+
+                    # 2. BM25에 없으면 MetadataDB에서 직접 가져오기
+                    if not selected_doc:
+                        logger.info(f"🔍 BM25에 없음, MetadataDB에서 직접 검색: {selected_filename}")
+                        all_docs = self.metadata_db.search_documents(limit=500)
+                        for doc in all_docs:
+                            if doc.get("filename") == selected_filename:
+                                # BM25 result 형식으로 변환
+                                selected_doc = {
+                                    "doc_id": doc.get("filename", "unknown"),
+                                    "snippet": (doc.get("text_preview") or "")[:800],
+                                    "score": 0.0,
+                                    "page": 1,
+                                    "filename": doc.get("filename"),
+                                    "file_path": doc.get("path"),
+                                    "meta": {
+                                        "filename": doc.get("filename"),
+                                        "date": doc.get("date"),
+                                        "drafter": doc.get("drafter"),
+                                        "category": doc.get("category"),
+                                    }
+                                }
+                                logger.info(f"✅ MetadataDB에서 발견: {selected_filename}")
+                                break
+
+                    # 3. 찾았으면 최상위에 강제 추가
+                    if selected_doc:
+                        # 기존 결과에서 제거 (중복 방지)
+                        normalized = [r for r in normalized if r.get("filename") != selected_filename]
+                        # 최상위에 강제 추가 (score=99.9로 최우선)
+                        selected_doc_priority = selected_doc.copy()
+                        selected_doc_priority["score"] = 99.9
+                        normalized = [selected_doc_priority] + normalized[:top_k-1]
+                        logger.info(f"🎯 선택된 문서 최상위 강제 추가: {selected_filename} (score=99.9)")
+                    else:
+                        logger.warning(f"⚠️ 선택된 문서 '{selected_filename}'를 찾지 못함 (BM25/MetadataDB 모두)")
 
             else:
                 # Fallback: MetadataDB 기반 (비권장, 500자 제한)

@@ -202,7 +202,8 @@ class DocumentLoader:
             # 1. metadata.db에서 기안자 정보 로드
             metadata_drafters = self._load_metadata_drafters()
             if metadata_drafters:
-                print(f"📋 metadata.db에서 {len(metadata_drafters)}개 기안자 정보 로드")
+                unique_drafters = len(set(metadata_drafters.values()))
+                print(f"📋 metadata.db에서 {len(metadata_drafters)}개 문서의 기안자 정보 로드 (고유 기안자 {unique_drafters}명)")
 
             # 2. metadata.db 연결 (everything_index.db 대신)
             metadata_db_path = Path("metadata.db")
@@ -270,6 +271,28 @@ class DocumentLoader:
             traceback.print_exc()
             return pd.DataFrame()
 
+    def _is_likely_korean_name(self, name: str) -> bool:
+        """한글 이름 여부 판별 (장비명 필터링)
+
+        Args:
+            name: 체크할 이름
+
+        Returns:
+            True if likely a Korean person name
+        """
+        if not name or name == '미확인':
+            return False
+
+        # 영문/숫자가 포함되면 장비명으로 간주
+        if any(c.isascii() and c.isalnum() for c in name):
+            return False
+
+        # 한글만으로 구성되고 2-4글자면 이름으로 간주
+        if 2 <= len(name) <= 4 and all('\uac00' <= c <= '\ud7a3' for c in name):
+            return True
+
+        return False
+
     def _print_statistics(self, df: pd.DataFrame) -> None:
         """로드 통계 출력
 
@@ -279,18 +302,32 @@ class DocumentLoader:
         if df.empty:
             return
 
-        drafter_count = len(df[df['drafter'] != '미확인'])
         total_count = len(df)
+        df_with_drafter = df[df['drafter'].notna() & (df['drafter'] != '미확인') & (df['drafter'] != '')]
+        drafter_count = len(df_with_drafter)
         percentage = drafter_count * 100 // max(total_count, 1)
 
+        # 전체 고유 기안자 (장비명 포함)
+        all_unique_drafters = df_with_drafter['drafter'].unique() if drafter_count > 0 else []
+        all_unique_count = len(all_unique_drafters)
+
+        # 한글 이름만 필터링 (장비명 제외)
+        korean_drafters = [d for d in all_unique_drafters if self._is_likely_korean_name(d)]
+        korean_count = len(korean_drafters)
+
         print(f"📈 기안자 통계:")
+        print(f"  - 총 문서 수: {total_count}개")
         print(f"  - 기안자 확인: {drafter_count}개 ({percentage}%)")
         print(f"  - 기안자 미확인: {total_count - drafter_count}개")
+        print(f"  - 고유 기안자(한글 이름만): {korean_count}명")
 
-        # 기안자 샘플
-        if drafter_count > 0:
-            unique_drafters = df[df['drafter'] != '미확인']['drafter'].unique()[:10]
-            print(f"  - 기안자 샘플: {', '.join(unique_drafters)}")
+        if all_unique_count > korean_count:
+            print(f"  - 장비명 등 제외: {all_unique_count - korean_count}개")
+
+        # 기안자 샘플 (한글 이름만, 상위 10명)
+        if korean_count > 0:
+            sample = ', '.join(korean_drafters[:10])
+            print(f"  - 기안자 샘플: {sample}")
 
 
 # 하위 호환을 위한 함수 래퍼

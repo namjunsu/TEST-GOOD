@@ -424,9 +424,11 @@ def _create_enhanced_query(context: str, prompt: str) -> str:
     Returns:
         str: 향상된 쿼리 문자열
     """
+    # 컨텍스트와 프롬프트를 결합하여 enhanced query 생성
     if context:
         return f"{ChatConfig.CONTEXT_PREFIX}\n{context}\n\n{ChatConfig.CURRENT_QUERY_PREFIX} {prompt}"
-    return prompt
+    else:
+        return prompt
 
 
 def _handle_error(error: Exception) -> str:
@@ -492,7 +494,8 @@ def _display_chat_history(messages: List[Dict[str, str]]) -> None:
 def _generate_ai_response(
     query: str,
     rag_instance: RAGProtocol,
-    message_placeholder: Any
+    message_placeholder: Any,
+    selected_filename: Optional[str] = None
 ) -> Optional[dict]:
     """AI 응답 생성 (Evidence 포함)
 
@@ -503,6 +506,7 @@ def _generate_ai_response(
         query: 향상된 쿼리 문자열
         rag_instance: RAG 시스템 인스턴스
         message_placeholder: Streamlit placeholder 객체
+        selected_filename: 선택된 문서 파일명 (우선 검색용, 선택사항)
 
     Returns:
         Optional[dict]: {"text": str, "evidence": []} 또는 None (에러 시)
@@ -516,7 +520,8 @@ def _generate_ai_response(
             raise AttributeError("RAG instance has no 'answer' method")
 
         # 응답 생성 (다양한 타입 가능: RAGResponse 객체, dict, str 등)
-        raw_response = rag_instance.answer(query)
+        # 선택된 문서가 있으면 우선 검색을 위해 전달
+        raw_response = rag_instance.answer(query, selected_filename=selected_filename)
 
         # 응답 정규화: 모든 타입을 dict로 통일
         response = _normalize_rag_response(raw_response)
@@ -575,6 +580,22 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
     # 1. 세션 상태 초기화
     _initialize_chat_state()
 
+    # 1-1. 선택된 문서 알림 (사이드바에서 문서 선택시)
+    if 'selected_doc' in st.session_state and st.session_state.selected_doc is not None and st.session_state.get('show_doc_preview', False):
+        selected_doc = st.session_state.selected_doc
+        # pandas Series가 아닌 dict인 경우만 처리
+        if isinstance(selected_doc, dict):
+            title = selected_doc.get('title', '알 수 없음')
+            col1, col2 = st.columns([10, 1])
+            with col1:
+                st.info(f"🎯 **문서 컨텍스트 모드**: {title} 문서를 우선적으로 검색합니다")
+            with col2:
+                if st.button("❌", key="clear_doc_context", help="문서 컨텍스트 해제"):
+                    st.session_state.show_doc_preview = False
+                    if 'selected_doc' in st.session_state:
+                        del st.session_state.selected_doc
+                    st.rerun()
+
     # 2. 기존 대화 표시
     _display_chat_history(st.session_state.messages)
 
@@ -603,12 +624,25 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
             # 향상된 쿼리 생성
             enhanced_query = _create_enhanced_query(context, prompt)
 
+            # 선택된 문서 확인 (사이드바에서 선택한 문서 우선 검색용)
+            selected_filename = None
+            doc = st.session_state.get('selected_doc')
+            if doc is not None:
+                try:
+                    # 딕셔너리 또는 pandas Series에서 filename 추출
+                    selected_filename = doc.get('filename') if hasattr(doc, 'get') else doc['filename']
+                    if selected_filename:
+                        logger.info(f"📌 선택된 문서 우선 검색: {selected_filename}")
+                except (KeyError, TypeError, AttributeError):
+                    pass
+
             # AI 응답 생성
             with st.spinner(ChatConfig.SPINNER_TEXT):
                 response = _generate_ai_response(
                     enhanced_query,
                     unified_rag_instance,
-                    message_placeholder
+                    message_placeholder,
+                    selected_filename=selected_filename
                 )
 
                 # 응답이 있으면 표시 및 저장
@@ -627,7 +661,7 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
 
                         # expander를 기본적으로 열린 상태로 표시 (UX 개선)
                         # 사용자가 미리보기를 클릭했을 때 문서가 사라지는 문제 해결
-                        auto_expand = True  # 항상 열린 상태
+                        auto_expand = False  # 기본 접힘 상태 (사용자 요청: 자동 펼침 비활성화)
 
                         with st.expander(f"📚 출처 문서 ({len(display_evidence)}건)", expanded=auto_expand):
                             for i, ev in enumerate(display_evidence, 1):

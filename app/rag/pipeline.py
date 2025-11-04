@@ -390,6 +390,7 @@ class RAGPipeline:
         compression_ratio: float = 0.7,
         use_hyde: bool = False,
         temperature: float = 0.1,
+        selected_filename: Optional[str] = None,
     ) -> RAGResponse:
         """RAG 질의 (단일 진입점)
 
@@ -399,6 +400,7 @@ class RAGPipeline:
             compression_ratio: 압축 비율
             use_hyde: HyDE 사용 여부
             temperature: LLM 생성 온도
+            selected_filename: 선택된 문서 파일명 (우선 검색용, 선택사항)
 
         Returns:
             RAGResponse: 답변 + 메타데이터
@@ -427,7 +429,7 @@ class RAGPipeline:
 
             # 1. 검색: 정규화된 청크(dict) 리스트 기대
             search_start = time.perf_counter()
-            results = self.retriever.search(query, top_k, mode=preliminary_mode)
+            results = self.retriever.search(query, top_k, mode=preliminary_mode, selected_filename=selected_filename)
             metrics["search_time"] = time.perf_counter() - search_start
 
             # [검색 결과 Top-N 진단 로그]
@@ -810,12 +812,13 @@ JSON:"""
             },
         }
 
-    def answer(self, query: str, top_k: Optional[int] = None) -> dict:
+    def answer(self, query: str, top_k: Optional[int] = None, selected_filename: Optional[str] = None) -> dict:
         """답변 생성 (Evidence 포함 구조화된 응답)
 
         Args:
             query: 사용자 질문
             top_k: 검색 결과 개수 (None이면 기본값 5)
+            selected_filename: 선택된 문서 파일명 (우선 검색용, 선택사항)
 
         Returns:
             dict: {
@@ -845,6 +848,13 @@ JSON:"""
             # 🎯 모드 라우팅: Q&A 의도 키워드가 있으면 파일명이 있어도 Q&A 모드 우선
             query_mode = self.query_router.classify_mode(actual_query)
             router_reason = self.query_router.get_routing_reason(actual_query)
+
+            # 🔧 selected_filename이 있고 요약 의도가 감지되면 SUMMARY 모드로 강제 (우선순위 최상위)
+            if selected_filename and self.query_router.SUMMARY_INTENT_PATTERN.search(actual_query):
+                logger.info(f"🎯 선택된 문서({selected_filename}) + 요약 의도 감지 → SUMMARY 모드로 강제")
+                query_mode = QueryMode.SUMMARY
+                router_reason = "selected_doc_summary"
+
             logger.info(
                 f"🔀 라우팅 결과: mode={query_mode.value}, reason={router_reason}"
             )
@@ -859,11 +869,11 @@ JSON:"""
 
             # 📝 SUMMARY 모드: 내용 요약 (5줄 섹션)
             if query_mode == QueryMode.SUMMARY:
-                return self._answer_summary(actual_query)
+                return self._answer_summary(actual_query, selected_filename=selected_filename)
 
             # 👀 PREVIEW 모드: 문서 미리보기 (원문 6-8줄, 가짜 표 금지)
             if query_mode == QueryMode.PREVIEW:
-                return self._answer_preview(actual_query)
+                return self._answer_preview(actual_query, selected_filename=selected_filename)
 
             # 🔍 디버깅: 실제 pattern matching 대상 로깅
             logger.info(f"🔍 Pattern matching 대상 쿼리: '{actual_query[:100]}'")
@@ -1070,7 +1080,7 @@ JSON:"""
             #     return {...}
 
         # 일반 쿼리는 기존 로직 사용
-        response = self.query(query, top_k=top_k or 5)
+        response = self.query(query, top_k=top_k or 5, selected_filename=selected_filename)
 
         if response.success:
             # 검색/압축에서 넘어온 정규화 청크 사용 (실제 page/snippet/meta 노출)
@@ -1450,11 +1460,12 @@ JSON:"""
                 }
             }
 
-    def _answer_preview(self, query: str) -> dict:
+    def _answer_preview(self, query: str, selected_filename: Optional[str] = None) -> dict:
         """문서 미리보기 (원문 인용, 가짜 표 생성 금지)
 
         Args:
             query: 사용자 질의 (예: "[파일명].pdf 미리보기")
+            selected_filename: 선택된 문서 파일명 (우선 검색용, 선택사항)
 
         Returns:
             dict: 표준 응답 구조 (원문 6-8줄)
@@ -1464,21 +1475,24 @@ JSON:"""
         from pathlib import Path
 
         try:
-            # 파일명 추출
-            filename_match = re.search(r"(\S+\.pdf)", query, re.IGNORECASE)
-            if not filename_match:
-                return {
-                    "text": "파일명을 찾을 수 없습니다.",
-                    "citations": [],
-                    "evidence": [],
-                    "status": {
-                        "retrieved_count": 0,
-                        "selected_count": 0,
-                        "found": False
+            # 파일명 추출 (selected_filename이 있으면 우선 사용)
+            if selected_filename:
+                logger.info(f"🎯 선택된 문서 우선 처리: {selected_filename}")
+                filename = selected_filename
+            else:
+                filename_match = re.search(r"(\S+\.pdf)", query, re.IGNORECASE)
+                if not filename_match:
+                    return {
+                        "text": "파일명을 찾을 수 없습니다.",
+                        "citations": [],
+                        "evidence": [],
+                        "status": {
+                            "retrieved_count": 0,
+                            "selected_count": 0,
+                            "found": False
+                        }
                     }
-                }
-
-            filename = filename_match.group(1)
+                filename = filename_match.group(1)
 
             # DB에서 문서 조회
             conn = sqlite3.connect("metadata.db")
@@ -1813,11 +1827,12 @@ JSON:"""
         logger.info(f"📋 최종 컨텍스트 길이: {len(context)}자 (청크 수: {len(parts)})")
         return context
 
-    def _answer_summary(self, query: str) -> dict:
+    def _answer_summary(self, query: str, selected_filename: Optional[str] = None) -> dict:
         """내용 요약 (문서 타입 자동 감지 + 맞춤 프롬프트)
 
         Args:
             query: 사용자 질의 (예: "[파일명].pdf 내용 요약해줘" 또는 "미러클랩 카메라 삼각대 기술검토서 이문서 내용 요약헤줘")
+            selected_filename: 선택된 문서 파일명 (우선 검색용, 선택사항)
 
         Returns:
             dict: 표준 응답 구조 (JSON 기반 요약)
@@ -1838,17 +1853,25 @@ JSON:"""
         )
 
         try:
-            # 0. doc=<파일명> 또는 [DOC]<파일명> 패턴 확인 (정확 참조 토큰)
+            # 0-1. selected_filename이 있으면 최우선 사용 (사이드바에서 선택한 문서)
             doc_ref = None
             doc_locked = False
-            doc_exact_match = re.search(r"(?:doc=|DOC])\s*([^\s]+\.pdf)", query, re.IGNORECASE)
-            if not doc_exact_match:
-                doc_exact_match = re.search(r"\[DOC\]\s*([^\s]+\.pdf)", query, re.IGNORECASE)
 
-            if doc_exact_match:
-                doc_ref = doc_exact_match.group(1)
+            if selected_filename:
+                logger.info(f"🎯 선택된 문서 우선 처리: {selected_filename}")
+                doc_ref = selected_filename
                 doc_locked = True
-                logger.info(f"🔒 정확 참조 모드: doc={doc_ref}")
+
+            # 0. doc=<파일명> 또는 [DOC]<파일명> 패턴 확인 (정확 참조 토큰)
+            if not doc_ref:
+                doc_exact_match = re.search(r"(?:doc=|DOC])\s*([^\s]+\.pdf)", query, re.IGNORECASE)
+                if not doc_exact_match:
+                    doc_exact_match = re.search(r"\[DOC\]\s*([^\s]+\.pdf)", query, re.IGNORECASE)
+
+                if doc_exact_match:
+                    doc_ref = doc_exact_match.group(1)
+                    doc_locked = True
+                    logger.info(f"🔒 정확 참조 모드: doc={doc_ref}")
 
             # 1. .pdf 확장자 포함 파일명 추출 시도
             filename_match = re.search(r"(\S+\.pdf)", query, re.IGNORECASE) if not doc_ref else None
@@ -2358,7 +2381,7 @@ JSON:"""
 class _DummyRetriever:
     """더미 검색기 (폴백용)"""
 
-    def search(self, query: str, top_k: int) -> List[Dict[str, Any]]:
+    def search(self, query: str, top_k: int, mode: str = "chat", selected_filename: Optional[str] = None) -> List[Dict[str, Any]]:
         logger.warning("Dummy retriever: 빈 결과 반환")
         return []
 

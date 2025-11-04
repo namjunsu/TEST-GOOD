@@ -9,7 +9,7 @@ import os
 # .env 파일 로드 (선택적)
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    load_dotenv(override=True)  # .env 파일이 환경 변수를 override하도록 설정
 except ImportError:
     pass  # dotenv가 없으면 환경변수에서만 읽음
 

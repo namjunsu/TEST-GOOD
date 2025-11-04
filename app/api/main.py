@@ -18,7 +18,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(override=True)  # .env 파일이 환경 변수를 override하도록 설정
 
 app = FastAPI(
     title="AI-CHAT API",

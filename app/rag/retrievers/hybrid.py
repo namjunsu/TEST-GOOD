@@ -7,7 +7,7 @@ import os
 import re
 import yaml
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from app.core.logging import get_logger
 from modules.metadata_db import MetadataDB
 from app.rag.query_parser import QueryParser

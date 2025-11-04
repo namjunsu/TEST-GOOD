@@ -494,7 +494,8 @@ A:"""
         mode_token_budgets = {
             "chat": int(os.getenv("CHAT_MAX_TOKENS", "64")),
             "rag": int(os.getenv("RAG_MAX_TOKENS", "160")),
-            "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", "320")),
+            "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", "1200")),
+            "summary": int(os.getenv("SUMMARY_MAX_TOKENS", "1200")),  # summary 모드 추가
         }
         mode_max_tokens = mode_token_budgets.get(mode.lower(), self.config.max_tokens)
         self.logger.info(f"🎯 Mode={mode}, max_tokens={mode_max_tokens} (budget: {mode_token_budgets.get(mode.lower(), 'N/A')})")

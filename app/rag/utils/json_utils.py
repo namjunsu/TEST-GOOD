@@ -93,7 +93,7 @@ def parse_summary_json_robust(response: str) -> Optional[Dict[str, Any]]:
             pass
 
         # 6단계: 모든 시도 실패
-        logger.warning("❌ JSON 파싱 완전 실패")
+        logger.warning(f"❌ JSON 파싱 완전 실패. LLM 원문(첫 800자):\n{response[:800]}")
         return None
 
     except Exception as e:

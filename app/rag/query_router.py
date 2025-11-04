@@ -249,13 +249,51 @@ class QueryRouter:
         return False
 
     def classify_mode(self, query: str) -> QueryMode:
-        """쿼리 모드 분류 (우선순위: COST_SUM > PREVIEW > LIST > SUMMARY > QA)
+        """쿼리 모드 자동 분류 및 라우팅
+
+        사용자 질의를 분석하여 가장 적절한 QueryMode로 자동 라우팅합니다.
+        패턴 매칭과 키워드 감지를 통해 우선순위에 따라 모드를 결정합니다.
+
+        우선순위 (높음 → 낮음):
+            1. COST_SUM: 비용 합계 질의 (예: "합계", "총 비용")
+            2. PREVIEW: 파일명 + 미리보기 의도
+            3. LIST: 연도/작성자 기반 목록 검색
+            4. SEARCH: 키워드 기반 문서 검색 (NEW)
+            5. SUMMARY: 문서 지시어 + 요약 의도
+            6. QA: Q&A 의도 키워드 또는 기본값
+
+        모드 판단 기준:
+            COST_SUM: COST_INTENT_PATTERN 매칭
+            PREVIEW: 파일명 패턴 + (미리보기 키워드 or "미리보기" 단어)
+            LIST: LIST_INTENT_PATTERN 매칭 & 요약 의도 없음
+            SEARCH: SEARCH_INTENT_PATTERN 매칭
+                    (예: "찾아줘", "검색", "관련 문서", "있어?")
+            SUMMARY: (파일명 or 문서 지시어 or 문서 타입) & 요약 의도
+            QA: qa_keywords 매칭 또는 모든 조건 불만족 시 기본값
 
         Args:
-            query: 사용자 질의
+            query (str): 사용자 질의.
+                예: "2024년 남준수 문서 전부" → LIST
+                    "중계차 렌즈 문서 찾아줘" → SEARCH
+                    "이 문서 요약해줘" → SUMMARY
+                    "비용 합계는?" → COST_SUM
 
         Returns:
-            QueryMode (COST_SUM, PREVIEW, LIST, SUMMARY, QA 중 하나)
+            QueryMode: 분류된 쿼리 모드 (COST_SUM, PREVIEW, LIST,
+                      SEARCH, SUMMARY, QA 중 하나)
+
+        Example:
+            >>> router = QueryRouter()
+            >>> router.classify_mode("중계차 카메라 문서 찾아줘")
+            QueryMode.SEARCH
+            >>> router.classify_mode("2024년 남준수 문서 전부")
+            QueryMode.LIST
+            >>> router.classify_mode("이 문서 요약해줘")
+            QueryMode.SUMMARY
+
+        Note:
+            - 로깅을 통해 결정 과정 추적 가능
+            - 모든 조건 불만족 시 QueryMode.QA 반환 (fallback)
         """
         query_lower = query.lower()
 

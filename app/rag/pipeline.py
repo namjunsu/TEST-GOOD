@@ -1355,11 +1355,51 @@ JSON:"""
     def _answer_search(self, query: str) -> dict:
         """문서 검색 (키워드 기반 BM25 검색, 상세 정보 포함)
 
+        SEARCH 모드 핸들러로, 사용자의 키워드를 기반으로 관련 문서를 검색하고
+        메타데이터(기안자, 날짜, 비용)와 함께 카드 형식으로 반환합니다.
+
+        처리 흐름:
+            1. 불용어 제거하여 검색 키워드 추출
+            2. BM25 retriever로 상위 10개 문서 검색
+            3. 각 문서의 메타데이터를 DB에서 조회
+            4. 카드 형식으로 포맷팅 (제목, 기안자, 날짜, 비용, 미리보기)
+
         Args:
-            query: 사용자 질의 (예: "중계차 카메라 렌즈관련 문서 찾아줘", "유인혁 기안서 문서 찾아줘")
+            query (str): 사용자 질의.
+                예: "중계차 카메라 렌즈관련 문서 찾아줘"
+                    "유인혁 기안서 문서 찾아줘"
+                    "렌즈 오버홀 문서 있어?"
 
         Returns:
-            dict: 표준 응답 구조 (문서 목록 + 상세 메타데이터)
+            dict: 표준 응답 구조
+                {
+                    "mode": "SEARCH",
+                    "text": str,  # 포맷팅된 카드 목록
+                    "files": list[str],  # 파일명 목록
+                    "count": int,  # 검색된 문서 수
+                    "citations": list[dict],  # Evidence 정보
+                    "evidence": list[dict],  # 하위 호환용 (citations와 동일)
+                    "status": {
+                        "retrieved_count": int,
+                        "selected_count": int,
+                        "found": bool
+                    }
+                }
+
+        Example:
+            >>> pipeline._answer_search("중계차 카메라 문서 찾아줘")
+            {
+                "mode": "SEARCH",
+                "text": "📄 **'중계차 카메라' 관련 문서 (3건)**\\n\\n1. **중계차 카메라 렌즈 오버홀**\\n   📋 기안서 | 📅 2024-03-15 | ✍ 유인혁\\n   💰 2,500,000원\\n   📝 Canon HJ40x10B 렌즈 오버홀...",
+                "files": ["2024-03-15_중계차_카메라_렌즈_오버홀.pdf", ...],
+                "count": 3,
+                ...
+            }
+
+        Note:
+            - 최대 10개 문서까지 반환
+            - 불용어: "문서", "파일", "기안서", "찾아줘", "찾아", "검색", "관련", "좀", "해줘"
+            - 검색 실패 시 count=0, found=False 반환
         """
         from modules.metadata_db import MetadataDB
         import re

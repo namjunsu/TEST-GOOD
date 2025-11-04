@@ -122,13 +122,18 @@ config/indexing.py → app/config/settings.py에 통합 검토
 
 ## 5. 작업 순서
 
-1. ✅ 분석 완료 (현재)
-2. 🔄 SEARCH 모드 구현
+1. ✅ 분석 완료
+2. ✅ SEARCH 모드 구현 완료 (커밋: 52e4713)
+   - QueryMode.SEARCH enum 추가
+   - SEARCH_INTENT_PATTERN 패턴 추가
+   - classify_mode()에 SEARCH 라우팅 로직 추가
+   - _answer_search() 핸들러 구현
+   - BM25 키워드 검색 + 메타데이터 조회
 3. 🔄 레거시 코드 제거
 4. 🔄 폴더 정리
 5. 🔄 문서화
 6. 🔄 테스트 및 검증
-7. 🔄 커밋
+7. 🔄 최종 커밋
 
 ## 6. 예상 소요 시간
 

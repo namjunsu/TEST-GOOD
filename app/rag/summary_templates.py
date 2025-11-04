@@ -434,11 +434,14 @@ def format_summary_output(
 
         if parsed_json.get('비교대안') and len(parsed_json['비교대안']) > 0:
             output += "**🔍 비교 대안**\n"
-            for i, item in enumerate(parsed_json['비교대안'][:3], 1):
+            for i, item in enumerate(parsed_json['비교대안'][:4], 1):  # 최대 4개까지 표시
                 model = item.get('모델', '없음')
-                spec = item.get('사양특징', '없음')
+                spec = item.get('사양', '없음')  # 수정: '사양특징' → '사양'
+                qty = item.get('수량', '')
                 price = item.get('가격', '없음')
-                output += f"{i}. **{model}** - {spec} ({price})\n"
+                # 수량 정보가 있으면 추가
+                qty_str = f" x{qty}" if qty and qty != '없음' else ""
+                output += f"{i}. **{model}**{qty_str} - {spec} ({price})\n"
             output += "\n"
 
         if parsed_json.get('선정권고') and parsed_json['선정권고'] != '없음':

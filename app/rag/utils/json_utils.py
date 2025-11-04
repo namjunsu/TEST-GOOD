@@ -71,6 +71,7 @@ def parse_summary_json_robust(response: str) -> Optional[Dict[str, Any]]:
             try:
                 parsed = json.loads(json_str)
                 logger.info("✓ JSON 파싱 성공 (기본 방법)")
+                logger.info(f"🔍 파싱된 JSON:\n{json.dumps(parsed, ensure_ascii=False, indent=2)}")
                 return parsed
             except json.JSONDecodeError:
                 pass

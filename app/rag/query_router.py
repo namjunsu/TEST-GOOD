@@ -299,19 +299,25 @@ class QueryRouter:
             logger.info("🎯 모드 결정: SUMMARY (내용 요약)")
             return QueryMode.SUMMARY
 
-        # 7. Q&A 의도 키워드 체크 (레거시 호환)
+        # 7. SEARCH 모드 (문서 검색 의도)
+        # "중계차 카메라 렌즈관련 문서 찾아줘", "유인혁 기안서 문서 찾아줘" 등
+        if self.SEARCH_INTENT_PATTERN.search(query):
+            logger.info("🎯 모드 결정: SEARCH (문서 검색)")
+            return QueryMode.SEARCH
+
+        # 8. Q&A 의도 키워드 체크 (레거시 호환)
         has_qa_intent = any(keyword in query_lower for keyword in self.qa_keywords)
 
         if has_qa_intent:
             logger.info("🎯 모드 결정: QA (의도 키워드 감지)")
             return QueryMode.QA
 
-        # 8. 파일명만 있으면 PREVIEW (레거시 호환)
+        # 9. 파일명만 있으면 PREVIEW (레거시 호환)
         if has_filename:
             logger.info("🎯 모드 결정: PREVIEW (파일명만 존재)")
             return QueryMode.PREVIEW
 
-        # 9. 기본: Q&A 모드
+        # 10. 기본: Q&A 모드
         logger.info("🎯 모드 결정: QA (기본)")
         return QueryMode.QA
 

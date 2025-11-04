@@ -875,6 +875,10 @@ JSON:"""
             if query_mode == QueryMode.PREVIEW:
                 return self._answer_preview(actual_query, selected_filename=selected_filename)
 
+            # 🔍 SEARCH 모드: 문서 검색 (키워드 기반 BM25 검색)
+            if query_mode == QueryMode.SEARCH:
+                return self._answer_search(actual_query)
+
             # 🔍 디버깅: 실제 pattern matching 대상 로깅
             logger.info(f"🔍 Pattern matching 대상 쿼리: '{actual_query[:100]}'")
 
@@ -1339,6 +1343,196 @@ JSON:"""
             logger.error(f"❌ 목록 검색 실패: {e}", exc_info=True)
             return {
                 "text": f"목록 검색 중 오류가 발생했습니다: {str(e)}",
+                "citations": [],
+                "evidence": [],
+                "status": {
+                    "retrieved_count": 0,
+                    "selected_count": 0,
+                    "found": False
+                }
+            }
+
+    def _answer_search(self, query: str) -> dict:
+        """문서 검색 (키워드 기반 BM25 검색, 상세 정보 포함)
+
+        Args:
+            query: 사용자 질의 (예: "중계차 카메라 렌즈관련 문서 찾아줘", "유인혁 기안서 문서 찾아줘")
+
+        Returns:
+            dict: 표준 응답 구조 (문서 목록 + 상세 메타데이터)
+        """
+        from modules.metadata_db import MetadataDB
+        import re
+
+        try:
+            # 검색 키워드 추출 (불용어 제거)
+            stop_words = ["문서", "파일", "기안서", "찾아줘", "찾아", "검색", "관련", "좀", "해줘"]
+            keywords = query
+            for word in stop_words:
+                keywords = keywords.replace(word, " ")
+            keywords = keywords.strip()
+
+            logger.info(f"🔍 문서 검색: 키워드='{keywords}'")
+
+            # BM25 검색 실행 (top_k=10)
+            if not hasattr(self.retriever, 'search'):
+                logger.error("❌ Retriever에 search 메서드가 없습니다")
+                return {
+                    "mode": "SEARCH",
+                    "text": "검색 기능을 사용할 수 없습니다.",
+                    "files": [],
+                    "count": 0,
+                    "citations": [],
+                    "evidence": [],
+                    "status": {
+                        "retrieved_count": 0,
+                        "selected_count": 0,
+                        "found": False
+                    }
+                }
+
+            # 하이브리드 검색 실행
+            search_results = self.retriever.search(keywords, top_k=10)
+
+            # 결과에서 파일명 추출 (중복 제거)
+            filenames = []
+            seen = set()
+            for result in search_results:
+                filename = result.get("filename") or result.get("doc_id")
+                if filename and filename not in seen:
+                    filenames.append(filename)
+                    seen.add(filename)
+
+            if not filenames:
+                return {
+                    "mode": "SEARCH",
+                    "text": f"'{keywords}' 관련 문서를 찾지 못했습니다.",
+                    "files": [],
+                    "count": 0,
+                    "citations": [],
+                    "evidence": [],
+                    "status": {
+                        "retrieved_count": 0,
+                        "selected_count": 0,
+                        "found": False
+                    }
+                }
+
+            # 각 문서의 메타데이터 조회
+            db = MetadataDB()
+            doc_details = []
+
+            for filename in filenames[:10]:  # 최대 10개까지
+                # DB에서 메타데이터 조회 (filename으로 직접 검색)
+                conn = db._get_conn()
+                cursor = conn.execute(
+                    "SELECT * FROM documents WHERE filename = ? LIMIT 1",
+                    (filename,)
+                )
+                row = cursor.fetchone()
+
+                if row:
+                    doc = dict(row)
+                    doc_details.append({
+                        "filename": filename,
+                        "drafter": doc.get("drafter", "작성자 미상"),
+                        "date": doc.get("display_date") or doc.get("date", "날짜 없음"),
+                        "doctype": doc.get("doctype", "문서"),
+                        "claimed_total": doc.get("claimed_total"),
+                        "text_preview": doc.get("text_preview", "")[:100]
+                    })
+                else:
+                    # 메타데이터가 없는 경우 파일명만 표시
+                    doc_details.append({
+                        "filename": filename,
+                        "drafter": "작성자 미상",
+                        "date": "날짜 없음",
+                        "doctype": "문서",
+                        "claimed_total": None,
+                        "text_preview": ""
+                    })
+
+            # 응답 텍스트 포맷팅 (리팩토링 계획서의 형식 참고)
+            cards = []
+            for i, doc in enumerate(doc_details, 1):
+                filename = doc["filename"]
+
+                # 파일명에서 제목 추출
+                title = re.sub(r'^\d{4}-\d{2}-\d{2}_', '', filename)
+                title = re.sub(r'\.pdf$', '', title, flags=re.IGNORECASE)
+                title = title.replace('_', ' ')
+
+                # 카드 생성
+                card_lines = [f"{i}. **{title}**"]
+                card_lines.append(f"   📋 {doc['doctype']} | 📅 {doc['date']} | ✍ {doc['drafter']}")
+
+                # 비용 정보 추가 (있는 경우)
+                if doc['claimed_total']:
+                    card_lines.append(f"   💰 {doc['claimed_total']:,}원")
+
+                # 미리보기 추가 (있는 경우)
+                if doc['text_preview']:
+                    preview = doc['text_preview'].replace('\n', ' ')[:80]
+                    card_lines.append(f"   📝 {preview}...")
+
+                cards.append("\n".join(card_lines))
+
+            answer_text = f"📄 **'{keywords}' 관련 문서 ({len(doc_details)}건)**\n\n" + "\n\n".join(cards)
+
+            # Evidence 구성
+            evidence = []
+            for doc in doc_details:
+                filename = doc["filename"]
+
+                # 실제 파일 경로 생성
+                year_match = re.search(r'(\d{4})-', filename)
+                if year_match:
+                    year = year_match.group(1)
+                    file_path_str = f"docs/year_{year}/{filename}"
+                else:
+                    file_path_str = f"docs/{filename}"
+
+                # 제목 생성 (cards와 동일)
+                title = re.sub(r'^\d{4}-\d{2}-\d{2}_', '', filename)
+                title = re.sub(r'\.pdf$', '', title, flags=re.IGNORECASE)
+                title = title.replace('_', ' ')
+
+                evidence.append({
+                    "doc_id": filename,
+                    "filename": filename,
+                    "file_path": file_path_str,
+                    "page": 1,
+                    "snippet": title[:160],
+                    "ref": None,
+                    "meta": {
+                        "filename": filename,
+                        "drafter": doc.get("drafter"),
+                        "date": doc.get("date"),
+                        "doctype": doc.get("doctype")
+                    }
+                })
+
+            return {
+                "mode": "SEARCH",
+                "text": answer_text,
+                "files": filenames,
+                "count": len(doc_details),
+                "citations": evidence,
+                "evidence": evidence,
+                "status": {
+                    "retrieved_count": len(doc_details),
+                    "selected_count": len(doc_details),
+                    "found": True
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"❌ 문서 검색 실패: {e}", exc_info=True)
+            return {
+                "mode": "SEARCH",
+                "text": f"문서 검색 중 오류가 발생했습니다: {str(e)}",
+                "files": [],
+                "count": 0,
                 "citations": [],
                 "evidence": [],
                 "status": {

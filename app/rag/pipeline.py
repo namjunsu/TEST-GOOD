@@ -1622,8 +1622,38 @@ JSON:"""
             해당 문서의 청크 리스트
         """
         try:
-            # HybridRetriever를 사용하여 해당 문서의 청크 검색
-            # 파일명을 쿼리로 사용하여 검색
+            # BM25 인덱스에서 직접 해당 문서 찾기 (검색 대신 직접 접근)
+            if hasattr(self.retriever, 'bm25') and self.retriever.bm25:
+                bm25_store = self.retriever.bm25
+
+                # metadata에서 filename이 일치하는 문서의 인덱스 찾기
+                target_indices = []
+                for i, meta in enumerate(bm25_store.metadata):
+                    if meta.get('filename') == filename:
+                        target_indices.append(i)
+                        logger.info(f"✅ BM25 인덱스에서 발견: {filename} (index={i})")
+
+                # 찾은 문서들의 content를 청크로 변환
+                chunks = []
+                for idx in target_indices:
+                    content = bm25_store.documents[idx]
+                    if content and len(content.strip()) > 0:
+                        # 전체 문서를 하나의 큰 청크로 사용
+                        chunks.append({
+                            'doc_id': filename,
+                            'page': 1,
+                            'text': content,  # 전체 텍스트
+                            'score': 1.0,  # 직접 매칭이므로 최고 스코어
+                            'filename': filename
+                        })
+                        logger.info(f"✓ 문서 content 로드: {len(content)}자")
+
+                if chunks:
+                    logger.info(f"✓ 문서 청크 {len(chunks)}개 로드 완료")
+                    return chunks
+
+            # BM25 사용 불가 시 폴백: 키워드 검색
+            logger.warning("⚠️ BM25 직접 접근 불가, 검색으로 폴백")
             search_query = filename.replace('.pdf', '').replace('_', ' ')
             results = self.retriever.search(search_query, top_k=20)
 
@@ -1650,6 +1680,8 @@ JSON:"""
 
         except Exception as e:
             logger.error(f"❌ 문서 청크 로드 실패: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return []
 
     def _extract_with_ocr(self, pdf_path: str, start_page: int, total_pages: int) -> str:

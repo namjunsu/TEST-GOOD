@@ -58,6 +58,71 @@ streamlit run web_interface.py --port 8501
 - **Language**: Korean document support
 - **Python**: 3.12+
 
+## 🎯 Query Modes
+
+The system supports multiple query modes with automatic routing:
+
+### SEARCH Mode
+Find documents by keyword or topic.
+
+**Examples:**
+- "중계차 카메라 렌즈관련 문서 찾아줘"
+- "유인혁 기안서 문서 검색"
+- "렌즈 오버홀 문서 있어?"
+
+**Features:**
+- BM25 keyword-based retrieval
+- Metadata enrichment (author, date, cost)
+- Card-style results with preview
+
+### SUMMARY Mode
+Get detailed summaries of specific documents.
+
+**Examples:**
+- "2024-03-15_중계차_렌즈_오버홀.pdf 내용 요약해줘"
+- "이 문서 요약해줘" (with document selected)
+
+**Features:**
+- Document type detection (기안서, 검토서, etc.)
+- JSON-structured extraction
+- Spec details and cost information
+
+### QA Mode
+Ask specific questions about documents.
+
+**Examples:**
+- "렌즈 오버홀 비용은 얼마였어?"
+- "유인혁이 작성한 문서의 주요 내용은?"
+
+**Features:**
+- Retrieval-augmented generation
+- Context-aware answers
+- Source citations
+
+### LIST Mode
+Browse documents by author or year.
+
+**Examples:**
+- "2024년 남준수 문서 전부"
+- "year:2024 drafter:최새름"
+
+**Features:**
+- Structured metadata filtering
+- Chronological sorting
+- Compact 2-line cards
+
+### COST_SUM Mode
+Get cost aggregates from documents.
+
+**Examples:**
+- "채널에이 중계차 보수 합계는?"
+- "2024년 총 비용"
+
+**Features:**
+- Direct DB aggregation
+- Drafter/year filtering
+- Fast numerical results
+
 ## 🛠️ Development
 
 ### Project Structure

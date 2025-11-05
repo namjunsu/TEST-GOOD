@@ -148,10 +148,14 @@ class AutoIndexer:
 
         return search_paths
 
-    def check_new_files(self) -> Dict:
-        """새 파일 체크 (성능 최적화)"""
+    def check_new_files(self, force: bool = False) -> Dict:
+        """새 파일 체크 (성능 최적화)
+
+        Args:
+            force: True일 경우 락 체크 우회 (force_reindex에서 사용)
+        """
         # [LOCK] 동시 재색인 보호
-        if is_reindexing():
+        if not force and is_reindexing():
             print("⏭️  Skip scan: reindex lock present")
             return {"new": [], "modified": [], "deleted": []}
 
@@ -570,7 +574,7 @@ class AutoIndexer:
         print("🔄 강제 재인덱싱 시작...")
         self.file_index = {'files': {}, 'last_update': None}
         self.failed_files = {}  # 실패 목록 초기화
-        result = self.check_new_files()
+        result = self.check_new_files(force=True)
 
         # total 키 추가 (sidebar_library.py 호환성)
         total = len(result.get('new', [])) + len(result.get('modified', []))

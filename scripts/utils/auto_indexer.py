@@ -571,7 +571,12 @@ class AutoIndexer:
         self.file_index = {'files': {}, 'last_update': None}
         self.failed_files = {}  # 실패 목록 초기화
         result = self.check_new_files()
-        print(f"✅ 재인덱싱 완료: {result['total']}개 파일")
+
+        # total 키 추가 (sidebar_library.py 호환성)
+        total = len(result.get('new', [])) + len(result.get('modified', []))
+        result['total'] = total
+
+        print(f"✅ 재인덱싱 완료: {total}개 파일")
         return result
 
 

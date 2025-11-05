@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 from utils.year_utils import safe_year_to_int, normalize_year_list, compare_year
 from scripts.utils.lock import reindexing_lock, is_reindexing
+from app.config.settings import RAG_MODEL
 
 
 def display_document_list(
@@ -403,7 +404,7 @@ def render_sidebar_library(rag_instance) -> None:
         year_range = "데이터 없음"
 
     st.info(f"""
-    **모델**: Qwen2.5-7B
+    **모델**: {RAG_MODEL}
     **문서**: {len(df)}개
     **기간**: {year_range}
     """)

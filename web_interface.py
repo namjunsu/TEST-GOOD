@@ -327,7 +327,7 @@ def main():
                 </p>
                 <div style='margin-top: 30px;'>
                     <div style='display: inline-block; padding: 10px 20px; background: rgba(255,255,255,0.1); border-radius: 10px;'>
-                        <p style='color: white; margin: 0;'>📦 Qwen2.5-7B 모델 로드 중...</p>
+                        <p style='color: white; margin: 0;'>📦 로컬 LLM 모델 로드 중...</p>
                     </div>
                 </div>
             </div>

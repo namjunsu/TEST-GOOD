@@ -47,7 +47,7 @@ STREAMLIT_PORT = int(os.getenv("STREAMLIT_PORT", "8501"))
 STREAMLIT_HOST = os.getenv("STREAMLIT_HOST", "localhost")
 
 # RAG 설정
-RAG_MODEL = os.getenv("RAG_MODEL", "Qwen2.5-7B")
+RAG_MODEL = os.getenv("RAG_MODEL", "Local LLM")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 
 # 디렉토리 자동 생성

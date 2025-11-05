@@ -109,7 +109,7 @@ def render_sidebar_library(rag_instance) -> None:
         st.caption(f"물리 파일 총계: {physical_total}개")
 
         # 마지막 업데이트
-        if stats['last_update'] != 'Never':
+        if stats.get('last_update') and stats['last_update'] != 'Never':
             st.caption(f"마지막 체크: {stats['last_update'][:16]}")
 
     st.markdown("---")

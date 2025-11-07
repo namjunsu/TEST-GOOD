@@ -22,6 +22,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from app.core.logging import get_logger
+from utils.streaming import stream_text_smart
 
 
 # ===== 로깅 설정 =====
@@ -71,7 +72,7 @@ class ChatConfig:
 
     # UI 문자열
     INPUT_PLACEHOLDER = "💬 무엇을 도와드릴까요?"
-    SPINNER_TEXT = "🤔 생각 중..."
+    SPINNER_TEXT = "🔍 문서 검색 중... (캐시 확인 → 인덱스 검색 → 답변 생성)"
     DIVIDER = "---"
 
     # 에러 메시지
@@ -134,7 +135,8 @@ def render_doc_card(
     display_date: Optional[str],
     drafter: Optional[str],
     summary: str,
-    show_preview_inline: bool = False
+    show_preview_inline: bool = False,
+    msg_idx: int = 0
 ) -> None:
     """문서 카드 렌더링 (고정 레이아웃) - 안전가드 + 캐시 적용
 
@@ -156,72 +158,66 @@ def render_doc_card(
     """
     from utils.pdf_utils import download_pdf_button, render_pdf_preview
 
-    # 1행: 파일명
-    st.markdown(f"**{index}. 📄 {filename}**")
+    # 리스트 형식으로 간결하게 표시
+    import hashlib
+    # 고유 키 생성: msg_idx와 index를 포함하여 중복 방지
+    file_hash = hashlib.md5(filename.encode()).hexdigest()[:8]
+    unique_key = f"{msg_idx}_{index}_{file_hash}"
+    session_key = f"show_preview_{unique_key}"
 
-    # 2행: 메타칩 (존재하는 것만 표시)
-    meta_chips = []
-    if doctype:
-        meta_chips.append(f"🏷 {doctype}")
+    # 메타정보 구성
+    meta_parts = []
     if display_date:
-        meta_chips.append(f"📅 {display_date}")
+        meta_parts.append(display_date)
     if drafter:
-        meta_chips.append(f"✍ {drafter}")
+        meta_parts.append(drafter)
+    meta_str = ' · '.join(meta_parts) if meta_parts else ""
 
-    if meta_chips:
-        st.caption(" · ".join(meta_chips))
-    else:
-        st.caption("—")  # 메타 정보 없음
+    # 요약 (40자로 단축)
+    summary_short = summary[:40].strip()
+    if len(summary) > 40:
+        summary_short += "..."
 
-    # 3행: 요약 (최대 2줄, 160자)
-    summary_truncated = summary[:160].strip()
-    if len(summary) > 160:
-        summary_truncated += "..."
-    st.markdown(f"{summary_truncated}")
+    # 한 줄 리스트 형식: • 파일명.pdf (날짜 · 기안자) - 요약...
+    list_line = f"**{index}.** 📄 **{filename}**"
+    if meta_str:
+        list_line += f" `{meta_str}`"
+    if summary_short:
+        list_line += f" — {summary_short}"
 
-    # 4행: 버튼 (안전가드 + 표준 함수 사용)
+    st.markdown(list_line)
+
+    # 액션 버튼 (작게, 같은 줄에)
     if file_path:
-        col1, col2 = st.columns([1, 1])
+        col1, col2, col3 = st.columns([1, 1, 8])
 
-        # 안정적인 키 생성 (index 대신 filename 해시 사용)
-        import hashlib
-        file_hash = hashlib.md5(filename.encode()).hexdigest()[:8]
-        session_key = f"show_preview_{file_hash}"
-
-        # 미리보기 버튼 (expander 토글)
         with col1:
-            preview_key = f"preview_btn_{file_hash}"
+            preview_key = f"preview_btn_{unique_key}"
             current_state = st.session_state.get(session_key, False)
-            button_label = "📖 미리보는중" if current_state else "🔎 미리보기"
-            button_type = "primary" if current_state else "secondary"
+            icon = "📖" if current_state else "🔎"
 
-            if st.button(button_label, key=preview_key, type=button_type, use_container_width=True):
-                # 세션 상태에 미리보기 정보 저장
+            if st.button(icon, key=preview_key, help="미리보기", use_container_width=True):
                 st.session_state[session_key] = not current_state
-                # rerun으로 상태 반영
-                st.rerun()
+                # Streamlit 자동 재렌더링 (st.rerun() 제거, 2025-11-07)
 
-        # 다운로드 버튼 (표준 함수 사용)
         with col2:
             download_pdf_button(
                 file_path=str(file_path),
-                key=f"download_{file_hash}",
-                width="stretch"
+                key=f"download_{unique_key}",
+                width="stretch",
+                icon_only=True
             )
 
-        # 5행: PDF 뷰어 (예외 처리 강화, 다운로드 fallback)
-        # expander 없이 직접 표시하여 안정성 향상
+        # PDF 미리보기 (선택 시)
         if st.session_state.get(session_key, False):
-            st.markdown("---")
-            st.markdown(f"**📄 PDF 미리보기: {filename}**")
+            st.markdown(f"**📄 {filename}**")
             render_pdf_preview(
                 file_path=str(file_path),
-                height=600,
+                height=500,
                 show_download_fallback=True
             )
-            st.markdown("---")
     else:
-        st.warning("⚠️ 파일 경로가 제공되지 않았습니다")
+        st.caption("⚠️ 파일 경로 없음")
 
 
 def _normalize_rag_response(resp: Any) -> dict:
@@ -297,6 +293,87 @@ def _initialize_chat_state() -> None:
     if 'messages' not in st.session_state:
         st.session_state.messages = []
         logger.info("Chat session initialized")
+
+
+def _display_evidence_section(evidence_list: List, msg_idx: int) -> None:
+    """출처 문서 섹션 표시
+
+    Evidence 리스트를 간결한 리스트 형식으로 표시하며,
+    각 메시지별로 expander 상태를 session_state로 관리합니다.
+
+    Args:
+        evidence_list: 출처 문서 리스트
+        msg_idx: 메시지 인덱스 (expander 상태 관리용)
+    """
+    from pathlib import Path
+
+    # Top-K=20 제한
+    MAX_DISPLAY = 20
+    display_evidence = evidence_list[:MAX_DISPLAY]
+    has_more = len(evidence_list) > MAX_DISPLAY
+
+    # Expander는 기본 접힌 상태 (Streamlit 내부 상태 관리 사용)
+    # expanded 파라미터를 동적으로 변경하면 재렌더링 시 충돌이 발생할 수 있음
+    with st.expander(
+        f"📚 출처 문서 ({len(display_evidence)}건)",
+        expanded=False
+    ):
+        for i, ev in enumerate(display_evidence, 1):
+            # Evidence가 dict 또는 객체일 수 있으므로 안전하게 접근
+            if isinstance(ev, dict):
+                doc_id = ev.get("doc_id") or ev.get("chunk_id", "unknown")
+                filename = ev.get("filename", doc_id)
+                snippet = ev.get("snippet") or ev.get("content", "") or ev.get("text", "")
+                file_path_str = ev.get("file_path")
+                meta = ev.get("meta", {})
+            else:
+                # 객체인 경우
+                doc_id = getattr(ev, "doc_id", None) or getattr(ev, "chunk_id", "unknown")
+                filename = getattr(ev, "filename", doc_id)
+                snippet = getattr(ev, "snippet", None) or getattr(ev, "content", "") or getattr(ev, "text", "")
+                file_path_str = getattr(ev, "file_path", None)
+                meta = getattr(ev, "meta", {})
+
+            # 파일 경로 생성 (year 폴더 지원)
+            if file_path_str:
+                file_path = Path(file_path_str)
+            else:
+                # Fallback: year 폴더 추출
+                import re
+                year_match = re.search(r'(\d{4})-', filename)
+                if year_match:
+                    year = year_match.group(1)
+                    file_path = Path(f"docs/year_{year}") / filename
+                else:
+                    file_path = Path("docs") / filename
+
+            # 메타 데이터 추출
+            doctype = meta.get("doctype") if isinstance(meta, dict) else None
+            display_date = meta.get("date") or meta.get("display_date") if isinstance(meta, dict) else None
+            drafter = meta.get("drafter") if isinstance(meta, dict) else None
+
+            # 카드 렌더링 (리스트 형식)
+            render_doc_card(
+                index=i,
+                filename=filename,
+                file_path=file_path,
+                doctype=doctype,
+                display_date=display_date,
+                drafter=drafter,
+                summary=snippet,
+                show_preview_inline=False,
+                msg_idx=msg_idx
+            )
+
+            # 간결한 구분 (마지막 아이템 제외)
+            if i < len(display_evidence):
+                st.markdown("")  # 작은 여백만
+
+        # 더 보기 정보 (5건 초과 시)
+        if has_more:
+            st.markdown("---")
+            remaining = len(evidence_list) - MAX_DISPLAY
+            st.info(f"📄 {remaining}건의 문서가 더 있습니다. (현재 상위 {MAX_DISPLAY}건만 표시)")
 
 
 def _validate_message_structure(message: Any) -> bool:
@@ -431,8 +508,8 @@ def _create_enhanced_query(context: str, prompt: str) -> str:
         return prompt
 
 
-def _handle_error(error: Exception) -> str:
-    """예외 타입별 에러 메시지 생성
+def _handle_error(error: Exception) -> dict:
+    """예외 타입별 에러 메시지 및 상세 정보 생성
 
     예외 타입에 따라 적절한 사용자 친화적 메시지를 반환합니다.
     모든 에러는 로그에 기록됩니다.
@@ -441,7 +518,7 @@ def _handle_error(error: Exception) -> str:
         error: 발생한 예외 객체
 
     Returns:
-        str: 사용자에게 표시할 에러 메시지
+        dict: {"message": str, "details": str, "error_type": str}
     """
     error_type = type(error).__name__
     error_msg = str(error)
@@ -451,32 +528,45 @@ def _handle_error(error: Exception) -> str:
 
     # 타입별 처리
     if isinstance(error, TimeoutError):
-        return ChatConfig.ERROR_TIMEOUT
+        user_message = ChatConfig.ERROR_TIMEOUT
+        details = f"요청 처리 시간이 초과되었습니다. 서버가 응답하지 않거나 요청이 너무 복잡할 수 있습니다."
     elif isinstance(error, MemoryError):
-        return ChatConfig.ERROR_MEMORY
+        user_message = ChatConfig.ERROR_MEMORY
+        details = f"사용 가능한 메모리가 부족합니다. 대화 기록을 정리하거나 더 짧은 질문을 시도해보세요."
     elif isinstance(error, ConnectionError):
-        return ChatConfig.ERROR_NETWORK
+        user_message = ChatConfig.ERROR_NETWORK
+        details = f"네트워크 연결에 문제가 발생했습니다. 인터넷 연결을 확인해주세요."
     elif isinstance(error, AttributeError):
         # UnifiedRAG 인스턴스 문제일 가능성
-        return ChatConfig.ERROR_INITIALIZATION
+        user_message = ChatConfig.ERROR_INITIALIZATION
+        details = f"시스템 초기화에 문제가 있습니다. 페이지를 새로고침해주세요."
     elif isinstance(error, KeyError):
         # 메시지 구조 문제
         logger.error(f"Message structure error: {error_msg}")
-        return ChatConfig.ERROR_GENERIC
+        user_message = ChatConfig.ERROR_GENERIC
+        details = f"메시지 구조에 문제가 발생했습니다. 다시 시도해주세요."
     else:
         # 일반 에러 - 민감한 정보는 노출하지 않음
-        return ChatConfig.ERROR_GENERIC
+        user_message = ChatConfig.ERROR_GENERIC
+        details = f"예상치 못한 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+
+    return {
+        "message": user_message,
+        "details": details,
+        "error_type": error_type
+    }
 
 
 def _display_chat_history(messages: List[Dict[str, str]]) -> None:
     """채팅 기록 표시
 
     저장된 모든 메시지를 Streamlit chat UI로 표시합니다.
+    Evidence가 포함된 메시지는 출처 문서도 함께 표시합니다.
 
     Args:
         messages: 표시할 메시지 리스트
     """
-    for message in messages:
+    for msg_idx, message in enumerate(messages):
         # 메시지 구조 검증
         if not _validate_message_structure(message):
             logger.warning(f"Skipping invalid message: {message}")
@@ -485,6 +575,11 @@ def _display_chat_history(messages: List[Dict[str, str]]) -> None:
         try:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
+
+                # Evidence 표시 (assistant 메시지에만)
+                if message["role"] == "assistant" and message.get("evidence"):
+                    _display_evidence_section(message["evidence"], msg_idx)
+
         except Exception as e:
             logger.error(f"Error displaying message: {e}")
             # 표시 오류는 사용자에게 알리지 않고 로그만 남김
@@ -534,26 +629,41 @@ def _generate_ai_response(
         return response
 
     except Exception as e:
-        error_msg = _handle_error(e)
-        message_placeholder.markdown(error_msg)
-        return {"text": error_msg, "evidence": []}  # 에러 메시지 반환
+        error_info = _handle_error(e)
+
+        # 사용자 친화적 에러 메시지 표시
+        message_placeholder.error(error_info["message"])
+
+        # 상세 정보는 expander로 제공
+        with message_placeholder.container():
+            with st.expander("🔍 오류 상세 정보", expanded=False):
+                st.caption(f"**오류 유형**: {error_info['error_type']}")
+                st.caption(f"**상세 설명**: {error_info['details']}")
+                st.info("💡 **해결 방법**: 위 설명을 참고하여 문제를 해결해주세요. 문제가 지속되면 관리자에게 문의하세요.")
+
+        return {"text": error_info["message"], "evidence": []}  # 에러 메시지 반환
 
 
-def _add_message(role: str, content: str) -> None:
+def _add_message(role: str, content: str, evidence: Optional[List] = None) -> None:
     """메시지 추가
 
     세션 상태에 새로운 메시지를 추가합니다.
-    타임스탬프를 자동으로 추가합니다.
+    타임스탬프와 evidence를 자동으로 추가합니다.
 
     Args:
         role: 메시지 역할 (user 또는 assistant)
         content: 메시지 내용
+        evidence: 출처 문서 리스트 (선택사항)
     """
     message: ChatMessage = {
         "role": role,
         "content": content,
         "timestamp": datetime.now().isoformat()
     }
+
+    # Evidence 추가 (있는 경우만)
+    if evidence:
+        message["evidence"] = evidence
 
     st.session_state.messages.append(message)
 
@@ -594,7 +704,7 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                     st.session_state.show_doc_preview = False
                     if 'selected_doc' in st.session_state:
                         del st.session_state.selected_doc
-                    st.rerun()
+                    # Streamlit 자동 재렌더링으로 충분 (st.rerun() 제거, 2025-11-07)
 
     # 2. 기존 대화 표시
     _display_chat_history(st.session_state.messages)
@@ -647,79 +757,31 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
 
                 # 응답이 있으면 표시 및 저장
                 if response:
-                    # 답변 텍스트 표시
-                    message_placeholder.markdown(response["text"])
+                    # 답변 텍스트를 점진적으로 표시 (ChatGPT 스타일)
+                    # 캐시에서 가져온 경우 빠르게, 새로 생성한 경우 천천히
+                    from_cache = response.get("status", {}).get("from_cache")
 
-                    # Evidence 표시 (Top-K=20 제한, 고정 카드 레이아웃, 문서 라이브러리와 통일)
+                    # 캐시 피드백 배지 표시
+                    if from_cache:
+                        st.caption("⚡ **Cached** - 이전 응답을 빠르게 불러왔습니다")
+
+                    if from_cache:
+                        # 캐시된 응답은 즉시 표시 (스트리밍 효과 없음)
+                        message_placeholder.markdown(response["text"])
+                    else:
+                        # 새로 생성된 응답은 점진적으로 표시
+                        streaming_speed = os.getenv("STREAMING_SPEED", "medium")  # slow, medium, fast
+                        for partial_text in stream_text_smart(response["text"], speed=streaming_speed):
+                            message_placeholder.markdown(partial_text + "▌")  # 커서 효과
+                        # 최종 텍스트 (커서 제거)
+                        message_placeholder.markdown(response["text"])
+
+                    # Evidence 표시 (session_state 관리로 미리보기 클릭 시에도 유지됨)
                     if response.get("evidence"):
-                        evidence_list = response["evidence"]
-
-                        # Top-K=20 제한 (모든 문서 표시)
-                        MAX_DISPLAY = 20
-                        display_evidence = evidence_list[:MAX_DISPLAY]
-                        has_more = len(evidence_list) > MAX_DISPLAY
-
-                        # expander를 기본적으로 열린 상태로 표시 (UX 개선)
-                        # 사용자가 미리보기를 클릭했을 때 문서가 사라지는 문제 해결
-                        auto_expand = False  # 기본 접힘 상태 (사용자 요청: 자동 펼침 비활성화)
-
-                        with st.expander(f"📚 출처 문서 ({len(display_evidence)}건)", expanded=auto_expand):
-                            for i, ev in enumerate(display_evidence, 1):
-                                # Evidence가 dict 또는 객체일 수 있으므로 안전하게 접근
-                                if isinstance(ev, dict):
-                                    doc_id = ev.get("doc_id") or ev.get("chunk_id", "unknown")
-                                    filename = ev.get("filename", doc_id)
-                                    snippet = ev.get("snippet") or ev.get("content", "") or ev.get("text", "")
-                                    file_path_str = ev.get("file_path")  # ← 실제 파일 경로
-                                    meta = ev.get("meta", {})
-                                else:
-                                    # 객체인 경우
-                                    doc_id = getattr(ev, "doc_id", None) or getattr(ev, "chunk_id", "unknown")
-                                    filename = getattr(ev, "filename", doc_id)
-                                    snippet = getattr(ev, "snippet", None) or getattr(ev, "content", "") or getattr(ev, "text", "")
-                                    file_path_str = getattr(ev, "file_path", None)
-                                    meta = getattr(ev, "meta", {})
-
-                                # 파일 경로 생성 (year 폴더 지원)
-                                if file_path_str:
-                                    file_path = Path(file_path_str)
-                                else:
-                                    # Fallback: _encode_file_ref 로직과 동일
-                                    import re
-                                    year_match = re.search(r'(\d{4})-', filename)
-                                    if year_match:
-                                        year = year_match.group(1)
-                                        file_path = Path(f"docs/year_{year}") / filename
-                                    else:
-                                        file_path = Path("docs") / filename
-
-                                # 메타 데이터 추출
-                                doctype = meta.get("doctype") if isinstance(meta, dict) else None
-                                display_date = meta.get("date") or meta.get("display_date") if isinstance(meta, dict) else None
-                                drafter = meta.get("drafter") if isinstance(meta, dict) else None
-
-                                # 카드 렌더링 (1건일 때만 인라인 미리보기 자동 표시)
-                                render_doc_card(
-                                    index=i,
-                                    filename=filename,
-                                    file_path=file_path,
-                                    doctype=doctype,
-                                    display_date=display_date,
-                                    drafter=drafter,
-                                    summary=snippet,
-                                    show_preview_inline=(auto_expand and i == 1)
-                                )
-
-                                # 구분선 (마지막 아이템 제외)
-                                if i < len(display_evidence):
-                                    st.markdown("---")
-
-                            # 더 보기 버튼 (5건 초과 시)
-                            if has_more:
-                                st.markdown("---")
-                                remaining = len(evidence_list) - MAX_DISPLAY
-                                st.info(f"📄 {remaining}건의 문서가 더 있습니다. (현재 상위 {MAX_DISPLAY}건만 표시)")
-                                # 추후 "더 보기" 버튼 구현 가능
+                        # 새 응답의 인덱스는 메시지 리스트의 마지막 인덱스가 될 것임
+                        # 하지만 아직 메시지가 저장되지 않았으므로 현재 길이를 사용
+                        current_msg_idx = len(st.session_state.messages)
+                        _display_evidence_section(response["evidence"], current_msg_idx)
 
                     # 진단 패널 (DIAG_RAG=true일 때만 표시)
                     if DIAG_RAG and response.get("diagnostics"):
@@ -731,22 +793,37 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                             with col1:
                                 st.metric("모드", diag.get("mode", "unknown"))
                                 st.metric("생성 경로", diag.get("generate_path", "unknown"))
+                                # 캐시 히트 여부
+                                cache_hit = "⚡ Hit" if diag.get("cache_hit") else "❌ Miss"
+                                st.metric("캐시", cache_hit)
 
                             with col2:
                                 st.metric("검색 문서 수", diag.get("retrieved_k", 0))
                                 st.metric("압축 후 문서 수", diag.get("after_compress_k", 0))
+                                # 스니펫 총 글자수
+                                snippet_chars = diag.get("snippet_total_chars", 0)
+                                st.metric("스니펫 총 글자수", f"{snippet_chars:,}")
 
                             with col3:
                                 st.metric("Evidence 개수", diag.get("evidence_count", 0))
-                                injected = "Yes" if diag.get("evidence_injected") else "No"
-                                st.metric("Evidence 강제 주입", injected)
+                                # 토큰 사용량
+                                input_tokens = diag.get("input_tokens", 0)
+                                output_tokens = diag.get("output_tokens", 0)
+                                st.metric("입력 토큰", f"{input_tokens:,}")
+                                st.metric("출력 토큰", f"{output_tokens:,}")
 
                             # 상세 정보 (작은 텍스트로)
                             st.caption(f"압축 비율: {diag.get('compression_ratio', 'N/A')}")
                             st.caption(f"최종 사용 문서 수: {diag.get('used_k', 0)}")
+                            # 응답 시간
+                            latency_ms = diag.get("latency_ms", 0)
+                            st.caption(f"응답 시간: {latency_ms:,}ms ({latency_ms/1000:.2f}s)")
+                            # Evidence 강제 주입 여부
+                            injected = "Yes" if diag.get("evidence_injected") else "No"
+                            st.caption(f"Evidence 강제 주입: {injected}")
 
-                    # 메시지 저장 (텍스트만)
-                    _add_message(ChatConfig.ROLE_ASSISTANT, response["text"])
+                    # 메시지 저장 (텍스트 + evidence)
+                    _add_message(ChatConfig.ROLE_ASSISTANT, response["text"], evidence=response.get("evidence"))
                 else:
                     # 응답이 없으면 기본 에러 메시지
                     error_msg = ChatConfig.ERROR_GENERIC

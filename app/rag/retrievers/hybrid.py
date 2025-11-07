@@ -12,6 +12,7 @@ from app.core.logging import get_logger
 from modules.metadata_db import MetadataDB
 from app.rag.query_parser import QueryParser
 from rag_system.bm25_store import BM25Store  # 인덱서와 동일 모듈 사용
+from app.rag.parallel_executor import get_parallel_executor
 
 logger = get_logger(__name__)
 
@@ -26,8 +27,17 @@ class HybridRetriever:
     def __init__(self):
         """초기화 - BM25Store 및 MetadataDB 로드"""
         try:
+            # 스니펫 길이 설정 (3600자 = ~1200 토큰)
+            self.snippet_max_length = int(os.getenv("SNIPPET_MAX_LENGTH", "3600"))
+
             # 검색 백엔드 설정
             self.use_bm25 = os.getenv("RETRIEVER_BACKEND", "bm25").lower() == "bm25"
+
+            # 병렬 처리 설정
+            self.enable_parallel = os.getenv("ENABLE_PARALLEL_SEARCH", "true").lower() == "true"
+            if self.enable_parallel:
+                self.parallel_executor = get_parallel_executor(max_workers=3)
+                logger.info("✅ Parallel search execution enabled")
 
             # MetadataDB 초기화 (필터링용)
             self.metadata_db = MetadataDB()
@@ -99,6 +109,41 @@ class HybridRetriever:
             self._last_index_mtime = current_mtime
             logger.info(f"✅ 인덱스 재로드 완료 ({len(self.bm25.documents)}개 문서)")
 
+    def _find_selected_document(self, selected_filename: str) -> Optional[Dict[str, Any]]:
+        """
+        선택된 문서를 MetadataDB에서 직접 검색
+
+        Args:
+            selected_filename: 검색할 파일명
+
+        Returns:
+            변환된 문서 딕셔너리 또는 None
+        """
+        try:
+            all_docs = self.metadata_db.search_documents(limit=500)
+            for doc in all_docs:
+                if doc.get("filename") == selected_filename:
+                    # BM25 result 형식으로 변환
+                    return {
+                        "doc_id": doc.get("filename", "unknown"),
+                        "snippet": doc.get("text_preview") or "",  # 전체 문서 사용
+                        "score": 99.9,  # 최우선 스코어
+                        "page": 1,
+                        "filename": doc.get("filename"),
+                        "file_path": doc.get("path"),
+                        "meta": {
+                            "filename": doc.get("filename"),
+                            "date": doc.get("date"),
+                            "drafter": doc.get("drafter"),
+                            "category": doc.get("category"),
+                        }
+                    }
+            logger.warning(f"⚠️ 선택된 문서를 찾을 수 없음: {selected_filename}")
+            return None
+        except Exception as e:
+            logger.error(f"❌ 선택 문서 검색 실패: {e}")
+            return None
+
     def _calculate_relevance_score(self, query: str, doc: Dict[str, Any]) -> float:
         """쿼리와 문서 간 relevance 스코어 계산 (BM25 유사)
 
@@ -168,15 +213,37 @@ class HybridRetriever:
                 # DOC_ANCHORED 모드: 넉넉하게 검색 후 필터링
                 search_k = 50 if mode.lower() == "doc_anchored" else top_k
 
-                # BM25Store에서 직접 검색
-                bm25_results = self.bm25.search(query, top_k=search_k)
+                # Parallel execution: BM25 search와 selected doc lookup 동시 실행
+                if self.enable_parallel and selected_filename:
+                    # 병렬 실행: BM25 검색 + 선택 문서 검색
+                    search_tasks = [
+                        {
+                            "name": "bm25_search",
+                            "func": self.bm25.search,
+                            "args": (query,),
+                            "kwargs": {"top_k": search_k}
+                        },
+                        {
+                            "name": "selected_doc_lookup",
+                            "func": self._find_selected_document,
+                            "args": (selected_filename,),
+                            "kwargs": {}
+                        }
+                    ]
+                    parallel_results = self.parallel_executor.execute_searches(search_tasks)
+                    bm25_results = parallel_results.get("bm25_search", [])
+                    selected_doc = parallel_results.get("selected_doc_lookup")
+                else:
+                    # 순차 실행 (기본)
+                    bm25_results = self.bm25.search(query, top_k=search_k)
+                    selected_doc = None
 
                 # BM25 결과를 RAGPipeline 형식으로 변환 (doc_id, snippet 필드 추가)
                 converted_results = []
                 for result in bm25_results:
                     converted_results.append({
                         "doc_id": result.get("filename", "unknown"),
-                        "snippet": result.get("content", "")[:800],  # content -> snippet
+                        "snippet": result.get("content", ""),  # 전체 문서 사용 (snippet 제한 제거)
                         "score": result.get("score", 0.0),
                         "page": 1,
                         "filename": result.get("filename"),  # 원본 filename 유지
@@ -209,42 +276,29 @@ class HybridRetriever:
 
                 # 선택된 문서 강제 추가 (사용자 요청 우선 처리)
                 if selected_filename:
-                    selected_doc = None
-                    # 1. BM25 결과에서 먼저 찾기
-                    for result in converted_results:
-                        if result.get("filename") == selected_filename:
-                            selected_doc = result
-                            break
-
-                    # 2. BM25에 없으면 MetadataDB에서 직접 가져오기
-                    if not selected_doc:
-                        logger.info(f"🔍 BM25에 없음, MetadataDB에서 직접 검색: {selected_filename}")
-                        all_docs = self.metadata_db.search_documents(limit=500)
-                        for doc in all_docs:
-                            if doc.get("filename") == selected_filename:
-                                # BM25 result 형식으로 변환
-                                selected_doc = {
-                                    "doc_id": doc.get("filename", "unknown"),
-                                    "snippet": (doc.get("text_preview") or "")[:800],
-                                    "score": 0.0,
-                                    "page": 1,
-                                    "filename": doc.get("filename"),
-                                    "file_path": doc.get("path"),
-                                    "meta": {
-                                        "filename": doc.get("filename"),
-                                        "date": doc.get("date"),
-                                        "drafter": doc.get("drafter"),
-                                        "category": doc.get("category"),
-                                    }
-                                }
-                                logger.info(f"✅ MetadataDB에서 발견: {selected_filename}")
+                    # 병렬 실행에서 이미 가져온 경우 사용, 아니면 검색
+                    if self.enable_parallel and 'selected_doc' in locals() and selected_doc:
+                        # 이미 병렬로 가져옴
+                        logger.info(f"✅ 병렬 검색으로 선택 문서 발견: {selected_filename}")
+                    else:
+                        # 1. BM25 결과에서 먼저 찾기
+                        selected_doc = None
+                        for result in converted_results:
+                            if result.get("filename") == selected_filename:
+                                selected_doc = result.copy()
+                                selected_doc["score"] = 99.9
                                 break
+
+                        # 2. BM25에 없으면 MetadataDB에서 직접 가져오기
+                        if not selected_doc:
+                            logger.info(f"🔍 BM25에 없음, MetadataDB에서 직접 검색: {selected_filename}")
+                            selected_doc = self._find_selected_document(selected_filename)
 
                     # 3. 찾았으면 최상위에 강제 추가
                     if selected_doc:
                         # 기존 결과에서 제거 (중복 방지)
                         normalized = [r for r in normalized if r.get("filename") != selected_filename]
-                        # 최상위에 강제 추가 (score=99.9로 최우선)
+                        # 최상위에 강제 추가
                         selected_doc_priority = selected_doc.copy()
                         selected_doc_priority["score"] = 99.9
                         normalized = [selected_doc_priority] + normalized[:top_k-1]
@@ -267,7 +321,7 @@ class HybridRetriever:
 
                 normalized = []
                 for doc in results:
-                    snippet = (doc.get('text_preview') or doc.get('content') or "")[:800]
+                    snippet = doc.get('text_preview') or doc.get('content') or ""  # 전체 문서 사용
                     if not snippet:
                         snippet = f"[{doc.get('filename', 'unknown')}]"
 
@@ -289,6 +343,12 @@ class HybridRetriever:
 
                 normalized.sort(key=lambda x: x['score'], reverse=True)
                 normalized = normalized[:top_k]
+
+            # ✨ 파일명 매칭 보너스 (쿼리와 파일명이 유사하면 점수 증가)
+            if not selected_filename:  # 선택된 문서가 없을 때만 적용
+                normalized = self._apply_filename_bonus(query, normalized)
+                # 보너스 적용 후 재정렬
+                normalized.sort(key=lambda x: x['score'], reverse=True)
 
             # 스코어 분포 통계 계산 (low-confidence 가드레일용)
             scores = [r["score"] for r in normalized]
@@ -325,3 +385,81 @@ class HybridRetriever:
             import traceback
             logger.error(traceback.format_exc())
             return []
+
+    def _apply_filename_bonus(self, query: str, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """파일명 유사도에 따라 점수 보너스 적용
+
+        쿼리와 파일명이 매우 유사할 때 검색 순위를 높이기 위한 보정.
+
+        Args:
+            query: 사용자 검색 질의
+            results: 검색 결과 리스트
+
+        Returns:
+            보너스가 적용된 검색 결과 리스트
+        """
+        import re
+
+        # 쿼리 정규화: 공백, 특수문자 제거 후 토큰화
+        query_normalized = re.sub(r'[^\w\s]', ' ', query.lower())
+        query_tokens = set(query_normalized.split())
+
+        if not query_tokens:
+            return results
+
+        for result in results:
+            filename = result.get('filename', '')
+            if not filename:
+                continue
+
+            # 파일명 정규화
+            # 1. 날짜 패턴 제거 (YYYY-MM-DD_)
+            filename_clean = re.sub(r'^\d{4}-\d{2}-\d{2}_', '', filename)
+            # 2. 확장자 제거
+            filename_clean = re.sub(r'\.\w+$', '', filename_clean)
+            # 3. 언더스코어를 공백으로 치환
+            filename_clean = filename_clean.replace('_', ' ')
+            # 4. 특수문자 제거 후 소문자 변환
+            filename_clean = re.sub(r'[^\w\s]', ' ', filename_clean.lower())
+
+            # 파일명 토큰화
+            filename_tokens = set(filename_clean.split())
+
+            if not filename_tokens:
+                continue
+
+            # 토큰 매칭률 계산 (Jaccard similarity)
+            intersection = query_tokens & filename_tokens
+            union = query_tokens | filename_tokens
+            jaccard_score = len(intersection) / len(union) if union else 0.0
+
+            # 쿼리 토큰이 파일명에 모두 포함되었는지 확인
+            query_coverage = len(intersection) / len(query_tokens) if query_tokens else 0.0
+
+            # 최종 유사도 점수 (둘 중 높은 값 사용)
+            similarity = max(jaccard_score, query_coverage)
+
+            # 보너스 점수 계산 (0~30점 범위)
+            # - 80% 이상 유사: +30점
+            # - 60~80% 유사: +20점
+            # - 40~60% 유사: +10점
+            # - 40% 미만: 보너스 없음
+            bonus = 0.0
+            if similarity >= 0.8:
+                bonus = 30.0
+            elif similarity >= 0.6:
+                bonus = 20.0
+            elif similarity >= 0.4:
+                bonus = 10.0
+
+            # 보너스 적용
+            if bonus > 0:
+                original_score = result['score']
+                result['score'] += bonus
+                logger.info(
+                    f"📈 파일명 보너스: {filename[:40]} | "
+                    f"유사도={similarity:.2f} | "
+                    f"점수 {original_score:.2f} → {result['score']:.2f} (+{bonus:.1f})"
+                )
+
+        return results

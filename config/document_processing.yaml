@@ -267,3 +267,34 @@ folders:
   rejected: "docs/rejected"
   quarantine: "docs/quarantine"
   extracted: "data/extracted"
+
+# 쿼리 모드 라우팅 설정
+mode_routing:
+  # Q&A 의도를 나타내는 키워드
+  qa_intent_keywords:
+    - "알려줘"
+    - "알려주세요"
+    - "설명"
+    - "뭐야"
+    - "뭔가요"
+    - "무엇"
+    - "어떻게"
+    - "왜"
+    - "자세히"        # 상세 정보 요청
+    - "자세하게"      # 상세 정보 요청
+    - "상세히"        # 상세 정보 요청
+    - "구체적으로"    # 구체적인 정보 요청
+    - "내용"          # 내용 설명 요청
+    - "정보"          # 정보 요청
+    - "어떤"          # 어떤 내용인지
+    - "확인"          # 확인 요청
+
+  # 미리보기만 원하는 경우의 키워드
+  preview_only_keywords:
+    - "미리보기"
+    - "원문"
+    - "전문"
+    - "보기"
+
+  # 파일명 패턴 (정규식)
+  filename_pattern: '\S+\.pdf'

@@ -8,6 +8,8 @@ import hashlib
 from pathlib import Path
 from typing import Any, Dict
 
+from utils.path_validator import validate_and_resolve_path
+
 
 def render_document_preview(rag_instance: Any, config_module: Any) -> None:
     """문서 미리보기 패널 렌더링
@@ -36,23 +38,27 @@ def render_document_preview(rag_instance: Any, config_module: Any) -> None:
             st.caption(f"**카테고리**: {doc['category']} | **파일**: {doc['filename']}")
 
         with col3:
-            # Use the full path from metadata, not just filename
-            if 'path' in doc and doc['path']:
-                file_path = Path(doc['path'])
-            else:
-                file_path = Path(DOCS_DIR) / doc['filename']
-            if file_path.exists():
+            # 파일 경로 검증 (디렉터리 트래버설 방지)
+            file_path = validate_and_resolve_path(
+                file_path_str=doc.get('path'),
+                base_dir=Path(DOCS_DIR).parent,  # docs의 상위 디렉터리 (프로젝트 루트)
+                fallback_filename=f"docs/{doc.get('filename')}" if doc.get('filename') else None
+            )
+
+            if file_path and file_path.exists():
                 with open(file_path, 'rb') as f:
                     pdf_bytes = f.read()
 
                 st.download_button(
                     label="📥 다운로드",
                     data=pdf_bytes,
-                    file_name=doc['filename'],
+                    file_name=doc.get('filename', 'document.pdf'),
                     mime="application/pdf",
-                    key=f"dl_{hashlib.md5(doc['filename'].encode()).hexdigest()}",
+                    key=f"dl_{hashlib.md5(doc.get('filename', 'unknown').encode()).hexdigest()}",
                     width="stretch"
                 )
+            else:
+                st.warning("⚠️ 파일을 찾을 수 없거나 접근이 거부되었습니다")
 
         with col4:
             if st.button("❌ 닫기", key="close_preview_btn", use_container_width=True):
@@ -89,15 +95,17 @@ def render_document_preview(rag_instance: Any, config_module: Any) -> None:
 
         # PDF 미리보기 표시
         if st.session_state.pdf_preview_shown:
-            # Use the full path from metadata, not just filename
-            if 'path' in doc and doc['path']:
-                file_path = Path(doc['path'])
-            else:
-                file_path = Path(DOCS_DIR) / doc['filename']
-            if file_path.exists():
+            # 파일 경로 검증 (디렉터리 트래버설 방지)
+            file_path = validate_and_resolve_path(
+                file_path_str=doc.get('path'),
+                base_dir=Path(DOCS_DIR).parent,  # docs의 상위 디렉터리 (프로젝트 루트)
+                fallback_filename=f"docs/{doc.get('filename')}" if doc.get('filename') else None
+            )
+
+            if file_path and file_path.exists():
                 with st.spinner("📄 PDF 로딩 중..."):
                     show_pdf_preview(file_path, height)
             else:
-                st.error("PDF 파일을 찾을 수 없습니다")
+                st.error("⚠️ PDF 파일을 찾을 수 없거나 접근이 거부되었습니다")
 
         st.markdown("---")

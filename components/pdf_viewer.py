@@ -231,7 +231,7 @@ class PDFViewer:
                     )
                     if new_page != current_page:
                         st.session_state[page_key] = new_page
-                        st.rerun()
+                        # Streamlit 자동 재렌더링으로 충분 (st.rerun() 제거, 2025-11-07)
 
             # 현재 페이지 렌더링
             page = pdf_document[current_page - 1]
@@ -281,7 +281,7 @@ class PDFViewer:
                         disabled=(current_page == 1)
                     ):
                         st.session_state[page_key] = max(1, current_page - 1)
-                        st.rerun()
+                        # Streamlit 자동 재렌더링으로 충분 (st.rerun() 제거, 2025-11-07)
 
                 with col3:
                     st.markdown(
@@ -296,7 +296,7 @@ class PDFViewer:
                         disabled=(current_page == total_pages)
                     ):
                         st.session_state[page_key] = min(total_pages, current_page + 1)
-                        st.rerun()
+                        # Streamlit 자동 재렌더링으로 충분 (st.rerun() 제거, 2025-11-07)
 
             # 메모리 해제
             pdf_document.close()

@@ -63,7 +63,8 @@ def download_pdf_button(
     file_path: str,
     label: str = "⬇ 원본 다운로드",
     key: Optional[str] = None,
-    width: str = "stretch"  # 'stretch' or 'content'
+    width: str = "stretch",  # 'stretch' or 'content'
+    icon_only: bool = False
 ) -> bool:
     """표준화된 PDF 다운로드 버튼 (한글 파일명 안전)
 
@@ -72,6 +73,7 @@ def download_pdf_button(
         label: 버튼 라벨
         key: Streamlit 위젯 키
         width: 버튼 너비 ('stretch' 또는 'content')
+        icon_only: True면 아이콘만 표시 (기본값: False)
 
     Returns:
         bool: 버튼 클릭 여부
@@ -80,13 +82,17 @@ def download_pdf_button(
         safe_file_path = safe_path(file_path)
         pdf_bytes = load_pdf_bytes(file_path)
 
+        # 아이콘 전용 모드
+        display_label = "📥" if icon_only else label
+
         return st.download_button(
-            label=label,
+            label=display_label,
             data=pdf_bytes,
             file_name=safe_file_path.name,
             mime="application/pdf",
             key=key,
-            width=width
+            use_container_width=(width == "stretch"),
+            help="다운로드" if icon_only else None
         )
 
     except FileNotFoundError:

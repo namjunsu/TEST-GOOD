@@ -20,6 +20,8 @@ from typing import Protocol, List, Optional, Dict, Any
 from app.core.logging import get_logger
 from app.core.errors import ModelError, SearchError, ErrorCode, ERROR_MESSAGES
 from app.rag.query_router import QueryRouter, QueryMode
+from app.rag.cache_manager import get_cached_result, cache_query_result, get_cache_stats
+from app.rag.persistent_cache import get_cached_result_persistent, cache_query_result_persistent
 
 logger = get_logger(__name__)
 
@@ -56,6 +58,40 @@ DOMAIN_KEYWORDS = {
     '최새름', '유인혁', '남준수', '박준서', '이원구',
     '최정은', '한건희', '김경현', '김수연', '김창수', '송경원',
 }
+
+
+def clean_ui_metadata(query: str) -> str:
+    """UI에서 복사한 메타데이터 태그 제거 (🏷, 📅, ✍ 등)
+
+    예시:
+        입력: "2024 중계차 🏷 pdf · 📅 2024-10-24 · ✍ 문서 내용 요약해 줘"
+        출력: "2024 중계차 문서 내용 요약해 줘"
+    """
+    import re
+
+    # 원본 보존 (디버깅용)
+    original = query
+
+    # 패턴 1: 🏷 [텍스트] · 형태 제거
+    query = re.sub(r'🏷[^·]+·\s*', '', query)
+
+    # 패턴 2: 📅 [날짜] · 형태 제거
+    query = re.sub(r'📅[^·]+·\s*', '', query)
+
+    # 패턴 3: ✍ [텍스트] (마지막 항목, · 없음)
+    query = re.sub(r'✍[^·]+', '', query)
+
+    # 패턴 4: "pdf", "해 줘" 같은 불필요한 확장자 언급 제거
+    query = re.sub(r'\s+pdf\s+', ' ', query)
+
+    # 연속 공백 정리
+    query = re.sub(r'\s+', ' ', query).strip()
+
+    # 변경사항이 있으면 로그 출력
+    if query != original:
+        logger.info(f"🧹 UI 메타데이터 제거: '{original[:60]}...' → '{query[:60]}...'")
+
+    return query
 
 
 def is_smalltalk(query: str) -> bool:
@@ -527,15 +563,20 @@ class RAGPipeline:
 {full_text}
 
 **추출 필드:**
-- model: 모델명 (예: "HRD-442")
-- manufacturer: 제조사 (예: "Hanwha Techwin")
-- ip_address: IP 주소 (예: "10.120.10.153")
-- reason: 교체 사유 (문서에서 그대로 인용)
-- duration_years: 사용 기간 (숫자만, 예: 7)
+- model: 장비 모델명 (반드시 문서에 명시된 경우에만 추출, 없으면 null)
+- manufacturer: 제조사명 (반드시 문서에 명시된 경우에만 추출, 없으면 null)
+- ip_address: IP 주소 (반드시 문서에 명시된 경우에만 추출, 없으면 null)
+- reason: 교체/보수 사유 (문서에서 그대로 인용)
+- duration_years: 사용 기간 (숫자만, 문서에 "N년" 형태로 명시된 경우에만)
+
+**🚨 매우 중요한 규칙:**
+1. **절대 추측하지 마세요** - 문서에 정확히 나온 정보만 추출
+2. **없으면 null** - 문서에 없는 필드는 반드시 null 사용
+3. **예시 사용 금지** - PMW-500, Sony 같은 값이 문서에 없으면 절대 사용 금지
+4. **모델명/제조사가 없으면** - 차량이나 시스템 보수 문서는 model=null, manufacturer=null
 
 **출력 형식:**
 오직 JSON만 출력하세요. 다른 텍스트는 포함하지 마세요.
-문서에 없는 필드는 null로 표시하세요.
 
 JSON:"""
 
@@ -832,6 +873,27 @@ JSON:"""
                 }
             }
         """
+        # ✨ 2-tier Cache check - 메모리 캐시 → 영구 캐시
+        cache_key = f"{query}:{selected_filename}" if selected_filename else query
+
+        # Tier 1: 메모리 캐시 확인 (가장 빠름)
+        cached_result = get_cached_result(cache_key)
+        if cached_result:
+            logger.info(f"🎯 Memory Cache HIT! Returning cached result for query: {query[:50]}...")
+            if "status" in cached_result:
+                cached_result["status"]["from_cache"] = "memory"
+            return cached_result
+
+        # Tier 2: 영구 캐시 확인 (서버 재시작 후에도 유지)
+        cached_result = get_cached_result_persistent(cache_key)
+        if cached_result:
+            logger.info(f"💾 Persistent Cache HIT! Returning cached result for query: {query[:50]}...")
+            # 영구 캐시에서 가져온 결과를 메모리 캐시에도 저장 (다음 접근을 위해)
+            cache_query_result(cache_key, cached_result)
+            if "status" in cached_result:
+                cached_result["status"]["from_cache"] = "persistent"
+            return cached_result
+
         # 🔥 CRITICAL: 기안자/날짜 검색은 QuickFixRAG에 위임 (전문 로직 보유)
         if hasattr(self.generator, "rag"):
             import re
@@ -844,6 +906,9 @@ JSON:"""
                 if len(parts) > 1:
                     actual_query = parts[-1].strip()
                     logger.info(f"📝 확장 쿼리에서 추출: '{actual_query[:50]}'")
+
+            # 🧹 UI 메타데이터 제거 (🏷 pdf · 📅 2024-10-24 · ✍ 등)
+            actual_query = clean_ui_metadata(actual_query)
 
             # 🎯 모드 라우팅: Q&A 의도 키워드가 있으면 파일명이 있어도 Q&A 모드 우선
             query_mode = self.query_router.classify_mode(actual_query)
@@ -1154,13 +1219,21 @@ JSON:"""
                 f"total_ms={total_ms}"
             )
 
-            return {
+            result = {
                 "text": response.answer,
                 "citations": evidence,  # 🔴 표준 키 (필수)
                 "evidence": evidence,  # 하위 호환성 (동일 데이터)
                 "status": status,  # UI에서 이것만 확인
                 "diagnostics": response.diagnostics if DIAG_RAG else {},
             }
+
+            # ✨ Cache the successful result to both tiers
+            cache_key = f"{query}:{selected_filename}" if selected_filename else query
+            cache_query_result(cache_key, result)  # Memory cache
+            cache_query_result_persistent(cache_key, result)  # Persistent cache
+            logger.info(f"📝 Cached result to memory + persistent storage for query: {query[:50]}...")
+
+            return result
         else:
             # 에러 발생 시 (중립 톤, 사과 표현 금지)
             error_msg = ERROR_MESSAGES.get(

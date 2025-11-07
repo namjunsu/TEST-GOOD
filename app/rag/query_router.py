@@ -321,41 +321,50 @@ class QueryRouter:
             keyword in query_lower for keyword in self.preview_keywords
         )
 
-        # 4. PREVIEW 모드 (파일명 + 미리보기 의도)
+        # 4. Q&A 의도 키워드 체크 (상세 정보 요청 우선 처리)
+        has_qa_intent = any(keyword in query_lower for keyword in self.qa_keywords)
+
+        # "자세히", "상세히", "구체적으로" 등이 있으면 무조건 QA 모드
+        detailed_keywords = ["자세히", "상세히", "자세하게", "구체적으로"]
+        has_detailed_intent = any(keyword in query_lower for keyword in detailed_keywords)
+
+        if has_detailed_intent:
+            logger.info(f"🎯 모드 결정: QA (상세 정보 요청 키워드 감지: {[k for k in detailed_keywords if k in query_lower]})")
+            return QueryMode.QA
+
+        # 5. PREVIEW 모드 (파일명 + 미리보기 의도)
         if has_filename and (has_preview_intent or "미리보기" in query_lower):
             logger.info("🎯 모드 결정: PREVIEW (파일명 + 미리보기)")
             return QueryMode.PREVIEW
 
-        # 5. LIST 모드 (연도/작성자 + 찾기) - 요약 의도가 없을 때만
-        if self.LIST_INTENT_PATTERN.search(query) and not self.SUMMARY_INTENT_PATTERN.search(query):
+        # 6. LIST 모드 (연도/작성자 + 찾기) - 요약 의도와 QA 의도가 없을 때만
+        if self.LIST_INTENT_PATTERN.search(query) and not self.SUMMARY_INTENT_PATTERN.search(query) and not has_qa_intent:
             logger.info("🎯 모드 결정: LIST (목록 검색)")
             return QueryMode.LIST
 
-        # 6. SUMMARY 모드 (파일명/문서지시어/문서타입 + 요약 의도)
+        # 7. SUMMARY 모드 (파일명/문서지시어/문서타입 + 요약 의도)
         # 수정: 문서 타입 키워드도 문서 참조로 인정
         if (has_filename or has_doc_reference or has_doc_type_keyword) and self.SUMMARY_INTENT_PATTERN.search(query):
             logger.info("🎯 모드 결정: SUMMARY (내용 요약)")
             return QueryMode.SUMMARY
 
-        # 7. SEARCH 모드 (문서 검색 의도)
+        # 8. SEARCH 모드 (문서 검색 의도)
         # "중계차 카메라 렌즈관련 문서 찾아줘", "유인혁 기안서 문서 찾아줘" 등
         if self.SEARCH_INTENT_PATTERN.search(query):
             logger.info("🎯 모드 결정: SEARCH (문서 검색)")
             return QueryMode.SEARCH
 
-        # 8. Q&A 의도 키워드 체크 (레거시 호환)
-        has_qa_intent = any(keyword in query_lower for keyword in self.qa_keywords)
-
+        # 9. Q&A 의도 키워드 체크 (일반 QA 키워드)
         if has_qa_intent:
             logger.info("🎯 모드 결정: QA (의도 키워드 감지)")
             return QueryMode.QA
 
-        # 9. 파일명만 있으면 PREVIEW (레거시 호환)
+        # 10. 파일명만 있으면 PREVIEW (레거시 호환)
         if has_filename:
             logger.info("🎯 모드 결정: PREVIEW (파일명만 존재)")
             return QueryMode.PREVIEW
 
-        # 10. 기본: Q&A 모드
+        # 11. 기본: Q&A 모드
         logger.info("🎯 모드 결정: QA (기본)")
         return QueryMode.QA
 

@@ -1,13 +1,20 @@
 """
 쿼리 모드 라우터
-2025-11-01
+2025-11-07 (단순화 버전)
 
-질의 의도를 분석하여 Q&A 모드 vs 문서 미리보기 모드를 결정합니다.
+질의 의도를 분석하여 적절한 쿼리 모드를 결정합니다.
 
 규칙:
-- Q&A 의도 키워드가 있으면 파일명이 있어도 Q&A 모드 우선
-- 파일명만 있고 Q&A 의도가 없으면 미리보기 모드
-- 고신뢰 + 장비 용어 → DOC_ANCHORED 모드 (단일 문서 앵커)
+- 비용 질의 → COST 모드
+- 문서 참조 + 내용/요약 의도 → DOCUMENT 모드
+- 목록/검색 의도 → SEARCH 모드
+- 기본값 또는 Q&A 의도 → QA 모드
+
+변경 이력 (2025-11-07):
+- DOC_ANCHORED 모드 제거 (과도한 필드 추출 문제)
+- PREVIEW + SUMMARY → DOCUMENT 통합
+- LIST + SEARCH + LIST_FIRST → SEARCH 통합
+- 8개 모드 → 4개 모드 단순화
 """
 
 import os
@@ -36,18 +43,6 @@ class ScoreStats:
     hits: int
 
 
-# 장비/사양 도메인 용어 (DVR, 카메라 등)
-DEVICE_TERMS = (
-    "dvr", "hrd-", "hrd442", "hrd-442", "hanwha", "한화", "nvr",
-    "녹화", "모니터", "교체", "ip ", "카메라", "eng", "마이크"
-)
-
-# 환경변수로 조정 가능한 임계값
-FORCE_TOP1_MIN = float(os.getenv("ROUTER_FORCE_DOC_TOP1_MIN", "15.0"))
-FORCE_DELTA12_MIN = float(os.getenv("ROUTER_FORCE_DOC_DELTA12_MIN", "3.0"))
-FORCE_RATIO12_MIN = float(os.getenv("ROUTER_FORCE_DOC_RATIO12_MIN", "1.35"))
-
-
 # 헬퍼 함수: 파일명 정규화 (공백/특수문자 제거)
 def _norm(s: str) -> str:
     """문자열 정규화: 소문자 + 공백/특수문자 제거"""
@@ -69,53 +64,18 @@ def _score(qn: str, tn: str) -> float:
     return min(1.0, base + length_bonus)
 
 
-def _has_device_terms(query: str) -> bool:
-    """장비/사양 도메인 용어 포함 여부 체크"""
-    ql = query.lower()
-    return any(term in ql for term in DEVICE_TERMS)
-
-
-def _should_force_doc_anchor(query: str, score_stats: dict) -> bool:
-    """DOC_ANCHORED 모드 강제 조건 체크
-
-    Args:
-        query: 사용자 질의
-        score_stats: 검색 결과 점수 통계 dict
-
-    Returns:
-        True if should force DOC_ANCHORED mode
-    """
-    # 장비 용어 포함 시 무조건 DOC_ANCHORED
-    if _has_device_terms(query):
-        logger.info(f"🎯 DOC_ANCHORED 강제: 장비 용어 감지")
-        return True
-
-    # 고신뢰 점수 조건 (Top-1 우세)
-    top1 = score_stats.get("top1", 0.0)
-    delta12 = score_stats.get("delta12", 0.0)
-    top2 = score_stats.get("top2", 0.0)
-    ratio12 = top1 / max(top2, 1e-9)
-
-    if top1 >= FORCE_TOP1_MIN and (delta12 >= FORCE_DELTA12_MIN or ratio12 >= FORCE_RATIO12_MIN):
-        logger.info(
-            f"🎯 DOC_ANCHORED 강제: 고신뢰 점수 "
-            f"(top1={top1:.2f}, delta12={delta12:.2f}, ratio12={ratio12:.2f})"
-        )
-        return True
-
-    return False
-
-
 class QueryMode(Enum):
-    """쿼리 모드"""
+    """쿼리 모드 (단순화: 8개 → 4개)
 
-    COST_SUM = "cost_sum"  # 비용 합계 직접 조회 모드 (최우선)
-    PREVIEW = "preview"  # 문서 미리보기 모드 (파일 전문)
-    LIST = "list"  # 목록 검색 모드 (다건 카드 표시)
-    LIST_FIRST = "list_first"  # 낮은 신뢰도 → 목록 우선 표시 모드
-    DOC_ANCHORED = "doc_anchored"  # 단일 문서 앵커 모드 (Top-1 고정)
-    SUMMARY = "summary"  # 내용 요약 모드 (5줄 섹션)
-    SEARCH = "search"  # 문서 검색 모드 (문서 리스트 반환)
+    2025-11-07: 모드 구조 재설계
+    - DOC_ANCHORED 제거 (과도한 필드 추출 문제)
+    - PREVIEW + SUMMARY → DOCUMENT 통합
+    - LIST + SEARCH + LIST_FIRST → SEARCH 통합
+    """
+
+    COST = "cost"  # 비용 조회 (renamed from COST_SUM)
+    DOCUMENT = "document"  # 문서 내용/요약 (통합: PREVIEW + SUMMARY)
+    SEARCH = "search"  # 문서 검색 (통합: LIST + SEARCH + LIST_FIRST)
     QA = "qa"  # 질답 모드 (RAG 파이프라인, 기본)
 
 
@@ -249,47 +209,45 @@ class QueryRouter:
         return False
 
     def classify_mode(self, query: str) -> QueryMode:
-        """쿼리 모드 자동 분류 및 라우팅
+        """쿼리 모드 자동 분류 및 라우팅 (단순화 버전)
 
         사용자 질의를 분석하여 가장 적절한 QueryMode로 자동 라우팅합니다.
         패턴 매칭과 키워드 감지를 통해 우선순위에 따라 모드를 결정합니다.
 
         우선순위 (높음 → 낮음):
-            1. COST_SUM: 비용 합계 질의 (예: "합계", "총 비용")
-            2. PREVIEW: 파일명 + 미리보기 의도
-            3. LIST: 연도/작성자 기반 목록 검색
-            4. SEARCH: 키워드 기반 문서 검색 (NEW)
-            5. SUMMARY: 문서 지시어 + 요약 의도
-            6. QA: Q&A 의도 키워드 또는 기본값
+            1. COST: 비용 조회 질의 (예: "합계", "총액")
+            2. DOCUMENT: 문서 내용/요약 요청 (파일명 or 문서지시어 + 내용/요약 의도)
+            3. SEARCH: 문서 검색 (찾기, 검색, 목록 등)
+            4. QA: 질답 모드 (기본)
 
         모드 판단 기준:
-            COST_SUM: COST_INTENT_PATTERN 매칭
-            PREVIEW: 파일명 패턴 + (미리보기 키워드 or "미리보기" 단어)
-            LIST: LIST_INTENT_PATTERN 매칭 & 요약 의도 없음
-            SEARCH: SEARCH_INTENT_PATTERN 매칭
-                    (예: "찾아줘", "검색", "관련 문서", "있어?")
-            SUMMARY: (파일명 or 문서 지시어 or 문서 타입) & 요약 의도
+            COST: COST_INTENT_PATTERN 매칭
+            DOCUMENT: (파일명 or 문서지시어 or 문서타입) & (미리보기 or 요약 or 내용 의도)
+            SEARCH: LIST_INTENT_PATTERN or SEARCH_INTENT_PATTERN 매칭
+                    (예: "찾아줘", "검색", "관련 문서", "2024년 문서")
             QA: qa_keywords 매칭 또는 모든 조건 불만족 시 기본값
 
         Args:
             query (str): 사용자 질의.
-                예: "2024년 남준수 문서 전부" → LIST
+                예: "2024년 남준수 문서 전부" → SEARCH
                     "중계차 렌즈 문서 찾아줘" → SEARCH
-                    "이 문서 요약해줘" → SUMMARY
-                    "비용 합계는?" → COST_SUM
+                    "이 문서 요약해줘" → DOCUMENT
+                    "미러클랩 카메라 삼각대 기술검토서 내용 알려줘" → DOCUMENT
+                    "비용 합계는?" → COST
 
         Returns:
-            QueryMode: 분류된 쿼리 모드 (COST_SUM, PREVIEW, LIST,
-                      SEARCH, SUMMARY, QA 중 하나)
+            QueryMode: 분류된 쿼리 모드 (COST, DOCUMENT, SEARCH, QA 중 하나)
 
         Example:
             >>> router = QueryRouter()
             >>> router.classify_mode("중계차 카메라 문서 찾아줘")
             QueryMode.SEARCH
             >>> router.classify_mode("2024년 남준수 문서 전부")
-            QueryMode.LIST
+            QueryMode.SEARCH
             >>> router.classify_mode("이 문서 요약해줘")
-            QueryMode.SUMMARY
+            QueryMode.DOCUMENT
+            >>> router.classify_mode("미러클랩 삼각대 기술검토서 내용 알려줘")
+            QueryMode.DOCUMENT
 
         Note:
             - 로깅을 통해 결정 과정 추적 가능
@@ -297,74 +255,67 @@ class QueryRouter:
         """
         query_lower = query.lower()
 
-        # 0. 비용 질의 체크 (최우선)
+        # 1. 비용 질의 체크 (최우선)
         if self.COST_INTENT_PATTERN.search(query):
-            logger.info("🎯 모드 결정: COST_SUM (비용 질의 감지)")
-            return QueryMode.COST_SUM
+            logger.info("🎯 모드 결정: COST (비용 질의 감지)")
+            return QueryMode.COST
 
-        # 1. 파일명 패턴 체크
+        # 2. 파일명 패턴 체크
         has_filename = (
             re.search(self.filename_pattern, query, re.IGNORECASE) is not None
         )
 
-        # 2. 문서 지시어 체크 (이문서, 해당 문서 등)
+        # 3. 문서 지시어 체크 (이문서, 해당 문서 등)
         has_doc_reference = self.DOC_REFERENCE_PATTERN.search(query) is not None
 
-        # 2.1. 문서 타입 키워드 체크 (검토서, 기안서, 견적서 등)
+        # 4. 문서 타입 키워드 체크 (검토서, 기안서, 견적서 등)
         has_doc_type_keyword = bool(re.search(
             r"(검토서|기안서|견적서|제안서|보고서|계획서|공문|발주서|납품서|영수증)",
             query, re.IGNORECASE
         ))
 
-        # 3. 미리보기 전용 키워드 체크
-        has_preview_intent = any(
-            keyword in query_lower for keyword in self.preview_keywords
+        # 5. 문서 내용 요청 키워드 체크 (미리보기, 요약, 내용)
+        has_content_intent = (
+            any(keyword in query_lower for keyword in self.preview_keywords)
+            or "미리보기" in query_lower
+            or self.SUMMARY_INTENT_PATTERN.search(query) is not None
+            or "내용" in query_lower
         )
 
-        # 4. Q&A 의도 키워드 체크 (상세 정보 요청 우선 처리)
+        # 6. Q&A 의도 키워드 체크
         has_qa_intent = any(keyword in query_lower for keyword in self.qa_keywords)
 
-        # "자세히", "상세히", "구체적으로" 등이 있으면 무조건 QA 모드
+        # 7. "자세히", "상세히" 등이 있으면 무조건 QA 모드 (상세 답변 필요)
         detailed_keywords = ["자세히", "상세히", "자세하게", "구체적으로"]
         has_detailed_intent = any(keyword in query_lower for keyword in detailed_keywords)
 
         if has_detailed_intent:
-            logger.info(f"🎯 모드 결정: QA (상세 정보 요청 키워드 감지: {[k for k in detailed_keywords if k in query_lower]})")
+            logger.info(f"🎯 모드 결정: QA (상세 정보 요청: {[k for k in detailed_keywords if k in query_lower]})")
             return QueryMode.QA
 
-        # 5. PREVIEW 모드 (파일명 + 미리보기 의도)
-        if has_filename and (has_preview_intent or "미리보기" in query_lower):
-            logger.info("🎯 모드 결정: PREVIEW (파일명 + 미리보기)")
-            return QueryMode.PREVIEW
+        # 8. DOCUMENT 모드: 문서 참조 + 내용 요청
+        # "이 문서 요약해줘", "XXX 기술검토서 내용 알려줘", "파일명.pdf 미리보기"
+        if (has_filename or has_doc_reference or has_doc_type_keyword) and has_content_intent:
+            logger.info("🎯 모드 결정: DOCUMENT (문서 내용/요약)")
+            return QueryMode.DOCUMENT
 
-        # 6. LIST 모드 (연도/작성자 + 찾기) - 요약 의도와 QA 의도가 없을 때만
-        if self.LIST_INTENT_PATTERN.search(query) and not self.SUMMARY_INTENT_PATTERN.search(query) and not has_qa_intent:
-            logger.info("🎯 모드 결정: LIST (목록 검색)")
-            return QueryMode.LIST
-
-        # 7. SUMMARY 모드 (파일명/문서지시어/문서타입 + 요약 의도)
-        # 수정: 문서 타입 키워드도 문서 참조로 인정
-        if (has_filename or has_doc_reference or has_doc_type_keyword) and self.SUMMARY_INTENT_PATTERN.search(query):
-            logger.info("🎯 모드 결정: SUMMARY (내용 요약)")
-            return QueryMode.SUMMARY
-
-        # 8. SEARCH 모드 (문서 검색 의도)
-        # "중계차 카메라 렌즈관련 문서 찾아줘", "유인혁 기안서 문서 찾아줘" 등
-        if self.SEARCH_INTENT_PATTERN.search(query):
+        # 9. SEARCH 모드: 목록/검색 의도
+        # "2024년 남준수 문서 전부", "중계차 카메라 문서 찾아줘"
+        if self.LIST_INTENT_PATTERN.search(query) or self.SEARCH_INTENT_PATTERN.search(query):
             logger.info("🎯 모드 결정: SEARCH (문서 검색)")
             return QueryMode.SEARCH
 
-        # 9. Q&A 의도 키워드 체크 (일반 QA 키워드)
+        # 10. Q&A 의도 키워드 체크 (일반 QA 키워드)
         if has_qa_intent:
             logger.info("🎯 모드 결정: QA (의도 키워드 감지)")
             return QueryMode.QA
 
-        # 10. 파일명만 있으면 PREVIEW (레거시 호환)
-        if has_filename:
-            logger.info("🎯 모드 결정: PREVIEW (파일명만 존재)")
-            return QueryMode.PREVIEW
+        # 11. 문서 참조만 있고 의도 불명확 → DOCUMENT (레거시 호환)
+        if has_filename or has_doc_reference:
+            logger.info("🎯 모드 결정: DOCUMENT (문서 참조 감지, 기본 내용 반환)")
+            return QueryMode.DOCUMENT
 
-        # 11. 기본: Q&A 모드
+        # 12. 기본: Q&A 모드
         logger.info("🎯 모드 결정: QA (기본)")
         return QueryMode.QA
 
@@ -431,27 +382,20 @@ class QueryRouter:
         query: str,
         retrieval_results: Any = None
     ) -> QueryMode:
-        """검색 결과를 고려한 모드 분류 (DOC_ANCHORED + low-confidence 가드레일 포함)
+        """검색 결과를 고려한 모드 분류 (단순화 버전)
 
         Args:
             query: 사용자 질의
             retrieval_results: HybridRetriever.search() 결과 (score_stats 속성 포함 가능)
 
         Returns:
-            QueryMode (COST_SUM, PREVIEW, LIST, LIST_FIRST, DOC_ANCHORED, SUMMARY, QA 중 하나)
+            QueryMode (COST, DOCUMENT, SEARCH, QA 중 하나)
+
+        Note:
+            현재는 검색 결과와 무관하게 기본 모드 분류만 수행.
+            DOC_ANCHORED, LIST_FIRST 등의 동적 모드 변경 로직 제거됨 (2025-11-07).
         """
-        # score_stats 추출
-        score_stats = getattr(retrieval_results, "score_stats", {}) or {}
-
-        # 1. DOC_ANCHORED 강제 체크 (최우선)
-        if retrieval_results is not None and _should_force_doc_anchor(query, score_stats):
-            return QueryMode.DOC_ANCHORED
-
-        # 2. Low-confidence 체크
-        if retrieval_results is not None and self._is_low_confidence(retrieval_results):
-            return QueryMode.LIST_FIRST
-
-        # 3. 기본 모드 분류
+        # 기본 모드 분류만 수행 (검색 결과 무관)
         return self.classify_mode(query)
 
     def classify_mode_with_hits(
@@ -470,10 +414,10 @@ class QueryRouter:
         """
         q = query.strip()
 
-        # 요약 의도 감지
-        wants_summary = self.SUMMARY_INTENT_PATTERN.search(q) is not None
+        # 요약/내용 의도 감지
+        wants_content = self.SUMMARY_INTENT_PATTERN.search(q) is not None or "내용" in q.lower()
 
-        if wants_summary and hits:
+        if wants_content and hits:
             # 쿼리 정규화
             qn = _norm(q)
 
@@ -490,8 +434,8 @@ class QueryRouter:
 
                 # 단일 후보 확정 조건: 1개만 있거나, 상위 스코어가 0.66 이상
                 if len(ranked) == 1 or top_score >= 0.66:
-                    logger.info(f"✅ 요약 의도 감지 + 단일 후보 확정 (score={top_score:.2f}) → SUMMARY 모드")
-                    return QueryMode.SUMMARY, [top]
+                    logger.info(f"✅ 요약/내용 의도 감지 + 단일 후보 확정 (score={top_score:.2f}) → DOCUMENT 모드")
+                    return QueryMode.DOCUMENT, [top]
 
         # 기본 분류 (검색 결과 무관)
         mode = self.classify_mode(query)

@@ -539,120 +539,7 @@ class RAGPipeline:
             query_mode = self.query_router.classify_mode_with_retrieval(query, results)
             logger.info(f"🔀 QueryRouter 분류: mode={query_mode.value}")
 
-            # 🎯 DOC_ANCHORED 모드: Top-1 문서만 사용, 전체 텍스트 보장 + 구조화된 추출
-            if query_mode == QueryMode.DOC_ANCHORED:
-                from app.extractors.device_fields import extract_fields_rule_based
-                from app.extractors.merge import merge_device_fields
-                import json
-
-                top_doc = results[0]
-                doc_id = top_doc.get('meta', {}).get('filename') or top_doc.get('doc_id', 'unknown')
-                snippet = top_doc.get('snippet', '')
-
-                # 스니펫 보강: 짧으면 data/extracted에서 전체 텍스트 로드
-                full_text = self._load_full_text_if_short(doc_id, snippet)
-
-                # 1) 규칙 기반 추출 (정규식, 확실한 패턴)
-                rule_fields = extract_fields_rule_based(full_text)
-                logger.info(f"🔍 규칙 추출: {rule_fields}")
-
-                # 2) LLM JSON 스키마 추출
-                json_schema_prompt = f"""다음 문서에서 장비 정보를 추출하여 JSON으로 출력하세요.
-
-**문서:**
-{full_text}
-
-**추출 필드:**
-- model: 장비 모델명 (반드시 문서에 명시된 경우에만 추출, 없으면 null)
-- manufacturer: 제조사명 (반드시 문서에 명시된 경우에만 추출, 없으면 null)
-- ip_address: IP 주소 (반드시 문서에 명시된 경우에만 추출, 없으면 null)
-- reason: 교체/보수 사유 (문서에서 그대로 인용)
-- duration_years: 사용 기간 (숫자만, 문서에 "N년" 형태로 명시된 경우에만)
-
-**🚨 매우 중요한 규칙:**
-1. **절대 추측하지 마세요** - 문서에 정확히 나온 정보만 추출
-2. **없으면 null** - 문서에 없는 필드는 반드시 null 사용
-3. **예시 사용 금지** - PMW-500, Sony 같은 값이 문서에 없으면 절대 사용 금지
-4. **모델명/제조사가 없으면** - 차량이나 시스템 보수 문서는 model=null, manufacturer=null
-
-**출력 형식:**
-오직 JSON만 출력하세요. 다른 텍스트는 포함하지 마세요.
-
-JSON:"""
-
-                # LLM 생성 (저온도로 정확성 향상)
-                llm_response = self.generator.generate(
-                    query=json_schema_prompt,
-                    context="",  # 프롬프트에 이미 문서 포함
-                    temperature=0.05,
-                    mode="summarize"  # 충분한 토큰 예산
-                )
-
-                # JSON 파싱 시도
-                llm_fields = {}
-                try:
-                    # LLM 응답에서 JSON 부분만 추출
-                    json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', llm_response, re.DOTALL)
-                    if json_match:
-                        llm_fields = json.loads(json_match.group(0))
-                        logger.info(f"🤖 LLM 추출: {llm_fields}")
-                except Exception as e:
-                    logger.warning(f"⚠️ LLM JSON 파싱 실패: {e}, response={llm_response[:200]}")
-
-                # 3) 병합 및 검증
-                merged_fields = merge_device_fields(rule_fields, llm_fields)
-                logger.info(f"✅ 최종 필드: {merged_fields}")
-
-                # 4) 사용자 친화적 답변 생성
-                answer_parts = []
-                answer_parts.append(f"**문서:** {doc_id}\n")
-
-                if merged_fields.get("model") or merged_fields.get("manufacturer"):
-                    answer_parts.append("**현재 장비:**")
-                    if merged_fields.get("manufacturer"):
-                        answer_parts.append(f"- 제조사: {merged_fields['manufacturer']}")
-                    if merged_fields.get("model"):
-                        answer_parts.append(f"- 모델명: {merged_fields['model']}")
-                    if merged_fields.get("ip_address"):
-                        answer_parts.append(f"- IP 주소: {merged_fields['ip_address']}")
-
-                if merged_fields.get("duration_years") or merged_fields.get("reason"):
-                    answer_parts.append("\n**교체 검토 배경:**")
-                    if merged_fields.get("duration_years"):
-                        answer_parts.append(f"- 사용 기간: {merged_fields['duration_years']}년")
-                    if merged_fields.get("reason"):
-                        answer_parts.append(f"- 사유: {merged_fields['reason']}")
-
-                answer_parts.append(f"\n출처: {doc_id}")
-                answer = "\n".join(answer_parts)
-
-                metrics["mode"] = "doc_anchored"
-                metrics["top_score"] = top_doc.get('score', 0.0)
-                metrics["generate_time"] = time.perf_counter() - gen_start
-                metrics["total_time"] = time.perf_counter() - start_time
-
-                # 출처 정보 구성
-                evidence_chunks = [{
-                    "doc_id": doc_id,
-                    "score": top_doc.get('score', 0.0),
-                    "snippet": full_text[:500],  # 미리보기용
-                    "page": top_doc.get('page', 1),
-                    "meta": top_doc.get('meta', {})
-                }]
-
-                logger.info(f"✅ DOC_ANCHORED 답변 생성 완료: {doc_id} ({len(full_text)}자)")
-
-                return RAGResponse(
-                    answer=answer,
-                    success=True,
-                    source_docs=[doc_id],
-                    evidence_chunks=evidence_chunks,
-                    latency=metrics["total_time"],
-                    metrics=metrics,
-                    diagnostics={"mode": "doc_anchored", "doc_id": doc_id}
-                )
-
-            # 🎯 STEP 2: 기존 모드 결정 로직 (DOC_ANCHORED 아닌 경우)
+            # 🎯 STEP 2: 모드 결정 로직
             # CRITICAL: Determine mode BEFORE context hydration to apply mode-aware context limits
             mode_env = os.getenv('MODE', 'AUTO').upper()
             top_score = results[0].get('score', 0.0) if results else 0.0
@@ -914,33 +801,25 @@ JSON:"""
             query_mode = self.query_router.classify_mode(actual_query)
             router_reason = self.query_router.get_routing_reason(actual_query)
 
-            # 🔧 selected_filename이 있고 요약 의도가 감지되면 SUMMARY 모드로 강제 (우선순위 최상위)
-            if selected_filename and self.query_router.SUMMARY_INTENT_PATTERN.search(actual_query):
-                logger.info(f"🎯 선택된 문서({selected_filename}) + 요약 의도 감지 → SUMMARY 모드로 강제")
-                query_mode = QueryMode.SUMMARY
-                router_reason = "selected_doc_summary"
+            # 🔧 selected_filename이 있고 요약/내용 의도가 감지되면 DOCUMENT 모드로 강제 (우선순위 최상위)
+            if selected_filename and (self.query_router.SUMMARY_INTENT_PATTERN.search(actual_query) or "내용" in actual_query.lower()):
+                logger.info(f"🎯 선택된 문서({selected_filename}) + 요약/내용 의도 감지 → DOCUMENT 모드로 강제")
+                query_mode = QueryMode.DOCUMENT
+                router_reason = "selected_doc_content"
 
             logger.info(
                 f"🔀 라우팅 결과: mode={query_mode.value}, reason={router_reason}"
             )
 
-            # 💰 COST_SUM 모드: 비용 합계 직접 조회
-            if query_mode == QueryMode.COST_SUM:
+            # 💰 COST 모드: 비용 합계 직접 조회
+            if query_mode == QueryMode.COST:
                 return self._answer_cost_sum(actual_query)
 
-            # 📋 LIST 모드: 목록 검색 (2줄 카드 형식)
-            if query_mode == QueryMode.LIST:
-                return self._answer_list(actual_query)
+            # 📄 DOCUMENT 모드: 문서 내용/요약 (통합: PREVIEW + SUMMARY)
+            if query_mode == QueryMode.DOCUMENT:
+                return self._answer_document(actual_query, selected_filename=selected_filename)
 
-            # 📝 SUMMARY 모드: 내용 요약 (5줄 섹션)
-            if query_mode == QueryMode.SUMMARY:
-                return self._answer_summary(actual_query, selected_filename=selected_filename)
-
-            # 👀 PREVIEW 모드: 문서 미리보기 (원문 6-8줄, 가짜 표 금지)
-            if query_mode == QueryMode.PREVIEW:
-                return self._answer_preview(actual_query, selected_filename=selected_filename)
-
-            # 🔍 SEARCH 모드: 문서 검색 (키워드 기반 BM25 검색)
+            # 🔍 SEARCH 모드: 문서 검색 (통합: LIST + SEARCH + LIST_FIRST)
             if query_mode == QueryMode.SEARCH:
                 return self._answer_search(actual_query)
 
@@ -1758,6 +1637,193 @@ JSON:"""
             logger.error(f"❌ 비용 질의 처리 실패: {e}", exc_info=True)
             return {
                 "text": f"비용 정보 조회 중 오류가 발생했습니다: {str(e)}",
+                "citations": [],
+                "evidence": [],
+                "status": {
+                    "retrieved_count": 0,
+                    "selected_count": 0,
+                    "found": False
+                }
+            }
+
+    def _answer_document(self, query: str, selected_filename: Optional[str] = None) -> dict:
+        """문서 내용 조회 (DOCUMENT 모드: PREVIEW + SUMMARY 통합)
+
+        DOC_ANCHORED 모드를 대체하여, 문서 전체 내용을 반환합니다.
+        5개 필드만 추출하던 구조적 제한을 제거하고, 사용자가 요청한 문서의
+        전체 텍스트를 제공합니다.
+
+        Args:
+            query: 사용자 질의 (예: "미러클랩 카메라 삼각대 기술검토서 이문서 내용 알려줘")
+            selected_filename: 선택된 문서 파일명 (우선 검색용, 선택사항)
+
+        Returns:
+            dict: 표준 응답 구조 (전체 문서 텍스트 포함)
+
+        Note:
+            - 과거 DOC_ANCHORED의 5-field 추출 문제를 해결하기 위해 생성됨
+            - 전체 문서 텍스트를 data/extracted/ 에서 직접 로드
+            - LLM을 사용하지 않고 원문 그대로 반환
+        """
+        import re
+        import sqlite3
+        from pathlib import Path
+
+        try:
+            # 1. 문서 식별 (selected_filename 우선, 없으면 쿼리에서 추출)
+            target_filename = None
+
+            if selected_filename:
+                logger.info(f"🎯 선택된 문서 우선 처리: {selected_filename}")
+                target_filename = selected_filename
+            else:
+                # 쿼리에서 파일명 추출 시도
+                # 예: "미러클랩 카메라 삼각대 기술검토서" → 검색으로 문서 찾기
+                # 불용어 제거
+                stopwords = ["이문서", "이 문서", "해당 문서", "내용", "알려줘", "알려",
+                             "보여줘", "보여", "자세하게", "자세히", "요약", "정리"]
+                keywords = query
+                for word in stopwords:
+                    keywords = keywords.replace(word, " ")
+                keywords = " ".join(keywords.split())  # 공백 정리
+
+                # .pdf 확장자가 있으면 직접 사용
+                filename_match = re.search(r"(\S+\.pdf)", query, re.IGNORECASE)
+                if filename_match:
+                    target_filename = filename_match.group(1)
+                    logger.info(f"📄 쿼리에서 파일명 추출: {target_filename}")
+                else:
+                    # 키워드로 검색
+                    logger.info(f"🔍 키워드로 문서 검색: {keywords}")
+                    search_results = self.retriever.search(keywords, top_k=1)
+
+                    if search_results:
+                        target_filename = search_results[0].get("meta", {}).get("filename") or search_results[0].get("doc_id", "")
+                        logger.info(f"✅ 검색으로 문서 발견: {target_filename}")
+
+            if not target_filename:
+                return {
+                    "text": "문서를 찾을 수 없습니다. 문서명을 명확히 입력해주세요.",
+                    "citations": [],
+                    "evidence": [],
+                    "status": {
+                        "retrieved_count": 0,
+                        "selected_count": 0,
+                        "found": False
+                    }
+                }
+
+            # 2. DB에서 메타데이터 조회
+            conn = sqlite3.connect("metadata.db")
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT filename, drafter, date, display_date, category, doctype
+                FROM documents
+                WHERE filename = ? OR filename LIKE ?
+                LIMIT 1
+                """,
+                (target_filename, f"%{target_filename}%"),
+            )
+            result = cursor.fetchone()
+            conn.close()
+
+            if not result:
+                return {
+                    "text": f"'{target_filename}' 문서의 메타데이터를 찾을 수 없습니다.",
+                    "citations": [],
+                    "evidence": [],
+                    "status": {
+                        "retrieved_count": 0,
+                        "selected_count": 0,
+                        "found": False
+                    }
+                }
+
+            filename, drafter, date, display_date, category, doctype = result
+
+            # 3. data/extracted/ 에서 전체 텍스트 로드
+            extracted_dir = Path("data/extracted")
+            txt_filename = filename.replace('.pdf', '.txt')
+            txt_path = extracted_dir / txt_filename
+
+            if not txt_path.exists():
+                return {
+                    "text": f"'{filename}' 문서의 추출된 텍스트 파일을 찾을 수 없습니다.\n경로: {txt_path}",
+                    "citations": [],
+                    "evidence": [],
+                    "status": {
+                        "retrieved_count": 1,
+                        "selected_count": 0,
+                        "found": False
+                    }
+                }
+
+            # 전체 텍스트 읽기
+            with open(txt_path, 'r', encoding='utf-8') as f:
+                full_text = f.read()
+
+            if not full_text or len(full_text.strip()) < 10:
+                return {
+                    "text": f"'{filename}' 문서의 텍스트가 비어있거나 너무 짧습니다.",
+                    "citations": [],
+                    "evidence": [],
+                    "status": {
+                        "retrieved_count": 1,
+                        "selected_count": 0,
+                        "found": False
+                    }
+                }
+
+            # 4. 답변 포맷팅 (전체 내용 포함)
+            answer_text = f"**📄 {filename}**\n\n"
+            answer_text += f"**기안자**: {drafter or '정보 없음'} | "
+            answer_text += f"**날짜**: {display_date or date or '정보 없음'} | "
+            answer_text += f"**분류**: {category or '미분류'}\n"
+            answer_text += f"{'='*80}\n\n"
+
+            # 전체 텍스트 포함 (길이 제한 없음)
+            answer_text += full_text
+
+            # 5. Evidence 구성
+            ref = _encode_file_ref(filename)
+            evidence = [{
+                "doc_id": filename,
+                "filename": filename,
+                "page": 1,
+                "snippet": full_text[:1000],  # 스니펫은 1000자로 제한
+                "ref": ref,
+                "meta": {
+                    "filename": filename,
+                    "drafter": drafter,
+                    "date": display_date or date,
+                    "category": category,
+                    "doctype": doctype
+                }
+            }]
+
+            logger.info({
+                "mode": "DOCUMENT",
+                "filename": filename,
+                "text_length": len(full_text),
+                "llm": False  # LLM 사용 안 함 (원문 그대로 반환)
+            })
+
+            return {
+                "text": answer_text,
+                "citations": evidence,
+                "evidence": evidence,
+                "status": {
+                    "retrieved_count": 1,
+                    "selected_count": 1,
+                    "found": True
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"❌ DOCUMENT 모드 처리 실패: {e}", exc_info=True)
+            return {
+                "text": f"문서 내용 조회 중 오류가 발생했습니다: {str(e)}",
                 "citations": [],
                 "evidence": [],
                 "status": {

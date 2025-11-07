@@ -4,8 +4,6 @@ Query Cache Manager for RAG System
 Caches frequently asked questions to improve response time
 """
 import time
-import hashlib
-import json
 from typing import Dict, Any, Optional, Tuple
 from collections import OrderedDict
 import logging
@@ -142,23 +140,3 @@ def get_cache_stats() -> Dict[str, Any]:
     return cache.get_stats()
 
 
-# Preload frequently asked questions
-FREQUENT_QUERIES = [
-    "뷰파인더 케이블 얼마?",
-    "2025년 문서 목록",
-    "무선 마이크 관련 문서",
-    "최새름 기안자",
-    "2025년 8월 26일 문서",
-    "중계차 장비",
-    "ENG 카메라",
-    "구매 내역",
-    "수리 내역"
-]
-
-
-def preload_frequent_queries():
-    """Preload cache with frequently asked questions"""
-    logger.info("Preloading frequent queries into cache...")
-    # This would be called after system initialization
-    # The actual results would be filled when queries are first executed
-    pass

@@ -1006,7 +1006,17 @@ class RAGPipeline:
                 keywords = keywords.replace(word, " ")
             keywords = keywords.strip()
 
-            logger.info(f"🔍 문서 검색: 키워드='{keywords}'")
+            # 기안자명 추출 (쿼리에서 한글 이름 패턴 검색)
+            drafter_filter = None
+            # DB에서 자주 등장하는 기안자 목록 (추후 DB 조회로 개선 가능)
+            common_drafters = ["남준수", "최새름", "유인혁", "이의주", "강병규", "박연수", "이호영", "이승헌"]
+            for name in common_drafters:
+                if name in query:
+                    drafter_filter = name
+                    logger.info(f"🔍 기안자 필터 적용: {drafter_filter}")
+                    break
+
+            logger.info(f"🔍 문서 검색: 키워드='{keywords}'{f' | 기안자={drafter_filter}' if drafter_filter else ''}")
 
             # BM25 검색 실행 (top_k=10)
             if not hasattr(self.retriever, 'search'):
@@ -1057,12 +1067,20 @@ class RAGPipeline:
             doc_details = []
 
             for filename in filenames[:10]:  # 최대 10개까지
-                # DB에서 메타데이터 조회 (filename으로 직접 검색)
+                # DB에서 메타데이터 조회 (filename + 기안자 필터)
                 conn = db._get_conn()
-                cursor = conn.execute(
-                    "SELECT * FROM documents WHERE filename = ? LIMIT 1",
-                    (filename,)
-                )
+                if drafter_filter:
+                    # 기안자 필터가 있으면 추가 조건 적용
+                    cursor = conn.execute(
+                        "SELECT * FROM documents WHERE filename = ? AND drafter = ? LIMIT 1",
+                        (filename, drafter_filter)
+                    )
+                else:
+                    # 기안자 필터가 없으면 기존대로
+                    cursor = conn.execute(
+                        "SELECT * FROM documents WHERE filename = ? LIMIT 1",
+                        (filename,)
+                    )
                 row = cursor.fetchone()
 
                 if row:
@@ -1076,7 +1094,11 @@ class RAGPipeline:
                         "text_preview": doc.get("text_preview", "")[:100]
                     })
                 else:
-                    # 메타데이터가 없는 경우 파일명만 표시
+                    # 기안자 필터가 적용된 경우, 매칭되지 않은 문서는 스킵
+                    if drafter_filter:
+                        logger.debug(f"🔍 기안자 필터로 제외: {filename}")
+                        continue
+                    # 메타데이터가 없는 경우 파일명만 표시 (필터 없을 때만)
                     doc_details.append({
                         "filename": filename,
                         "drafter": "작성자 미상",
@@ -1106,8 +1128,14 @@ class RAGPipeline:
 
                 # 미리보기 추가 (있는 경우)
                 if doc['text_preview']:
-                    preview = doc['text_preview'].replace('\n', ' ')[:80]
-                    card_lines.append(f"   📝 {preview}...")
+                    # 마커 제거: [페이지 X], [OCR ...], 불필요한 공백
+                    clean_text = re.sub(r'\[페이지\s*\d+\]', '', doc['text_preview'])
+                    clean_text = re.sub(r'\[OCR[^\]]*\]', '', clean_text)
+                    clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+
+                    if clean_text:  # 정리 후 내용이 있으면 표시
+                        preview = clean_text[:80]
+                        card_lines.append(f"   📝 {preview}...")
 
                 cards.append("\n".join(card_lines))
 

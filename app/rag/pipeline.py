@@ -1135,20 +1135,23 @@ class RAGPipeline:
             max_docs = 200 if any(kw in query.lower() for kw in ["전부", "모두", "모든", "전체", "all"]) else 10
 
             for filename in filenames[:max_docs]:  # 최대 개수까지
-                # DB에서 메타데이터 조회 (filename + 기안자 필터)
+                # DB에서 메타데이터 조회 (filename + 기안자 필터 + 날짜 필터)
                 conn = db._get_conn()
+
+                # SQL 쿼리 동적 생성 (필터 조건 추가)
+                sql = "SELECT * FROM documents WHERE filename = ?"
+                params = [filename]
+
                 if drafter_filter:
-                    # 기안자 필터가 있으면 추가 조건 적용
-                    cursor = conn.execute(
-                        "SELECT * FROM documents WHERE filename = ? AND drafter = ? LIMIT 1",
-                        (filename, drafter_filter)
-                    )
-                else:
-                    # 기안자 필터가 없으면 기존대로
-                    cursor = conn.execute(
-                        "SELECT * FROM documents WHERE filename = ? LIMIT 1",
-                        (filename,)
-                    )
+                    sql += " AND drafter = ?"
+                    params.append(drafter_filter)
+
+                if year_filter:
+                    sql += " AND (date LIKE ? OR display_date LIKE ?)"
+                    params.extend([f"{year_filter}%", f"{year_filter}%"])
+
+                sql += " LIMIT 1"
+                cursor = conn.execute(sql, params)
                 row = cursor.fetchone()
 
                 if row:

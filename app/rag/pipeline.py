@@ -1575,39 +1575,60 @@ class RAGPipeline:
                     if hasattr(self.generator, 'rag') and hasattr(self.generator.rag, 'llm'):
                         llm = self.generator.rag.llm
 
-                        # 유연한 요약 프롬프트 (문서 타입에 맞게 자동 조정)
-                        summary_prompt = f"""다음 문서의 핵심 내용을 간결하게 요약하세요.
+                        # 구조화된 요약 시스템 사용 (summary_templates.py)
+                        from app.rag.summary_templates import (
+                            detect_doc_kind,
+                            build_prompt,
+                            parse_summary_json,
+                            format_summary_output
+                        )
 
-문서 내용:
-{full_text[:3000]}
+                        # 1. 문서 종류 감지
+                        kind = detect_doc_kind(filename, full_text)
+                        logger.info(f"📄 문서 종류 감지: {kind}")
 
-요약 가이드:
-- 문서를 읽는 사람이 빠르게 핵심을 파악할 수 있도록
-- 중요한 정보 위주로 간결하게 (5-10줄)
-- 필요시 불릿 포인트 사용
-- 금액이 있으면 명확히 표시
+                        # 2. 구조화된 프롬프트 생성
+                        summary_prompt = build_prompt(
+                            kind=kind,
+                            filename=filename,
+                            drafter=drafter,
+                            display_date=display_date,
+                            context_text=full_text[:4000],
+                            claimed_total=None  # 금액은 메타데이터에서 추출 예정
+                        )
 
-이제 위 문서를 요약하세요:"""
-
-                        # 직접 generate 호출 (인용 없이)
+                        # 3. LLM 호출
                         from llama_cpp import Llama
-                        if isinstance(llm.llm, Llama):  # QwenLLM.llm 사용
+                        if isinstance(llm.llm, Llama):
                             output = llm.llm.create_chat_completion(
                                 messages=[
-                                    {"role": "system", "content": "당신은 문서를 읽는 사람의 입장에서 핵심만 빠르게 전달하는 전문가입니다. 문서 타입에 맞게 자연스럽게 요약하세요."},
+                                    {"role": "system", "content": "당신은 문서 요약 전문가입니다. JSON 형식으로만 응답하세요."},
                                     {"role": "user", "content": summary_prompt}
                                 ],
-                                max_tokens=500,
+                                max_tokens=800,  # 구조화된 JSON을 위해 토큰 증가
                                 temperature=0.3
                             )
-                            llm_result = output['choices'][0]['message']['content']
+                            llm_raw = output['choices'][0]['message']['content']
+
+                            # 4. JSON 파싱
+                            parsed_json = parse_summary_json(llm_raw)
+
+                            # 5. 마크다운 포맷팅
+                            llm_result = format_summary_output(
+                                parsed_json=parsed_json,
+                                kind=kind,
+                                filename=filename,
+                                drafter=drafter,
+                                display_date=display_date,
+                                claimed_total=None
+                            )
                         else:
                             # Fallback
                             llm_result = f"LLM 타입 불일치: {type(llm.llm)}"
                     else:
                         llm_result = "LLM 접근 실패"
 
-                    # 요약만 제공 (원문은 evidence에 있으므로 중복 제거)
+                    # 구조화된 요약 제공
                     answer_text += f"{llm_result}"
                     use_llm = True
                 except Exception as e:

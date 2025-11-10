@@ -816,11 +816,12 @@ class RAGPipeline:
             query_mode = self.query_router.classify_mode(actual_query)
             router_reason = self.query_router.get_routing_reason(actual_query)
 
-            # 🔧 selected_filename이 있고 요약/내용 의도가 감지되면 DOCUMENT 모드로 강제 (우선순위 최상위)
-            if selected_filename and (self.query_router.SUMMARY_INTENT_PATTERN.search(actual_query) or "내용" in actual_query.lower()):
-                logger.info(f"🎯 선택된 문서({selected_filename}) + 요약/내용 의도 감지 → DOCUMENT 모드로 강제")
+            # 🔧 selected_filename이 있으면 무조건 DOCUMENT 모드로 전환 (우선순위 최상위)
+            # 문서가 선택된 상태에서는 모든 질문에 대해 LLM이 해당 문서 기반으로 답변
+            if selected_filename:
+                logger.info(f"🎯 선택된 문서({selected_filename}) 감지 → DOCUMENT 모드로 강제")
                 query_mode = QueryMode.DOCUMENT
-                router_reason = "selected_doc_content"
+                router_reason = "selected_doc"
 
             # 🔧 요약 의도 + 쿼리에 날짜/문서명 패턴이 있으면 DOCUMENT 모드로 강제
             import re

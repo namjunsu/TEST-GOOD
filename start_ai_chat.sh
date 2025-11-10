@@ -228,7 +228,7 @@ fi
 
 # ---------- LLM 모델 사전 로드 ----------
 log INFO "LLM 모델 사전 로드 중..."
-if "${PY}" scripts/preload_llm.py > "${LOG_DIR}/llm_preload_$(date +%Y%m%d_%H%M%S).log" 2>&1; then
+if PYTHONPATH="${PROJECT_ROOT}" "${PY}" scripts/preload_llm.py > "${LOG_DIR}/llm_preload_$(date +%Y%m%d_%H%M%S).log" 2>&1; then
   log SUCCESS "LLM 모델 사전 로드 완료"
 else
   log WARN "LLM 모델 사전 로드 실패 (첫 질의 시 느릴 수 있음)"

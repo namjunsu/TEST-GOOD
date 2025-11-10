@@ -1081,7 +1081,8 @@ class RAGPipeline:
                 }
 
             # 🔢 "총 몇개" 질문 감지 - 개수만 답하고 리스트 생략
-            count_only_query = any(kw in query.lower() for kw in ["몇개", "몇 개", "개수", "총", "몇"])
+            # 타이핑 오류 대응: "몆개" (잘못된 자모 조합) → "몇개"
+            count_only_query = any(kw in query.lower() for kw in ["몇개", "몆개", "몇 개", "몆 개", "개수", "총", "몇", "몆"])
 
             # 각 문서의 메타데이터 조회
             db = MetadataDB()

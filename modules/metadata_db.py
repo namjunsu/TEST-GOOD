@@ -23,6 +23,7 @@ class MetadataDB:
     def __init__(self, db_path: str = "metadata.db"):
         self._db_path = db_path
         self._local = threading.local()
+        self._docs_root = Path("docs").resolve()  # 문서 루트 경로
         self.init_database()
         logger.info(f"MetadataDB 초기화 (thread-safe): {db_path}")
 
@@ -70,6 +71,21 @@ class MetadataDB:
             raise
         finally:
             cur.close()
+
+    def _normalize_path(self, path: str) -> str:
+        """
+        상대 경로 정규화 헬퍼
+        docs/foo.pdf → foo.pdf
+        /abs/path/docs/foo.pdf → foo.pdf
+        """
+        try:
+            p = Path(path).resolve()
+            rel = p.relative_to(self._docs_root)
+            return str(rel)
+        except ValueError:
+            # docs 밖: 그대로 반환 + 경고
+            logger.warning(f"⚠️ PDF path outside docs: {path}")
+            return path
 
     def init_database(self):
         """데이터베이스 초기화 및 테이블 생성"""
@@ -139,16 +155,16 @@ class MetadataDB:
             """
             )
 
+            # FTS5 external content 모드에서는 UPDATE 대신 DELETE+INSERT 패턴 권장
+            cur.execute("DROP TRIGGER IF EXISTS documents_au")
             cur.execute(
                 """
-                CREATE TRIGGER IF NOT EXISTS documents_au
+                CREATE TRIGGER documents_au
                 AFTER UPDATE ON documents
                 BEGIN
-                    UPDATE documents_fts
-                    SET title = new.title,
-                        text_preview = new.text_preview,
-                        keywords = new.keywords
-                    WHERE rowid = new.id;
+                    DELETE FROM documents_fts WHERE rowid = new.id;
+                    INSERT INTO documents_fts(rowid, path, title, text_preview, keywords)
+                    VALUES (new.id, new.path, new.title, new.text_preview, new.keywords);
                 END
             """
             )
@@ -223,7 +239,7 @@ class MetadataDB:
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                     (
-                        str(metadata.get("path", "")),
+                        self._normalize_path(str(metadata.get("path", ""))),
                         metadata.get("filename", ""),
                         metadata.get("title", ""),
                         metadata.get("date", ""),
@@ -330,18 +346,19 @@ class MetadataDB:
         )
         return [dict(row) for row in cursor.fetchall()]
 
-    def search_by_keyword(self, keyword: str) -> List[Dict[str, Any]]:
-        """키워드 검색 (FTS 사용)"""
+    def search_by_keyword(self, keyword: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """키워드 검색 (FTS5 BM25 스코어링 사용)"""
         conn = self._get_conn()
         cursor = conn.execute(
             """
-            SELECT d.* FROM documents d
+            SELECT d.*, bm25(documents_fts) AS score
+            FROM documents d
             JOIN documents_fts f ON d.id = f.rowid
             WHERE documents_fts MATCH ?
-            ORDER BY rank
-            LIMIT 20
+            ORDER BY score ASC
+            LIMIT ?
         """,
-            (keyword,),
+            (keyword, limit),
         )
         return [dict(row) for row in cursor.fetchall()]
 
@@ -467,7 +484,7 @@ class MetadataDB:
             conn = self._get_conn()
             cursor = conn.execute(
                 "SELECT path FROM documents WHERE filename = ? OR path = ? LIMIT 1",
-                (doc_id, doc_id)
+                (doc_id, self._normalize_path(doc_id))
             )
             row = cursor.fetchone()
 
@@ -552,7 +569,7 @@ class MetadataDB:
         with self._cursor() as cur:
             cur.execute(
                 "UPDATE documents SET text_preview = ?, updated_at = CURRENT_TIMESTAMP WHERE path = ?",
-                (text_preview[:1000], str(path)),  # 최대 1000자
+                (text_preview[:1000], self._normalize_path(str(path))),  # 최대 1000자
             )
 
     def get_statistics(self) -> Dict[str, Any]:

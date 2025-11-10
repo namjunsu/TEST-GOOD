@@ -1545,11 +1545,7 @@ class RAGPipeline:
             needs_summary = any(kw in query.lower() for kw in summary_keywords)
 
             # 5. 답변 포맷팅
-            answer_text = f"**📄 {filename}**\n\n"
-            answer_text += f"**기안자**: {drafter or '정보 없음'} | "
-            answer_text += f"**날짜**: {display_date or date or '정보 없음'} | "
-            answer_text += f"**분류**: {category or '미분류'}\n"
-            answer_text += f"{'='*80}\n\n"
+            answer_text = ""
 
             # LLM 요약 또는 원문
             if needs_summary and len(full_text) > 500:

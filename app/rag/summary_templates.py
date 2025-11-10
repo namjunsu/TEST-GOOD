@@ -323,11 +323,11 @@ def format_summary_output(
     if not parsed_json:
         return "⚠️ 요약 생성 중 오류가 발생했습니다.\n\n문서를 직접 확인하시려면 미리보기를 이용해주세요."
 
-    output = f"**📄 {parsed_json.get('제목') or filename}**\n\n"
+    output = f"📄 {parsed_json.get('제목') or filename}\n\n"
 
     # 요약 (공통)
     if parsed_json.get('요약'):
-        output += f"**📝 {parsed_json['요약']}**\n\n"
+        output += f"📝 요약\n{parsed_json['요약']}\n\n"
 
     # 소모품/구매 문서
     if kind == "consumables":
@@ -430,10 +430,10 @@ def format_summary_output(
     # 구매/교체 검토서
     elif kind == "proc_eval":
         if parsed_json.get('배경목적'):
-            output += f"**🎯 배경/목적**\n{parsed_json['배경목적']}\n\n"
+            output += f"🎯 배경/목적\n{parsed_json['배경목적']}\n\n"
 
         if parsed_json.get('비교대안') and len(parsed_json['비교대안']) > 0:
-            output += "**🔍 비교 대안**\n"
+            output += "🔍 비교 대안\n\n"
             for i, item in enumerate(parsed_json['비교대안'][:4], 1):  # 최대 4개까지 표시
                 model = item.get('모델', '없음')
                 spec = item.get('사양', '없음')  # 수정: '사양특징' → '사양'
@@ -441,18 +441,17 @@ def format_summary_output(
                 price = item.get('가격', '없음')
                 # 수량 정보가 있으면 추가
                 qty_str = f" x{qty}" if qty and qty != '없음' else ""
-                output += f"{i}. **{model}**{qty_str} - {spec} ({price})\n"
-            output += "\n"
+                output += f"{i}. {model}{qty_str}\n   - 사양: {spec}\n   - 가격: {price}\n\n"
 
         if parsed_json.get('선정권고') and parsed_json['선정권고'] != '없음':
-            output += f"**✅ 선정/권고**\n{parsed_json['선정권고']}\n\n"
+            output += f"✅ 선정/권고\n{parsed_json['선정권고']}\n\n"
 
         budget = parsed_json.get('예산합계') or claimed_total
         if budget and str(budget) != '없음':
             if isinstance(budget, int):
-                output += f"**💰 예산/합계**: ₩{budget:,}\n\n"
+                output += f"💰 예산/합계: ₩{budget:,}\n\n"
             else:
-                output += f"**💰 예산/합계**: {budget}\n\n"
+                output += f"💰 예산/합계: {budget}\n\n"
 
     # 폐기 문서
     elif kind == "disposal":

@@ -1,524 +1,337 @@
 #!/usr/bin/env python3
 """
-고급 메타데이터 추출기 - PDF에서 구조화된 정보 추출
+고급 메타데이터 추출기 v1.3
+- 정규식 사전 컴파일 / 날짜·금액 정밀 추출 / 연락처·장비·회사명 보강
 """
 
 from app.core.logging import get_logger
 import re
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime
-from pathlib import Path
 
 logger = get_logger(__name__)
 
+_KR_MOBILE = re.compile(r'(01[016789])[-\s\.]?\d{3,4}[-\s\.]?\d{4}')
+_EMAIL = re.compile(r'([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})')
+
+def _norm_space(s: str) -> str:
+    s = s.replace('\u3000', ' ')
+    s = re.sub(r'\s+', ' ', s)
+    s = s.replace('．', '.').replace('，', ',').replace('：', ':').strip()
+    return s
+
+def _to_kr_mobile(s: str) -> str:
+    # 01012345678 → 010-1234-5678
+    d = re.sub(r'\D', '', s)
+    if len(d) == 11 and d.startswith('01'):
+        return f'{d[:3]}-{d[3:7]}-{d[7:]}'
+    if len(d) == 10 and d.startswith('02'):
+        return f'02-{d[2:6]}-{d[6:]}'
+    return s
+
+@dataclass
+class ExtractedDates:
+    main_date: Optional[str]
+    year: Optional[int]
+    all_dates: List[Dict[str, Any]]
 
 class MetadataExtractor:
     """PDF 메타데이터 추출기"""
 
     def __init__(self):
-        # 확장된 패턴 정의
-        self.patterns = {
-            # 날짜 패턴 (우선순위 순)
-            'dates': [
-                # 표준 형식
-                (r'(\d{4})[년\-\.\/](\d{1,2})[월\-\.\/](\d{1,2})', 'ymd'),
-                (r'(\d{4})\.(\d{1,2})\.(\d{1,2})', 'ymd'),
-                (r'(\d{4})-(\d{2})-(\d{2})', 'ymd'),
-
-                # 한국어 형식
-                (r'(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일', 'ymd'),
-                (r'(\d{2,4})년도?\s*(\d{1,2})월', 'ym'),
-
-                # 역순 형식
-                (r'(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})', 'dmy'),
-
-                # 연도만
-                (r'(20\d{2}|19\d{2})년도?', 'y'),
-            ],
-
-            # 금액 패턴 (더 정확한 매칭)
-            'amounts': [
-                # 정확한 금액 표시
-                (r'총[\s]*금액[\s]*:?[\s]*([0-9,]+)[\s]*원', 'total'),
-                (r'합계[\s]*:?[\s]*([0-9,]+)[\s]*원', 'total'),
-                (r'계약금액[\s]*:?[\s]*([0-9,]+)[\s]*원', 'contract'),
-                (r'결제금액[\s]*:?[\s]*([0-9,]+)[\s]*원', 'payment'),
-
-                # 일반 금액
-                (r'([0-9]{1,3}(?:,[0-9]{3})+)[\s]*원', 'general'),
-                (r'￦[\s]*([0-9,]+)', 'general'),
-                (r'KRW[\s]*([0-9,]+)', 'general'),
-
-                # 부가세 포함
-                (r'부가세포함[\s]*([0-9,]+)', 'vat_included'),
-                (r'VAT포함[\s]*([0-9,]+)', 'vat_included'),
-            ],
-
-            # 부서/조직
-            'departments': [
-                # 방송국 부서
-                (r'(카메라|조명|음향|영상|스튜디오|중계|편집|송출)[\s]*(부|팀|실)?', 'tech'),
-                (r'(제작[1-9]|보도|교양|예능|드라마|스포츠|시사)[\s]*(부|국|팀)?', 'prod'),
-                (r'(기술|제작|경영|편성|심의|홍보)[\s]*(본부|국|센터)', 'div'),
-
-                # 일반 부서
-                (r'부서[\s]*:[\s]*([가-힣]+(?:부|팀|실|과))', 'general'),
-                (r'소속[\s]*:[\s]*([가-힣]+)', 'general'),
-                (r'담당[\s]*:[\s]*([가-힣]+)', 'general'),
-            ],
-
-            # 문서 유형 (세분화)
-            'doc_types': {
-                '구매': {
-                    'keywords': ['구매', '구입', '발주', '조달', '입찰', '계약서', '견적'],
-                    'priority': 1
-                },
-                '수리': {
-                    'keywords': ['수리', '정비', 'A/S', '고장', '수선', '보수', '유지보수'],
-                    'priority': 2
-                },
-                '임대': {
-                    'keywords': ['임대', '임차', '렌탈', '대여', '리스'],
-                    'priority': 3
-                },
-                '신청': {
-                    'keywords': ['신청서', '요청서', '의뢰서', '신청', '요청'],
-                    'priority': 4
-                },
-                '보고': {
-                    'keywords': ['보고서', '보고', '결과', '분석', '현황', '실적'],
-                    'priority': 5
-                },
-                '회의': {
-                    'keywords': ['회의록', '회의', '미팅', '협의', '논의'],
-                    'priority': 6
-                },
-                '검수': {
-                    'keywords': ['검수', '검사', '시험', '테스트', '점검'],
-                    'priority': 7
-                }
-            },
-
-            # 기안자 (문서 작성자)
-            'drafter': [
-                (r'기안자[\s]*:?[\s]*([가-힣]{2,4})', 'drafter'),
-                (r'작성자[\s]*:?[\s]*([가-힣]{2,4})', 'drafter'),
-                (r'기안[\s]*:?[\s]*([가-힣]{2,4})', 'drafter'),
-            ],
-
-            # 담당자/연락처
-            'contacts': [
-                (r'담당자?[\s]*:?[\s]*([가-힣]{2,4})', 'name'),
-                (r'연락처[\s]*:?[\s]*([\d\-]+)', 'phone'),
-                (r'전화[\s]*:?[\s]*([\d\-]+)', 'phone'),
-                (r'(010|011|016|017|018|019)[\-\s]?\d{3,4}[\-\s]?\d{4}', 'mobile'),
-                (r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', 'email'),
-            ],
-
-            # 제품/장비 정보
-            'equipment': [
-                (r'(모델|Model)[\s]*:?[\s]*([A-Z0-9\-]+)', 'model'),
-                (r'(시리얼|Serial|S/N)[\s]*:?[\s]*([A-Z0-9\-]+)', 'serial'),
-                (r'(제조사|Manufacturer)[\s]*:?[\s]*([가-힣A-Za-z]+)', 'maker'),
-
-                # 특정 장비명
-                (r'(카메라|렌즈|조명|마이크|믹서|스위처|모니터|삼각대)', 'equipment'),
-                (r'(DVR|NVR|VTR|CCU|서버|스토리지)', 'equipment'),
-            ],
-
-            # 프로젝트/프로그램
-            'projects': [
-                (r'프로그램[\s]*:[\s]*([가-힣\s]+)', 'program'),
-                (r'방송[\s]*프로그램[\s]*:[\s]*([가-힣\s]+)', 'program'),
-                (r'프로젝트[\s]*:[\s]*([가-힣A-Za-z0-9\s]+)', 'project'),
-                (r'《([^》]+)》', 'program'),  # 프로그램명 괄호
-                (r'【([^】]+)】', 'program'),
-            ],
-
-            # 계약/결재 정보
-            'approval': [
-                (r'결재일[\s]*:?[\s]*(\d{4}[\.\-]\d{1,2}[\.\-]\d{1,2})', 'approval_date'),
-                (r'계약번호[\s]*:?[\s]*([A-Z0-9\-]+)', 'contract_no'),
-                (r'문서번호[\s]*:?[\s]*([A-Z0-9\-]+)', 'doc_no'),
-                (r'품의번호[\s]*:?[\s]*([A-Z0-9\-]+)', 'request_no'),
-            ]
-        }
-
-        # 회사/업체 리스트 (자주 나오는 업체)
-        self.known_companies = [
-            '삼성', 'LG', '소니', 'Sony', '파나소닉', 'Panasonic',
-            '캐논', 'Canon', '니콘', 'Nikon', '후지', 'Fuji',
-            'ARRI', 'RED', 'Blackmagic', 'DJI', 'Atomos',
-            '한국방송', 'KBS', 'MBC', 'SBS', 'EBS', 'JTBC'
+        # === 날짜 패턴(컴파일) ===
+        self._date_patterns = [
+            (re.compile(r'(\d{4})[년\-\.\/](\d{1,2})[월\-\.\/](\d{1,2})'), 'ymd'),
+            (re.compile(r'(\d{4})\.(\d{1,2})\.(\d{1,2})'), 'ymd'),
+            (re.compile(r'(\d{4})-(\d{2})-(\d{2})'), 'ymd'),
+            (re.compile(r'(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일'), 'ymd'),
+            (re.compile(r'(\d{2,4})년도?\s*(\d{1,2})월'), 'ym'),
+            (re.compile(r'(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})'), 'dmy'),
+            (re.compile(r'(20\d{2}|19\d{2})년도?'), 'y'),
         ]
 
+        # === 금액 패턴(문맥 앵커 추가) ===
+        self._amount_patterns = [
+            (re.compile(r'(?<!페이지|p)\s*총\s*금액\s*[:\s]*([0-9\.,]+)\s*원', re.I), 'total'),
+            (re.compile(r'(?<!페이지|p)\s*합계\s*[:\s]*([0-9\.,]+)\s*원', re.I), 'total'),
+            (re.compile(r'계약\s*금액\s*[:\s]*([0-9\.,]+)\s*원', re.I), 'contract'),
+            (re.compile(r'결제\s*금액\s*[:\s]*([0-9\.,]+)\s*원', re.I), 'payment'),
+            (re.compile(r'(?<!페이지|p)\s*([0-9]{1,3}(?:[,\.\s][0-9]{3})+)\s*원'), 'general'),
+            (re.compile(r'￦\s*([0-9\.,]+)'), 'general'),
+            (re.compile(r'KRW\s*([0-9\.,]+)', re.I), 'general'),
+            (re.compile(r'(?:부가세\s*포함|VAT\s*포함)\s*([0-9\.,]+)', re.I), 'vat_included'),
+        ]
+
+        # === 부서/조직 ===
+        self._dept_patterns = [
+            (re.compile(r'(카메라|조명|음향|영상|스튜디오|중계|편집|송출)(?:\s*(부|팀|실))?'), 'tech'),
+            (re.compile(r'(제작[1-9]|보도|교양|예능|드라마|스포츠|시사)(?:\s*(부|국|팀))?'), 'prod'),
+            (re.compile(r'(기술|제작|경영|편성|심의|홍보)\s*(본부|국|센터)'), 'div'),
+            (re.compile(r'부서\s*:\s*([가-힣A-Za-z]+(?:부|팀|실|과|센터|본부))'), 'general'),
+            (re.compile(r'소속\s*:\s*([가-힣A-Za-z]+)'), 'general'),
+            (re.compile(r'담당\s*:\s*([가-힣A-Za-z]+)'), 'general'),
+        ]
+
+        # === 문서유형 키워드(소문자 비교) ===
+        self._doctype = [
+            ('구매', 1, ['구매','구입','발주','조달','입찰','계약서','견적']),
+            ('수리', 2, ['수리','정비','a/s','as','고장','수선','보수','유지보수']),
+            ('임대', 3, ['임대','임차','렌탈','대여','리스']),
+            ('신청', 4, ['신청서','요청서','의뢰서','신청','요청']),
+            ('보고', 5, ['보고서','보고','결과','분석','현황','실적']),
+            ('회의', 6, ['회의록','회의','미팅','협의','논의']),
+            ('검수', 7, ['검수','검사','시험','테스트','점검']),
+        ]
+
+        # === 기안자 ===
+        self._drafter_patterns = [
+            re.compile(r'기안자\s*[:\s]*([가-힣]{2,4})'),
+            re.compile(r'작성자\s*[:\s]*([가-힣]{2,4})'),
+            re.compile(r'기안\s*[:\s]*([가-힣]{2,4})'),
+        ]
+
+        # === 연락처 ===
+        self._contact_name = re.compile(r'담당자?\s*[:\s]*([가-힣A-Za-z]{2,20})')
+
+        # === 장비/모델/시리얼 ===
+        self._equip_patterns = [
+            (re.compile(r'\b(?:모델|model)\s*[:\s]*([A-Z0-9][A-Z0-9_\-]{2,})', re.I), 'model'),
+            (re.compile(r'\b(?:시리얼|serial|s\/n)\s*[:\s]*([A-Z0-9][A-Z0-9_\-]{2,})', re.I), 'serial'),
+            (re.compile(r'(카메라|렌즈|조명|마이크|믹서|스위처|모니터|삼각대)'), 'equipment'),
+            (re.compile(r'(?:DVR|NVR|VTR|CCU|서버|스토리지)', re.I), 'equipment'),
+        ]
+
+        # === 프로젝트/프로그램 ===
+        self._proj_patterns = [
+            re.compile(r'프로그램\s*:\s*([가-힣A-Za-z0-9\s\-\_\(\)]+)'),
+            re.compile(r'방송\s*프로그램\s*:\s*([가-힣A-Za-z0-9\s\-\_\(\)]+)'),
+            re.compile(r'프로젝트\s*:\s*([가-힣A-Za-z0-9\s\-\_\(\)]+)'),
+            re.compile(r'《([^》]+)》'), re.compile(r'【([^】]+)】'),
+        ]
+
+        # === 결재/번호 ===
+        self._approval_patterns = [
+            (re.compile(r'결재일\s*[:\s]*(\d{4}[\.\-]\d{1,2}[\.\-]\d{1,2})'), 'approval_date'),
+            (re.compile(r'계약번호\s*[:\s]*([A-Z0-9\-]+)', re.I), 'contract_no'),
+            (re.compile(r'문서번호\s*[:\s]*([A-Z0-9\-]+)', re.I), 'doc_no'),
+            (re.compile(r'품의번호\s*[:\s]*([A-Z0-9\-]+)', re.I), 'request_no'),
+        ]
+
+        # === 업체 키워드 ===
+        self._known_companies = [
+            '삼성','lg','소니','sony','파나소닉','panasonic','캐논','canon','니콘','nikon','후지','fuji',
+            'arri','red','blackmagic','dji','atomos','hanwha','techwin','hanwha vision','tvlogic','ross','panasonic',
+            'kbs','mbc','sbs','ebs','jtbc','channel a','채널a','채널에이'
+        ]
+        # (주) 변형
+        self._company_variants = [
+            re.compile(r'([가-힣A-Za-z]+)\s*주식회사'),
+            re.compile(r'주식회사\s*([가-힣A-Za-z]+)'),
+            re.compile(r'\(주\)\s*([가-힣A-Za-z]+)'),
+            re.compile(r'([가-힣A-Za-z]+)\s*\(주\)'),
+            re.compile(r'([가-힣A-Za-z]+)\s*(?:코리아|코퍼레이션|테크윈|비전)', re.I),
+        ]
+
+    # ==== Public API ====
     def extract_all(self, text: str, filename: str = "") -> Dict[str, Any]:
-        """
-        모든 메타데이터 추출
+        text = _norm_space(text)
+        base = f"{text} {filename}"
 
-        Args:
-            text: PDF 텍스트
-            filename: 파일명 (추가 정보 추출용)
+        dates = self._extract_dates(base)
+        amounts = self._extract_amounts(text)
+        department = self._extract_department(base)
+        doc_type = self._extract_doc_type(base)
+        drafter = self._extract_drafter(text)
+        contacts = self._extract_contacts(text)
+        equipment = self._extract_equipment(text)
+        projects = self._extract_projects(text)
+        approval = self._extract_approval(text)
+        companies = self._extract_companies(base)
 
-        Returns:
-            추출된 메타데이터 딕셔너리
-        """
-        # 텍스트 정규화
-        text = self._normalize_text(text)
-        combined_text = text + " " + filename
+        summary: Dict[str, Any] = {}
+        if dates.main_date:
+            summary['date'] = dates.main_date
+        elif dates.year:
+            summary['year'] = dates.year
+        if amounts.get('total'):
+            summary['amount'] = amounts['total']
+        if department:
+            summary['department'] = department
+        if doc_type:
+            summary['doc_type'] = doc_type
+        if drafter:
+            summary['drafter'] = drafter
+        if contacts['names']:
+            summary['contact'] = contacts['names'][0]
+        if equipment:
+            summary['equipment_count'] = len(equipment)
+        if companies:
+            summary['main_company'] = companies[0]
 
-        metadata = {
-            'dates': self._extract_dates(combined_text),
-            'amounts': self._extract_amounts(text),
-            'department': self._extract_department(combined_text),
-            'doc_type': self._extract_doc_type(combined_text),
-            'drafter': self._extract_drafter(text),
-            'contacts': self._extract_contacts(text),
-            'equipment': self._extract_equipment(text),
-            'projects': self._extract_projects(text),
-            'approval': self._extract_approval(text),
-            'companies': self._extract_companies(text),
-
-            # 요약 정보
-            'summary': {}
+        return {
+            'dates': dates.__dict__,
+            'amounts': amounts,
+            'department': department,
+            'doc_type': doc_type,
+            'drafter': drafter,
+            'contacts': contacts,
+            'equipment': equipment,
+            'projects': projects,
+            'approval': approval,
+            'companies': companies,
+            'summary': summary,
         }
 
-        # 요약 정보 생성
-        metadata['summary'] = self._create_summary(metadata)
+    # ==== Extractors ====
+    def _extract_dates(self, text: str) -> ExtractedDates:
+        found: List[Dict[str, Any]] = []
+        year_hint: Optional[int] = None
 
-        return metadata
-
-    def _normalize_text(self, text: str) -> str:
-        """텍스트 정규화"""
-        # 불필요한 공백 정리
-        text = re.sub(r'\s+', ' ', text)
-        # 특수문자 정규화
-        text = text.replace('．', '.')
-        text = text.replace('，', ',')
-        text = text.replace('：', ':')
-        return text
-
-    def _extract_dates(self, text: str) -> Dict[str, Any]:
-        """날짜 정보 추출"""
-        dates = {
-            'main_date': None,
-            'year': None,
-            'all_dates': []
-        }
-
-        for pattern, date_type in self.patterns['dates']:
-            matches = re.finditer(pattern, text)
-            for match in matches:
+        for rx, typ in self._date_patterns:
+            for m in rx.finditer(text):
                 try:
-                    if date_type == 'ymd':
-                        year = int(match.group(1))
-                        month = int(match.group(2))
-                        day = int(match.group(3))
-                        date_str = f"{year:04d}-{month:02d}-{day:02d}"
-
-                    elif date_type == 'ym':
-                        year = int(match.group(1))
-                        month = int(match.group(2))
-                        date_str = f"{year:04d}-{month:02d}"
-
-                    elif date_type == 'y':
-                        year = int(match.group(1))
-                        date_str = f"{year:04d}"
-
-                    elif date_type == 'dmy':
-                        day = int(match.group(1))
-                        month = int(match.group(2))
-                        year = int(match.group(3))
-                        date_str = f"{year:04d}-{month:02d}-{day:02d}"
-
+                    if typ == 'ymd':
+                        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+                    elif typ == 'ym':
+                        y, mo, d = int(m.group(1)), int(m.group(2)), 1
+                    elif typ == 'y':
+                        y, mo, d = int(m.group(1)), 1, 1
+                    elif typ == 'dmy':
+                        d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
                     else:
                         continue
 
-                    # 연도 범위 체크 (1990-2030)
-                    if year < 100:
-                        year = 2000 + year if year < 30 else 1900 + year
+                    # 2자리 연도 교정 후 문자열 생성
+                    if y < 100:
+                        y = 2000 + y if y < 30 else 1900 + y
 
-                    if 1990 <= year <= 2030:
-                        dates['all_dates'].append({
-                            'date': date_str,
-                            'year': year,
-                            'type': date_type,
-                            'position': match.start()
-                        })
-
-                        if not dates['year']:
-                            dates['year'] = year
-
-                        if not dates['main_date'] and date_type in ['ymd', 'dmy']:
-                            dates['main_date'] = date_str
-
-                except (ValueError, IndexError):
+                    if 1990 <= y <= 2035 and 1 <= mo <= 12 and 1 <= d <= 31:
+                        date_str = f'{y:04d}-{mo:02d}-{d:02d}'
+                        found.append({'date': date_str, 'year': y, 'type': typ, 'position': m.start()})
+                        if not year_hint:
+                            year_hint = y
+                except Exception:
                     continue
 
-        # 날짜 정렬 (최신 날짜 우선)
-        if dates['all_dates']:
-            dates['all_dates'].sort(key=lambda x: x['date'], reverse=True)
+        # 최신일자 우선
+        found.sort(key=lambda x: x['date'], reverse=True)
+        main_date = None
+        for item in found:
+            if item['type'] in ('ymd', 'dmy'):
+                main_date = item['date']; break
 
-        return dates
+        return ExtractedDates(main_date=main_date, year=year_hint, all_dates=found)
 
     def _extract_amounts(self, text: str) -> Dict[str, Any]:
-        """금액 정보 추출"""
-        amounts = {
-            'total': None,
-            'contract': None,
-            'all_amounts': []
-        }
-
-        for pattern, amount_type in self.patterns['amounts']:
-            matches = re.finditer(pattern, text)
-            for match in matches:
-                try:
-                    amount_str = match.group(1).replace(',', '')
-                    amount = int(amount_str)
-
-                    if amount > 0:  # 0원 제외
-                        amounts['all_amounts'].append({
-                            'amount': amount,
-                            'type': amount_type,
-                            'formatted': f"{amount:,}원",
-                            'position': match.start()
-                        })
-
-                        # 특정 유형 금액 저장
-                        if amount_type == 'total' and not amounts['total']:
-                            amounts['total'] = amount
-                        elif amount_type == 'contract' and not amounts['contract']:
-                            amounts['contract'] = amount
-
-                except (ValueError, IndexError):
+        res = {'total': None, 'contract': None, 'all_amounts': []}
+        for rx, kind in self._amount_patterns:
+            for m in rx.finditer(text):
+                amt = int(re.sub(r'[^\d]', '', m.group(1)))
+                if amt <= 0:
                     continue
+                res['all_amounts'].append({
+                    'amount': amt,
+                    'type': kind,
+                    'formatted': f'{amt:,}원',
+                    'position': m.start()
+                })
+                if kind == 'total' and res['total'] is None:
+                    res['total'] = amt
+                if kind == 'contract' and res['contract'] is None:
+                    res['contract'] = amt
 
-        # 금액 정렬 (큰 금액 우선)
-        if amounts['all_amounts']:
-            amounts['all_amounts'].sort(key=lambda x: x['amount'], reverse=True)
-
-            # 총액이 없으면 최대 금액을 총액으로
-            if not amounts['total'] and amounts['all_amounts']:
-                amounts['total'] = amounts['all_amounts'][0]['amount']
-
-        return amounts
+        if res['all_amounts']:
+            res['all_amounts'].sort(key=lambda x: x['amount'], reverse=True)
+            if res['total'] is None:
+                res['total'] = res['all_amounts'][0]['amount']
+        return res
 
     def _extract_department(self, text: str) -> Optional[str]:
-        """부서 정보 추출"""
-        for pattern, dept_type in self.patterns['departments']:
-            match = re.search(pattern, text)
-            if match:
-                dept = match.group(1)
-                # 부/팀/실 등이 없으면 추가
-                if dept and not any(suffix in dept for suffix in ['부', '팀', '실', '과', '센터', '본부']):
-                    if dept_type == 'tech':
+        for rx, t in self._dept_patterns:
+            m = rx.search(text)
+            if m:
+                dept = m.group(1)
+                if dept and not any(s in dept for s in ['부','팀','실','과','센터','본부']):
+                    if t == 'tech':
                         dept += '부'
                 return dept
         return None
 
     def _extract_doc_type(self, text: str) -> Optional[str]:
-        """문서 유형 추출"""
-        text_lower = text.lower()
-
-        # 우선순위에 따라 검사
-        doc_types_sorted = sorted(
-            self.patterns['doc_types'].items(),
-            key=lambda x: x[1]['priority']
-        )
-
-        for doc_type, info in doc_types_sorted:
-            for keyword in info['keywords']:
-                if keyword in text_lower:
-                    return doc_type
-
+        t = text.lower()
+        for name, prio, kws in sorted(self._doctype, key=lambda x: x[1]):
+            for kw in kws:
+                if kw in t:
+                    return name
         return None
 
     def _extract_drafter(self, text: str) -> Optional[str]:
-        """기안자 정보 추출"""
-        for pattern, drafter_type in self.patterns['drafter']:
-            match = re.search(pattern, text)
-            if match:
-                drafter = match.group(1)
-                # 2-4자 한글 이름만 허용
-                if drafter and 2 <= len(drafter) <= 4:
-                    return drafter
+        for rx in self._drafter_patterns:
+            m = rx.search(text)
+            if m:
+                nm = m.group(1)
+                if 2 <= len(nm) <= 4:
+                    return nm
         return None
 
     def _extract_contacts(self, text: str) -> Dict[str, List[str]]:
-        """연락처 정보 추출"""
-        contacts = {
-            'names': [],
-            'phones': [],
-            'emails': []
-        }
-
-        for pattern, contact_type in self.patterns['contacts']:
-            matches = re.finditer(pattern, text)
-            for match in matches:
-                value = match.group(1) if match.lastindex else match.group(0)
-
-                if contact_type == 'name' and value not in contacts['names']:
-                    contacts['names'].append(value)
-                elif contact_type in ['phone', 'mobile'] and value not in contacts['phones']:
-                    contacts['phones'].append(value)
-                elif contact_type == 'email' and value not in contacts['emails']:
-                    contacts['emails'].append(value.lower())
-
-        return contacts
+        names, phones, emails = [], [], []
+        for m in self._contact_name.finditer(text):
+            v = m.group(1)
+            if v not in names:
+                names.append(v)
+        for m in _KR_MOBILE.finditer(text):
+            v = _to_kr_mobile(m.group(0))
+            if v not in phones:
+                phones.append(v)
+        for m in _EMAIL.finditer(text):
+            v = m.group(1).lower()
+            if v not in emails:
+                emails.append(v)
+        return {'names': names, 'phones': phones, 'emails': emails}
 
     def _extract_equipment(self, text: str) -> List[Dict[str, str]]:
-        """장비 정보 추출"""
-        equipment = []
-        found_items = set()
-
-        for pattern, eq_type in self.patterns['equipment']:
-            matches = re.finditer(pattern, text, re.IGNORECASE)
-            for match in matches:
-                if match.lastindex and match.lastindex > 1:
-                    item = match.group(2)
-                else:
-                    item = match.group(1) if match.lastindex else match.group(0)
-
-                if item and item not in found_items:
-                    equipment.append({
-                        'name': item,
-                        'type': eq_type
-                    })
-                    found_items.add(item)
-
-        return equipment
+        items: List[Dict[str, str]] = []
+        seen = set()
+        for rx, kind in self._equip_patterns:
+            for m in rx.finditer(text):
+                val = m.group(1)
+                if not val:
+                    continue
+                key = (kind, val.lower())
+                if key in seen:
+                    continue
+                seen.add(key)
+                items.append({'name': val, 'type': kind})
+        return items
 
     def _extract_projects(self, text: str) -> List[str]:
-        """프로젝트/프로그램 정보 추출"""
-        projects = []
-        found_projects = set()
-
-        for pattern, proj_type in self.patterns['projects']:
-            matches = re.finditer(pattern, text)
-            for match in matches:
-                project = match.group(1).strip()
-                if project and project not in found_projects:
-                    projects.append(project)
-                    found_projects.add(project)
-
-        return projects
+        out, seen = [], set()
+        for rx in self._proj_patterns:
+            for m in rx.finditer(text):
+                v = _norm_space(m.group(1))
+                if v and v not in seen:
+                    seen.add(v); out.append(v)
+        return out
 
     def _extract_approval(self, text: str) -> Dict[str, str]:
-        """결재 정보 추출"""
-        approval = {}
-
-        for pattern, approval_type in self.patterns['approval']:
-            match = re.search(pattern, text)
-            if match:
-                approval[approval_type] = match.group(1)
-
-        return approval
+        out: Dict[str, str] = {}
+        for rx, key in self._approval_patterns:
+            m = rx.search(text)
+            if m:
+                out[key] = m.group(1)
+        return out
 
     def _extract_companies(self, text: str) -> List[str]:
-        """회사/업체명 추출"""
-        companies = []
-
-        for company in self.known_companies:
-            if company in text:
-                companies.append(company)
-
-        # 추가로 "주식회사", "(주)" 패턴 찾기
-        company_patterns = [
-            r'([가-힣]+)\s*주식회사',
-            r'주식회사\s*([가-힣]+)',
-            r'\(주\)\s*([가-힣]+)',
-            r'([가-힣]+)\s*\(주\)',
-        ]
-
-        for pattern in company_patterns:
-            matches = re.finditer(pattern, text)
-            for match in matches:
-                company = match.group(1)
-                if company and company not in companies:
-                    companies.append(company)
-
-        return companies
-
-    def _create_summary(self, metadata: Dict) -> Dict:
-        """메타데이터 요약 생성"""
-        summary = {}
-
-        # 주요 날짜
-        if metadata['dates']['main_date']:
-            summary['date'] = metadata['dates']['main_date']
-        elif metadata['dates']['year']:
-            summary['year'] = metadata['dates']['year']
-
-        # 주요 금액
-        if metadata['amounts']['total']:
-            summary['amount'] = metadata['amounts']['total']
-
-        # 부서
-        if metadata['department']:
-            summary['department'] = metadata['department']
-
-        # 문서 유형
-        if metadata['doc_type']:
-            summary['doc_type'] = metadata['doc_type']
-
-        # 기안자
-        if metadata['drafter']:
-            summary['drafter'] = metadata['drafter']
-
-        # 담당자
-        if metadata['contacts']['names']:
-            summary['contact'] = metadata['contacts']['names'][0]
-
-        # 장비
-        if metadata['equipment']:
-            summary['equipment_count'] = len(metadata['equipment'])
-
-        # 회사
-        if metadata['companies']:
-            summary['main_company'] = metadata['companies'][0]
-
-        return summary
-
-
-# 테스트 함수
-def test_extractor():
-    """메타데이터 추출기 테스트"""
-    extractor = MetadataExtractor()
-
-    # 테스트 텍스트
-    test_text = """
-    문서번호: KBS-2024-0312
-
-    카메라부 장비 구매 계약서
-
-    1. 계약일자: 2024년 3월 15일
-    2. 계약금액: 총 150,000,000원 (부가세포함)
-    3. 납품업체: 주식회사 소니코리아
-    4. 담당자: 김철수 (010-1234-5678)
-    5. 장비내역:
-       - FX9 카메라 시스템 (S/N: FX9-2024-001)
-       - 렌즈 세트
-
-    프로그램: 《뉴스9》 스튜디오 개선 프로젝트
-    """
-
-    # 메타데이터 추출
-    metadata = extractor.extract_all(test_text, "2024_카메라부_구매계약서.pdf")
-
-    # 결과 출력
-    print("추출된 메타데이터:")
-    print("- 날짜:", metadata['dates']['main_date'])
-    print("- 금액:", metadata['amounts']['total'])
-    print("- 부서:", metadata['department'])
-    print("- 문서유형:", metadata['doc_type'])
-    print("- 담당자:", metadata['contacts']['names'])
-    print("- 회사:", metadata['companies'])
-    print("- 장비:", metadata['equipment'])
-    print("- 프로그램:", metadata['projects'])
-    print("\n요약:", metadata['summary'])
-
-    return metadata
-
-
-if __name__ == "__main__":
-    test_extractor()
+        t = text.lower()
+        out, seen = [], set()
+        for c in self._known_companies:
+            if c in t and c not in seen:
+                seen.add(c); out.append(c)
+        for rx in self._company_variants:
+            for m in rx.finditer(text):
+                v = m.group(1).strip()
+                if v and v.lower() not in seen:
+                    seen.add(v.lower()); out.append(v)
+        return out

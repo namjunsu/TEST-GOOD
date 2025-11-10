@@ -1541,7 +1541,7 @@ class RAGPipeline:
                 }
 
             # 4. 요약 의도 감지
-            summary_keywords = ["요약", "요약해", "정리", "정리해", "내용", "summary"]
+            summary_keywords = ["요약", "요약해", "정리", "정리해", "내용", "개요", "summary", "overview"]
             needs_summary = any(kw in query.lower() for kw in summary_keywords)
 
             # 5. 답변 포맷팅

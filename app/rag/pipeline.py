@@ -1547,10 +1547,10 @@ class RAGPipeline:
             # 5. 답변 포맷팅
             answer_text = ""
 
-            # LLM 요약 또는 원문
-            if needs_summary and len(full_text) > 500:
-                # LLM 요약 수행 (기존 RAG 시스템의 프롬프트 사용)
-                logger.info(f"📝 요약 요청 감지 → LLM 요약 수행 (원문 {len(full_text)}자)")
+            # LLM 답변 또는 원문
+            # 문서가 선택된 상태에서는 항상 LLM을 사용하여 사용자 질문에 답변
+            if len(full_text) > 500:
+                logger.info(f"💬 문서 기반 LLM 답변 수행 (원문 {len(full_text)}자, 요약모드={needs_summary})")
                 try:
                     # 문서를 청크 형태로 구성
                     chunks = [{
@@ -1571,53 +1571,87 @@ class RAGPipeline:
                     if hasattr(self.generator, 'rag') and hasattr(self.generator.rag, 'llm'):
                         llm = self.generator.rag.llm
 
-                        # 구조화된 요약 시스템 사용 (summary_templates.py)
-                        from app.rag.summary_templates import (
-                            detect_doc_kind,
-                            build_prompt,
-                            parse_summary_json,
-                            format_summary_output
-                        )
-
-                        # 1. 문서 종류 감지
-                        kind = detect_doc_kind(filename, full_text)
-                        logger.info(f"📄 문서 종류 감지: {kind}")
-
-                        # 2. 구조화된 프롬프트 생성
-                        summary_prompt = build_prompt(
-                            kind=kind,
-                            filename=filename,
-                            drafter=drafter,
-                            display_date=display_date,
-                            context_text=full_text[:4000],
-                            claimed_total=None  # 금액은 메타데이터에서 추출 예정
-                        )
-
-                        # 3. LLM 호출
-                        from llama_cpp import Llama
-                        if isinstance(llm.llm, Llama):
-                            output = llm.llm.create_chat_completion(
-                                messages=[
-                                    {"role": "system", "content": "당신은 문서 요약 전문가입니다. JSON 형식으로만 응답하세요."},
-                                    {"role": "user", "content": summary_prompt}
-                                ],
-                                max_tokens=800,  # 구조화된 JSON을 위해 토큰 증가
-                                temperature=0.3
+                        if needs_summary:
+                            # 요약 모드: 구조화된 요약 시스템 사용 (summary_templates.py)
+                            from app.rag.summary_templates import (
+                                detect_doc_kind,
+                                build_prompt,
+                                parse_summary_json,
+                                format_summary_output
                             )
-                            llm_raw = output['choices'][0]['message']['content']
 
-                            # 4. JSON 파싱
-                            parsed_json = parse_summary_json(llm_raw)
+                            # 1. 문서 종류 감지
+                            kind = detect_doc_kind(filename, full_text)
+                            logger.info(f"📄 문서 종류 감지: {kind}")
 
-                            # 5. 마크다운 포맷팅
-                            llm_result = format_summary_output(
-                                parsed_json=parsed_json,
+                            # 2. 구조화된 프롬프트 생성
+                            summary_prompt = build_prompt(
                                 kind=kind,
                                 filename=filename,
                                 drafter=drafter,
                                 display_date=display_date,
-                                claimed_total=None
+                                context_text=full_text[:4000],
+                                claimed_total=None  # 금액은 메타데이터에서 추출 예정
                             )
+                            llm_prompt = summary_prompt
+                        else:
+                            # Q&A 모드: 사용자 질문에 대한 답변
+                            llm_prompt = f"""다음 문서를 읽고 사용자의 질문에 정확하게 답변하세요.
+
+문서 정보:
+- 파일명: {filename}
+- 기안자: {drafter or '정보 없음'}
+- 날짜: {display_date or date or '정보 없음'}
+
+문서 내용:
+{full_text[:4000]}
+
+사용자 질문: {query}
+
+답변 작성 지침:
+1. 문서 내용을 기반으로만 답변하세요
+2. 문서에 없는 정보는 "문서에 해당 정보가 없습니다"라고 답변하세요
+3. 금액, 날짜, 이름 등은 정확하게 인용하세요
+4. 간결하고 명확하게 답변하세요
+
+답변:"""
+
+                        # 3. LLM 호출
+                        from llama_cpp import Llama
+                        if isinstance(llm.llm, Llama):
+                            if needs_summary:
+                                # 요약 모드: JSON 응답 요청
+                                system_msg = "당신은 문서 요약 전문가입니다. JSON 형식으로만 응답하세요."
+                                max_tokens = 800
+                            else:
+                                # Q&A 모드: 일반 답변 요청
+                                system_msg = "당신은 문서 분석 전문가입니다. 문서 내용을 기반으로 정확하게 답변하세요."
+                                max_tokens = 500
+
+                            output = llm.llm.create_chat_completion(
+                                messages=[
+                                    {"role": "system", "content": system_msg},
+                                    {"role": "user", "content": llm_prompt}
+                                ],
+                                max_tokens=max_tokens,
+                                temperature=0.3
+                            )
+                            llm_raw = output['choices'][0]['message']['content']
+
+                            if needs_summary:
+                                # 요약 모드: JSON 파싱 및 포맷팅
+                                parsed_json = parse_summary_json(llm_raw)
+                                llm_result = format_summary_output(
+                                    parsed_json=parsed_json,
+                                    kind=kind,
+                                    filename=filename,
+                                    drafter=drafter,
+                                    display_date=display_date,
+                                    claimed_total=None
+                                )
+                            else:
+                                # Q&A 모드: 답변 그대로 사용
+                                llm_result = llm_raw.strip()
                         else:
                             # Fallback
                             llm_result = f"LLM 타입 불일치: {type(llm.llm)}"

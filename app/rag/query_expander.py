@@ -94,11 +94,12 @@ class QueryExpander:
 
         try:
             # LLM 호출
+            # QwenLLM 시그니처: generate_response(question, context_chunks, max_retries=2, enable_complex_processing=True, mode="rag")
             response = self.llm.generate_response(
-                question=prompt,  # 'query'가 아니라 'question'
+                question=prompt,
                 context_chunks=[],
-                max_tokens=300,
-                temperature=0.3  # 낮은 temperature로 일관된 결과
+                enable_complex_processing=False,  # 단순 키워드 추출이므로 복합처리 불필요
+                mode="rag"
             )
 
             # JSON 파싱

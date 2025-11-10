@@ -1045,7 +1045,8 @@ class RAGPipeline:
 
             # "전부" 또는 "개수" 질의 감지 - 검색 개수 조정
             # "몇개", "개수" 질의는 정확한 카운트를 위해 많은 문서를 검색해야 함
-            needs_all = any(kw in query.lower() for kw in ["전부", "모두", "모든", "전체", "all", "몇", "개수", "총"])
+            # 타이핑 오류 대응: "몆" (U+BA86) 추가
+            needs_all = any(kw in query.lower() for kw in ["전부", "모두", "모든", "전체", "all", "몇", "몆", "개수", "총"])
             search_top_k = 200 if needs_all else 10  # 131개 문서도 커버하도록 200으로 증가
             logger.info(f"🔍 검색 top_k: {search_top_k} (needs_all={needs_all})")
 

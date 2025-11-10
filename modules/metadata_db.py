@@ -268,7 +268,7 @@ class MetadataDB:
         """연도별 검색"""
         conn = self._get_conn()
         cursor = conn.execute(
-            "SELECT * FROM documents WHERE year = ? ORDER BY date DESC", (year,)
+            "SELECT * FROM documents WHERE year = ? ORDER BY COALESCE(display_date, date) DESC", (year,)
         )
         return [dict(row) for row in cursor.fetchall()]
 
@@ -298,7 +298,7 @@ class MetadataDB:
             params.append(f"{year}%")
             params.append(f"{year}%")
 
-        query += " ORDER BY date DESC"
+        query += " ORDER BY COALESCE(display_date, date) DESC"
         if limit is not None:
             query += " LIMIT ?"
             params.append(limit)
@@ -341,7 +341,7 @@ class MetadataDB:
         """카테고리별 검색"""
         conn = self._get_conn()
         cursor = conn.execute(
-            "SELECT * FROM documents WHERE category LIKE ? ORDER BY date DESC",
+            "SELECT * FROM documents WHERE category LIKE ? ORDER BY COALESCE(display_date, date) DESC",
             (f"%{category}%",),
         )
         return [dict(row) for row in cursor.fetchall()]
@@ -368,7 +368,7 @@ class MetadataDB:
         """날짜 범위 검색"""
         conn = self._get_conn()
         cursor = conn.execute(
-            "SELECT * FROM documents WHERE date BETWEEN ? AND ? ORDER BY date DESC",
+            "SELECT * FROM documents WHERE date BETWEEN ? AND ? ORDER BY COALESCE(display_date, date) DESC",
             (start_date, end_date),
         )
         return [dict(row) for row in cursor.fetchall()]

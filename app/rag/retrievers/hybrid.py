@@ -237,26 +237,31 @@ class HybridRetriever:
         if not query_tokens:
             return 0.5  # 토큰 없으면 중립 스코어
 
-        # 문서 텍스트 준비
+        # 문서 텍스트 준비 (snippet과 meta에서 추출)
         filename = (doc.get('filename') or '').lower()
-        text_preview = (doc.get('text_preview') or '').lower()
-        drafter = (doc.get('drafter') or '').lower()
-        doc_text = filename + ' ' + text_preview + ' ' + drafter
+        snippet = (doc.get('snippet') or '').lower()  # Fixed: text_preview → snippet
+        meta = doc.get('meta', {})
+        drafter = (meta.get('drafter') or '').lower()  # Fixed: meta에서 drafter 추출
+        doc_text = filename + ' ' + snippet + ' ' + drafter
 
         # 매칭된 토큰 수 계산
         matched_tokens = sum(1 for token in query_tokens if token in doc_text)
 
         # 기본 스코어: 매칭률
-        match_ratio = matched_tokens / len(query_tokens)
+        match_ratio = matched_tokens / len(query_tokens) if query_tokens else 0.0
 
         # 보너스 1: 완전 일치하는 구문이 있으면 가산점
         if query.lower() in doc_text:
             match_ratio = min(1.0, match_ratio + 0.3)
 
         # 페널티: 문서가 너무 짧으면 감점 (신뢰도 저하)
-        text_len = len(doc.get('text_preview') or '')
+        text_len = len(doc.get('snippet') or '')  # Fixed: text_preview → snippet
         if text_len < 100:
             match_ratio *= 0.7
+
+        # 안전장치: match_ratio가 0일 때 최소 epsilon 값 부여
+        if match_ratio == 0.0 and matched_tokens == 0:
+            match_ratio = 1e-6  # epsilon to avoid all-zero scores
 
         # 🎯 파일명 매칭 강화 (CRITICAL: 정확도 향상의 핵심)
         filename_bonus = 0.0

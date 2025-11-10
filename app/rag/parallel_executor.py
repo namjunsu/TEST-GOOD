@@ -29,12 +29,12 @@ def timed_execution(func_name: str):
 class ParallelSearchExecutor:
     """Execute multiple search operations in parallel"""
 
-    def __init__(self, max_workers: int = 3):
+    def __init__(self, max_workers: int = 6):
         """
         Initialize parallel executor
 
         Args:
-            max_workers: Maximum number of parallel threads (default 3)
+            max_workers: Maximum number of parallel threads (default 6, tuned for performance)
         """
         self.max_workers = max_workers
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
@@ -160,12 +160,12 @@ class ParallelSearchExecutor:
 _global_executor: Optional[ParallelSearchExecutor] = None
 
 
-def get_parallel_executor(max_workers: int = 3) -> ParallelSearchExecutor:
+def get_parallel_executor(max_workers: int = 6) -> ParallelSearchExecutor:
     """
     Get or create global parallel executor instance
 
     Args:
-        max_workers: Maximum number of parallel threads
+        max_workers: Maximum number of parallel threads (default 6, tuned for performance)
 
     Returns:
         ParallelSearchExecutor instance

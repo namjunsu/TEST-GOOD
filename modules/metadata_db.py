@@ -36,9 +36,17 @@ class MetadataDB:
             timeout=30
         )
         conn.row_factory = sqlite3.Row
+
+        # Performance optimizations (WAL + memory tuning)
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA busy_timeout=5000;")
         conn.execute("PRAGMA synchronous=NORMAL;")
+        conn.execute("PRAGMA temp_store=MEMORY;")
+        conn.execute("PRAGMA mmap_size=30000000000;")  # 30GB mmap (OS limits apply)
+        conn.execute("PRAGMA cache_size=-524288;")     # ~512MB cache (negative = KB)
+        conn.execute("PRAGMA page_size=4096;")
+        conn.execute("PRAGMA analysis_limit=400;")
+
         return conn
 
     def _get_conn(self) -> sqlite3.Connection:

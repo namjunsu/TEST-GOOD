@@ -1,18 +1,56 @@
 """
-문서 유형별 요약 프롬프트 템플릿 (v2)
-2025-10-27
+문서 유형별 요약 프롬프트 템플릿 (v3)
+2025-11-10
 
 목적: 문서 타입 자동 감지 + 맞춤 프롬프트로 요약 품질 급상승
 핵심: "틀 채우기" 제거, "진짜 읽고 정리" 구현
+개선: 회의록 우선 분류, 금액 파싱 강화, JSON 추출 안정화
 """
 
 import json
 import re
+import unicodedata
 from typing import Any, Dict, Optional, Tuple
+
+# Compiled regex patterns for performance
+_KW = {
+    "minutes": re.compile(
+        r"(회의록|회의\s*결과|회의\s*일시|회의\s*장소|참석자|안건|결정\s*사항)",
+        re.IGNORECASE
+    ),
+    "proc_eval": re.compile(
+        r"(기술\s*검토서|구매\s*검토서|검토의\s*건|견적\s*비교|도입\s*검토|교체\s*검토|선정|권고|proposal)",
+        re.IGNORECASE
+    ),
+    "consumables": re.compile(
+        r"(소모품|consumable|구매\s*의\s*건|납품|발주)",
+        re.IGNORECASE
+    ),
+    "repair": re.compile(
+        r"(수리(?:\s*내역)?|불량|고장|장애|\bAS\b|A/S)",
+        re.IGNORECASE
+    ),
+    "disposal": re.compile(
+        r"(폐기|불용|SCRAP|disposal|폐기의\s*건)",
+        re.IGNORECASE
+    ),
+}
+
+# Money parsing patterns
+_MONEY_NUM = re.compile(r"([\d]{1,3}(?:[,]\d{3})+|\d+)\s*원?")
+_MONEY_UNIT = re.compile(r"(?:(\d+(?:\.\d+)?)\s*억)|(?:(\d+(?:\.\d+)?)\s*만)")
+_VAT_FLAG = re.compile(r"(부가세|VAT)\s*(별도|포함)", re.IGNORECASE)
+
+
+def _norm(s: str) -> str:
+    """Normalize text: NFKC + whitespace standardization"""
+    s = unicodedata.normalize("NFKC", s)
+    s = re.sub(r"[ \t\r\f\v]+", " ", s)
+    return s
 
 
 def detect_doc_kind(filename: str, text: str) -> str:
-    """파일명 + 본문으로 문서 종류 자동 감지
+    """파일명 + 본문으로 문서 종류 자동 감지 (v2: 회의록 우선)
 
     Args:
         filename: 파일명
@@ -21,34 +59,94 @@ def detect_doc_kind(filename: str, text: str) -> str:
     Returns:
         문서 종류: consumables/repair/proc_eval/disposal/minutes/generic
     """
-    s = f"{filename}\n{text[:2000]}".lower()
+    s = _norm(f"{filename}\n{text[:2000]}").lower()
 
-    # 구매/교체 검토서 (최우선 검사 - 기술검토서, 구매검토서 등을 proposal로 분류)
-    # 우선순위 키워드: 기술검토서, 검토서, 구매 검토서, 견적 비교, 구매의뢰, proposal
-    if re.search(r"(기술검토서|기술\s*검토서|구매\s*검토서|구매검토서|검토서|검토의\s*건|견적\s*비교|구매의뢰|proposal|교체\s*검토서|도입\s*검토|비교\s*검토)", s):
+    # 회의록 강한 시그널 우선 (오분류 방지)
+    # '안건/참석자/결정' 중 2개 이상 동시 존재 시 minutes 확정
+    if _KW["minutes"].search(s):
+        score = sum(1 for k in ["안건", "참석자", "결정"] if k in s)
+        if score >= 2:
+            return "minutes"
+
+    # 구매/교체 검토서
+    if _KW["proc_eval"].search(s):
         return "proc_eval"
 
-    # 소모품/구매 문서 (검토서 이후 검사 - 단순 소모품 구매 건)
-    if re.search(r"(소모품|consumable|구매\s*건|구매의\s*건|납품|발주)", s):
+    # 소모품/구매 문서 (검토서 이후 검사)
+    if _KW["consumables"].search(s):
         return "consumables"
 
     # 수리/장애 문서
-    if re.search(r"(수리|수리건|수리\s*내역|불량|고장|장애|as\b|a/s)", s):
+    if _KW["repair"].search(s):
         return "repair"
 
     # 폐기 문서
-    if re.search(r"(폐기|불용|scrap|disposal|폐기의\s*건)", s):
+    if _KW["disposal"].search(s):
         return "disposal"
-
-    # 회의록
-    if re.search(r"(회의록|회의\s*결과|안건|참석자|결정\s*사항)", s):
-        return "minutes"
 
     return "generic"
 
 
+def parse_money_any(s: str) -> Optional[int]:
+    """금액 파싱: 억/만 단위, 콤마 표기, VAT 고려
+
+    Args:
+        s: 입력 문자열
+
+    Returns:
+        파싱된 금액 (KRW 정수), 실패 시 None
+    """
+    s = _norm(s)
+
+    # 1) 억/만 단위
+    u = _MONEY_UNIT.search(s)
+    if u:
+        eok = u.group(1)
+        man = u.group(2)
+        if eok:
+            return int(round(float(eok) * 100_000_000))
+        if man:
+            return int(round(float(man) * 10_000))
+
+    # 2) 쉼표/원 표기
+    n = _MONEY_NUM.search(s)
+    if n:
+        return int(n.group(1).replace(",", ""))
+
+    return None
+
+
+def _windowed_money_candidates(text: str, window: int = 60) -> list:
+    """금액 주변 윈도우에서 후보 추출
+
+    Args:
+        text: 문서 본문
+        window: 키워드 주변 검색 범위
+
+    Returns:
+        금액 후보 리스트
+    """
+    cand = []
+
+    # '합계/총액/견적/금액' 주변 윈도우 우선 스캔
+    for m in re.finditer(r"(합계|총액|견적|금액).{0,%d}" % window, text, re.IGNORECASE | re.DOTALL):
+        seg = text[m.start(): m.end() + window]
+        val = parse_money_any(seg)
+        if val:
+            cand.append(val)
+
+    # 일반 숫자 표기도 보조로 스캔
+    for m in _MONEY_NUM.finditer(text):
+        try:
+            cand.append(int(m.group(1).replace(",", "")))
+        except Exception:
+            pass
+
+    return cand
+
+
 def _recheck_money_and_decision(text: str, claimed_total: Optional[int]) -> Tuple[Optional[int], bool]:
-    """본문 재스캔으로 "없음" 남발 방지
+    """본문 재스캔으로 "없음" 남발 방지 (v2: 억/만 지원)
 
     Args:
         text: 문서 본문
@@ -57,17 +155,10 @@ def _recheck_money_and_decision(text: str, claimed_total: Optional[int]) -> Tupl
     Returns:
         (재확인된 금액, 결정사항 존재 여부)
     """
-    # 금액 재확인 (claimed_total이 None일 때만)
     money = claimed_total
     if not money:
-        # 합계|총액|비용 패턴 스캔
-        money_match = re.search(r"(합계|총액|비용|견적|금액)\s*[:\s]\s*([\d,]+)\s*원?", text)
-        if money_match:
-            try:
-                money_str = money_match.group(2).replace(",", "")
-                money = int(money_str)
-            except:
-                pass
+        cands = _windowed_money_candidates(text, window=80)
+        money = max(cands) if cands else None
 
     # 결정/선정 사항 존재 여부
     decision_present = bool(re.search(r"(선정|결정|조치|확정|권고|채택|승인)", text))
@@ -265,8 +356,38 @@ def build_prompt(
 """
 
 
+def _extract_first_json_object(s: str) -> Optional[str]:
+    """스택 기반 중괄호 밸런싱으로 첫 완결 JSON 객체 추출
+
+    Args:
+        s: 입력 문자열
+
+    Returns:
+        첫 JSON 객체 문자열, 실패 시 None
+    """
+    # Fenced code block 우선
+    m = re.search(r"```json\s*(\{.*?\})\s*```", s, re.DOTALL | re.IGNORECASE)
+    if m:
+        return m.group(1)
+
+    # 스택 기반 탐색
+    start = None
+    depth = 0
+    for i, ch in enumerate(s):
+        if ch == '{':
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == '}':
+            if depth > 0:
+                depth -= 1
+                if depth == 0 and start is not None:
+                    return s[start:i + 1]
+    return None
+
+
 def parse_summary_json(response: str) -> Optional[Dict[str, Any]]:
-    """LLM 응답에서 JSON 추출 및 파싱 (강건한 파서)
+    """LLM 응답에서 JSON 추출 및 파싱 (v2: 스택 기반)
 
     Args:
         response: LLM 응답 텍스트
@@ -275,28 +396,57 @@ def parse_summary_json(response: str) -> Optional[Dict[str, Any]]:
         파싱된 JSON dict, 실패 시 None
     """
     try:
-        # 1단계: ```json ... ``` 블록 제거
-        cleaned = re.sub(r"```json|```", "", response).strip()
-
-        # 2단계: 첫 번째 {...} 블록 추출
-        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
-        if not match:
+        block = _extract_first_json_object(response)
+        if not block:
             return None
 
-        json_str = match.group(0)
-
-        # 3단계: JSON 파싱 시도
         try:
-            parsed = json.loads(json_str)
-            return parsed
+            return json.loads(block)
         except json.JSONDecodeError:
-            # 4단계: 흔한 JSON 오류 수정 시도 (끝 콤마 제거)
-            json_str = re.sub(r",\s*([}\]])", r"\1", json_str)
-            parsed = json.loads(json_str)
-            return parsed
+            # 미세 보정: 끝 콤마 제거
+            block = re.sub(r",\s*([}\]])", r"\1", block)
+            return json.loads(block)
 
     except Exception:
         return None
+
+
+def _to_int_or_none(v: Any) -> Optional[int]:
+    """금액을 정수로 정규화
+
+    Args:
+        v: 입력 값 (int, str, None)
+
+    Returns:
+        정수 KRW, 변환 실패 시 None
+    """
+    if v is None:
+        return None
+    if isinstance(v, int):
+        return v
+    if isinstance(v, str):
+        v = v.strip()
+        if v == "" or v == "없음":
+            return None
+        try:
+            return int(v.replace(",", "").replace("₩", ""))
+        except Exception:
+            # 억/만 단위 시도
+            pm = parse_money_any(v)
+            return pm
+    return None
+
+
+def _fmt_krw(v: Optional[int]) -> str:
+    """금액 포맷팅
+
+    Args:
+        v: 금액 (정수)
+
+    Returns:
+        포맷팅된 문자열
+    """
+    return f"₩{v:,}" if isinstance(v, int) else "없음"
 
 
 def format_summary_output(

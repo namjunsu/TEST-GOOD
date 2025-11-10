@@ -75,7 +75,7 @@ if [[ "$RETRIEVER_BACKEND" == "bm25" ]]; then
 
   # 2. 메타DB vs BM25 문서 수 정합성 (허용 편차 5% 또는 10문서 중 큰 값)
   set +e  # 일시적으로 exit-on-error 비활성화
-  python - <<'PYCHECK'
+  PYTHONPATH="${PROJECT_ROOT}" python - <<'PYCHECK'
 import sqlite3, os, sys
 from rag_system.bm25_store import BM25Store  # 인덱서와 동일 모듈 사용
 
@@ -151,15 +151,40 @@ log SUCCESS "가상환경 감지: ${VENV_DIR}"
 
 # ---------- 에러/인터럽트/종료 핸들러 ----------
 API_PID=""
+UI_PID=""
 cleanup() {
   log INFO "정리 작업 시작..."
+
+  # UI 프로세스 종료 (프로세스 그룹 포함)
+  if [[ -n "${UI_PID}" ]] && ps -p "$UI_PID" >/dev/null 2>&1; then
+    log INFO "Streamlit 종료 (PID: $UI_PID)"
+    # 프로세스 그룹 전체 종료
+    local pgid
+    pgid=$(ps -o pgid= -p "$UI_PID" 2>/dev/null | tr -d ' ') || pgid=""
+    if [[ -n "$pgid" ]]; then
+      kill -- -"$pgid" 2>/dev/null || true
+    fi
+    kill "$UI_PID" 2>/dev/null || true
+    wait "$UI_PID" 2>/dev/null || true
+  fi
+
+  # API 프로세스 종료 (프로세스 그룹 포함)
   if [[ -n "${API_PID}" ]] && ps -p "$API_PID" >/dev/null 2>&1; then
     log INFO "FastAPI 종료 (PID: $API_PID)"
+    # 프로세스 그룹 전체 종료
+    local pgid
+    pgid=$(ps -o pgid= -p "$API_PID" 2>/dev/null | tr -d ' ') || pgid=""
+    if [[ -n "$pgid" ]]; then
+      kill -- -"$pgid" 2>/dev/null || true
+    fi
     kill "$API_PID" 2>/dev/null || true
     wait "$API_PID" 2>/dev/null || true
   fi
-  # 정확 매칭: 현재 프로젝트 루트 기준 uvicorn 종료(오살 최소화)
+
+  # 정확 매칭: 현재 프로젝트 루트 기준 잔여 프로세스 종료(오살 최소화)
   pgrep -fa "uvicorn app\.api\.main:app" | awk '{print $1}' | xargs -r kill 2>/dev/null || true
+  pgrep -fa "streamlit.*web_interface\.py" | awk '{print $1}' | xargs -r kill 2>/dev/null || true
+
   log SUCCESS "정리 완료"
 }
 trap 'log ERROR "스크립트 오류(라인 $LINENO)"; cleanup; exit 1' ERR
@@ -171,8 +196,12 @@ if [[ -x "${PROJECT_ROOT}/utils/system_checker.py" ]]; then
   log INFO "시스템 검증 실행..."
   if ! "${PY}" "${PROJECT_ROOT}/utils/system_checker.py" 2>&1 | tee -a "$LOG_FILE"; then
     log WARN "시스템 검증 경고. 계속 진행할지 선택하세요."
-    read -r -p "계속 진행(y)/중단(n): " ans
-    [[ "${ans:-n}" =~ ^[Yy]$ ]] || { log INFO "사용자 선택으로 종료"; exit 0; }
+    if [[ "${ASSUME_YES:-0}" == "1" ]]; then
+      log INFO "비대화 모드(ASSUME_YES=1): 자동 계속 진행"
+    else
+      read -r -p "계속 진행(y)/중단(n): " ans
+      [[ "${ans:-n}" =~ ^[Yy]$ ]] || { log INFO "사용자 선택으로 종료"; exit 0; }
+    fi
   else
     log SUCCESS "시스템 검증 통과"
   fi
@@ -214,7 +243,12 @@ log INFO "로그 파일: ${LOG_FILE}"
 
 if check_running; then
   log WARN "포트 ${PORT}에서 이미 실행 중으로 감지"
-  read -r -p "재시작하시겠습니까? (y/n): " rs
+  if [[ "${ASSUME_YES:-0}" == "1" ]]; then
+    log INFO "비대화 모드(ASSUME_YES=1): 자동 재시작"
+    rs="y"
+  else
+    read -r -p "재시작하시겠습니까? (y/n): " rs
+  fi
   if [[ "${rs:-n}" =~ ^[Yy]$ ]]; then
     # 해당 포트 사용 프로세스만 종료
     command -v lsof >/dev/null 2>&1 && lsof -i ":${PORT}" -t | xargs -r kill -9 2>/dev/null || true
@@ -263,11 +297,17 @@ log INFO "Streamlit UI 시작..."
 echo "========================================="
 echo "UI:  http://localhost:${PORT}"
 echo "API: http://localhost:${API_PORT}"
-echo "Health: http://localhost:${API_PORT}/health"
+echo "Health: http://localhost:${API_PORT}/_healthz"
 echo "========================================="
 
-exec "${ST}" run web_interface.py \
+"${ST}" run web_interface.py \
   --server.port "${PORT}" \
   --server.address "${HOST}" \
   --server.headless true \
-  --browser.gatherUsageStats false 2>&1 | tee -a "$LOG_FILE"
+  --browser.gatherUsageStats false 2>&1 | tee -a "$LOG_FILE" &
+UI_PID=$!
+wait "$UI_PID"
+UI_RC=$?
+
+log INFO "Streamlit 종료 (exit code: $UI_RC)"
+exit "$UI_RC"

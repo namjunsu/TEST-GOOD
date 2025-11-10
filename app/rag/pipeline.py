@@ -298,12 +298,21 @@ class RAGResponse:
 class Retriever(Protocol):
     """검색 엔진 인터페이스"""
 
-    def search(self, query: str, top_k: int) -> List[Dict[str, Any]]:
+    def search(
+        self,
+        query: str,
+        top_k: int,
+        *,
+        mode: str = "chat",
+        selected_filename: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         """검색 수행 (정규화 스키마 반환)
 
         Args:
             query: 검색 질의
             top_k: 상위 K개 결과
+            mode: 검색 모드 ("chat", "doc_anchored" 등)
+            selected_filename: 우선 검색할 문서명
 
         Returns:
             [
@@ -456,10 +465,14 @@ class RAGPipeline:
 
         try:
             # 0. 검색 전 pre-routing: 장비 질의 감지 (DOC_ANCHORED 필터링용)
-            # QueryRouter의 device term 감지 로직 활용
+            # QueryRouter의 device term 감지 로직 활용 (공개 API 우선, fallback to 비공개)
             preliminary_mode = "chat"
-            if hasattr(self, 'query_router') and hasattr(self.query_router, '_has_device_terms'):
-                if self.query_router._has_device_terms(query):
+            if hasattr(self, 'query_router'):
+                has_device = (
+                    getattr(self.query_router, "has_device_terms", None) or
+                    getattr(self.query_router, "_has_device_terms", None)
+                )
+                if callable(has_device) and has_device(query):
                     preliminary_mode = "doc_anchored"
                     logger.info("🎯 검색 전 DOC_ANCHORED 모드 감지 (장비 용어)")
 
@@ -2293,4 +2306,4 @@ class _DummyGenerator:
 
     def generate(self, query: str, context: str, temperature: float, mode: str = "rag") -> str:
         logger.warning("Dummy generator: 기본 응답 반환")
-        return "죄송합니다. 답변을 생성할 수 없습니다."
+        return "[E_GENERATE] 현재 생성기가 비활성 상태입니다."

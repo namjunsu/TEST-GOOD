@@ -6,9 +6,9 @@
 핵심: "틀 채우기" 제거, "진짜 읽고 정리" 구현
 """
 
-from typing import Dict, Any, Optional, Tuple
 import json
 import re
+from typing import Any, Dict, Optional, Tuple
 
 
 def detect_doc_kind(filename: str, text: str) -> str:

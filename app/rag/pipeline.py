@@ -657,7 +657,9 @@ class RAGPipeline:
             )
 
             # CHAT 모드일 경우 출처 제거 (일반 대화는 문서 인용 불필요)
-            final_source_docs = [] if determined_mode == "chat" else [c.get("doc_id") for c in results[:3]]
+            # "전부" 또는 "개수" 질의 감지 시 출처도 더 많이 표시
+            max_sources = 200 if any(kw in query.lower() for kw in ["전부", "모두", "모든", "전체", "all", "몇", "개수", "총"]) else 3
+            final_source_docs = [] if determined_mode == "chat" else [c.get("doc_id") for c in results[:max_sources]]
             final_evidence_chunks = [] if determined_mode == "chat" else compressed
 
             return RAGResponse(
@@ -806,6 +808,16 @@ class RAGPipeline:
                 logger.info(f"🎯 선택된 문서({selected_filename}) + 요약/내용 의도 감지 → DOCUMENT 모드로 강제")
                 query_mode = QueryMode.DOCUMENT
                 router_reason = "selected_doc_content"
+
+            # 🔧 요약 의도 + 쿼리에 날짜/문서명 패턴이 있으면 DOCUMENT 모드로 강제
+            import re
+            has_summary_intent = self.query_router.SUMMARY_INTENT_PATTERN.search(actual_query) or "내용" in actual_query.lower()
+            has_date_pattern = re.search(r'\d{4}[-_]\d{2}[-_]\d{2}', actual_query)  # 2025-06-10 형식
+
+            if has_summary_intent and has_date_pattern and not selected_filename:
+                logger.info(f"🎯 요약 의도 + 날짜 패턴 감지 → DOCUMENT 모드로 강제")
+                query_mode = QueryMode.DOCUMENT
+                router_reason = "summary_with_date_pattern"
 
             logger.info(
                 f"🔀 라우팅 결과: mode={query_mode.value}, reason={router_reason}"
@@ -1018,7 +1030,13 @@ class RAGPipeline:
 
             logger.info(f"🔍 문서 검색: 키워드='{keywords}'{f' | 기안자={drafter_filter}' if drafter_filter else ''}")
 
-            # BM25 검색 실행 (top_k=10)
+            # "전부" 또는 "개수" 질의 감지 - 검색 개수 조정
+            # "몇개", "개수" 질의는 정확한 카운트를 위해 많은 문서를 검색해야 함
+            needs_all = any(kw in query.lower() for kw in ["전부", "모두", "모든", "전체", "all", "몇", "개수", "총"])
+            search_top_k = 200 if needs_all else 10  # 131개 문서도 커버하도록 200으로 증가
+            logger.info(f"🔍 검색 top_k: {search_top_k} (needs_all={needs_all})")
+
+            # BM25 검색 실행
             if not hasattr(self.retriever, 'search'):
                 logger.error("❌ Retriever에 search 메서드가 없습니다")
                 return {
@@ -1036,7 +1054,7 @@ class RAGPipeline:
                 }
 
             # 하이브리드 검색 실행
-            search_results = self.retriever.search(keywords, top_k=10)
+            search_results = self.retriever.search(keywords, top_k=search_top_k)
 
             # 결과에서 파일명 추출 (중복 제거)
             filenames = []
@@ -1062,11 +1080,60 @@ class RAGPipeline:
                     }
                 }
 
+            # 🔢 "총 몇개" 질문 감지 - 개수만 답하고 리스트 생략
+            count_only_query = any(kw in query.lower() for kw in ["몇개", "몇 개", "개수", "총", "몇"])
+
             # 각 문서의 메타데이터 조회
             db = MetadataDB()
+
+            # 날짜 필터링 (연도 추출)
+            year_filter = None
+            year_match = re.search(r'(20\d{2})년?', query)
+            if year_match:
+                year_filter = year_match.group(1)
+                logger.info(f"📅 연도 필터 적용: {year_filter}")
+
+            # 기안자 + 날짜 필터로 정확한 개수 계산
+            if count_only_query:
+                conn = db._get_conn()
+                sql = "SELECT COUNT(*) as cnt FROM documents WHERE 1=1"
+                params = []
+
+                if drafter_filter:
+                    sql += " AND drafter = ?"
+                    params.append(drafter_filter)
+
+                if year_filter:
+                    sql += " AND (date LIKE ? OR display_date LIKE ?)"
+                    params.extend([f"{year_filter}%", f"{year_filter}%"])
+
+                cursor = conn.execute(sql, params)
+                total_count = cursor.fetchone()['cnt']
+
+                # 개수만 답변
+                drafter_text = f"{drafter_filter} " if drafter_filter else ""
+                year_text = f"{year_filter}년 " if year_filter else ""
+
+                return {
+                    "mode": "SEARCH",
+                    "text": f"{year_text}{drafter_text}문서는 총 **{total_count}개**입니다.",
+                    "files": [],
+                    "count": total_count,
+                    "citations": [],
+                    "evidence": [],
+                    "status": {
+                        "retrieved_count": total_count,
+                        "selected_count": 0,
+                        "found": total_count > 0
+                    }
+                }
+
             doc_details = []
 
-            for filename in filenames[:10]:  # 최대 10개까지
+            # "전부" 또는 "개수" 질의 감지 - 최대 개수 조정
+            max_docs = 200 if any(kw in query.lower() for kw in ["전부", "모두", "모든", "전체", "all"]) else 10
+
+            for filename in filenames[:max_docs]:  # 최대 개수까지
                 # DB에서 메타데이터 조회 (filename + 기안자 필터)
                 conn = db._get_conn()
                 if drafter_filter:
@@ -1139,7 +1206,17 @@ class RAGPipeline:
 
                 cards.append("\n".join(card_lines))
 
-            answer_text = f"📄 **'{keywords}' 관련 문서 ({len(doc_details)}건)**\n\n" + "\n\n".join(cards)
+            # "몇개", "개수" 질의인지 확인
+            is_count_query = any(kw in query.lower() for kw in ["몇개", "몇 개", "개수", "총", "count", "number"])
+
+            if is_count_query:
+                # 개수만 간단히 답변
+                answer_text = f"**'{keywords}' 관련 문서는 총 {len(doc_details)}개**입니다.\n\n" + "\n\n".join(cards[:10])
+                if len(cards) > 10:
+                    answer_text += f"\n\n... 외 {len(cards) - 10}개 문서 (\"전부 보여줘\"를 입력하면 모든 문서를 볼 수 있습니다)"
+            else:
+                # 일반 검색 결과
+                answer_text = f"📄 **'{keywords}' 관련 문서 ({len(doc_details)}건)**\n\n" + "\n\n".join(cards)
 
             # Evidence 구성
             evidence = []
@@ -1445,15 +1522,85 @@ class RAGPipeline:
                     }
                 }
 
-            # 4. 답변 포맷팅 (전체 내용 포함)
+            # 4. 요약 의도 감지
+            summary_keywords = ["요약", "요약해", "정리", "정리해", "내용", "summary"]
+            needs_summary = any(kw in query.lower() for kw in summary_keywords)
+
+            # 5. 답변 포맷팅
             answer_text = f"**📄 {filename}**\n\n"
             answer_text += f"**기안자**: {drafter or '정보 없음'} | "
             answer_text += f"**날짜**: {display_date or date or '정보 없음'} | "
             answer_text += f"**분류**: {category or '미분류'}\n"
             answer_text += f"{'='*80}\n\n"
 
-            # 전체 텍스트 포함 (길이 제한 없음)
-            answer_text += full_text
+            # LLM 요약 또는 원문
+            if needs_summary and len(full_text) > 500:
+                # LLM 요약 수행 (기존 RAG 시스템의 프롬프트 사용)
+                logger.info(f"📝 요약 요청 감지 → LLM 요약 수행 (원문 {len(full_text)}자)")
+                try:
+                    # 문서를 청크 형태로 구성
+                    chunks = [{
+                        "text": full_text[:4000],  # 최대 4000자
+                        "snippet": full_text[:4000],
+                        "content": full_text[:4000],
+                        "filename": filename,
+                        "score": 1.0,
+                        "meta": {
+                            "drafter": drafter,
+                            "date": display_date or date,
+                            "category": category
+                        }
+                    }]
+
+                    # 직접 LLM 호출 (인용 검증 우회)
+                    # QuickFixGenerator의 내부 LLM 접근
+                    if hasattr(self.generator, 'rag') and hasattr(self.generator.rag, 'llm'):
+                        llm = self.generator.rag.llm
+
+                        # 유연한 요약 프롬프트 (문서 타입에 맞게 자동 조정)
+                        summary_prompt = f"""다음 문서의 핵심 내용을 간결하게 요약하세요.
+
+문서 내용:
+{full_text[:3000]}
+
+요약 가이드:
+- 문서를 읽는 사람이 빠르게 핵심을 파악할 수 있도록
+- 중요한 정보 위주로 간결하게 (5-10줄)
+- 필요시 불릿 포인트 사용
+- 금액이 있으면 명확히 표시
+
+이제 위 문서를 요약하세요:"""
+
+                        # 직접 generate 호출 (인용 없이)
+                        from llama_cpp import Llama
+                        if isinstance(llm.llm, Llama):  # QwenLLM.llm 사용
+                            output = llm.llm.create_chat_completion(
+                                messages=[
+                                    {"role": "system", "content": "당신은 문서를 읽는 사람의 입장에서 핵심만 빠르게 전달하는 전문가입니다. 문서 타입에 맞게 자연스럽게 요약하세요."},
+                                    {"role": "user", "content": summary_prompt}
+                                ],
+                                max_tokens=500,
+                                temperature=0.3
+                            )
+                            llm_result = output['choices'][0]['message']['content']
+                        else:
+                            # Fallback
+                            llm_result = f"LLM 타입 불일치: {type(llm.llm)}"
+                    else:
+                        llm_result = "LLM 접근 실패"
+
+                    # 요약만 제공 (원문은 evidence에 있으므로 중복 제거)
+                    answer_text += f"{llm_result}"
+                    use_llm = True
+                except Exception as e:
+                    logger.warning(f"⚠️ LLM 요약 실패, 원문 사용: {e}")
+                    logger.exception(e)
+                    answer_text += full_text
+                    use_llm = False
+            else:
+                # 전체 텍스트 포함 (길이 제한 없음)
+                answer_text += full_text
+                use_llm = False
 
             # 5. Evidence 구성
             ref = _encode_file_ref(filename)
@@ -1476,7 +1623,8 @@ class RAGPipeline:
                 "mode": "DOCUMENT",
                 "filename": filename,
                 "text_length": len(full_text),
-                "llm": False  # LLM 사용 안 함 (원문 그대로 반환)
+                "llm": use_llm,  # LLM 요약 사용 여부
+                "summary_requested": needs_summary
             })
 
             return {

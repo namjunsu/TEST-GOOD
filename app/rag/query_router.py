@@ -27,6 +27,7 @@ from dataclasses import dataclass
 
 from app.core.logging import get_logger
 from typing import List, Tuple, Optional
+from app.rag.routing_monitor import get_monitor
 
 logger = get_logger(__name__)
 
@@ -95,9 +96,12 @@ class QueryRouter:
         r"(총액|금액|비용|합계|총계)(은|는)?\s*\?"
         r"|"
         # Pattern 4: NEW - context + cost keyword (e.g., "기안한 문서 총액", "소모품 구매 총액")
-        r"(기안|작성|문서|구매|소모품|발주|납품).*(총액|금액|비용|합계|총계)"
+        r"(기안|작성|문서|구매|소모품|발주|납품|년|월).*(총액|금액|비용|합계|총계)"
         r"|"
-        # Pattern 5: NEW - compound cost phrases (e.g., "비용 합계", "합계 금액")
+        # Pattern 5: NEW - year/period + cost keyword (e.g., "2024년 총액")
+        r"\d{4}년?\s*(총액|금액|비용|합계|총계)"
+        r"|"
+        # Pattern 6: NEW - compound cost phrases (e.g., "비용 합계", "합계 금액")
         r"(비용|구매)\s*(합계|총액)"
         r"|"
         r"(합계|총액)\s*(금액|비용)"
@@ -107,7 +111,7 @@ class QueryRouter:
 
     # 목록 검색 패턴 (연도/작성자 + 찾기)
     LIST_INTENT_PATTERN = re.compile(
-        r"(\d{4}년?|[가-힣]{2,4}(가|이)?).*(찾아|검색|리스트|목록|보여|알려)",
+        r"(\d{4}년?|[가-힣]{2,4}(가|이)?|모든|전체|all).*(찾아|검색|리스트|목록|보여|알려|문서)",
         re.IGNORECASE,
     )
 
@@ -123,7 +127,8 @@ class QueryRouter:
         r"문서\s*(찾|검색)|"            # "문서 찾아줘", "문서 검색"
         r"파일\s*(찾|검색|있)|"          # "파일 찾아", "파일 있어?"
         r"기안서\s*(찾|검색|있)|"        # "기안서 찾아"
-        r"(있어\??|있나요|있는지))",     # "있어?", "있나요"
+        r"(있어\??|있나요|있는지)|"     # "있어?", "있나요"
+        r"(몇\s*개|개수|총|count|number))",  # "몇개", "개수", "총" (NEW)
         re.IGNORECASE,
     )
 
@@ -153,6 +158,9 @@ class QueryRouter:
         # Low-confidence 가드레일 설정 (환경 변수)
         self.low_conf_delta = float(os.getenv("LOW_CONF_DELTA", "0.05"))
         self.low_conf_min_hits = int(os.getenv("LOW_CONF_MIN_HITS", "1"))
+
+        # 라우팅 모니터 초기화
+        self.monitor = get_monitor()
 
         logger.info(
             f"📋 모드 라우터 초기화: QA 키워드 {len(self.qa_keywords)}개, 미리보기 키워드 {len(self.preview_keywords)}개, "
@@ -208,6 +216,26 @@ class QueryRouter:
 
         return False
 
+    def _log_routing_decision(self, query: str, mode: QueryMode, confidence: float, reason: str) -> None:
+        """라우팅 결정 기록
+
+        Args:
+            query: 사용자 질의
+            mode: 결정된 모드
+            confidence: 신뢰도 (0.0~1.0)
+            reason: 라우팅 이유
+        """
+        try:
+            self.monitor.log_decision(
+                query=query,
+                mode=mode.value,
+                reason=reason,
+                confidence=confidence
+            )
+        except Exception as e:
+            # 모니터링 실패가 라우팅을 막으면 안 됨
+            logger.error(f"라우팅 모니터링 실패: {e}")
+
     def classify_mode(self, query: str) -> QueryMode:
         """쿼리 모드 자동 분류 및 라우팅 (단순화 버전)
 
@@ -258,6 +286,8 @@ class QueryRouter:
         # 1. 비용 질의 체크 (최우선)
         if self.COST_INTENT_PATTERN.search(query):
             logger.info("🎯 모드 결정: COST (비용 질의 감지)")
+            reason = self.get_routing_reason(query)
+            self._log_routing_decision(query, QueryMode.COST, confidence=0.95, reason=reason)
             return QueryMode.COST
 
         # 2. 파일명 패턴 체크
@@ -291,32 +321,44 @@ class QueryRouter:
 
         if has_detailed_intent:
             logger.info(f"🎯 모드 결정: QA (상세 정보 요청: {[k for k in detailed_keywords if k in query_lower]})")
+            reason = self.get_routing_reason(query)
+            self._log_routing_decision(query, QueryMode.QA, confidence=0.85, reason=reason)
             return QueryMode.QA
 
         # 8. DOCUMENT 모드: 문서 참조 + 내용 요청
         # "이 문서 요약해줘", "XXX 기술검토서 내용 알려줘", "파일명.pdf 미리보기"
         if (has_filename or has_doc_reference or has_doc_type_keyword) and has_content_intent:
             logger.info("🎯 모드 결정: DOCUMENT (문서 내용/요약)")
+            reason = self.get_routing_reason(query)
+            self._log_routing_decision(query, QueryMode.DOCUMENT, confidence=0.9, reason=reason)
             return QueryMode.DOCUMENT
 
         # 9. SEARCH 모드: 목록/검색 의도
         # "2024년 남준수 문서 전부", "중계차 카메라 문서 찾아줘"
         if self.LIST_INTENT_PATTERN.search(query) or self.SEARCH_INTENT_PATTERN.search(query):
             logger.info("🎯 모드 결정: SEARCH (문서 검색)")
+            reason = self.get_routing_reason(query)
+            self._log_routing_decision(query, QueryMode.SEARCH, confidence=0.9, reason=reason)
             return QueryMode.SEARCH
 
         # 10. Q&A 의도 키워드 체크 (일반 QA 키워드)
         if has_qa_intent:
             logger.info("🎯 모드 결정: QA (의도 키워드 감지)")
+            reason = self.get_routing_reason(query)
+            self._log_routing_decision(query, QueryMode.QA, confidence=0.8, reason=reason)
             return QueryMode.QA
 
         # 11. 문서 참조만 있고 의도 불명확 → DOCUMENT (레거시 호환)
         if has_filename or has_doc_reference:
             logger.info("🎯 모드 결정: DOCUMENT (문서 참조 감지, 기본 내용 반환)")
+            reason = self.get_routing_reason(query)
+            self._log_routing_decision(query, QueryMode.DOCUMENT, confidence=0.6, reason=reason)
             return QueryMode.DOCUMENT
 
         # 12. 기본: Q&A 모드
         logger.info("🎯 모드 결정: QA (기본)")
+        reason = "default_qa"
+        self._log_routing_decision(query, QueryMode.QA, confidence=0.5, reason=reason)
         return QueryMode.QA
 
     def get_routing_reason(self, query: str) -> str:
@@ -376,6 +418,81 @@ class QueryRouter:
             reason_parts.append("default_qa")
 
         return "|".join(reason_parts)
+
+    def suggest_alternative_modes(self, query: str) -> List[Tuple[QueryMode, float, str]]:
+        """낮은 신뢰도일 때 대체 모드 제안
+
+        Args:
+            query: 사용자 질의
+
+        Returns:
+            (QueryMode, confidence, reason) 튜플 리스트 (신뢰도 높은 순)
+        """
+        query_lower = query.lower()
+        suggestions = []
+
+        # 각 모드별 신뢰도 계산
+        # 1. COST 모드 체크
+        if self.COST_INTENT_PATTERN.search(query):
+            suggestions.append((QueryMode.COST, 0.95, "cost_intent"))
+
+        # 2. SEARCH 모드 체크
+        has_list = self.LIST_INTENT_PATTERN.search(query) is not None
+        has_search = self.SEARCH_INTENT_PATTERN.search(query) is not None
+
+        if has_list or has_search:
+            conf = 0.9 if has_list else 0.85
+            reason = "list_intent" if has_list else "search_intent"
+            suggestions.append((QueryMode.SEARCH, conf, reason))
+
+        # 3. DOCUMENT 모드 체크
+        has_filename = re.search(self.filename_pattern, query, re.IGNORECASE) is not None
+        has_doc_ref = self.DOC_REFERENCE_PATTERN.search(query) is not None
+        has_summary = self.SUMMARY_INTENT_PATTERN.search(query) is not None
+        has_content = "내용" in query_lower or "미리보기" in query_lower
+
+        if (has_filename or has_doc_ref) and (has_summary or has_content):
+            suggestions.append((QueryMode.DOCUMENT, 0.9, "doc_reference+content"))
+        elif has_filename or has_doc_ref:
+            suggestions.append((QueryMode.DOCUMENT, 0.6, "doc_reference_only"))
+
+        # 4. QA 모드 체크
+        has_qa = any(keyword in query_lower for keyword in self.qa_keywords)
+        if has_qa:
+            suggestions.append((QueryMode.QA, 0.8, "qa_keywords"))
+
+        # 5. 제안이 없으면 QA를 기본으로
+        if not suggestions:
+            suggestions.append((QueryMode.QA, 0.5, "default"))
+
+        # 신뢰도 높은 순으로 정렬
+        suggestions.sort(key=lambda x: x[1], reverse=True)
+
+        return suggestions
+
+    def classify_mode_with_confidence(self, query: str) -> Tuple[QueryMode, float, List[Tuple[QueryMode, float, str]]]:
+        """모드 분류 + 신뢰도 + 대체 제안 반환
+
+        Args:
+            query: 사용자 질의
+
+        Returns:
+            (선택된_모드, 신뢰도, 대체_모드_리스트)
+        """
+        # 기본 분류 수행 (모니터링 포함)
+        mode = self.classify_mode(query)
+
+        # 대체 모드 제안 생성
+        alternatives = self.suggest_alternative_modes(query)
+
+        # 선택된 모드의 신뢰도 찾기
+        confidence = 0.5  # 기본값
+        for alt_mode, alt_conf, _ in alternatives:
+            if alt_mode == mode:
+                confidence = alt_conf
+                break
+
+        return mode, confidence, alternatives
 
     def classify_mode_with_retrieval(
         self,

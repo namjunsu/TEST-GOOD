@@ -13,6 +13,7 @@ from modules.metadata_db import MetadataDB
 from app.rag.query_parser import QueryParser
 from rag_system.bm25_store import BM25Store  # 인덱서와 동일 모듈 사용
 from app.rag.parallel_executor import get_parallel_executor
+from app.rag.query_expander import get_query_expander
 
 logger = get_logger(__name__)
 
@@ -43,6 +44,10 @@ class HybridRetriever:
             self.metadata_db = MetadataDB()
             self.known_drafters = self.metadata_db.list_unique_drafters()
             self.parser = QueryParser(self.known_drafters)
+
+            # Query Expander 초기화 (Lazy - 첫 사용 시 초기화)
+            self.query_expander = None
+            logger.info("✅ Query Expander (Lazy initialization)")
 
             # BM25Store 초기화
             self.bm25 = None
@@ -144,27 +149,99 @@ class HybridRetriever:
             logger.error(f"❌ 선택 문서 검색 실패: {e}")
             return None
 
+    def _search_fts(self, query: str, top_k: int) -> List[Dict[str, Any]]:
+        """FTS (Full-Text Search) 검색 수행 with Query Expansion
+
+        Args:
+            query: 검색 질의
+            top_k: 상위 K개 결과
+
+        Returns:
+            변환된 검색 결과 리스트
+        """
+        try:
+            conn = self.metadata_db._get_conn()
+
+            # Lazy initialization: Query Expander 첫 사용 시 초기화
+            if self.query_expander is None:
+                try:
+                    self.query_expander = get_query_expander()
+                    logger.info("✅ Query Expander 초기화 완료 (lazy)")
+                except Exception as e:
+                    logger.warning(f"⚠️ Query Expander 초기화 실패, 기본 검색 사용: {e}")
+                    # Expander를 False로 설정 (다음 호출 시 재시도 방지)
+                    self.query_expander = False
+
+            # LLM 기반 Query Expansion (초기화 성공한 경우만)
+            if self.query_expander and self.query_expander is not False:
+                try:
+                    expansion_result = self.query_expander.expand_query(query)
+                    fts_query = expansion_result["search_query"]
+                    logger.info(f"🔍 Query expansion: '{query}' → '{fts_query[:100]}...'")
+                    logger.info(f"📊 확장된 키워드: {len(expansion_result['expanded_keywords'])}개")
+                except Exception as e:
+                    logger.warning(f"⚠️ Query expansion 실패, fallback 사용: {e}")
+                    # Fallback: 기본 키워드 분리 (따옴표로 감싸서 리터럴 처리)
+                    fts_query = ' OR '.join(f'"{word}"' for word in query.split())
+            else:
+                # Fallback: 기본 키워드 분리 (따옴표로 감싸서 리터럴 처리)
+                fts_query = ' OR '.join(f'"{word}"' for word in query.split())
+
+            cursor = conn.execute("""
+                SELECT d.filename, d.title, d.drafter, d.date, d.category, d.text_preview
+                FROM documents_fts fts
+                JOIN documents d ON fts.rowid = d.rowid
+                WHERE documents_fts MATCH ?
+                ORDER BY rank
+                LIMIT ?
+            """, (fts_query, top_k * 2))  # 여유있게 가져오기
+
+            results = []
+            for row in cursor.fetchall():
+                filename, title, drafter, date, category, text_preview = row
+
+                results.append({
+                    "doc_id": filename,
+                    "snippet": text_preview or "",
+                    "score": 1.0,  # FTS는 rank만 제공, 임의 스코어
+                    "page": 1,
+                    "filename": filename,
+                    "file_path": None,  # FTS에서는 path 없음
+                    "meta": {
+                        "filename": filename,
+                        "date": date,
+                        "drafter": drafter,
+                        "category": category,
+                    }
+                })
+
+            logger.info(f"✅ FTS 검색 완료: {len(results)}개 결과 (원본='{query}', 확장={len(expansion_result['expanded_keywords'])}개)")
+            return results[:top_k]
+
+        except Exception as e:
+            logger.error(f"❌ FTS 검색 실패: {e}")
+            return []
+
     def _calculate_relevance_score(self, query: str, doc: Dict[str, Any]) -> float:
-        """쿼리와 문서 간 relevance 스코어 계산 (BM25 유사)
+        """쿼리와 문서 간 relevance 스코어 계산 (BM25 유사) + 파일명 매칭 강화
 
         Args:
             query: 검색 질의
             doc: 문서 딕셔너리 (filename, text_preview 포함)
 
         Returns:
-            0.0~1.0 범위의 relevance 스코어
+            0.0~10.0 범위의 relevance 스코어 (파일명 매칭 시 최대 10점)
         """
         # 쿼리 토큰화 (공백 + 특수문자 제거)
         query_tokens = set(re.findall(r'\w+', query.lower()))
         if not query_tokens:
             return 0.5  # 토큰 없으면 중립 스코어
 
-        # 문서 텍스트 준비 (filename + text_preview)
-        doc_text = (
-            (doc.get('filename') or '') + ' ' +
-            (doc.get('text_preview') or '') + ' ' +
-            (doc.get('drafter') or '')
-        ).lower()
+        # 문서 텍스트 준비
+        filename = (doc.get('filename') or '').lower()
+        text_preview = (doc.get('text_preview') or '').lower()
+        drafter = (doc.get('drafter') or '').lower()
+        doc_text = filename + ' ' + text_preview + ' ' + drafter
 
         # 매칭된 토큰 수 계산
         matched_tokens = sum(1 for token in query_tokens if token in doc_text)
@@ -172,7 +249,7 @@ class HybridRetriever:
         # 기본 스코어: 매칭률
         match_ratio = matched_tokens / len(query_tokens)
 
-        # 보너스: 완전 일치하는 구문이 있으면 가산점
+        # 보너스 1: 완전 일치하는 구문이 있으면 가산점
         if query.lower() in doc_text:
             match_ratio = min(1.0, match_ratio + 0.3)
 
@@ -181,7 +258,27 @@ class HybridRetriever:
         if text_len < 100:
             match_ratio *= 0.7
 
-        return max(0.0, min(1.0, match_ratio))
+        # 🎯 파일명 매칭 강화 (CRITICAL: 정확도 향상의 핵심)
+        filename_bonus = 0.0
+        filename_exact_match_count = 0
+
+        for token in query_tokens:
+            # 파일명에 정확히 일치하는 토큰이 있으면 큰 보너스
+            if token in filename:
+                filename_exact_match_count += 1
+                filename_bonus += 2.0  # 토큰당 +2점
+
+        # 파일명에서 연속된 구문 매칭 시 추가 보너스
+        if len(query_tokens) >= 2 and query.lower() in filename:
+            filename_bonus += 3.0  # 완전 구문 매칭 +3점
+
+        # 최종 스코어: 기본 스코어(0~1) + 파일명 보너스(0~10)
+        final_score = match_ratio + filename_bonus
+
+        if filename_bonus > 0:
+            logger.debug(f"📊 Scoring '{filename[:50]}': match={match_ratio:.2f}, filename_bonus={filename_bonus:.1f}, final={final_score:.1f}")
+
+        return max(0.0, min(10.0, final_score))
 
     def search(self, query: str, top_k: int, mode: str = "chat", selected_filename: Optional[str] = None) -> List[Dict[str, Any]]:
         """검색 수행
@@ -208,53 +305,91 @@ class HybridRetriever:
             # 인덱스 갱신 체크
             self._reload_if_index_rotated()
 
-            # BM25 백엔드 사용
+            # FTS 우선 검색, BM25 보충 전략
             if self.use_bm25 and self.bm25:
                 # DOC_ANCHORED 모드: 넉넉하게 검색 후 필터링
                 search_k = 50 if mode.lower() == "doc_anchored" else top_k
 
-                # Parallel execution: BM25 search와 selected doc lookup 동시 실행
-                if self.enable_parallel and selected_filename:
-                    # 병렬 실행: BM25 검색 + 선택 문서 검색
-                    search_tasks = [
-                        {
-                            "name": "bm25_search",
-                            "func": self.bm25.search,
-                            "args": (query,),
-                            "kwargs": {"top_k": search_k}
-                        },
-                        {
-                            "name": "selected_doc_lookup",
-                            "func": self._find_selected_document,
-                            "args": (selected_filename,),
-                            "kwargs": {}
-                        }
-                    ]
-                    parallel_results = self.parallel_executor.execute_searches(search_tasks)
-                    bm25_results = parallel_results.get("bm25_search", [])
-                    selected_doc = parallel_results.get("selected_doc_lookup")
-                else:
-                    # 순차 실행 (기본)
-                    bm25_results = self.bm25.search(query, top_k=search_k)
-                    selected_doc = None
+                # 1. FTS 먼저 시도 (더 정확함)
+                fts_results = self._search_fts(query, top_k=search_k)
 
-                # BM25 결과를 RAGPipeline 형식으로 변환 (doc_id, snippet 필드 추가)
+                # 2. FTS 결과가 충분하면 FTS만 사용, 부족하면 BM25 보충
+                if len(fts_results) >= search_k * 0.5:  # FTS 결과가 목표의 50% 이상이면
+                    logger.info(f"✅ FTS 결과 충분 ({len(fts_results)}개), BM25 생략")
+                    bm25_results = []  # BM25 생략
+                    selected_doc = None
+                else:
+                    # FTS 결과 부족, BM25로 보충
+                    logger.info(f"⚠️ FTS 결과 부족 ({len(fts_results)}개), BM25로 보충")
+
+                    # Parallel execution: BM25 search와 selected doc lookup 동시 실행
+                    if self.enable_parallel and selected_filename:
+                        # 병렬 실행: BM25 검색 + 선택 문서 검색
+                        search_tasks = [
+                            {
+                                "name": "bm25_search",
+                                "func": self.bm25.search,
+                                "args": (query,),
+                                "kwargs": {"top_k": search_k}
+                            },
+                            {
+                                "name": "selected_doc_lookup",
+                                "func": self._find_selected_document,
+                                "args": (selected_filename,),
+                                "kwargs": {}
+                            }
+                        ]
+                        parallel_results = self.parallel_executor.execute_searches(search_tasks)
+                        bm25_results = parallel_results.get("bm25_search", [])
+                        selected_doc = parallel_results.get("selected_doc_lookup")
+                    else:
+                        # 순차 실행 (기본)
+                        bm25_results = self.bm25.search(query, top_k=search_k)
+                        selected_doc = None
+
+                # FTS + BM25 결과 병합 (중복 제거)
                 converted_results = []
+                seen_filenames = set()
+
+                # 1. FTS 결과 먼저 추가 (우선순위 높음)
+                for result in fts_results:
+                    filename = result.get("filename")
+                    if filename and filename not in seen_filenames:
+                        converted_results.append(result)
+                        seen_filenames.add(filename)
+
+                # 2. BM25 결과 추가 (FTS에 없는 것만)
                 for result in bm25_results:
-                    converted_results.append({
-                        "doc_id": result.get("filename", "unknown"),
-                        "snippet": result.get("content", ""),  # 전체 문서 사용 (snippet 제한 제거)
-                        "score": result.get("score", 0.0),
-                        "page": 1,
-                        "filename": result.get("filename"),  # 원본 filename 유지
-                        "file_path": result.get("path"),  # path -> file_path
-                        "meta": {
+                    filename = result.get("filename")
+                    if filename and filename not in seen_filenames:
+                        converted_results.append({
+                            "doc_id": result.get("filename", "unknown"),
+                            "snippet": result.get("content", ""),
+                            "score": result.get("score", 0.0),
+                            "page": 1,
                             "filename": result.get("filename"),
-                            "date": result.get("date"),
-                            "drafter": result.get("drafter"),
-                            "category": result.get("category"),
-                        }
-                    })
+                            "file_path": result.get("path"),
+                            "meta": {
+                                "filename": result.get("filename"),
+                                "date": result.get("date"),
+                                "drafter": result.get("drafter"),
+                                "category": result.get("category"),
+                            }
+                        })
+                        seen_filenames.add(filename)
+
+                logger.info(f"📊 병합 결과: FTS {len(fts_results)}개 + BM25 {len(bm25_results)}개 = 총 {len(converted_results)}개 (중복 제거)")
+
+                # 🎯 파일명 매칭 기반 재스코어링 (CRITICAL: 정확도 향상)
+                if converted_results:
+                    for result in converted_results:
+                        # 각 문서에 대해 파일명 매칭 보너스 계산
+                        enhanced_score = self._calculate_relevance_score(query, result)
+                        result["score"] = enhanced_score
+
+                    # 스코어 기준 재정렬 (높은 순)
+                    converted_results.sort(key=lambda x: x.get("score", 0.0), reverse=True)
+                    logger.info(f"🔄 파일명 매칭 재스코어링 완료 (top score: {converted_results[0]['score']:.2f})")
 
                 # DOC_ANCHORED 필터링: 장비 관련 키워드만 통과
                 if mode.lower() == "doc_anchored":

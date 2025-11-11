@@ -940,7 +940,7 @@ class RAGPipeline:
                     candidate_title = re.sub(r'^\d{4}[-_]\d{2}[-_]\d{2}[-_]', '', candidate_title)
 
                     # metadata_db에서 제목으로 문서 검색
-                    from app.modules.metadata_db import MetadataDB
+                    from modules.metadata_db import MetadataDB
                     db = MetadataDB()
                     try:
                         # 제목 정규화 (특수문자, 공백 처리)

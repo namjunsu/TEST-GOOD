@@ -22,6 +22,13 @@ from app.core.errors import ModelError, SearchError, ErrorCode, ERROR_MESSAGES
 from app.rag.query_router import QueryRouter, QueryMode
 from app.rag.cache_manager import get_cached_result, cache_query_result, get_cache_stats
 from app.rag.persistent_cache import get_cached_result_persistent, cache_query_result_persistent
+from app.utils.text_normalizer import normalize_query, is_detailed_mode, detect_section
+from app.prompts.document_prompts import (
+    build_detailed_prompt,
+    build_section_prompt,
+    build_summary_prompt,
+    build_qa_prompt,
+)
 
 logger = get_logger(__name__)
 
@@ -92,6 +99,89 @@ def clean_ui_metadata(query: str) -> str:
         logger.info(f"🧹 UI 메타데이터 제거: '{original[:60]}...' → '{query[:60]}...'")
 
     return query
+
+
+def route_query(query: str) -> Dict[str, Any]:
+    """쿼리 라우팅: 모드/섹션/프롬프트/리트리버 파라미터 결정
+
+    우선순위:
+        1. 상세 모드 (detailed_mode) - 최우선
+        2. 섹션 고정 (detected_section)
+        3. 요약 모드 (needs_summary)
+        4. 기본 Q&A 모드
+
+    Args:
+        query: 사용자 질의
+
+    Returns:
+        dict: {
+            "mode": "DETAILED|SECTION|SUMMARY|QA",
+            "prompt_type": 프롬프트 타입,
+            "max_tokens": LLM 생성 토큰 수,
+            "retriever_params": {
+                "top_k": int,
+                "chunk_merge": bool,
+                "max_context_tokens": int
+            },
+            "detailed_mode": bool,
+            "detected_section": str | None,
+            "needs_summary": bool
+        }
+    """
+    # 1) 정규화
+    nq = normalize_query(query)
+
+    # 2) 모드/섹션 판단 (상세 모드 우선권)
+    detailed = is_detailed_mode(nq)
+    section = detect_section(nq)
+
+    # 3) 요약 트리거 (섹션 미지정 & 상세 모드 아님일 때만)
+    needs_summary = False
+    if not section and not detailed:
+        # "내용" 단독은 제외, "요약", "summary" 등 명시적 키워드만
+        if any(k in nq for k in ["요약", "summary", "한줄", "한 문장"]):
+            needs_summary = True
+
+    # 4) 리트리버 파라미터 (상세 모드 시 상향)
+    retriever_params = {
+        "top_k": 8 if detailed else 5,
+        "chunk_merge": True if detailed else False,
+        "max_context_tokens": 3200 if detailed else 2000,
+    }
+
+    # 5) 프롬프트/토큰
+    if detailed:
+        mode = "DETAILED"
+        prompt_type = "detailed"
+        max_tokens = int(os.getenv("LLM_MAX_TOKENS_DETAILED", "1500"))
+    elif section:
+        mode = "SECTION"
+        prompt_type = "section"
+        max_tokens = int(os.getenv("LLM_MAX_TOKENS_SECTION", "900"))
+    elif needs_summary:
+        mode = "SUMMARY"
+        prompt_type = "summary"
+        max_tokens = int(os.getenv("LLM_MAX_TOKENS_SUMMARY", "600"))
+    else:
+        mode = "QA"
+        prompt_type = "qa"
+        max_tokens = int(os.getenv("LLM_MAX_TOKENS_QA", "800"))
+
+    logger.info(
+        f"🎯 라우팅 결정: mode={mode}, detailed={detailed}, section={section}, "
+        f"summary={needs_summary}, top_k={retriever_params['top_k']}, "
+        f"max_tokens={max_tokens}"
+    )
+
+    return {
+        "mode": mode,
+        "prompt_type": prompt_type,
+        "max_tokens": max_tokens,
+        "retriever_params": retriever_params,
+        "detailed_mode": detailed,
+        "detected_section": section,
+        "needs_summary": needs_summary,
+    }
 
 
 def is_smalltalk(query: str) -> bool:
@@ -1632,16 +1722,12 @@ class RAGPipeline:
                 if detected_section:
                     break
 
-            # 5. 상세 답변 의도 감지 (우선순위 최상위)
-            detailed_mode = False
-            detail_keywords = ["자세히", "상세히", "자세하게", "상세하게", "구체적으로", "디테일", "세부사항"]
-            detailed_mode = any(kw in query.lower() for kw in detail_keywords)
-
-            # 6. 요약 의도 감지 (섹션이 감지되지 않았고, 상세 모드가 아닐 때만)
-            needs_summary = False
-            if not detected_section and not detailed_mode:
-                summary_keywords = ["요약", "요약해", "정리", "정리해", "내용", "개요", "summary", "overview"]
-                needs_summary = any(kw in query.lower() for kw in summary_keywords)
+            # 5. 라우팅 결정 (정규화 + 통합 로직)
+            routing = route_query(query)
+            detailed_mode = routing["detailed_mode"]
+            detected_section = routing["detected_section"]  # 재할당 (기존 감지 로직 덮어쓰기)
+            needs_summary = routing["needs_summary"]
+            max_tokens = routing["max_tokens"]
 
             # 7. 답변 포맷팅
             answer_text = ""
@@ -1672,56 +1758,22 @@ class RAGPipeline:
 
                         # 섹션이 감지되면 요약 모드보다 우선 (Q&A 모드로 처리)
                         if detected_section:
-                            # 섹션별 Q&A 모드
-                            section_instruction = f"""
-⚠️ 중요: 사용자가 '{detected_section}' 관련 내용을 질문했습니다.
-- 문서에서 '{detected_section}' 섹션 또는 관련 키워드({', '.join(detected_keywords[:3])})가 있는 부분만 찾아서 답변하세요
-- 전체 요약이 아닌, 해당 섹션의 구체적인 내용만 추출하여 답변하세요
-- 해당 섹션이 문서에 없으면 "문서에 '{detected_section}' 관련 내용이 없습니다"라고 답변하세요
-"""
-                            llm_prompt = f"""다음 문서를 읽고 사용자의 질문에 정확하게 답변하세요.
-
-문서 정보:
-- 파일명: {filename}
-- 기안자: {drafter or '정보 없음'}
-- 날짜: {display_date or date or '정보 없음'}
-
-문서 내용:
-{full_text[:4000]}
-
-사용자 질문: {query}
-{section_instruction}
-답변 작성 지침:
-1. 문서 내용을 기반으로만 답변하세요
-2. 문서에 없는 정보는 "문서에 해당 정보가 없습니다"라고 답변하세요
-3. 금액, 날짜, 이름 등은 정확하게 인용하세요
-4. 간결하고 명확하게 답변하세요
-5. 특정 섹션을 질문받았다면, 그 섹션 내용만 집중해서 답변하세요
-
-답변:"""
+                            # 섹션별 프롬프트 (템플릿 사용)
+                            llm_prompt = build_section_prompt(
+                                context=full_text[:4000],
+                                section=detected_section,
+                                filename=filename,
+                                drafter=drafter,
+                                date=display_date or date
+                            )
                         elif detailed_mode:
-                            # 상세 답변 모드: 모든 세부사항 포함
-                            llm_prompt = f"""다음 문서를 읽고 사용자의 질문에 매우 상세하게 답변하세요.
-
-문서 정보:
-- 파일명: {filename}
-- 기안자: {drafter or '정보 없음'}
-- 날짜: {display_date or date or '정보 없음'}
-
-문서 내용:
-{full_text[:4000]}
-
-사용자 질문: {query}
-
-답변 작성 지침:
-1. 문서의 모든 세부사항을 빠짐없이 포함하여 답변하세요
-2. 배경/목적, 현황, 검토 내용, 비교 대안, 선정 사유, 예산 등 모든 섹션을 다루세요
-3. 금액, 날짜, 이름, 사양 등은 정확하게 인용하세요
-4. 각 항목별로 구체적인 설명을 포함하세요
-5. 표나 목록이 있다면 그대로 재현하세요
-6. 가능한 한 상세하고 완전하게 답변하세요
-
-답변:"""
+                            # 상세 답변 프롬프트 (템플릿 사용)
+                            llm_prompt = build_detailed_prompt(
+                                context=full_text[:4000],
+                                filename=filename,
+                                drafter=drafter,
+                                date=display_date or date
+                            )
                         elif needs_summary:
                             # 요약 모드: 구조화된 요약 시스템 사용 (summary_templates.py)
                             from app.rag.summary_templates import (
@@ -1746,46 +1798,27 @@ class RAGPipeline:
                             )
                             llm_prompt = summary_prompt
                         else:
-                            # 일반 Q&A 모드: 사용자 질문에 대한 답변
-                            llm_prompt = f"""다음 문서를 읽고 사용자의 질문에 정확하게 답변하세요.
+                            # 일반 Q&A 프롬프트 (템플릿 사용)
+                            llm_prompt = build_qa_prompt(
+                                context=full_text[:4000],
+                                query=query,
+                                filename=filename,
+                                drafter=drafter,
+                                date=display_date or date
+                            )
 
-문서 정보:
-- 파일명: {filename}
-- 기안자: {drafter or '정보 없음'}
-- 날짜: {display_date or date or '정보 없음'}
-
-문서 내용:
-{full_text[:4000]}
-
-사용자 질문: {query}
-
-답변 작성 지침:
-1. 문서 내용을 기반으로만 답변하세요
-2. 문서에 없는 정보는 "문서에 해당 정보가 없습니다"라고 답변하세요
-3. 금액, 날짜, 이름 등은 정확하게 인용하세요
-4. 간결하고 명확하게 답변하세요
-
-답변:"""
-
-                        # 3. LLM 호출
+                        # 3. LLM 호출 (max_tokens는 route_query에서 결정)
                         from llama_cpp import Llama
                         if isinstance(llm.llm, Llama):
+                            # System 메시지는 모드별로 설정
                             if detailed_mode:
-                                # 상세 답변 모드: 모든 세부사항 포함
                                 system_msg = "당신은 문서 분석 전문가입니다. 사용자가 요청한 모든 세부사항을 빠짐없이 포함하여 상세하게 답변하세요."
-                                max_tokens = 1500  # 상세 답변용으로 크게 증가
                             elif needs_summary:
-                                # 요약 모드: JSON 응답 요청
                                 system_msg = "당신은 문서 요약 전문가입니다. JSON 형식으로만 응답하세요."
-                                max_tokens = 800
                             elif detected_section:
-                                # 섹션별 Q&A 모드: 특정 섹션 추출
                                 system_msg = f"당신은 문서 분석 전문가입니다. 사용자가 요청한 '{detected_section}' 섹션만 정확하게 추출하여 답변하세요."
-                                max_tokens = 600
                             else:
-                                # 일반 Q&A 모드: 전반적인 질문 답변
                                 system_msg = "당신은 문서 분석 전문가입니다. 문서 내용을 기반으로 정확하게 답변하세요."
-                                max_tokens = 500
 
                             output = llm.llm.create_chat_completion(
                                 messages=[

@@ -169,7 +169,7 @@ class BM25Store:
         try:
             with open(self.index_path, 'rb') as f:
                 index_data = pickle.load(f)
-            
+
             self.documents = index_data['documents']
             self.metadata = index_data['metadata']
             self.term_freqs = index_data['term_freqs']
@@ -179,7 +179,16 @@ class BM25Store:
             self.vocab = set(index_data['vocab'])
             self.k1 = index_data.get('k1', 1.2)
             self.b = index_data.get('b', 0.75)
-            
+
+            # 메타데이터 길이 보정 (IndexError 방지)
+            N = len(self.documents)
+            if len(self.metadata) < N:
+                self.metadata += [{} for _ in range(N - len(self.metadata))]
+                self.logger.warning(f"메타데이터 부족분 패딩: {N - len(self.metadata)}개")
+            elif len(self.metadata) > N:
+                self.metadata = self.metadata[:N]
+                self.logger.warning(f"메타데이터 초과분 절단: {len(self.metadata) - N}개")
+
         except Exception as e:
             self.logger.error(f"BM25 인덱스 로드 실패: {e}")
             raise
@@ -238,8 +247,15 @@ class BM25Store:
             raise
 
     
-    def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
-        """BM25 스코어로 문서 검색 (성능 추적 포함)"""
+    def search(self, query: str, top_k: int = 5, snippet_max: int = 5000, **kwargs) -> List[Dict[str, Any]]:
+        """BM25 스코어로 문서 검색 (성능 추적 포함)
+
+        Args:
+            query: 검색 쿼리
+            top_k: 반환할 최대 결과 수
+            snippet_max: 스니펫 최대 길이 (기본: 5000자)
+            **kwargs: 추가 옵션
+        """
         if not self.documents:
             return []
 
@@ -247,7 +263,7 @@ class BM25Store:
         self.search_count += 1
 
         try:
-            # 쿼리 토큰화
+            # 쿼리 토큰화 (빈 쿼리 방어)
             query_tokens = self.tokenizer.tokenize(query)
             if not query_tokens:
                 return []
@@ -288,12 +304,18 @@ class BM25Store:
             results = []
             for i, (score, doc_idx) in enumerate(scores[:top_k]):
                 if score > 0:  # 양의 스코어만
+                    # 메타데이터 안전 접근 (IndexError 방지)
+                    metadata = self.metadata[doc_idx] if doc_idx < len(self.metadata) else {}
+                    # 스니펫 길이 제한 적용
+                    content = self.documents[doc_idx]
+                    snippet = content[:snippet_max] if snippet_max > 0 else content
+
                     result = {
                         'rank': i + 1,
                         'score': float(score),
-                        'content': self.documents[doc_idx],
+                        'content': snippet,
                         'query_tokens': query_tokens,
-                        **self.metadata[doc_idx]
+                        **metadata
                     }
                     results.append(result)
             
@@ -325,7 +347,12 @@ class BM25Store:
             'total_documents': len(self.documents),
             'vocab_size': len(self.vocab),
             'avg_doc_length': self.avg_doc_len,
+            'avgdl': self.avg_doc_len,  # 호환성 alias
             'index_path': str(self.index_path),
+            'bm25_index_path': str(self.index_path),  # 호환성 alias
+            'bm25_index_docs': len(self.documents),  # 호환성 alias
+            'has_tf': bool(self.term_freqs),
+            'has_df': bool(self.doc_freqs),
             'parameters': {
                 'k1': self.k1,
                 'b': self.b

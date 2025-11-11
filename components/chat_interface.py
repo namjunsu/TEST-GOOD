@@ -480,8 +480,28 @@ def _build_conversation_context(messages: List[Dict[str, str]], max_turns: int =
         role = msg['role']
         display_role = ChatConfig.ROLE_DISPLAY_USER if role == ChatConfig.ROLE_USER else ChatConfig.ROLE_DISPLAY_ASSISTANT
 
+        # 메시지 내용 처리 (긴 응답은 요약)
+        content = msg['content']
+
+        # AI 응답이 너무 길면 요약 (500자 제한)
+        MAX_CONTEXT_LENGTH = 500
+        if role == ChatConfig.ROLE_ASSISTANT and len(content) > MAX_CONTEXT_LENGTH:
+            # 리스트 응답 패턴 감지
+            if "관련 문서" in content and "건)" in content:
+                # 문서 리스트 응답인 경우: 건수만 추출
+                import re
+                match = re.search(r'\((\d+)건\)', content)
+                if match:
+                    doc_count = match.group(1)
+                    content = f"(이전 응답: {doc_count}건의 문서 리스트 제공됨)"
+                else:
+                    content = f"(이전 응답: 문서 리스트 제공됨 - 생략)"
+            else:
+                # 일반 긴 응답: 앞부분만 유지
+                content = content[:MAX_CONTEXT_LENGTH] + "...(생략)"
+
         # 메시지 추가
-        context_parts.append(f"{display_role}: {msg['content']}")
+        context_parts.append(f"{display_role}: {content}")
 
     # 컨텍스트가 비어있으면 빈 문자열 반환
     if not context_parts:

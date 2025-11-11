@@ -549,8 +549,10 @@ class RAGPipeline:
 
             # 🎯 STEP 1: QueryRouter 모드 분류 (DOC_ANCHORED 최우선 체크)
             # CRITICAL: 검색 결과를 고려한 지능형 라우팅
-            query_mode = self.query_router.classify_mode_with_retrieval(query, results)
-            logger.info(f"🔀 QueryRouter 분류: mode={query_mode.value}")
+            route_decision = self.query_router.classify_mode_with_retrieval(query, results)
+            router_reason = route_decision.reason
+            query_mode = route_decision.mode  # Extract QueryMode enum
+            logger.info(f"🔀 QueryRouter 분류: mode={query_mode.value}, reason={router_reason}")
 
             # 🎯 STEP 2: 모드 결정 로직
             # CRITICAL: Determine mode BEFORE context hydration to apply mode-aware context limits
@@ -824,7 +826,6 @@ class RAGPipeline:
 
         # 🔥 CRITICAL: 기안자/날짜 검색은 QuickFixRAG에 위임 (전문 로직 보유)
         if hasattr(self.generator, "rag"):
-            import re
             import sqlite3
 
             # ✅ 확장된 쿼리에서 실제 질문 추출 (chat_interface.py 대응)
@@ -838,41 +839,80 @@ class RAGPipeline:
             # 🧹 UI 메타데이터 제거 (🏷 pdf · 📅 2024-10-24 · ✍ 등)
             actual_query = clean_ui_metadata(actual_query)
 
+            # 🔍 쿼리에서 문서명 추출 (사용자가 직접 타이핑한 경우)
+            # 패턴: "문서제목 이 문서/해당 문서 ..."
+            if not selected_filename:
+                doc_ref_pattern = r'^(.+?)\s+(이\s?문서|해당\s?문서|이문서)'
+                match = re.match(doc_ref_pattern, actual_query, re.IGNORECASE)
+                if match:
+                    candidate_title = match.group(1).strip()
+                    # 날짜 패턴 제거 (예: "2025-01-09_광화문_스튜디오..." → "광화문_스튜디오...")
+                    candidate_title = re.sub(r'^\d{4}[-_]\d{2}[-_]\d{2}[-_]', '', candidate_title)
+
+                    # metadata_db에서 제목으로 문서 검색
+                    from app.modules.metadata_db import MetadataDB
+                    db = MetadataDB()
+                    try:
+                        # 제목 정규화 (특수문자, 공백 처리)
+                        normalized_title = candidate_title.replace('_', ' ').replace('&', '').strip()
+
+                        # DB에서 제목 유사도 검색 (LIKE 패턴)
+                        conn = db.conn
+                        cursor = conn.cursor()
+                        query_sql = """
+                            SELECT filename, title FROM documents
+                            WHERE title LIKE ? OR filename LIKE ?
+                            ORDER BY
+                                CASE
+                                    WHEN title = ? THEN 1
+                                    WHEN title LIKE ? THEN 2
+                                    ELSE 3
+                                END
+                            LIMIT 1
+                        """
+                        like_pattern = f"%{normalized_title}%"
+                        cursor.execute(query_sql, (like_pattern, like_pattern, candidate_title, f"{candidate_title}%"))
+                        result = cursor.fetchone()
+
+                        if result:
+                            selected_filename = result[0]
+                            logger.info(f"📌 쿼리에서 문서명 추출: '{candidate_title}' → '{selected_filename}'")
+                    except Exception as e:
+                        logger.warning(f"문서명 추출 중 오류 (무시): {e}")
+
             # 🎯 모드 라우팅: Q&A 의도 키워드가 있으면 파일명이 있어도 Q&A 모드 우선
-            query_mode = self.query_router.classify_mode(actual_query)
-            router_reason = self.query_router.get_routing_reason(actual_query)
+            route_decision = self.query_router.classify_mode(actual_query)
 
             # 🔧 selected_filename이 있으면 무조건 DOCUMENT 모드로 전환 (우선순위 최상위)
             # 문서가 선택된 상태에서는 모든 질문에 대해 LLM이 해당 문서 기반으로 답변
             if selected_filename:
                 logger.info(f"🎯 선택된 문서({selected_filename}) 감지 → DOCUMENT 모드로 강제")
-                query_mode = QueryMode.DOCUMENT
-                router_reason = "selected_doc"
+                route_decision.mode = QueryMode.DOCUMENT
+                route_decision.reason = "selected_doc"
 
             # 🔧 요약 의도 + 쿼리에 날짜/문서명 패턴이 있으면 DOCUMENT 모드로 강제
-            import re
             has_summary_intent = self.query_router.SUMMARY_INTENT_PATTERN.search(actual_query) or "내용" in actual_query.lower()
             has_date_pattern = re.search(r'\d{4}[-_]\d{2}[-_]\d{2}', actual_query)  # 2025-06-10 형식
 
             if has_summary_intent and has_date_pattern and not selected_filename:
                 logger.info(f"🎯 요약 의도 + 날짜 패턴 감지 → DOCUMENT 모드로 강제")
-                query_mode = QueryMode.DOCUMENT
-                router_reason = "summary_with_date_pattern"
+                route_decision.mode = QueryMode.DOCUMENT
+                route_decision.reason = "summary_with_date_pattern"
 
             logger.info(
-                f"🔀 라우팅 결과: mode={query_mode.value}, reason={router_reason}"
+                f"🔀 라우팅 결과: mode={route_decision.mode.value}, reason={route_decision.reason}"
             )
 
             # 💰 COST 모드: 비용 합계 직접 조회
-            if query_mode == QueryMode.COST:
+            if route_decision.mode == QueryMode.COST:
                 return self._answer_cost_sum(actual_query)
 
             # 📄 DOCUMENT 모드: 문서 내용/요약 (통합: PREVIEW + SUMMARY)
-            if query_mode == QueryMode.DOCUMENT:
+            if route_decision.mode == QueryMode.DOCUMENT:
                 return self._answer_document(actual_query, selected_filename=selected_filename)
 
             # 🔍 SEARCH 모드: 문서 검색 (통합: LIST + SEARCH + LIST_FIRST)
-            if query_mode == QueryMode.SEARCH:
+            if route_decision.mode == QueryMode.SEARCH:
                 return self._answer_search(actual_query)
 
             # 🔍 디버깅: 실제 pattern matching 대상 로깅
@@ -931,8 +971,6 @@ class RAGPipeline:
             }
 
             # 운영 표준 1행 요약 로그 (필수)
-            import re
-
             author_mode = bool(re.search(r"(작성자|기안자|제안자)", query))
             search_ms = int(response.metrics.get("search_time", 0) * 1000)
             generate_ms = int(response.metrics.get("generate_time", 0) * 1000)
@@ -1070,12 +1108,14 @@ class RAGPipeline:
 
             logger.info(f"🔍 문서 검색: 키워드='{keywords}'{f' | 기안자={drafter_filter}' if drafter_filter else ''}")
 
-            # "전부" 또는 "개수" 질의 감지 - 검색 개수 조정
+            # "전부" 또는 "개수" 또는 "리스트" 질의 감지 - 검색 개수 조정
             # "몇개", "개수" 질의는 정확한 카운트를 위해 많은 문서를 검색해야 함
             # 타이핑 오류 대응: "몆" (U+BA86) 추가
+            # 🔧 "리스트 보여줘" 의도나 기안자 필터가 있으면 검색 개수를 늘림
             needs_all = any(kw in query.lower() for kw in ["전부", "모두", "모든", "전체", "all", "몇", "몆", "개수", "총"])
-            search_top_k = 200 if needs_all else 10  # 131개 문서도 커버하도록 200으로 증가
-            logger.info(f"🔍 검색 top_k: {search_top_k} (needs_all={needs_all})")
+            wants_list = any(kw in query.lower() for kw in ["리스트", "목록", "보여", "알려"])
+            search_top_k = 200 if (needs_all or wants_list or drafter_filter) else 10  # 131개 문서도 커버하도록 200으로 증가
+            logger.info(f"🔍 검색 top_k: {search_top_k} (needs_all={needs_all}, wants_list={wants_list}, has_drafter={bool(drafter_filter)})")
 
             # BM25 검색 실행
             if not hasattr(self.retriever, 'search'):
@@ -1172,8 +1212,10 @@ class RAGPipeline:
 
             doc_details = []
 
-            # "전부" 또는 "개수" 질의 감지 - 최대 개수 조정
-            max_docs = 200 if any(kw in query.lower() for kw in ["전부", "모두", "모든", "전체", "all"]) else 10
+            # "전부" 또는 "개수" 또는 "리스트/목록" 질의 감지 - 최대 개수 조정
+            # 🔧 기안자 필터가 있으면 더 많은 문서를 검색해야 함 (필터링으로 줄어들기 때문)
+            wants_list = any(kw in query.lower() for kw in ["리스트", "목록", "보여", "알려", "전부", "모두", "모든", "전체", "all"])
+            max_docs = 200 if wants_list or drafter_filter else 10
 
             for filename in filenames[:max_docs]:  # 최대 개수까지
                 # DB에서 메타데이터 조회 (filename + 기안자 필터 + 날짜 필터)
@@ -1567,17 +1609,42 @@ class RAGPipeline:
                     }
                 }
 
-            # 4. 요약 의도 감지
-            summary_keywords = ["요약", "요약해", "정리", "정리해", "내용", "개요", "summary", "overview"]
-            needs_summary = any(kw in query.lower() for kw in summary_keywords)
+            # 4. 섹션별 키워드 감지 (2025-11-10: 우선순위 최상위로 이동)
+            # "개요 부분만", "검토 세부 내용" 등 특정 섹션 요청을 먼저 감지
+            section_keywords = {
+                '검토': ['검토', '검토내용', '검토 내용', '검토 세부', '리뷰', '검토의견', '검토 의견'],
+                '배경': ['배경', '목적', '배경/목적', '추진배경', '추진 배경', '사유'],
+                '개요': ['개요 부분', '개요만', '개요 세부'],  # "개요 부분만" 같은 명시적 요청만
+                '비교': ['비교', '대안', '비교대안', '비교 대안', '방안', '옵션'],
+                '선정': ['선정', '권고', '추천', '제안', '선정사유'],
+                '내역': ['내역', '세부내역', '세부 내역', '상세내역', '상세'],
+                '예산': ['예산', '비용', '금액', '합계', '총액']
+            }
 
-            # 5. 답변 포맷팅
+            detected_section = None
+            detected_keywords = []
+            for section, keywords in section_keywords.items():
+                for kw in keywords:
+                    if kw in query.lower():
+                        detected_section = section
+                        detected_keywords = keywords
+                        break
+                if detected_section:
+                    break
+
+            # 5. 요약 의도 감지 (섹션이 감지되지 않았을 때만)
+            needs_summary = False
+            if not detected_section:
+                summary_keywords = ["요약", "요약해", "정리", "정리해", "내용", "개요", "summary", "overview"]
+                needs_summary = any(kw in query.lower() for kw in summary_keywords)
+
+            # 6. 답변 포맷팅
             answer_text = ""
 
             # LLM 답변 또는 원문
             # 문서가 선택된 상태에서는 항상 LLM을 사용하여 사용자 질문에 답변
             if len(full_text) > 500:
-                logger.info(f"💬 문서 기반 LLM 답변 수행 (원문 {len(full_text)}자, 요약모드={needs_summary})")
+                logger.info(f"💬 문서 기반 LLM 답변 수행 (원문 {len(full_text)}자, 섹션={detected_section}, 요약모드={needs_summary})")
                 try:
                     # 문서를 청크 형태로 구성
                     chunks = [{
@@ -1598,7 +1665,36 @@ class RAGPipeline:
                     if hasattr(self.generator, 'rag') and hasattr(self.generator.rag, 'llm'):
                         llm = self.generator.rag.llm
 
-                        if needs_summary:
+                        # 섹션이 감지되면 요약 모드보다 우선 (Q&A 모드로 처리)
+                        if detected_section:
+                            # 섹션별 Q&A 모드
+                            section_instruction = f"""
+⚠️ 중요: 사용자가 '{detected_section}' 관련 내용을 질문했습니다.
+- 문서에서 '{detected_section}' 섹션 또는 관련 키워드({', '.join(detected_keywords[:3])})가 있는 부분만 찾아서 답변하세요
+- 전체 요약이 아닌, 해당 섹션의 구체적인 내용만 추출하여 답변하세요
+- 해당 섹션이 문서에 없으면 "문서에 '{detected_section}' 관련 내용이 없습니다"라고 답변하세요
+"""
+                            llm_prompt = f"""다음 문서를 읽고 사용자의 질문에 정확하게 답변하세요.
+
+문서 정보:
+- 파일명: {filename}
+- 기안자: {drafter or '정보 없음'}
+- 날짜: {display_date or date or '정보 없음'}
+
+문서 내용:
+{full_text[:4000]}
+
+사용자 질문: {query}
+{section_instruction}
+답변 작성 지침:
+1. 문서 내용을 기반으로만 답변하세요
+2. 문서에 없는 정보는 "문서에 해당 정보가 없습니다"라고 답변하세요
+3. 금액, 날짜, 이름 등은 정확하게 인용하세요
+4. 간결하고 명확하게 답변하세요
+5. 특정 섹션을 질문받았다면, 그 섹션 내용만 집중해서 답변하세요
+
+답변:"""
+                        elif needs_summary:
                             # 요약 모드: 구조화된 요약 시스템 사용 (summary_templates.py)
                             from app.rag.summary_templates import (
                                 detect_doc_kind,
@@ -1622,7 +1718,7 @@ class RAGPipeline:
                             )
                             llm_prompt = summary_prompt
                         else:
-                            # Q&A 모드: 사용자 질문에 대한 답변
+                            # 일반 Q&A 모드: 사용자 질문에 대한 답변
                             llm_prompt = f"""다음 문서를 읽고 사용자의 질문에 정확하게 답변하세요.
 
 문서 정보:
@@ -1650,8 +1746,12 @@ class RAGPipeline:
                                 # 요약 모드: JSON 응답 요청
                                 system_msg = "당신은 문서 요약 전문가입니다. JSON 형식으로만 응답하세요."
                                 max_tokens = 800
+                            elif detected_section:
+                                # 섹션별 Q&A 모드: 특정 섹션 추출
+                                system_msg = f"당신은 문서 분석 전문가입니다. 사용자가 요청한 '{detected_section}' 섹션만 정확하게 추출하여 답변하세요."
+                                max_tokens = 600
                             else:
-                                # Q&A 모드: 일반 답변 요청
+                                # 일반 Q&A 모드: 전반적인 질문 답변
                                 system_msg = "당신은 문서 분석 전문가입니다. 문서 내용을 기반으로 정확하게 답변하세요."
                                 max_tokens = 500
 

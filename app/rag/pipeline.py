@@ -1632,19 +1632,24 @@ class RAGPipeline:
                 if detected_section:
                     break
 
-            # 5. 요약 의도 감지 (섹션이 감지되지 않았을 때만)
+            # 5. 상세 답변 의도 감지 (우선순위 최상위)
+            detailed_mode = False
+            detail_keywords = ["자세히", "상세히", "자세하게", "상세하게", "구체적으로", "디테일", "세부사항"]
+            detailed_mode = any(kw in query.lower() for kw in detail_keywords)
+
+            # 6. 요약 의도 감지 (섹션이 감지되지 않았고, 상세 모드가 아닐 때만)
             needs_summary = False
-            if not detected_section:
+            if not detected_section and not detailed_mode:
                 summary_keywords = ["요약", "요약해", "정리", "정리해", "내용", "개요", "summary", "overview"]
                 needs_summary = any(kw in query.lower() for kw in summary_keywords)
 
-            # 6. 답변 포맷팅
+            # 7. 답변 포맷팅
             answer_text = ""
 
             # LLM 답변 또는 원문
             # 문서가 선택된 상태에서는 항상 LLM을 사용하여 사용자 질문에 답변
             if len(full_text) > 500:
-                logger.info(f"💬 문서 기반 LLM 답변 수행 (원문 {len(full_text)}자, 섹션={detected_section}, 요약모드={needs_summary})")
+                logger.info(f"💬 문서 기반 LLM 답변 수행 (원문 {len(full_text)}자, 섹션={detected_section}, 요약모드={needs_summary}, 상세모드={detailed_mode})")
                 try:
                     # 문서를 청크 형태로 구성
                     chunks = [{
@@ -1692,6 +1697,29 @@ class RAGPipeline:
 3. 금액, 날짜, 이름 등은 정확하게 인용하세요
 4. 간결하고 명확하게 답변하세요
 5. 특정 섹션을 질문받았다면, 그 섹션 내용만 집중해서 답변하세요
+
+답변:"""
+                        elif detailed_mode:
+                            # 상세 답변 모드: 모든 세부사항 포함
+                            llm_prompt = f"""다음 문서를 읽고 사용자의 질문에 매우 상세하게 답변하세요.
+
+문서 정보:
+- 파일명: {filename}
+- 기안자: {drafter or '정보 없음'}
+- 날짜: {display_date or date or '정보 없음'}
+
+문서 내용:
+{full_text[:4000]}
+
+사용자 질문: {query}
+
+답변 작성 지침:
+1. 문서의 모든 세부사항을 빠짐없이 포함하여 답변하세요
+2. 배경/목적, 현황, 검토 내용, 비교 대안, 선정 사유, 예산 등 모든 섹션을 다루세요
+3. 금액, 날짜, 이름, 사양 등은 정확하게 인용하세요
+4. 각 항목별로 구체적인 설명을 포함하세요
+5. 표나 목록이 있다면 그대로 재현하세요
+6. 가능한 한 상세하고 완전하게 답변하세요
 
 답변:"""
                         elif needs_summary:
@@ -1742,7 +1770,11 @@ class RAGPipeline:
                         # 3. LLM 호출
                         from llama_cpp import Llama
                         if isinstance(llm.llm, Llama):
-                            if needs_summary:
+                            if detailed_mode:
+                                # 상세 답변 모드: 모든 세부사항 포함
+                                system_msg = "당신은 문서 분석 전문가입니다. 사용자가 요청한 모든 세부사항을 빠짐없이 포함하여 상세하게 답변하세요."
+                                max_tokens = 1500  # 상세 답변용으로 크게 증가
+                            elif needs_summary:
                                 # 요약 모드: JSON 응답 요청
                                 system_msg = "당신은 문서 요약 전문가입니다. JSON 형식으로만 응답하세요."
                                 max_tokens = 800

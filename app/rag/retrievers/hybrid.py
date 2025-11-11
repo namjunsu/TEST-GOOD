@@ -1,19 +1,34 @@
-"""하이브리드 검색 엔진 (BM25 인덱스 기반)
+"""하이브리드 검색 엔진 v2.1 (BM25 + ExactMatch)
+
+2025-11-11 v2.1 변경사항:
+- FTS 정렬: ORDER BY rank → bm25(fts) (SQLite FTS5 호환)
+- expansion_result 안전 초기화 (expanded_kw_count)
+- 파일명 보너스 스케일 정규화 (30점 → 4점, 전체 0-10 유지)
+- selected_doc 처리 명확화 (locals() 제거)
+
+2025-11-11 v2.0 변경사항:
+- Stage 0: ExactMatchRetriever (모델/부품 코드 정확일치 최우선)
+- Stage 1: 메타데이터 라우팅 (YEAR + NAME)
+- Stage 2: FTS 검색
+- Stage 3: BM25 보충
 
 BM25Store를 사용하여 전체 텍스트 기반 검색 수행
 """
 
 import os
 import re
-import yaml
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
+import yaml
+
 from app.core.logging import get_logger
-from modules.metadata_db import MetadataDB
-from app.rag.query_parser import QueryParser
-from rag_system.bm25_store import BM25Store  # 인덱서와 동일 모듈 사용
 from app.rag.parallel_executor import get_parallel_executor
 from app.rag.query_expander import get_query_expander
+from app.rag.query_parser import QueryParser
+from app.rag.retrievers.exact_match import ExactMatchRetriever
+from modules.metadata_db import MetadataDB
+from rag_system.bm25_store import BM25Store  # 인덱서와 동일 모듈 사용
 
 logger = get_logger(__name__)
 
@@ -31,6 +46,10 @@ class HybridRetriever:
             # 스니펫 길이 설정 (3600자 = ~1200 토큰)
             self.snippet_max_length = int(os.getenv("SNIPPET_MAX_LENGTH", "3600"))
 
+            # 검색 후보/표시 수 분리 (2025-11-10)
+            self.retrieve_topk = int(os.getenv("RETRIEVE_TOPK", "200"))
+            self.display_limit = int(os.getenv("DISPLAY_LIMIT", "20"))
+
             # 검색 백엔드 설정
             self.use_bm25 = os.getenv("RETRIEVER_BACKEND", "bm25").lower() == "bm25"
 
@@ -44,6 +63,15 @@ class HybridRetriever:
             self.metadata_db = MetadataDB()
             self.known_drafters = self.metadata_db.list_unique_drafters()
             self.parser = QueryParser(self.known_drafters)
+
+            # ExactMatchRetriever 초기화 (Stage 0 - v2.0 추가)
+            self.exact_match_enabled = os.getenv("ENABLE_EXACT_MATCH", "true").lower() == "true"
+            if self.exact_match_enabled:
+                self.exact_match = ExactMatchRetriever(db=self.metadata_db)
+                logger.info("✅ ExactMatchRetriever v2.0 enabled (Stage 0)")
+            else:
+                self.exact_match = None
+                logger.info("⚠️ ExactMatchRetriever disabled")
 
             # Query Expander 초기화 (Lazy - 첫 사용 시 초기화)
             self.query_expander = None
@@ -162,6 +190,9 @@ class HybridRetriever:
         try:
             conn = self.metadata_db._get_conn()
 
+            # 확장 키워드 카운트 (안전 초기화)
+            expanded_kw_count = 0
+
             # Lazy initialization: Query Expander 첫 사용 시 초기화
             if self.query_expander is None:
                 try:
@@ -177,22 +208,22 @@ class HybridRetriever:
                 try:
                     expansion_result = self.query_expander.expand_query(query)
                     fts_query = expansion_result["search_query"]
+                    expanded_kw_count = len(expansion_result.get("expanded_keywords", []))
                     logger.info(f"🔍 Query expansion: '{query}' → '{fts_query[:100]}...'")
-                    logger.info(f"📊 확장된 키워드: {len(expansion_result['expanded_keywords'])}개")
                 except Exception as e:
                     logger.warning(f"⚠️ Query expansion 실패, fallback 사용: {e}")
                     # Fallback: 기본 키워드 분리 (따옴표로 감싸서 리터럴 처리)
-                    fts_query = ' OR '.join(f'"{word}"' for word in query.split())
+                    fts_query = " OR ".join(f'"{word}"' for word in query.split())
             else:
                 # Fallback: 기본 키워드 분리 (따옴표로 감싸서 리터럴 처리)
-                fts_query = ' OR '.join(f'"{word}"' for word in query.split())
+                fts_query = " OR ".join(f'"{word}"' for word in query.split())
 
             cursor = conn.execute("""
                 SELECT d.filename, d.title, d.drafter, d.date, d.category, d.text_preview
                 FROM documents_fts fts
                 JOIN documents d ON fts.rowid = d.rowid
                 WHERE documents_fts MATCH ?
-                ORDER BY rank
+                ORDER BY bm25(fts)
                 LIMIT ?
             """, (fts_query, top_k * 2))  # 여유있게 가져오기
 
@@ -215,7 +246,7 @@ class HybridRetriever:
                     }
                 })
 
-            logger.info(f"✅ FTS 검색 완료: {len(results)}개 결과 (원본='{query}', 확장={len(expansion_result['expanded_keywords'])}개)")
+            logger.info(f"✅ FTS 검색 완료: {len(results)}개 결과 (원본='{query}', 확장키워드={expanded_kw_count}개)")
             return results[:top_k]
 
         except Exception as e:
@@ -233,16 +264,16 @@ class HybridRetriever:
             0.0~10.0 범위의 relevance 스코어 (파일명 매칭 시 최대 10점)
         """
         # 쿼리 토큰화 (공백 + 특수문자 제거)
-        query_tokens = set(re.findall(r'\w+', query.lower()))
+        query_tokens = set(re.findall(r"\w+", query.lower()))
         if not query_tokens:
             return 0.5  # 토큰 없으면 중립 스코어
 
         # 문서 텍스트 준비 (snippet과 meta에서 추출)
-        filename = (doc.get('filename') or '').lower()
-        snippet = (doc.get('snippet') or '').lower()  # Fixed: text_preview → snippet
-        meta = doc.get('meta', {})
-        drafter = (meta.get('drafter') or '').lower()  # Fixed: meta에서 drafter 추출
-        doc_text = filename + ' ' + snippet + ' ' + drafter
+        filename = (doc.get("filename") or "").lower()
+        snippet = (doc.get("snippet") or "").lower()  # Fixed: text_preview → snippet
+        meta = doc.get("meta", {})
+        drafter = (meta.get("drafter") or "").lower()  # Fixed: meta에서 drafter 추출
+        doc_text = filename + " " + snippet + " " + drafter
 
         # 매칭된 토큰 수 계산
         matched_tokens = sum(1 for token in query_tokens if token in doc_text)
@@ -255,7 +286,7 @@ class HybridRetriever:
             match_ratio = min(1.0, match_ratio + 0.3)
 
         # 페널티: 문서가 너무 짧으면 감점 (신뢰도 저하)
-        text_len = len(doc.get('snippet') or '')  # Fixed: text_preview → snippet
+        text_len = len(doc.get("snippet") or "")  # Fixed: text_preview → snippet
         if text_len < 100:
             match_ratio *= 0.7
 
@@ -264,21 +295,26 @@ class HybridRetriever:
             match_ratio = 1e-6  # epsilon to avoid all-zero scores
 
         # 🎯 파일명 매칭 강화 (CRITICAL: 정확도 향상의 핵심)
+        # v2.1: 스케일 정규화 (보너스 상한 +4.0, 전체 0-10 범위 유지)
         filename_bonus = 0.0
         filename_exact_match_count = 0
 
         for token in query_tokens:
-            # 파일명에 정확히 일치하는 토큰이 있으면 큰 보너스
+            # 파일명에 정확히 일치하는 토큰이 있으면 보너스
             if token in filename:
                 filename_exact_match_count += 1
-                filename_bonus += 2.0  # 토큰당 +2점
+                filename_bonus += 0.4  # 토큰당 +0.4점 (5개 매칭 시 2.0)
 
         # 파일명에서 연속된 구문 매칭 시 추가 보너스
         if len(query_tokens) >= 2 and query.lower() in filename:
-            filename_bonus += 3.0  # 완전 구문 매칭 +3점
+            filename_bonus += 1.5  # 완전 구문 매칭 +1.5점
 
-        # 최종 스코어: 기본 스코어(0~1) + 파일명 보너스(0~10)
-        final_score = match_ratio + filename_bonus
+        # 보너스 상한 제한 (+4.0)
+        filename_bonus = min(4.0, filename_bonus)
+
+        # 최종 스코어: 기본 스코어(0~1) * 6.0 + 파일명 보너스(0~4.0) = 최대 10점
+        # (match_ratio를 6배로 스케일링하여 기본 스코어의 영향력 유지)
+        final_score = (match_ratio * 6.0) + filename_bonus
 
         if filename_bonus > 0:
             logger.debug(f"📊 Scoring '{filename[:50]}': match={match_ratio:.2f}, filename_bonus={filename_bonus:.1f}, final={final_score:.1f}")
@@ -286,7 +322,7 @@ class HybridRetriever:
         return max(0.0, min(10.0, final_score))
 
     def search(self, query: str, top_k: int, mode: str = "chat", selected_filename: Optional[str] = None) -> List[Dict[str, Any]]:
-        """검색 수행
+        """검색 수행 v2.0
 
         Args:
             query: 검색 질의
@@ -309,6 +345,59 @@ class HybridRetriever:
         try:
             # 인덱스 갱신 체크
             self._reload_if_index_rotated()
+
+            # Stage 0: ExactMatch (코드 정확일치 최우선 - v2.0 추가)
+            if self.exact_match_enabled and self.exact_match:
+                exact_results = self.exact_match.search(query, top_k=top_k)
+                if exact_results:
+                    logger.info(f"🎯 Stage 0 (ExactMatch): {len(exact_results)}건 반환, 하위 Stage 스킵")
+                    return exact_results[:top_k]
+
+            # Stage 1: 메타데이터 기반 검색 라우팅 (YEAR + NAME 패턴)
+            year_match = re.search(r"(\d{4})", query)
+            name_match = re.search(r"([가-힣]{2,4})", query)
+
+            if year_match and name_match:
+                year = year_match.group(1)
+                name = name_match.group(1)
+                logger.info(f"🎯 메타데이터 검색 라우팅: {year}년 + {name}")
+
+                # MetadataDB에서 직접 검색 (RETRIEVE_TOPK 후보 가져오기)
+                metadata_results = self.metadata_db.search_documents(drafter=name, year=year, limit=self.retrieve_topk)
+
+                if metadata_results:
+                    logger.info(f"✅ 메타데이터 검색 성공: {len(metadata_results)}개 문서")
+
+                    # 결과를 표준 형식으로 변환
+                    converted_results = []
+                    for result in metadata_results:
+                        converted_results.append({
+                            "doc_id": result.get("filename", "unknown"),
+                            "snippet": result.get("text_preview", "")[:self.snippet_max_length],
+                            "score": 3.0,  # 메타데이터 일치는 높은 점수
+                            "page": 1,
+                            "filename": result.get("filename"),
+                            "file_path": result.get("path"),
+                            "meta": {
+                                "filename": result.get("filename"),
+                                "date": result.get("display_date") or result.get("date"),
+                                "drafter": result.get("drafter"),
+                                "category": result.get("category"),
+                                "title": result.get("title", ""),
+                            }
+                        })
+
+                    # 중복 제거 및 상위 K개 반환
+                    seen_filenames = set()
+                    deduped_results = []
+                    for result in converted_results:
+                        filename = result.get("filename")
+                        if filename and filename not in seen_filenames:
+                            seen_filenames.add(filename)
+                            deduped_results.append(result)
+
+                    logger.info(f"📊 메타데이터 검색 결과: {len(metadata_results)}개 → 중복제거 {len(deduped_results)}개")
+                    return deduped_results[:top_k]
 
             # FTS 우선 검색, BM25 보충 전략
             if self.use_bm25 and self.bm25:
@@ -416,32 +505,32 @@ class HybridRetriever:
 
                 # 선택된 문서 강제 추가 (사용자 요청 우선 처리)
                 if selected_filename:
-                    # 병렬 실행에서 이미 가져온 경우 사용, 아니면 검색
-                    if self.enable_parallel and 'selected_doc' in locals() and selected_doc:
-                        # 이미 병렬로 가져옴
-                        logger.info(f"✅ 병렬 검색으로 선택 문서 발견: {selected_filename}")
+                    # v2.1: 명확한 selected_doc 처리
+                    # 1. 병렬 실행에서 이미 가져온 경우 사용
+                    if selected_doc:
+                        logger.info(f"✅ 병렬/캐시에서 선택 문서 발견: {selected_filename}")
                     else:
-                        # 1. BM25 결과에서 먼저 찾기
-                        selected_doc = None
+                        # 2. BM25 결과에서 먼저 찾기
                         for result in converted_results:
                             if result.get("filename") == selected_filename:
                                 selected_doc = result.copy()
                                 selected_doc["score"] = 99.9
+                                logger.info(f"✅ BM25 결과에서 선택 문서 발견: {selected_filename}")
                                 break
 
-                        # 2. BM25에 없으면 MetadataDB에서 직접 가져오기
+                        # 3. BM25에 없으면 MetadataDB에서 직접 가져오기
                         if not selected_doc:
                             logger.info(f"🔍 BM25에 없음, MetadataDB에서 직접 검색: {selected_filename}")
                             selected_doc = self._find_selected_document(selected_filename)
 
-                    # 3. 찾았으면 최상위에 강제 추가
+                    # 4. 찾았으면 최상위에 강제 추가
                     if selected_doc:
                         # 기존 결과에서 제거 (중복 방지)
                         normalized = [r for r in normalized if r.get("filename") != selected_filename]
                         # 최상위에 강제 추가
                         selected_doc_priority = selected_doc.copy()
                         selected_doc_priority["score"] = 99.9
-                        normalized = [selected_doc_priority] + normalized[:top_k-1]
+                        normalized = [selected_doc_priority] + normalized[:top_k - 1]
                         logger.info(f"🎯 선택된 문서 최상위 강제 추가: {selected_filename} (score=99.9)")
                     else:
                         logger.warning(f"⚠️ 선택된 문서 '{selected_filename}'를 찾지 못함 (BM25/MetadataDB 모두)")
@@ -450,8 +539,8 @@ class HybridRetriever:
                 # Fallback: MetadataDB 기반 (비권장, 500자 제한)
                 logger.warning("⚠️ BM25 비활성화, MetadataDB 폴백 모드 (text_preview 500자 제한)")
                 filters = self.parser.parse_filters(query)
-                year = filters.get('year')
-                drafter = filters.get('drafter')
+                year = filters.get("year")
+                drafter = filters.get("drafter")
 
                 results = self.metadata_db.search_documents(
                     year=year,
@@ -461,7 +550,7 @@ class HybridRetriever:
 
                 normalized = []
                 for doc in results:
-                    snippet = doc.get('text_preview') or doc.get('content') or ""  # 전체 문서 사용
+                    snippet = doc.get("text_preview") or doc.get("content") or ""  # 전체 문서 사용
                     if not snippet:
                         snippet = f"[{doc.get('filename', 'unknown')}]"
 
@@ -481,14 +570,14 @@ class HybridRetriever:
                         }
                     })
 
-                normalized.sort(key=lambda x: x['score'], reverse=True)
+                normalized.sort(key=lambda x: x["score"], reverse=True)
                 normalized = normalized[:top_k]
 
             # ✨ 파일명 매칭 보너스 (쿼리와 파일명이 유사하면 점수 증가)
             if not selected_filename:  # 선택된 문서가 없을 때만 적용
                 normalized = self._apply_filename_bonus(query, normalized)
                 # 보너스 적용 후 재정렬
-                normalized.sort(key=lambda x: x['score'], reverse=True)
+                normalized.sort(key=lambda x: x["score"], reverse=True)
 
             # 스코어 분포 통계 계산 (low-confidence 가드레일용)
             scores = [r["score"] for r in normalized]
@@ -541,26 +630,26 @@ class HybridRetriever:
         import re
 
         # 쿼리 정규화: 공백, 특수문자 제거 후 토큰화
-        query_normalized = re.sub(r'[^\w\s]', ' ', query.lower())
+        query_normalized = re.sub(r"[^\w\s]", " ", query.lower())
         query_tokens = set(query_normalized.split())
 
         if not query_tokens:
             return results
 
         for result in results:
-            filename = result.get('filename', '')
+            filename = result.get("filename", "")
             if not filename:
                 continue
 
             # 파일명 정규화
             # 1. 날짜 패턴 제거 (YYYY-MM-DD_)
-            filename_clean = re.sub(r'^\d{4}-\d{2}-\d{2}_', '', filename)
+            filename_clean = re.sub(r"^\d{4}-\d{2}-\d{2}_", "", filename)
             # 2. 확장자 제거
-            filename_clean = re.sub(r'\.\w+$', '', filename_clean)
+            filename_clean = re.sub(r"\.\w+$", "", filename_clean)
             # 3. 언더스코어를 공백으로 치환
-            filename_clean = filename_clean.replace('_', ' ')
+            filename_clean = filename_clean.replace("_", " ")
             # 4. 특수문자 제거 후 소문자 변환
-            filename_clean = re.sub(r'[^\w\s]', ' ', filename_clean.lower())
+            filename_clean = re.sub(r"[^\w\s]", " ", filename_clean.lower())
 
             # 파일명 토큰화
             filename_tokens = set(filename_clean.split())
@@ -594,8 +683,8 @@ class HybridRetriever:
 
             # 보너스 적용
             if bonus > 0:
-                original_score = result['score']
-                result['score'] += bonus
+                original_score = result["score"]
+                result["score"] += bonus
                 logger.info(
                     f"📈 파일명 보너스: {filename[:40]} | "
                     f"유사도={similarity:.2f} | "
@@ -603,3 +692,36 @@ class HybridRetriever:
                 )
 
         return results
+
+    def get_metrics(self) -> Dict[str, Any]:
+        """검색 엔진 메트릭 조회 (v2.0 추가)
+
+        Returns:
+            메트릭 딕셔너리:
+            - exact_match: ExactMatchRetriever 메트릭
+            - bm25: BM25Store 통계
+            - retriever_config: 설정 정보
+        """
+        metrics = {
+            "retriever_config": {
+                "use_bm25": self.use_bm25,
+                "exact_match_enabled": self.exact_match_enabled,
+                "enable_parallel": self.enable_parallel,
+                "retrieve_topk": self.retrieve_topk,
+                "display_limit": self.display_limit,
+                "snippet_max_length": self.snippet_max_length,
+            }
+        }
+
+        # ExactMatch 메트릭
+        if self.exact_match_enabled and self.exact_match:
+            metrics["exact_match"] = self.exact_match.get_metrics()
+
+        # BM25 통계
+        if self.use_bm25 and self.bm25:
+            metrics["bm25"] = {
+                "total_documents": len(self.bm25.documents),
+                "index_path": str(self.bm25.index_path),
+            }
+
+        return metrics

@@ -1,8 +1,5 @@
-# 문서 처리 설정 v1
+# 문서 처리 설정
 # 신규 기능은 이 파일의 플래그로 ON/OFF 제어
-
-# 스키마 버전 (호환성 추적)
-schema_version: 1
 
 # doctype 분류 활성화
 enable_doctype_classification: true
@@ -12,7 +9,6 @@ doctype:
   # 기안서 (기본 지원)
   proposal:
     enabled: true
-    weight: 1.0
     keywords:
       - "기안서"
       - "장비구매/수리"
@@ -23,16 +19,11 @@ doctype:
       - "품의서"
       - "구매 기안"
       - "수리 기안"
-    negative_keywords:
-      - "보고서"
-      - "회의록"
-      - "검토서"
     priority: 1
 
   # 보고서
   report:
     enabled: true
-    weight: 1.0
     keywords:
       - "보고서"
       - "개요"
@@ -43,15 +34,11 @@ doctype:
       - "그림"
       - "분석결과"
       - "종합의견"
-    negative_keywords:
-      - "기안서"
-      - "회의록"
     priority: 2
 
   # 검토서
   review:
     enabled: true
-    weight: 1.2
     keywords:
       - "기술검토서"
       - "검토서"
@@ -62,15 +49,11 @@ doctype:
       - "대안"
       - "평가"
       - "적합성"
-    negative_keywords:
-      - "기안서"
-      - "회의록"
     priority: 3
 
   # 회의록
   minutes:
     enabled: true
-    weight: 1.0
     keywords:
       - "회의록"
       - "참석자"
@@ -80,28 +63,26 @@ doctype:
       - "Action Item"
       - "조치사항"
       - "협의내용"
-    negative_keywords:
-      - "기안서"
-      - "보고서"
     priority: 4
 
   # 폐기/처분 문서 (실측 추가)
   disposal:
     enabled: true
-    weight: 1.0
     keywords:
       - "폐기"
       - "불용"
       - "처분"
       - "폐기 요청"
       - "불용장비"
-    negative_keywords: []
     priority: 5
 
 # 문서 인덱싱 설정
 ingestion:
-  # OCR 모드: off (비활성), fallback (실패 시), force (항상 사용)
-  ocr_mode: "fallback"
+  # OCR 사용 여부 (기본 OFF)
+  ocr_enabled: false
+
+  # OCR 폴백 (pdfplumber 실패 시)
+  ocr_fallback: false
 
   # 중복 판정 기준
   dedup:
@@ -150,37 +131,34 @@ metadata:
   # 작성자 Stoplist (기안자 오검출 방지)
   # 대문자 약어, 장비명, 부서명, 일반 용어 등 제외
   author_stoplist:
-    normalize: true  # 정규화 활성화 (공백/대소문자)
-    match: "exact_token"  # exact_token | substring
-    values:
-      - "BNC"
-      - "ENG"
-      - "NLE"
-      - "USB"
-      - "LED"
-      - "HDMI"
-      - "SDI"
-      - "UPS"
-      - "DVR"
-      - "CCTV"
-      - "PC"
-      - "휴대용"
-      - "스캔문서"
-      - "채널A"
-      - "채널에이"
-      - "미디어텍"
-      - "방송기술팀"
-      - "기술관리팀"
-      - "영상편집팀"
-      - "제작팀"
-      - "뉴스비전"
-      - "보도기술"
-      - "상암제작팀"
-      - "광화문"
-      - "사옥"
-      - "장비"
-      - "시스템"
-      - "워크스테이션"
+    - "BNC"
+    - "ENG"
+    - "NLE"
+    - "USB"
+    - "LED"
+    - "HDMI"
+    - "SDI"
+    - "UPS"
+    - "DVR"
+    - "CCTV"
+    - "PC"
+    - "휴대용"
+    - "스캔문서"
+    - "채널A"
+    - "채널에이"
+    - "미디어텍"
+    - "방송기술팀"
+    - "기술관리팀"
+    - "영상편집팀"
+    - "제작팀"
+    - "뉴스비전"
+    - "보도기술"
+    - "상암제작팀"
+    - "광화문"
+    - "사옥"
+    - "장비"
+    - "시스템"
+    - "워크스테이션"
 
 # 요약 템플릿 설정
 summary:

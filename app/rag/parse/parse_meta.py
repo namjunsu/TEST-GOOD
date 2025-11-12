@@ -160,9 +160,14 @@ class MetaParser:
 
             with open(config_path, "r", encoding="utf-8") as f:
                 cfg = yaml.safe_load(f) or {}
+
+            # 하위 호환: v0 스키마를 v1로 정규화
+            from app.config.compat import normalize_config
+            cfg = normalize_config(cfg)
+
             self._config_mtime = config_path.stat().st_mtime
             self._last_load_ts = time.time()
-            logger.info(f"✓ 설정 로드: {config_path}")
+            logger.info(f"✓ 설정 로드: {config_path} (schema v{cfg.get('schema_version', 0)})")
             return cfg
 
         except Exception as e:

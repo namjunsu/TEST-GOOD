@@ -115,8 +115,13 @@ class TableParser:
 
             with open(config_file, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
-                logger.info(f"✓ 설정 로드: {config_path}")
-                return config
+
+            # 하위 호환: v0 스키마를 v1로 정규화
+            from app.config.compat import normalize_config
+            config = normalize_config(config)
+
+            logger.info(f"✓ 설정 로드: {config_path} (schema v{config.get('schema_version', 0)})")
+            return config
 
         except Exception as e:
             logger.error(f"❌ 설정 로드 실패: {e}")

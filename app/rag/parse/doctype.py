@@ -58,6 +58,10 @@ class DocumentTypeClassifier:
             with open(cfg_file, "r", encoding="utf-8") as f:
                 cfg = yaml.safe_load(f) or {}
 
+            # 하위 호환: v0 스키마를 v1로 정규화
+            from app.config.compat import normalize_config
+            cfg = normalize_config(cfg)
+
             # 필수 루트 키 보정
             if "doctype" not in cfg:
                 cfg["doctype"] = self._get_default_config()["doctype"]

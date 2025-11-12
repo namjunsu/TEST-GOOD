@@ -15,19 +15,18 @@ import re
 import unicodedata
 from typing import List, Set
 
-
 # 하이픈 계열 유니코드 문자 (U+2010~U+2014, U+2212)
 HYPHEN_VARIANTS = {
-    '\u2010',  # hyphen
-    '\u2011',  # non-breaking hyphen
-    '\u2012',  # figure dash
-    '\u2013',  # en dash
-    '\u2014',  # em dash
-    '\u2212',  # minus sign
+    "\u2010",  # hyphen
+    "\u2011",  # non-breaking hyphen
+    "\u2012",  # figure dash
+    "\u2013",  # en dash
+    "\u2014",  # em dash
+    "\u2212",  # minus sign
 }
 
 # 정규표현식: 모든 하이픈 변형
-HYPHEN_PATTERN = re.compile(r'[\u2010\u2011\u2012\u2013\u2014\u2212]')
+HYPHEN_PATTERN = re.compile(r"[\u2010\u2011\u2012\u2013\u2014\u2212]")
 
 # 코드 추출 Denylist (오탐 방지)
 CODE_DENYLIST = {
@@ -39,21 +38,30 @@ CODE_DENYLIST = {
     "WOULD", "SHOULD", "THEIR", "THERE", "THESE", "THOSE",
 }
 
+# 브랜드/시리즈 Whitelist (신뢰도 높은 접두어)
+BRAND_PREFIXES = {
+    "LVM", "XRN", "NR", "RM", "KONA", "DECKLINK", "FS", "FX", "BM",
+    "SDI", "HDR", "LAG", "ODIN", "ATEYAA", "EX", "BE", "COM",
+}
+
 # 코드 패턴 정규식 (우선순위 높은 순서)
 # 주의: \b는 한글 경계를 인식하지 못하므로 lookahead/lookbehind 사용
 CODE_PATTERNS = [
     # [우선순위 1] 멀티세그먼트 코드 (1~4 세그먼트, 3~20자): XRN-1620B2, BE-68, COM/GROUPWARE/APPROVAL/APPROVAL
-    # 각 세그먼트: 1~6자, 구분자: -, /, 공백
+    # 각 세그먼트: 1~12자, 구분자: -, /, 공백
+    # 숫자 요구: 최소 1자리 숫자 포함 (오탐 감소)
     re.compile(
-        r'(?<![A-Z0-9])[A-Z]{1,4}[A-Z0-9]*[-/\s]+[A-Z0-9]{1,6}(?:[-/\s]+[A-Z0-9]{1,6}){0,2}(?![A-Z0-9])',
+        r"(?=(?:.*\d){1,})(?<![A-Z0-9])[A-Z]{1,4}[A-Z0-9]*[-/\s]+[A-Z0-9]{1,12}(?:[-/\s]+[A-Z0-9]{1,12}){0,2}(?![A-Z0-9])",
         re.IGNORECASE
     ),
     # [우선순위 2] 혼합형 (공백 포함 제품명): DeckLink 4K Extreme 12G
-    re.compile(r'(?<![A-Za-z])[A-Z][a-z]+(?:\s+[A-Z0-9]+[A-Za-z0-9]*)+(?![A-Za-z])'),
+    # 숫자 요구: 최소 1자리 숫자 포함
+    re.compile(r"(?=(?:.*\d){1,})(?<![A-Za-z])[A-Z][a-z]+(?:\s+[A-Z0-9]+[A-Za-z0-9]*)+(?![A-Za-z])"),
     # [우선순위 3] 단일형 (영문+숫자 밀착): LVM180A, GS724Tv6, FX3 (최소 1숫자)
-    re.compile(r'(?<![A-Z0-9])[A-Z]{2,}\d+[A-Za-z0-9]*(?![A-Z0-9])', re.IGNORECASE),
-    # [우선순위 4] 순수 영문 코드 (4~30자): ODIN, KONA, ATEYAA, INTERRUPTIBLEFOLDBACK (Patch A 보완)
-    re.compile(r'(?<![A-Z])[A-Z]{4,30}(?![A-Z])', re.IGNORECASE),
+    re.compile(r"(?<![A-Z0-9])[A-Z]{2,}\d+[A-Za-z0-9]*(?![A-Z0-9])", re.IGNORECASE),
+    # [우선순위 4] 브랜드 접두어 패턴 (Whitelist 기반): LVM, XRN, KONA, DECKLINK 등
+    # 4~12자 길이 제한 (과도한 오탐 방지)
+    re.compile(r"\b(?:LVM|XRN|NR|RM|KONA|DECKLINK|FS|FX|BM|SDI|HDR|LAG|ODIN|ATEYAA|EX|BE|COM)[A-Z0-9]{1,12}\b", re.IGNORECASE),
 ]
 
 
@@ -75,13 +83,13 @@ def normalize_text(text: str) -> str:
         return ""
 
     # 1. NFKC 정규화
-    text = unicodedata.normalize('NFKC', text)
+    text = unicodedata.normalize("NFKC", text)
 
     # 2. 하이픈 계열 통일
-    text = HYPHEN_PATTERN.sub('-', text)
+    text = HYPHEN_PATTERN.sub("-", text)
 
     # 3. 공백 압축
-    text = re.sub(r'\s+', ' ', text).strip()
+    text = re.sub(r"\s+", " ", text).strip()
 
     return text
 
@@ -113,46 +121,51 @@ def normalize_code(code: str, uppercase: bool = True) -> str:
         code = code.upper()
 
     # 순수 영숫자만 남기기 (하이픈, 공백, 특수문자 모두 제거)
-    code = re.sub(r'[^A-Z0-9]', '', code)
+    code = re.sub(r"[^A-Z0-9]", "", code)
 
     return code
 
 
 def generate_variants(code: str) -> List[str]:
-    """코드 변형 생성 (하이픈/공백/무공백 3종)
+    """코드 변형 생성 (구분자 보존 정규화 → 교차 변형 → 무공백)
 
     Args:
-        code: 정규화된 코드 (예: "XRN-1620B2")
+        code: 원본 코드 (예: "XRN-1620B2", "LVM 180A")
 
     Returns:
-        변형 리스트 (중복 제거)
+        변형 리스트 (중복 제거, 정렬)
 
     예:
         "XRN-1620B2" → ["XRN-1620B2", "XRN 1620B2", "XRN1620B2"]
-        "LVM-180A" → ["LVM-180A", "LVM 180A", "LVM180A"]
+        "LVM/180A" → ["LVM-180A", "LVM 180A", "LVM/180A", "LVM180A"]
+
+    개선:
+        - 구분자 보존 정규화 (하이픈/슬래시/공백 유지)
+        - 교차 변형 (-, /, 공백 상호 교환)
+        - 무공백 표기 (검색 보조)
     """
     if not code:
         return []
 
-    # 정규화 먼저 적용
-    code = normalize_code(code)
+    # 1) 구분자 보존 정규화 (NFKC + 하이픈 통일 + 공백 압축 + 대문자)
+    base = normalize_text(code).upper()
 
-    variants = set()
+    variants: Set[str] = set()
 
-    # 원본
-    variants.add(code)
+    # 2) 기본 표기 (하이픈 통일 상태)
+    variants.add(base)
 
-    # 하이픈 → 공백
-    if '-' in code:
-        variants.add(code.replace('-', ' '))
+    # 3) 하이픈 ↔ 공백 교차 변형
+    if "-" in base:
+        variants.add(base.replace("-", " "))
 
-    # 하이픈/공백 → 제거 (무공백)
-    variants.add(code.replace('-', '').replace(' ', ''))
+    # 4) 슬래시 → 하이픈/공백 변형
+    if "/" in base:
+        variants.add(base.replace("/", " "))
+        variants.add(base.replace("/", "-"))
 
-    # 슬래시도 동일 처리
-    if '/' in code:
-        variants.add(code.replace('/', ' '))
-        variants.add(code.replace('/', '-'))
+    # 5) 무공백 표기 (FTS/Exact 검색 보조)
+    variants.add(re.sub(r"[-/\s]", "", base))
 
     return sorted(variants)
 
@@ -209,65 +222,76 @@ def is_code_query(query: str) -> bool:
 
 
 def expand_query_with_variants(query: str) -> str:
-    """쿼리에서 코드를 찾아 변형 확장
+    """쿼리에서 코드를 찾아 변형 확장 (원문 유지)
 
     Args:
         query: 원본 쿼리 (예: "XRN-1620B2 사양")
 
     Returns:
-        변형 포함 쿼리 (예: "XRN-1620B2 OR XRN1620B2 OR XRN 1620B2 사양")
+        변형 포함 쿼리 (예: "(XRN-1620B2 OR XRN1620B2 OR XRN 1620B2) XRN-1620B2 사양")
 
     주의:
-        FTS5 MATCH 쿼리에 사용 시 OR 연산자로 연결됨
+        - FTS5 MATCH 쿼리에 사용 시 OR 연산자로 연결됨
+        - 원본 쿼리는 유지 (제거하지 않음)
+
+    개선:
+        - 정규화 없는 추출 (원문 기준)
+        - 원문 제거 로직 삭제 (안전성 확보)
+        - 변형 OR 그룹 + 원문 전체 병렬 유지
     """
-    codes = extract_codes(query, normalize_result=True)
+    # 원문 기준으로 코드 추출 (normalize_result=False)
+    codes = extract_codes(query, normalize_result=False)
 
     if not codes:
         return normalize_text(query)
 
     # 각 코드의 변형 생성
-    expanded_terms = []
+    expanded_groups = []
     for code in codes:
         variants = generate_variants(code)
         # OR 그룹으로 묶기: (A OR B OR C)
         if len(variants) > 1:
-            expanded_terms.append(f"({' OR '.join(variants)})")
+            expanded_groups.append(f"({' OR '.join(variants)})")
         else:
-            expanded_terms.append(variants[0])
+            expanded_groups.append(variants[0])
 
-    # 원본 쿼리에서 코드 제외한 나머지 텍스트
-    remaining_query = query
-    for code in codes:
-        remaining_query = remaining_query.replace(code, '')
+    # 원본 쿼리는 유지하고 변형 그룹을 앞에 추가
+    normalized_query = normalize_text(query)
 
-    remaining_query = normalize_text(remaining_query)
-
-    # 조합
-    if remaining_query:
-        return f"{' '.join(expanded_terms)} {remaining_query}"
-    else:
-        return ' '.join(expanded_terms)
+    # 조합: (변형 그룹) + 원문
+    return f"{' '.join(expanded_groups)} {normalized_query}"
 
 
 def normalize_filename(filename: str) -> str:
-    """파일명 정규화 (확장자 유지)
+    """파일명 정규화 (가독성 보존, 확장자 유지)
 
     Args:
         filename: 원본 파일명 (예: "LVM‐180A_manual.pdf")
 
     Returns:
-        정규화된 파일명 (예: "LVM-180A_MANUAL.PDF")
+        정규화된 파일명 (예: "LVM-180A_MANUAL.pdf")
+
+    개선:
+        - 하이픈 변형 통일 (en-dash/em-dash → hyphen)
+        - 공백 → 언더스코어
+        - 구분자 중복 축약 (__, -- → -)
+        - 영문 대문자, 확장자 소문자
+        - 가독성 보존 (특수문자 제거하지 않음)
     """
     if not filename:
         return ""
 
     # 확장자 분리
-    parts = filename.rsplit('.', 1)
+    parts = filename.rsplit(".", 1)
     stem = parts[0]
     ext = parts[1] if len(parts) > 1 else ""
 
-    # 본문 정규화
-    stem = normalize_code(stem, uppercase=True)
+    # 본문 정규화 (가독성 보존)
+    stem = normalize_text(stem).upper()  # 하이픈 통일 + 공백 압축 + 대문자
+    stem = re.sub(r"\s+", "_", stem)  # 공백 → 언더스코어
+    stem = re.sub(r"[-]{2,}", "-", stem)  # 하이픈 중복 축약
+    stem = re.sub(r"[_]{2,}", "_", stem)  # 언더스코어 중복 축약
+    stem = re.sub(r"[^A-Z0-9_\-]", "", stem)  # 안전 문자만 허용 (_, - 보존)
 
     # 확장자는 소문자 유지 (관례)
     if ext:

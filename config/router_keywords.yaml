@@ -1,50 +1,300 @@
 # ============================================================================
-# 라우터 키워드 설정 (DOC_ANCHORED 필터링)
+# 라우터 키워드 설정 v1.0 - 장비군별 프로파일
 # ============================================================================
-# 2025-11-01: 장비 질의 검색 정확도 향상 (운영 중 실시간 수정 가능)
+# 2025-11-12: DVR 단일 도메인 → 장비군별 프로파일화 (확장성 확보)
 #
-# 목적:
-#   - DOC_ANCHORED 모드에서 장비 관련 문서만 상위 랭킹
-#   - 비장비 문서(media port, 짐벌 등) 오탐 억제
-#   - 운영자가 YAML 수정만으로 즉시 반영 가능
+# 설계 원칙:
+#   1. 장비군별 프로파일 분리 (DVR/스위처/카메라/인터컴/오디오 등)
+#   2. 쿼리 기반 프로파일 자동 선택 (복수 병렬 가능)
+#   3. 앵커 점수 = allow 필터 + deny 패널티 + boost 가중 + proximity 보너스
+#   4. YAML 핫리로드로 무중단 반영
+#   5. 한글 경계 처리 ({KBL}/{KBR} 매크로)
+#
+# 참고: {KBL} = (?<![가-힣A-Za-z0-9]), {KBR} = (?![가-힣A-Za-z0-9])
+#       코드에서 동적 치환 처리
+
+schema_version: 1
 
 doc_anchored:
-  # 허용 패턴 (이 패턴 중 하나라도 매칭되면 통과)
-  # 주의: DVR/NVR 특화 패턴만 포함. 일반 "장비" 키워드는 너무 광범위하므로 제외
-  allow:
-    - "\\bHRD[-\\s]?\\d{3,4}\\b"                # HRD-442, HRD 1234, HRD-1234
-    - "\\bDVR\\b"                                # DVR (Digital Video Recorder)
-    - "\\bNVR\\b"                                # NVR (Network Video Recorder)
-    - "Hanwha(?:\\s+(?:Techwin|Vision))?"       # Hanwha, Hanwha Techwin, Hanwha Vision
-    - "방송.*보존용|영상.*보존용|녹화용"         # DVR 용도 특화 (보존용/녹화용)
+  profiles:
+    # ========================================================================
+    # DVR/NVR 프로파일
+    # ========================================================================
+    dvr_nvr:
+      description: "Digital Video Recorder / Network Video Recorder"
 
-  # 차단 패턴 (이 패턴 매칭 시 점수 하향 또는 제외)
-  deny:
-    - "지미집|지미짚"                             # 짐벌 장비 (비검색 대상)
-    - "control\\s*box"                           # 컨트롤 박스
-    - "틸트|짐벌"                                 # 카메라 보조 장비
+      # 허용 패턴 (하나라도 매칭 필수)
+      allow:
+        - "(?i){KBL}(?:HRD|HRX|XRN|QRN)[-\\s]?\\w{3,8}{KBR}"
+        - "(?i){KBL}(?:DVR|NVR){KBR}"
+        - "(?i)(보존\\s*용|녹화\\s*용|보존\\s*녹화)"
 
-  # 부스팅 키워드 (매칭 시 점수 가중)
-  boost:
-    - "HRD-442"
-    - "DVR"
-    - "Hanwha"
-    - "보존|녹화|교체|노후"
+      # 차단 패턴 (매칭 시 패널티)
+      deny:
+        - "(?i)지미집|지미짚|짐벌|틸트"
+
+      # 부스팅 키워드 (계층별 가중치)
+      boost:
+        high:
+          - "(?i){KBL}HRD-442{KBR}"
+          - "(?i){KBL}XRN-1620B2{KBR}"
+          - "(?i){KBL}QRN-1610{KBR}"
+        medium:
+          - "(?i){KBL}(?:DVR|NVR){KBR}"
+          - "(?i)(보존|녹화|교체|노후|증설)"
+        vendor:
+          - "(?i){KBL}Hanwha(?:\\s+(?:Techwin|Vision))?{KBR}"
+          - "(?i){KBL}Samsung{KBR}"
+
+      # 가중치 설정
+      weights:
+        high: 3.0
+        medium: 1.5
+        vendor: 1.0
+
+      # 패널티 및 임계값
+      deny_penalty: -4.0
+      pass_threshold: 1.0
+
+      # 근접도 보너스 (키워드 간 거리 기반)
+      proximity_pairs:
+        - {a: "(?i){KBL}(?:DVR|NVR){KBR}", b: "(?i)(보존|녹화)", window: 40, bonus: 1.0}
+        - {a: "(?i){KBL}(?:HRD|XRN|QRN)[-\\s]?\\w{3,8}{KBR}", b: "(?i)(교체|노후|증설)", window: 40, bonus: 0.8}
+
+    # ========================================================================
+    # 비디오 스위처 프로파일
+    # ========================================================================
+    video_switcher:
+      description: "Video Production Switcher (MVS, XVS, Carbonite, etc.)"
+
+      allow:
+        - "(?i){KBL}(?:MVS|XVS|Kahuna|Carbonite)[-\\s]?\\w*{KBR}"
+        - "(?i){KBL}(?:M/E|ME|Keyer|USK|DSK|Crosspoint){KBR}"
+        - "(?i)스위처|영상\\s*믹서"
+
+      deny:
+        - "(?i)짐벌|지미집"
+        # 주의: control box는 조건부 (스위처 모델명 근접 시 패널티 완화)
+
+      boost:
+        high:
+          - "(?i){KBL}MVS-8000{KBR}"
+          - "(?i){KBL}XVS-7000{KBR}"
+          - "(?i){KBL}Carbonite{KBR}"
+        medium:
+          - "(?i){KBL}(?:USK|DSK|Keyer|ME|M/E){KBR}"
+          - "(?i)(Clean\\s*PGM|PGM|PST|Aux|Preset)"
+        vendor:
+          - "(?i){KBL}Sony{KBR}"
+          - "(?i){KBL}Ross{KBR}"
+          - "(?i){KBL}Grass\\s*Valley{KBR}"
+
+      weights:
+        high: 3.0
+        medium: 1.5
+        vendor: 1.0
+
+      deny_penalty: -3.0
+      pass_threshold: 1.0
+
+      proximity_pairs:
+        - {a: "(?i){KBL}(?:MVS|XVS|Carbonite){KBR}", b: "(?i)(USK|DSK|Keyer)", window: 50, bonus: 1.2}
+        - {a: "(?i){KBL}스위처{KBR}", b: "(?i)(교체|증설|보수)", window: 40, bonus: 0.8}
+
+    # ========================================================================
+    # 인터컴 프로파일
+    # ========================================================================
+    intercom:
+      description: "Intercom Systems (RTS, OMNEO, ODIN, etc.)"
+
+      allow:
+        - "(?i){KBL}(?:RTS|OMNEO|AZEdit|KP[-\\s]?\\d+|ODIN){KBR}"
+        - "(?i){KBL}(?:Partyline|IFB|Tally|ASL){KBR}"
+        - "(?i)인터컴|통화\\s*시스템"
+
+      deny:
+        - "(?i)짐벌|지미집"
+
+      boost:
+        high:
+          - "(?i){KBL}ODIN{KBR}"
+          - "(?i){KBL}KP[-\\s]?\\d+{KBR}"
+          - "(?i){KBL}AZEdit{KBR}"
+        medium:
+          - "(?i){KBL}(?:OMNEO|Dante|AES67|MADI){KBR}"
+          - "(?i)(Partyline|IFB|Tally|키패널)"
+        vendor:
+          - "(?i){KBL}RTS{KBR}"
+          - "(?i){KBL}Clear[-\\s]?Com{KBR}"
+          - "(?i){KBL}Riedel{KBR}"
+
+      weights:
+        high: 3.0
+        medium: 1.2
+        vendor: 1.0
+
+      deny_penalty: -2.0
+      pass_threshold: 0.5
+
+      proximity_pairs:
+        - {a: "(?i){KBL}(?:RTS|ODIN){KBR}", b: "(?i)(키패널|Keypanel)", window: 40, bonus: 1.0}
+        - {a: "(?i){KBL}인터컴{KBR}", b: "(?i)(교체|증설)", window: 40, bonus: 0.8}
+
+    # ========================================================================
+    # 카메라 프로파일
+    # ========================================================================
+    camera:
+      description: "Broadcast Camera Systems (HDC, PXW, URSA, etc.)"
+
+      allow:
+        - "(?i){KBL}(?:HDC|PXW|PDW|FX|URSA|AK[-\\s]?HC)[-\\s]?\\w+{KBR}"
+        - "(?i)카메라\\s*(헤드|바디|컨트롤|CCU|RCP)"
+        - "(?i){KBL}(?:CCU|RCP|VF|Viewfinder){KBR}"
+
+      deny:
+        - "(?i)지미집|지미짚|짐벌|틸트"
+
+      boost:
+        high:
+          - "(?i){KBL}HDC-4300{KBR}"
+          - "(?i){KBL}PXW-Z450{KBR}"
+          - "(?i){KBL}URSA\\s*Broadcast{KBR}"
+        medium:
+          - "(?i){KBL}(?:RCP|CCU|VF|Baseband){KBR}"
+          - "(?i)(렌즈|뷰파인더|Viewfinder|삼각대)"
+        vendor:
+          - "(?i){KBL}Sony{KBR}"
+          - "(?i){KBL}Panasonic{KBR}"
+          - "(?i){KBL}Blackmagic{KBR}"
+
+      weights:
+        high: 3.0
+        medium: 1.5
+        vendor: 1.0
+
+      deny_penalty: -4.0
+      pass_threshold: 1.0
+
+      proximity_pairs:
+        - {a: "(?i){KBL}(?:HDC|PXW)[-\\s]?\\w+{KBR}", b: "(?i)(렌즈|뷰파인더)", window: 40, bonus: 1.0}
+        - {a: "(?i){KBL}카메라{KBR}", b: "(?i)(교체|증설|보수)", window: 40, bonus: 0.8}
+
+    # ========================================================================
+    # 오디오 프로파일
+    # ========================================================================
+    audio:
+      description: "Audio Consoles and Processing (DME, SSL, Studer, etc.)"
+
+      allow:
+        - "(?i){KBL}(?:DME[-\\s]?7000|SSL|Studer|AMS[-\\s]?Neve){KBR}"
+        - "(?i){KBL}(?:MADI|AES67|Dante|Ravenna){KBR}"
+        - "(?i)오디오\\s*(콘솔|매트릭스|프로세서|믹서)"
+
+      deny:
+        - "(?i)짐벌|지미집"
+
+      boost:
+        high:
+          - "(?i){KBL}DME-7000{KBR}"
+          - "(?i){KBL}System\\s*T{KBR}"
+          - "(?i){KBL}Vista{KBR}"
+        medium:
+          - "(?i){KBL}(?:AES67|Dante|MADI|Ravenna){KBR}"
+          - "(?i)(Fader|채널|Channel|Routing)"
+        vendor:
+          - "(?i){KBL}Yamaha{KBR}"
+          - "(?i){KBL}SSL{KBR}"
+          - "(?i){KBL}Studer{KBR}"
+          - "(?i){KBL}Lawo{KBR}"
+
+      weights:
+        high: 2.5
+        medium: 1.2
+        vendor: 1.0
+
+      deny_penalty: -2.0
+      pass_threshold: 0.8
+
+      proximity_pairs:
+        - {a: "(?i){KBL}(?:DME|SSL|Studer){KBR}", b: "(?i)(Dante|MADI|AES67)", window: 50, bonus: 1.0}
+        - {a: "(?i){KBL}오디오{KBR}", b: "(?i)(콘솔|믹서|매트릭스)", window: 40, bonus: 0.8}
 
 # ============================================================================
-# 사용 예시 (app/rag/retrievers/hybrid.py)
+# 프로파일 매칭 규칙 (쿼리 → 프로파일 후보 탐지)
 # ============================================================================
-# import yaml
-# from pathlib import Path
+profile_matching:
+  # 쿼리에서 키워드 감지 시 후보 프로파일 선정
+  # 복수 매칭 시 모든 프로파일 병렬 적용 → 최고 점수 선택
+
+  keywords:
+    dvr_nvr:
+      - "(?i){KBL}(?:DVR|NVR|HRD|XRN|QRN){KBR}"
+      - "(?i)(녹화|보존.*용)"
+
+    video_switcher:
+      - "(?i){KBL}(?:스위처|MVS|XVS|Carbonite|Kahuna){KBR}"
+      - "(?i){KBL}(?:ME|M/E|Keyer|USK|DSK){KBR}"
+
+    intercom:
+      - "(?i){KBL}(?:인터컴|RTS|ODIN|OMNEO){KBR}"
+      - "(?i)(Partyline|IFB|Tally|키패널)"
+
+    camera:
+      - "(?i){KBL}(?:카메라|HDC|PXW|PDW|URSA){KBR}"
+      - "(?i){KBL}(?:CCU|RCP|VF|Viewfinder){KBR}"
+
+    audio:
+      - "(?i){KBL}(?:오디오|Audio|DME|SSL|Studer){KBR}"
+      - "(?i){KBL}(?:콘솔|Console|믹서|Mixer|MADI|Dante){KBR}"
+
+  # 프로파일 우선순위 (동점 시)
+  priority:
+    - dvr_nvr
+    - video_switcher
+    - camera
+    - intercom
+    - audio
+
+  # 다중 프로파일 병합 설정
+  multi_profile:
+    enabled: true
+    merge_strategy: "max_score"  # max_score | weighted_avg | top_k_merge
+    top_k: 10
+    profile_weights:
+      dvr_nvr: 1.0
+      video_switcher: 1.0
+      camera: 1.0
+      intercom: 0.9
+      audio: 0.9
+
+# ============================================================================
+# 앵커 점수 계산 설정
+# ============================================================================
+anchor_scoring:
+  # 최종 점수 = base_weight * bm25_score + anchor_weight * anchor_score
+  base_weight: 0.7
+  anchor_weight: 0.3
+
+  # 정규화 설정
+  normalize_scores: true
+  normalize_method: "minmax"  # minmax | zscore | softmax
+
+  # 핫리로드 설정
+  hot_reload:
+    enabled: true
+    check_interval: 10  # seconds
+
+  # 메트릭 수집
+  metrics:
+    enabled: true
+    track_per_profile: true
+    log_low_confidence: true
+    low_confidence_threshold: 0.3
+
+# ============================================================================
+# 경계 처리 매크로 (코드에서 치환)
+# ============================================================================
+# {KBL} = (?<![가-힣A-Za-z0-9])  # Korean Boundary Left
+# {KBR} = (?![가-힣A-Za-z0-9])   # Korean Boundary Right
 #
-# # 로드
-# config_path = Path("config/router_keywords.yaml")
-# config = yaml.safe_load(config_path.read_text())
-# allow_patterns = config["doc_anchored"]["allow"]
-# device_pattern = "|".join(allow_patterns)
-#
-# # 검색 후 필터링
-# for result in bm25_results:
-#     text = result.get("snippet", "") + " " + result.get("doc_id", "")
-#     if re.search(device_pattern, text, re.IGNORECASE):
-#         filtered.append(result)
+# 사용 예: "{KBL}DVR{KBR}" → "(?<![가-힣A-Za-z0-9])DVR(?![가-힣A-Za-z0-9])"

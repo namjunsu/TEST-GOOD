@@ -54,7 +54,7 @@ class MetaParser:
 
         logger.info(
             f"📋 메타 파서 초기화: date_priority={len(self.date_priority)}, "
-            f"author_fields={len(self.author_fields)}, stoplist={len(self.author_stoplist)}, "
+            f"author_fields={len(self.author_fields)}, stoplist={len(self.author_stoplist_values)}, "
             f"category_rules={len(self.category_rules)}"
         )
 
@@ -80,7 +80,17 @@ class MetaParser:
         )
 
         # 작성자 Stoplist (기안자 오검출 방지)
-        self.author_stoplist = metadata_config.get("author_stoplist", [])
+        # v1 스키마: dict {normalize, match, values}, v0 호환: list
+        stoplist_raw = metadata_config.get("author_stoplist", [])
+        if isinstance(stoplist_raw, dict):
+            self.author_stoplist_normalize = stoplist_raw.get("normalize", True)
+            self.author_stoplist_match = stoplist_raw.get("match", "exact_token")
+            self.author_stoplist_values = stoplist_raw.get("values", [])
+        else:
+            # v0 호환: 리스트
+            self.author_stoplist_normalize = False
+            self.author_stoplist_match = "exact_token"
+            self.author_stoplist_values = stoplist_raw
 
         # 카테고리 규칙 (이전 호환성 유지)
         meta_parsing = self.config.get("meta_parsing", {}) or {}
@@ -104,6 +114,51 @@ class MetaParser:
                 logger.warning(f"⚠️ 핫리로드 실패: {e}")
         self._last_load_ts = now
 
+    def _is_in_stoplist(self, author: str) -> bool:
+        """
+        작성자가 Stoplist에 포함되는지 확인
+
+        v1 스키마 지원:
+        - normalize: 공백/대소문자 정규화
+        - match: "exact_token" (완전 일치) | "substring" (부분 문자열)
+
+        Args:
+            author: 작성자 후보 문자열
+
+        Returns:
+            Stoplist에 포함되면 True
+        """
+        if not self.author_stoplist_values:
+            return False
+
+        # 정규화 옵션 적용
+        if self.author_stoplist_normalize:
+            author_norm = author.strip().replace(" ", "").upper()
+        else:
+            author_norm = author
+
+        # 매칭 전략
+        if self.author_stoplist_match == "substring":
+            # 부분 문자열 매칭
+            for stop_value in self.author_stoplist_values:
+                if self.author_stoplist_normalize:
+                    stop_norm = stop_value.strip().replace(" ", "").upper()
+                else:
+                    stop_norm = stop_value
+                if stop_norm in author_norm or author_norm in stop_norm:
+                    return True
+        else:
+            # exact_token: 완전 일치 (기본값)
+            for stop_value in self.author_stoplist_values:
+                if self.author_stoplist_normalize:
+                    stop_norm = stop_value.strip().replace(" ", "").upper()
+                else:
+                    stop_norm = stop_value
+                if author_norm == stop_norm:
+                    return True
+
+        return False
+
     def _validate_author(self, author: str) -> bool:
         """작성자 이름 검증 (한글 2~4음절 + 영문/혼성 + Stoplist + 부서/직함 차단)
 
@@ -118,8 +173,8 @@ class MetaParser:
 
         a = author.strip()
 
-        # Stoplist 체크
-        if a in self.author_stoplist:
+        # Stoplist 체크 (v1: normalize/match 지원, v0: 단순 리스트)
+        if self._is_in_stoplist(a):
             logger.debug(f"작성자 Stoplist 제외: {a}")
             return False
 

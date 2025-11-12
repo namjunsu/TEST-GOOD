@@ -191,14 +191,15 @@ class DocumentTypeClassifier:
         """
 
         def pattern(keyword: str) -> str:
-            """키워드 → 정규식 패턴"""
+            """키워드 → 정규식 패턴 (한국어 조사 허용)"""
             k = self._normalize_text(keyword)
             # 이스케이프
             k = re.escape(k)
             # 공백 → \\s* (0개 이상의 공백 허용)
             k = k.replace(r"\ ", r"\s*")
-            # 단어 경계 (한글/영문 모두 대응)
-            return rf"(?<!\w){k}(?!\w)"
+            # 단순 매칭 (단어 경계 없음 - 한국어 조사 때문에 단어 경계가 모호함)
+            # 대신 정확도를 위해 최소 3글자 이상 키워드 사용 권장
+            return k
 
         compiled = {}
         for name, info in doctype_cfg.items():
@@ -209,9 +210,11 @@ class DocumentTypeClassifier:
                 re.compile(pattern(k), re.IGNORECASE)
                 for k in info.get("keywords", [])
             ]
+            # v1 스키마: negative_keywords, v0 호환: neg_keywords
+            neg_kw_list = info.get("negative_keywords") or info.get("neg_keywords", [])
             neg = [
                 re.compile(pattern(k), re.IGNORECASE)
-                for k in info.get("neg_keywords", [])
+                for k in neg_kw_list
             ]
 
             compiled[name] = {

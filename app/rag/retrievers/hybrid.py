@@ -1,7 +1,7 @@
 """하이브리드 검색 엔진 v2.1 (BM25 + ExactMatch)
 
 2025-11-11 v2.1 변경사항:
-- FTS 정렬: ORDER BY rank → bm25(fts) (SQLite FTS5 호환)
+- FTS 정렬: ORDER BY bm25(documents_fts) (SQLite FTS5 관련성 정렬)
 - expansion_result 안전 초기화 (expanded_kw_count)
 - 파일명 보너스 스케일 정규화 (30점 → 4점, 전체 0-10 유지)
 - selected_doc 처리 명확화 (locals() 제거)
@@ -223,7 +223,7 @@ class HybridRetriever:
                 FROM documents_fts fts
                 JOIN documents d ON fts.rowid = d.rowid
                 WHERE documents_fts MATCH ?
-                ORDER BY bm25(fts)
+                ORDER BY bm25(documents_fts)
                 LIMIT ?
             """, (fts_query, top_k * 2))  # 여유있게 가져오기
 

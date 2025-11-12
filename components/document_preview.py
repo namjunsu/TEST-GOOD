@@ -16,10 +16,10 @@ def render_document_preview(rag_instance: Any, config_module: Any) -> None:
 
     Args:
         rag_instance: RAG 시스템 인스턴스 (st.session_state.rag)
-        config_module: config 모듈 (config.DOCS_DIR 접근용) - app.config.settings
+        config_module: config 모듈 (config.settings.DOCS_DIR 접근용) - app.config.settings
     """
     from components.pdf_viewer import show_pdf_preview
-    from app.config.settings import DOCS_DIR
+    from app.config.settings import settings
 
     # 선택된 문서 미리보기 (사이드바에서 선택시)
     if 'selected_doc' in st.session_state and st.session_state.get('show_doc_preview', False):
@@ -41,7 +41,7 @@ def render_document_preview(rag_instance: Any, config_module: Any) -> None:
             # 파일 경로 검증 (디렉터리 트래버설 방지)
             file_path = validate_and_resolve_path(
                 file_path_str=doc.get('path'),
-                base_dir=Path(DOCS_DIR).parent,  # docs의 상위 디렉터리 (프로젝트 루트)
+                base_dir=Path(settings.DOCS_DIR).parent,  # docs의 상위 디렉터리 (프로젝트 루트)
                 fallback_filename=f"docs/{doc.get('filename')}" if doc.get('filename') else None
             )
 
@@ -98,7 +98,7 @@ def render_document_preview(rag_instance: Any, config_module: Any) -> None:
             # 파일 경로 검증 (디렉터리 트래버설 방지)
             file_path = validate_and_resolve_path(
                 file_path_str=doc.get('path'),
-                base_dir=Path(DOCS_DIR).parent,  # docs의 상위 디렉터리 (프로젝트 루트)
+                base_dir=Path(settings.DOCS_DIR).parent,  # docs의 상위 디렉터리 (프로젝트 루트)
                 fallback_filename=f"docs/{doc.get('filename')}" if doc.get('filename') else None
             )
 

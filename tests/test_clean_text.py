@@ -127,8 +127,11 @@ http://gw.channela-mt.com/approval_form_popup.php?seq=123
         assert "approval_form_popup.php" not in cleaned
         assert "- 5 -" not in cleaned
 
-        # 총 노이즈 카운트 확인
-        total_removed = sum(counts.values())
+        # 총 노이즈 카운트 확인 (removed_samples는 dict이므로 제외)
+        total_removed = sum(
+            v for k, v in counts.items()
+            if k != "removed_samples" and isinstance(v, int)
+        )
         assert total_removed >= 3
 
     def test_preserve_content(self, cleaner):

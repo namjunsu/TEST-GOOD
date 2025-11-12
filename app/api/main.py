@@ -9,16 +9,36 @@ import time
 import subprocess
 import base64
 import json
+import ipaddress
+import binascii
+import mimetypes
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
 load_dotenv(override=True)  # .env 파일이 환경 변수를 override하도록 설정
+
+# 중앙 설정 임포트
+from app.config.settings import settings
+
+# 로깅 설정 임포트
+from app.logging.config import setup_logging, get_logger, RequestContext
+
+# 로깅 초기화 (환경변수 기반)
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+LOG_JSON = os.getenv("LOG_JSON", "false").lower() == "true"
+setup_logging(
+    log_dir=str(settings.LOG_DIR),
+    log_level=LOG_LEVEL,
+    structured=LOG_JSON
+)
+log = get_logger("app.api")
 
 app = FastAPI(
     title="AI-CHAT API",
@@ -27,23 +47,212 @@ app = FastAPI(
 )
 
 # CORS 설정 (Streamlit과 통신)
+# allow_origins=["*"]와 allow_credentials=True 동시 사용 시 브라우저가 쿠키/인증 헤더 차단
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:8501").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in ALLOWED_ORIGINS if o.strip()],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
+# GZip 압축 (1KB 이상 응답에 적용)
+app.add_middleware(GZipMiddleware, minimum_size=1024)
+
+
+# Startup 이벤트
+@app.on_event("startup")
+async def startup_event():
+    """서버 시작 시 로그 기록"""
+    log.info(
+        "FastAPI server starting",
+        extra={
+            "version": "1.0.0",
+            "log_level": LOG_LEVEL,
+            "structured_logging": LOG_JSON,
+            "docs_dir": str(settings.DOCS_DIR),
+        }
+    )
+
+
+# 요청 로깅 미들웨어 (contextvars 기반 req_id/trace_id 자동 전파)
+@app.middleware("http")
+async def request_logging_middleware(request: Request, call_next):
+    """모든 HTTP 요청에 req_id/trace_id 자동 주입 및 로깅
+
+    - contextvars를 통해 하위 모든 로그에 자동 전파
+    - 응답 헤더에 X-Request-ID, X-Trace-ID 추가 (디버깅용)
+    - 요청/응답 시작/종료 로깅 with 레이턴시
+    """
+    with RequestContext() as ctx:
+        start = time.time()
+
+        log.info(
+            "Request started",
+            extra={
+                "method": request.method,
+                "path": request.url.path,
+                "client": request.client.host if request.client else "unknown",
+            }
+        )
+
+        try:
+            response = await call_next(request)
+
+            latency_ms = int((time.time() - start) * 1000)
+            log.info(
+                "Request completed",
+                extra={
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status": response.status_code,
+                    "latency_ms": latency_ms,
+                }
+            )
+
+            # 응답 헤더에 req_id/trace_id 추가 (프론트엔드 디버깅용)
+            response.headers["X-Request-ID"] = ctx.req_id
+            response.headers["X-Trace-ID"] = ctx.trace_id
+
+            return response
+
+        except Exception as e:
+            latency_ms = int((time.time() - start) * 1000)
+            log.error(
+                "Request failed",
+                extra={
+                    "method": request.method,
+                    "path": request.url.path,
+                    "latency_ms": latency_ms,
+                },
+                exc_info=True
+            )
+            raise
+
+
+# 보안 응답 헤더 미들웨어
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """보안 응답 헤더 추가
+
+    - X-Content-Type-Options: nosniff (MIME 스니핑 방지)
+    - Referrer-Policy: no-referrer (리퍼러 정보 노출 방지)
+    - X-Frame-Options: DENY (클릭재킹 방지)
+    """
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    return response
+
 
 # ===== 유틸리티 함수 =====
+
+# 프록시 헤더 신뢰 경계 설정
+TRUST_PROXY = os.getenv("TRUST_PROXY", "false").lower() == "true"
+ALLOWED_PROXY_IPS = []
+proxy_ips_str = os.getenv("ALLOWED_PROXY_IPS", "")
+if proxy_ips_str:
+    for cidr in proxy_ips_str.split(","):
+        try:
+            ALLOWED_PROXY_IPS.append(ipaddress.ip_network(cidr.strip()))
+        except ValueError:
+            print(f"Invalid CIDR notation: {cidr}")
+
+# 중앙 설정에서 경로 가져오기
+DOCS_DIR = settings.DOCS_DIR
+BM25_CANDIDATES = settings.BM25_CANDIDATES
+FAISS_CANDIDATES = settings.FAISS_CANDIDATES
+
+
+def _first_existing(paths: list) -> Path | None:
+    """경로 리스트에서 첫 번째 존재하는 파일 반환
+
+    Args:
+        paths: 경로 리스트
+
+    Returns:
+        Path | None: 존재하는 첫 번째 경로, 없으면 None
+    """
+    for p in paths:
+        if p and p.exists():
+            return p
+    return None
+
+
+def _client_ip_ok(request: Request) -> bool:
+    """클라이언트 IP가 허용된 프록시 IP 범위에 포함되는지 확인"""
+    if not ALLOWED_PROXY_IPS:
+        return False
+    try:
+        forwarded_for = request.headers.get("x-forwarded-for", "")
+        if forwarded_for:
+            ip_str = forwarded_for.split(",")[0].strip()
+        elif request.client:
+            ip_str = request.client.host
+        else:
+            return False
+        client_ip = ipaddress.ip_address(ip_str)
+        return any(client_ip in net for net in ALLOWED_PROXY_IPS)
+    except Exception:
+        return False
+
+
+def _decode_ref(ref: str) -> Path:
+    """Base64 인코딩된 파일 경로를 안전하게 디코딩 및 검증
+
+    Args:
+        ref: urlsafe base64 인코딩된 파일 경로
+
+    Returns:
+        Path: 검증된 파일 경로 (DOCS_DIR 하위)
+
+    Raises:
+        HTTPException: 잘못된 형식이거나 허용되지 않은 경로
+    """
+    try:
+        # urlsafe_b64의 패딩 보정 + 검증
+        missing = (-len(ref)) % 4
+        decoded = base64.urlsafe_b64decode(ref + ("=" * missing)).decode("utf-8")
+    except (binascii.Error, UnicodeDecodeError) as e:
+        raise HTTPException(status_code=400, detail="ref 파라미터 형식 오류") from e
+
+    file_path = Path(decoded).resolve()
+
+    # 경로 탈출/심볼릭 링크 방지: DOCS_DIR 하위만 허용
+    try:
+        if not str(file_path).startswith(str(DOCS_DIR) + os.sep):
+            raise HTTPException(status_code=403, detail="허용되지 않은 경로")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=403, detail="허용되지 않은 경로") from e
+
+    return file_path
+
+
+def _guess_mime(path: Path, default: str = "application/octet-stream") -> str:
+    """파일 확장자로부터 MIME 타입 자동 추측
+
+    Args:
+        path: 파일 경로
+        default: 기본 MIME 타입
+
+    Returns:
+        str: MIME 타입
+    """
+    mime_type, _ = mimetypes.guess_type(path.name)
+    return mime_type or default
+
 
 def get_public_base_url(request: Request) -> str:
     """동적으로 공개 기준 URL 생성 (프록시/포워딩 환경 지원)
 
     우선순위:
     1. 환경변수 PUBLIC_API_BASE (수동 설정)
-    2. X-Forwarded-Host / X-Forwarded-Proto 헤더 (프록시 환경)
+    2. X-Forwarded-Host / X-Forwarded-Proto 헤더 (프록시 환경, 신뢰 조건 필요)
     3. request.url (기본)
 
     Args:
@@ -57,13 +266,12 @@ def get_public_base_url(request: Request) -> str:
     if env_base:
         return env_base.rstrip("/")
 
-    # 2. 프록시 헤더 확인 (nginx, cloudflare 등)
-    forwarded_host = request.headers.get("x-forwarded-host")
-    forwarded_proto = request.headers.get("x-forwarded-proto")
-
-    if forwarded_host:
-        scheme = forwarded_proto or request.url.scheme
-        return f"{scheme}://{forwarded_host}"
+    # 2. 프록시 헤더 확인 (신뢰 조건: TRUST_PROXY=true && 클라이언트 IP 검증)
+    if TRUST_PROXY and _client_ip_ok(request):
+        forwarded_host = request.headers.get("x-forwarded-host")
+        if forwarded_host:
+            forwarded_proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+            return f"{forwarded_proto}://{forwarded_host}"
 
     # 3. 기본 request.url 사용
     return f"{request.url.scheme}://{request.url.netloc}"
@@ -71,7 +279,7 @@ def get_public_base_url(request: Request) -> str:
 
 # 파일 접근 로깅 함수
 def log_file_access(filename: str, action: str, query: str = ""):
-    """파일 접근 로그 기록
+    """파일 접근 로그 기록 (자동 로테이션: 10MB 임계치)
 
     Args:
         filename: 파일명
@@ -83,7 +291,13 @@ def log_file_access(filename: str, action: str, query: str = ""):
         log_dir.mkdir(exist_ok=True)
 
         log_file = log_dir / "file_access.jsonl"
-        log_entry = {
+
+        # 로그 로테이션: 10MB 초과 시 타임스탬프 파일로 백업
+        if log_file.exists() and log_file.stat().st_size > 10 * 1024 * 1024:
+            ts = datetime.now().strftime("%Y%m%d%H%M%S")
+            log_file.rename(log_dir / f"file_access.{ts}.jsonl")
+
+        entry = {
             "timestamp": datetime.now().isoformat(),
             "filename": filename,
             "action": action,
@@ -91,7 +305,7 @@ def log_file_access(filename: str, action: str, query: str = ""):
         }
 
         with open(log_file, "a", encoding="utf-8") as f:
-            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except Exception as e:
         print(f"로깅 실패: {e}")
 
@@ -103,6 +317,8 @@ def health():
     Returns:
         dict: 시스템 상태 정보 (P0-4: LLM 상태 포함)
     """
+    log.debug("Health check requested")
+
     # Git commit 정보
     commit = os.getenv("GIT_COMMIT", "unknown")
     if commit == "unknown":
@@ -151,7 +367,7 @@ def health():
 
 @app.get("/files/preview")
 def preview_file(ref: str = Query(..., description="base64 encoded file path")):
-    """파일 미리보기 (보안: docs 하위만 허용)
+    """파일 미리보기 (보안: DOCS_DIR 하위만 허용)
 
     Args:
         ref: base64로 인코딩된 파일 경로
@@ -159,62 +375,29 @@ def preview_file(ref: str = Query(..., description="base64 encoded file path")):
     Returns:
         파일 응답 (PDF/이미지 등)
     """
-    try:
-        # base64 디코딩
-        decoded_path = base64.urlsafe_b64decode(ref).decode()
-        file_path = Path(decoded_path)
+    file_path = _decode_ref(ref)
 
-        # 보안 검증: docs 하위만 허용
-        if "docs" not in file_path.parts:
-            log_file_access(file_path.name, "preview_denied", "")
-            raise HTTPException(
-                status_code=403,
-                detail="문서 위치가 허용 범위 외입니다. (docs 하위만 허용)"
-            )
+    if not file_path.exists():
+        log.warning("File not found for preview", extra={"filename": file_path.name})
+        log_file_access(file_path.name, "preview_not_found", "")
+        raise HTTPException(status_code=404, detail=f"파일 없음: {file_path.name}")
 
-        # 파일 존재 확인
-        if not file_path.exists():
-            log_file_access(file_path.name, "preview_not_found", "")
-            raise HTTPException(
-                status_code=404,
-                detail=f"파일을 찾을 수 없습니다: {file_path.name}"
-            )
+    log.info("File preview requested", extra={"filename": file_path.name})
+    log_file_access(file_path.name, "preview", "")
 
-        # 경로 탈출 방지 (resolve로 실제 경로 확인)
-        resolved_path = file_path.resolve()
-        if "docs" not in resolved_path.parts:
-            log_file_access(file_path.name, "preview_denied", "")
-            raise HTTPException(
-                status_code=403,
-                detail="경로 탐색 시도가 감지되었습니다."
-            )
+    mime_type = _guess_mime(file_path, default="application/pdf")
+    encoded_filename = quote(file_path.name)
 
-        # 로깅
-        log_file_access(file_path.name, "preview", "")
-
-        # 파일 반환 (inline 미리보기)
-        # RFC 5987: filename*=UTF-8''encoded_name for non-ASCII filenames
-        encoded_filename = quote(file_path.name)
-        return FileResponse(
-            path=str(resolved_path),
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}"
-            }
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"파일 미리보기 실패: {str(e)}"
-        )
+    return FileResponse(
+        path=str(file_path),
+        media_type=mime_type,
+        headers={"Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}"}
+    )
 
 
 @app.get("/files/download")
 def download_file(ref: str = Query(..., description="base64 encoded file path")):
-    """파일 다운로드 (보안: docs 하위만 허용)
+    """파일 다운로드 (보안: DOCS_DIR 하위만 허용)
 
     Args:
         ref: base64로 인코딩된 파일 경로
@@ -222,57 +405,24 @@ def download_file(ref: str = Query(..., description="base64 encoded file path"))
     Returns:
         파일 다운로드 응답
     """
-    try:
-        # base64 디코딩
-        decoded_path = base64.urlsafe_b64decode(ref).decode()
-        file_path = Path(decoded_path)
+    file_path = _decode_ref(ref)
 
-        # 보안 검증: docs 하위만 허용
-        if "docs" not in file_path.parts:
-            log_file_access(file_path.name, "download_denied", "")
-            raise HTTPException(
-                status_code=403,
-                detail="문서 위치가 허용 범위 외입니다. (docs 하위만 허용)"
-            )
+    if not file_path.exists():
+        log.warning("File not found for download", extra={"filename": file_path.name})
+        log_file_access(file_path.name, "download_not_found", "")
+        raise HTTPException(status_code=404, detail=f"파일 없음: {file_path.name}")
 
-        # 파일 존재 확인
-        if not file_path.exists():
-            log_file_access(file_path.name, "download_not_found", "")
-            raise HTTPException(
-                status_code=404,
-                detail=f"파일을 찾을 수 없습니다: {file_path.name}"
-            )
+    log.info("File download requested", extra={"filename": file_path.name})
+    log_file_access(file_path.name, "download", "")
 
-        # 경로 탈출 방지
-        resolved_path = file_path.resolve()
-        if "docs" not in resolved_path.parts:
-            log_file_access(file_path.name, "download_denied", "")
-            raise HTTPException(
-                status_code=403,
-                detail="경로 탐색 시도가 감지되었습니다."
-            )
+    mime_type = _guess_mime(file_path, default="application/pdf")
+    encoded_filename = quote(file_path.name)
 
-        # 로깅
-        log_file_access(file_path.name, "download", "")
-
-        # 파일 반환 (attachment 다운로드)
-        # RFC 5987: filename*=UTF-8''encoded_name for non-ASCII filenames
-        encoded_filename = quote(file_path.name)
-        return FileResponse(
-            path=str(resolved_path),
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
-            }
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"파일 다운로드 실패: {str(e)}"
-        )
+    return FileResponse(
+        path=str(file_path),
+        media_type=mime_type,
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"}
+    )
 
 
 @app.get("/")
@@ -324,6 +474,8 @@ def get_metrics():
             "ingest_status": str    # idle|running|failed
         }
     """
+    log.debug("Metrics requested")
+
     import sqlite3
     import pickle
     import hashlib
@@ -350,20 +502,20 @@ def get_metrics():
     except Exception as e:
         print(f"DocStore 카운트 실패: {e}")
 
-    # 2. FAISS 카운트
+    # 2. FAISS 카운트 (다중 후보 경로 지원)
     try:
-        faiss_path = Path("rag_system/db/faiss.index")
-        if faiss_path.exists():
+        faiss_path = _first_existing(FAISS_CANDIDATES)
+        if faiss_path:
             import faiss
             index = faiss.read_index(str(faiss_path))
             metrics["faiss_count"] = index.ntotal
     except Exception as e:
         print(f"FAISS 카운트 실패: {e}")
 
-    # 3. BM25 카운트
+    # 3. BM25 카운트 (다중 후보 경로 지원)
     try:
-        bm25_path = Path("rag_system/db/bm25_index.pkl")
-        if bm25_path.exists():
+        bm25_path = _first_existing(BM25_CANDIDATES)
+        if bm25_path:
             with open(bm25_path, 'rb') as f:
                 bm25_data = pickle.load(f)
 
@@ -387,8 +539,8 @@ def get_metrics():
             metrics["index_version"] = version_file.read_text().strip()
         else:
             # 버전 파일 없으면 BM25 수정 시각 기반으로 생성
-            bm25_path = Path("rag_system/db/bm25_index.pkl")
-            if bm25_path.exists():
+            bm25_path = _first_existing(BM25_CANDIDATES)
+            if bm25_path:
                 mtime = bm25_path.stat().st_mtime
                 timestamp = datetime.fromtimestamp(mtime).strftime("%Y%m%d%H%M%S")
 
@@ -407,8 +559,8 @@ def get_metrics():
             metrics["last_reindex_at"] = reindex_log.read_text().strip()
         else:
             # 로그 없으면 BM25 수정 시각 사용
-            bm25_path = Path("rag_system/db/bm25_index.pkl")
-            if bm25_path.exists():
+            bm25_path = _first_existing(BM25_CANDIDATES)
+            if bm25_path:
                 mtime = bm25_path.stat().st_mtime
                 metrics["last_reindex_at"] = datetime.fromtimestamp(mtime).isoformat()
     except Exception as e:
@@ -447,12 +599,9 @@ def get_metrics():
 
     # 8-1. [PATCH 2] 인덱스 위생 메트릭
     try:
-        import os
-        from app.config.settings import DOCS_DIR
-
         # 물리 파일 수 (fs_file_count)
         fs_count = 0
-        docs_path = Path(DOCS_DIR)
+        docs_path = settings.DOCS_DIR
         if docs_path.exists():
             for root, _, files in os.walk(docs_path):
                 fs_count += sum(1 for f in files if f.lower().endswith(('.pdf', '.txt')))
@@ -540,6 +689,19 @@ def get_metrics():
             "retrieval_latency_ms_p50": 0,
             "retrieval_latency_ms_p95": 0,
         })
+
+    # 10. Retriever 실시간 메트릭 (v2.0 추가)
+    try:
+        # rag_pipeline이 글로벌 변수로 있는지 확인
+        import sys
+        if 'rag_pipeline' in globals():
+            pipeline = globals()['rag_pipeline']
+            if hasattr(pipeline, 'retriever') and hasattr(pipeline.retriever, 'get_metrics'):
+                retriever_metrics = pipeline.retriever.get_metrics()
+                metrics["retriever_runtime"] = retriever_metrics
+                log.debug(f"Retriever metrics added: {retriever_metrics}")
+    except Exception as e:
+        print(f"Retriever 메트릭 조회 실패: {e}")
 
     return metrics
 

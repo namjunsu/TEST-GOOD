@@ -6,7 +6,10 @@ Indexing Configuration
 
 # app.config.settings에서 설정을 가져옵니다
 try:
-    from app.config.settings import ALLOWED_EXTS, DB_PATHS, PROJECT_ROOT
+    from app.config.settings import settings
+    ALLOWED_EXTS = settings.ALLOWED_EXTS
+    DB_PATHS = settings.DB_PATHS
+    PROJECT_ROOT = settings.PROJECT_ROOT
 except ImportError:
     # 폴백: 기본값 사용
     ALLOWED_EXTS = {".pdf", ".txt"}

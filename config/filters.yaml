@@ -41,6 +41,13 @@ drafter_stopwords:
   - 페이지
   - 케이스
 
+  # 시간 표현 (연도 관련)
+  - 올해
+  - 작년
+  - 재작년
+  - 년
+  - 연도
+
 # 검색 쿼리 불용어 (FTS/BM25에서 제거할 키워드)
 search_stopwords:
   # 조사/접속사
@@ -85,7 +92,52 @@ search_stopwords:
 
 # 질의 문법 토큰 패턴
 query_tokens:
-  year: "year:\\s*(\\d{4})"
-  drafter: "drafter:\\s*([가-힣a-zA-Z\\s]+)"
-  type: "type:\\s*(\\w+)"
-  date: "date:\\s*(\\d{4}-\\d{2}-\\d{2})"
+  year: "year\\s*[:=]\\s*(\\d{2,4})"
+  drafter: "drafter\\s*[:=]\\s*([가-힣a-zA-Z]+)"
+  type: "type\\s*[:=]\\s*(\\w+)"
+  date: "date\\s*[:=]\\s*(\\d{4}-\\d{2}-\\d{2})"
+
+# 도메인 특화 용어 (방송장비 - 항상 검색에 포함, LLM 독립적)
+domain_terms:
+  # 카메라/영상 장비
+  - LVM-180A
+  - XRN-1620B2
+  - LMK-25M
+  - HDC-4300
+  - PDW-850
+  - PXW-Z450
+
+  # 오디오 장비
+  - SPG9000
+  - ECO8000
+  - DDA408
+  - DME-7000
+  - AMS-Neve
+  - SSL
+  - Studer
+
+  # 네트워크/인터컴
+  - RTS Omneo
+  - Dante
+  - AES67
+  - MADI
+  - Intercom
+  - Tally
+
+  # 영상 장비
+  - DeckLink
+  - Blackmagic
+  - AJA
+  - Grass Valley
+  - Ross
+  - NewTek
+
+  # 일반 용어
+  - 뷰파인더
+  - 삼각대
+  - 케이블
+  - 마이크
+  - 렌즈
+  - 필터
+  - 배터리
+  - 어댑터

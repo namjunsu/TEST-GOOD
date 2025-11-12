@@ -3,14 +3,31 @@
 Context Hydrator - 청크에서 텍스트 추출 및 PDF 보강
 """
 
-from typing import List, Dict, Any, Tuple
-from pathlib import Path
 import logging
 import os
 import re
 import time
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# 문장 스코어링 휴리스틱 가중치 (환경변수 오버라이드 가능)
+# ============================================================================
+SCORE_WEIGHTS = {
+    "numeric": int(os.getenv("HYDRATOR_W_NUMERIC", "3")),        # 금액/날짜/수량
+    "keyword": int(os.getenv("HYDRATOR_W_KEYWORD", "1")),        # 도메인 키워드
+    "conclusion": int(os.getenv("HYDRATOR_W_CONCLUSION", "2")),  # 결론/요약 마커
+    "edge_bonus": int(os.getenv("HYDRATOR_W_EDGE", "1")),        # 첫/마지막 문장 가중
+}
+
+# 세미버(v1.2.3) 패턴을 숫자 가중에서 제외 (과다 반영 방지)
+IGNORE_SEMVER_IN_NUMERIC = os.getenv("IGNORE_SEMVER_IN_NUMERIC", "false").lower() == "true"
+
+# 말미 가중치 (마지막 문장/문단 보정)
+END_BONUS = int(os.getenv("END_BONUS", "1"))
 
 
 def hydrate_context(chunks: List[Dict[str, Any]], max_len: int = 10000, mode: str = "rag") -> Tuple[str, Dict[str, Any]]:
@@ -27,9 +44,13 @@ def hydrate_context(chunks: List[Dict[str, Any]], max_len: int = 10000, mode: st
     """
     start_time = time.perf_counter()
 
-    # 🎯 환경 변수에서 컨텍스트 토큰 상한 읽기 (1 token ≈ 3 chars in Korean)
+    # 🎯 환경 변수에서 컨텍스트 토큰 상한 읽기
     context_max_tokens = int(os.getenv("CONTEXT_MAX_TOKENS", "1200"))
-    context_max_chars = context_max_tokens * 3  # 1200 tokens = 3600 chars
+
+    # 🎯 토큰↔문자 변환 계수 (모델별 편차 고려)
+    # 기본값 0.33: 1 char ≈ 0.33 token (즉, 1 token ≈ 3 chars)
+    tokens_per_char = float(os.getenv("TOKENS_PER_CHAR", "0.33"))
+    context_max_chars = int(context_max_tokens / max(tokens_per_char, 1e-6))
     effective_max_len = min(max_len, context_max_chars)
 
     # 🎯 RAG 스타일 압축 모드 확인
@@ -39,18 +60,21 @@ def hydrate_context(chunks: List[Dict[str, Any]], max_len: int = 10000, mode: st
         "chunks_received": len(chunks),
         "chunks_used": 0,
         "pdf_tail_pages": 0,
+        "pdf_tail_status": "skipped",  # skipped | success | fail
         "total_length": 0,
         "fallback_chain": [],
         "context_max_tokens": context_max_tokens,
         "context_max_chars": context_max_chars,
         "extraction_time": 0.0,
-        "compression_applied": False
+        "compression_applied": False,
+        "token_estimate": 0,
+        "truncate_reason": "none"
     }
 
     parts = []
 
     # 1. 청크에서 텍스트 추출 (키 폴백 체인)
-    for i, chunk in enumerate(chunks):
+    for chunk in chunks:
         text = _extract_text_from_chunk(chunk, metrics)
         if text:
             parts.append(text)
@@ -68,63 +92,146 @@ def hydrate_context(chunks: List[Dict[str, Any]], max_len: int = 10000, mode: st
             current_text = "\n\n".join(parts)
             current_len = len(current_text)
 
-    # 3. 🎯 RAG 스타일 압축: 핵심 문장 추출 (모드가 rag이고 compact가 활성화된 경우)
+    # 3. 🎯 모드별 컨텍스트 압축 정책
     if mode == "rag" and rag_style_compact and current_len > effective_max_len:
+        # RAG 모드: 핵심 문장 추출 (정보 밀도 기반 압축)
         current_text = _extract_core_sentences(current_text, effective_max_len)
         current_len = len(current_text)
         metrics["compression_applied"] = True
+    elif mode == "summarize":
+        # Summarize 모드: 압축 비적용, 하드 컷만 수행
+        pass
 
-    # 4. 최대 길이 제한 (하드 컷)
+    # 4. 최대 길이 제한 (하드 컷 - 문단 단위)
     if current_len > effective_max_len:
-        current_text = current_text[:effective_max_len]
-        current_len = effective_max_len
+        current_text = _hard_cut_paragraphwise(current_text, effective_max_len)
+        current_len = len(current_text)
 
     metrics["total_length"] = current_len
+    metrics["token_estimate"] = int(current_len * tokens_per_char)
+
+    # 트렁케이션 사유 결정
+    if metrics["compression_applied"]:
+        metrics["truncate_reason"] = "compact"
+    elif current_len >= effective_max_len:
+        metrics["truncate_reason"] = "hardcut"
+    else:
+        metrics["truncate_reason"] = "none"
+
     metrics["extraction_time"] = time.perf_counter() - start_time
 
-    # 5. 로깅
+    # 5. 로깅 (단일 라인 요약 - 운영 모니터링)
     parts_info = []
-    if metrics["pdf_tail_pages"] > 0:
-        parts_info.append(f"pdf_tail:{metrics['pdf_tail_pages']}")
     if metrics["chunks_used"] > 0:
         parts_info.append(f"chunks:{metrics['chunks_used']}")
+    if metrics["pdf_tail_pages"] > 0:
+        parts_info.append(f"pdf_tail:{metrics['pdf_tail_pages']}")
 
     logger.info(
-        f"LLM_CTX len={current_len}/{effective_max_len}; "
-        f"parts=[{', '.join(parts_info)}]; "
-        f"compact={metrics['compression_applied']}; "
+        f"CTX len={current_len}/{effective_max_len} "
+        f"tokens~={metrics['token_estimate']} "
+        f"src=[{','.join(parts_info)}] "
+        f"truncate={metrics['truncate_reason']} "
+        f"mode={mode} "
+        f"coef={tokens_per_char:.2f} "
         f"time={metrics['extraction_time']:.3f}s"
     )
 
     if current_len == 0:
-        logger.warning(f"⚠️ Context is empty! chunks={len(chunks)}, fallback_chain={metrics['fallback_chain']}")
+        logger.error(
+            f"❌ CONTEXT_EMPTY chunks={len(chunks)} "
+            f"fallback_chain={metrics['fallback_chain']} "
+            f"pdf_tail_status={metrics['pdf_tail_status']} "
+            f"metrics={metrics}"
+        )
 
     return current_text, metrics
 
 
+def _hard_cut_paragraphwise(text: str, max_len: int) -> str:
+    """
+    문단 단위로 하드 컷 (의미 단위 보존)
+
+    Args:
+        text: 원본 텍스트
+        max_len: 최대 길이
+
+    Returns:
+        문단 단위로 잘린 텍스트
+    """
+    paras = [p.strip() for p in re.split(r"\n{2,}", text) if p.strip()]
+    out, total = [], 0
+    for p in paras:
+        if total + len(p) + 2 > max_len:
+            break
+        out.append(p)
+        total += len(p) + 2
+    return "\n\n".join(out) if out else text[:max_len]
+
+
 def _extract_text_from_chunk(chunk: Dict[str, Any], metrics: Dict[str, Any]) -> str:
     """
-    청크에서 텍스트 추출 (폴백 체인)
+    청크에서 텍스트 추출 (폴백 체인 + 경량 정규화)
 
-    폴백 순서: text → content → snippet → text_preview → ""
+    폴백 순서: text → content → page_content → raw_text → snippet → text_preview → abstract → ""
     """
-    # 폴백 체인
-    keys = ["text", "content", "snippet", "text_preview"]
+    # HTML/마크다운 잔여물 패턴
+    html_tags = re.compile(r"<[^>]+>")
+    md_artifacts = re.compile(r"^\s*[#>\-*|`]{1,}", re.MULTILINE)
+
+    # 폴백 체인 (확장)
+    keys = ["text", "content", "page_content", "raw_text", "snippet", "text_preview", "abstract"]
 
     for key in keys:
-        if key in chunk and chunk[key]:
-            text = str(chunk[key]).strip()
-            if text:
-                if key not in metrics["fallback_chain"]:
-                    metrics["fallback_chain"].append(key)
-                return text
+        val = chunk.get(key)
+        if not val:
+            continue
+        text = str(val).strip()
+        if not text:
+            continue
+
+        # 경량 정규화: HTML 태그, 마크다운 아티팩트 제거
+        text = html_tags.sub(" ", text)
+        text = md_artifacts.sub(" ", text)
+        text = re.sub(r"[ \t]+", " ", text).strip()
+
+        if text:
+            if key not in metrics["fallback_chain"]:
+                metrics["fallback_chain"].append(key)
+            return text
 
     return ""
+
+
+def _is_under_docs(path: Path) -> bool:
+    """
+    경로가 docs 디렉토리 하위인지 보안 검증
+
+    Args:
+        path: 검증할 경로
+
+    Returns:
+        docs 하위 여부
+    """
+    try:
+        base_docs = Path(os.getenv("DOCS_DIR", "docs")).resolve()
+        resolved_path = path.resolve()
+        return base_docs in resolved_path.parents or resolved_path == base_docs
+    except Exception:
+        return False
 
 
 def _extract_pdf_tail(chunk: Dict[str, Any], metrics: Dict[str, Any], needed: int = 5000) -> str:
     """
     PDF 마지막 2페이지 추출 (결론/요약 가능성 높음)
+
+    보안 강화:
+    - 경로 검증: resolve() 후 docs 하위 확인
+    - 확장자 검증: .pdf만 허용
+    - 파일 크기 제한: 64MB 상한
+
+    실패 모드:
+    - metrics["pdf_tail_status"] = "fail" 기록
 
     Args:
         chunk: 첫 번째 청크 (파일 경로 포함)
@@ -135,35 +242,47 @@ def _extract_pdf_tail(chunk: Dict[str, Any], metrics: Dict[str, Any], needed: in
         추출된 텍스트
     """
     try:
-        # 파일 경로 찾기
+        # 파일 경로 찾기 (다중 키 폴백)
         file_path = chunk.get("file_path") or chunk.get("path") or chunk.get("filename")
 
         if not file_path:
             return ""
 
-        file_path = Path(file_path)
+        p = Path(file_path)
 
-        # 보안: docs 폴더 외부 차단
-        if "docs" not in file_path.parts:
-            logger.warning(f"⚠️ PDF path outside docs: {file_path}")
+        # 보안 검증 1: PDF 확장자 확인
+        if p.suffix.lower() != ".pdf":
             return ""
 
-        if not file_path.exists():
-            logger.warning(f"⚠️ PDF not found: {file_path}")
+        # 보안 검증 2: docs 디렉토리 하위인지 확인 (심볼릭 링크 우회 방지)
+        if not _is_under_docs(p):
+            logger.warning(f"⚠️ PDF outside docs root: {p}")
+            metrics["pdf_tail_status"] = "fail"
+            return ""
+
+        # 보안 검증 3: 파일 존재 및 크기 제한 (64MB)
+        if not p.exists():
+            logger.warning(f"⚠️ PDF not found: {p}")
+            metrics["pdf_tail_status"] = "fail"
+            return ""
+
+        if p.stat().st_size > 64 * 1024 * 1024:  # 64MB 상한
+            logger.warning(f"⚠️ PDF too large: {p} ({p.stat().st_size / 1024 / 1024:.1f}MB)")
+            metrics["pdf_tail_status"] = "fail"
             return ""
 
         # PDF 읽기
         import pdfplumber
 
-        with pdfplumber.open(file_path) as pdf:
+        with pdfplumber.open(p) as pdf:
             total_pages = len(pdf.pages)
 
             if total_pages == 0:
+                metrics["pdf_tail_status"] = "fail"
                 return ""
 
             # 마지막 2페이지 (또는 전체)
             start_page = max(0, total_pages - 2)
-            pages_to_read = min(2, total_pages)
 
             text_parts = []
             for page_num in range(start_page, total_pages):
@@ -173,6 +292,7 @@ def _extract_pdf_tail(chunk: Dict[str, Any], metrics: Dict[str, Any], needed: in
 
             if text_parts:
                 metrics["pdf_tail_pages"] = len(text_parts)
+                metrics["pdf_tail_status"] = "success"
                 combined = "\n\n".join(text_parts)
 
                 # 필요한 만큼만 자르기
@@ -180,9 +300,14 @@ def _extract_pdf_tail(chunk: Dict[str, Any], metrics: Dict[str, Any], needed: in
                     combined = combined[:needed]
 
                 return combined
+            else:
+                # 텍스트 레이어 없음 (OCR 필요)
+                metrics["pdf_tail_status"] = "fail"
+                return ""
 
     except Exception as e:
         logger.warning(f"⚠️ PDF extraction failed: {e}")
+        metrics["pdf_tail_status"] = "fail"
 
     return ""
 
@@ -203,50 +328,62 @@ def _extract_core_sentences(text: str, max_len: int) -> str:
     Returns:
         압축된 텍스트
     """
-    # 문장 분리 (한국어 종결어미 기반)
-    sentences = re.split(r'([.!?]\s+|\n{2,})', text)
-    sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 10]
+    # 문장 분리 (lookbehind로 구분자 미포함)
+    sent_boundary = re.compile(r"(?<=[.!?])\s+|\n{2,}")
+    sentences = [s.strip() for s in sent_boundary.split(text) if len(s.strip()) > 10]
 
-    # 각 문장에 점수 부여
-    scored_sentences = []
-    for sent in sentences:
+    # 수치/단위 패턴 (쉼표 구분 숫자 + 단위)
+    numeric = re.compile(r"\b\d{1,3}(?:,\d{3})+\b|\b\d+\b")
+    semver = re.compile(r"\bv?\d+\.\d+(?:\.\d+)?\b")  # 세미버 패턴 (v1.2.3)
+    units = ("원", "년", "월", "일", "개", "대", "만", "억", "식", "통", "건", "명", "권", "대")
+
+    # 도메인 키워드 확장
+    keywords = ("기안", "구매", "수리", "교체", "렌즈", "마이크", "카메라", "케이블",
+                "품목", "모델", "금액", "날짜", "작성", "신청", "배터리", "건전지",
+                "소모품", "장비", "방송", "촬영", "사옥", "검토")
+
+    # 각 문장에 점수 부여 (인덱스 보존)
+    scored = []
+    for idx, sent in enumerate(sentences):
         score = 0
 
-        # 1. 수치 정보 (금액, 날짜, 수량)
-        if re.search(r'\d+[,원년월일개대식통만억]', sent):
-            score += 3
+        # 1) 수치 정보 (쉼표 구분 숫자 + 단위)
+        has_numeric = numeric.search(sent) or any(u in sent for u in units)
+        if has_numeric:
+            # 세미버 무시 옵션: v1.2.3 같은 버전 번호 제외
+            if IGNORE_SEMVER_IN_NUMERIC and semver.search(sent):
+                pass  # 숫자 가중치 미적용
+            else:
+                score += SCORE_WEIGHTS["numeric"]
 
-        # 2. 구체적 키워드 (품목, 모델, 기안, 구매)
-        keywords = ['기안', '구매', '수리', '교체', '렌즈', '마이크', '카메라', '케이블',
-                    '품목', '모델', '금액', '날짜', '작성', '신청', '건전지', '배터리']
-        for kw in keywords:
-            if kw in sent:
-                score += 1
+        # 2) 도메인 키워드
+        score += sum(SCORE_WEIGHTS["keyword"] for kw in keywords if kw in sent)
 
-        # 3. 결론/요약 문장
-        if any(marker in sent for marker in ['따라서', '요약', '결론', '목적', '내용']):
-            score += 2
+        # 3) 결론·요약 마커
+        if any(m in sent for m in ("따라서", "요약", "결론", "목적", "종합", "권고", "확정", "내용")):
+            score += SCORE_WEIGHTS["conclusion"]
 
-        # 4. 첫 문장/마지막 문장 가중치
-        if sent == sentences[0] or sent == sentences[-1]:
-            score += 1
+        # 4) 서두/말미 가중치
+        if END_BONUS and idx in (0, len(sentences) - 1):
+            score += SCORE_WEIGHTS["edge_bonus"]
 
-        scored_sentences.append((score, sent))
+        scored.append((score, idx, sent))
 
-    # 점수 순 정렬
-    scored_sentences.sort(key=lambda x: x[0], reverse=True)
+    # 점수 순 정렬 (점수 동일 시 원문 순서 유지)
+    scored.sort(key=lambda x: (-x[0], x[1]))
 
     # 상위 문장 선택 (길이 제한)
-    selected = []
-    current_len = 0
-    for score, sent in scored_sentences:
-        if current_len + len(sent) > max_len:
+    selected, total = [], 0
+    for _, idx, s in scored:
+        if total + len(s) > max_len:
+            continue
+        selected.append((idx, s))
+        total += len(s)
+        if total >= max_len:
             break
-        selected.append(sent)
-        current_len += len(sent)
 
-    # 원본 순서 복원 (가독성 유지)
-    selected_set = set(selected)
-    ordered = [s for s in sentences if s in selected_set]
+    # 원본 순서 복원 (인덱스 기반)
+    selected.sort(key=lambda x: x[0])
+    ordered = [s for _, s in selected]
 
     return "\n\n".join(ordered)

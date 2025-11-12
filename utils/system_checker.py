@@ -637,8 +637,6 @@ class SystemChecker:
             return
 
         try:
-            from app.config.settings import DOCS_DIR, PROJECT_ROOT
-
             # 필수 설정 체크 (app.config.settings 모듈 사용)
             required_settings: List[str] = [
                 'DOCS_DIR',

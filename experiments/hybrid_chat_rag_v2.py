@@ -193,18 +193,53 @@ class UnifiedRAG:
         return True
 
     def _search_documents(self, query: str) -> List[Dict]:
-        """문서 검색"""
+        """문서 검색 + 중복제거"""
         try:
-            # 기안자 검색
-            drafter_match = re.search(r'기안자\s*([가-힣]+)', query)
-            if drafter_match:
+            # 1) 연도 + 기안자 조합 검색 (메타데이터 우선)
+            year_match = re.search(r'(\d{4})', query)
+            drafter_match_plain = re.search(r'([가-힣]{2,4})', query)
+
+            if year_match and drafter_match_plain:
+                year = year_match.group(1)
+                drafter = drafter_match_plain.group(1)
+                logger.debug(f"연도+기안자 검색: {year}년 {drafter}")
+                raw_results = self.search_rag.search_module.search_by_drafter_and_year(drafter, year, top_k=50)
+
+            # 2) 기안자만 검색
+            elif re.search(r'기안자\s*([가-힣]+)', query):
+                drafter_match = re.search(r'기안자\s*([가-힣]+)', query)
                 drafter = drafter_match.group(1)
                 logger.debug(f"기안자 검색: {drafter}")
-                return self.search_rag.search_module.search_by_drafter(drafter, top_k=5)
+                raw_results = self.search_rag.search_module.search_by_drafter(drafter, top_k=50)
 
-            # 일반 검색
-            logger.debug(f"일반 검색: {query}")
-            return self.search_rag.search_module.search_by_content(query, top_k=5)
+            # 3) 일반 검색
+            else:
+                logger.debug(f"일반 검색: {query}")
+                raw_results = self.search_rag.search_module.search_by_content(query, top_k=50)
+
+            # 중복 제거 (doc_id 기반)
+            total_before = len(raw_results)
+            seen_ids = set()
+            deduped_results = []
+
+            for doc in raw_results:
+                doc_id = doc.get('id')
+                if doc_id and doc_id not in seen_ids:
+                    seen_ids.add(doc_id)
+                    deduped_results.append(doc)
+                elif not doc_id:
+                    # id가 없는 경우 path로 폴백 (레거시 지원)
+                    path = doc.get('path', '')
+                    if path and path not in seen_ids:
+                        seen_ids.add(path)
+                        deduped_results.append(doc)
+
+            total_after_dedup = len(deduped_results)
+
+            # 파이프라인 가시성 로깅
+            logger.info(f"search result sizes: raw={total_before} deduped={total_after_dedup}")
+
+            return deduped_results
 
         except Exception as e:
             logger.error("문서 검색 실패", exception=e)

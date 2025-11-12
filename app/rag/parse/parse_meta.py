@@ -1,16 +1,27 @@
 """
-메타데이터 파싱 모듈
-2025-10-26
+메타데이터 파싱 모듈 v1.5
+2025-11-11
 
 문서 날짜와 카테고리를 표준화합니다.
 
+v1.5 변경사항:
+- 설정 핫리로드 (mtime 기반)
+- 날짜 정규화 커버리지 확대 (YYYY/MM/DD, YYYY년 M월 D일, YYYYMMDD 등)
+- 파일명에서 날짜 폴백
+- 작성자 검증 유연화 (영문/혼성 이름 지원, 부서명/직함 오검출 차단)
+- 카테고리 분류 근거(reasons) 반환
+- 로그 가시성 개선 (INFO 요약 + DEBUG 상세)
+- 타입 계약 강화
+
 규칙:
-- 날짜: 기안일자 우선, 시행일자 폴백, 둘 다 표시
+- 날짜: 기안일자 우선, 시행일자 폴백, 둘 다 표시, 파일명 힌트 지원
 - 카테고리: 규칙 기반 분류, "정보 없음" 대신 "미분류" 사용
 """
 
+import time
 from pathlib import Path
-from typing import Dict, Any, Tuple
+from typing import Any, Dict, List, Tuple
+
 import yaml
 
 from app.core.logging import get_logger
@@ -21,16 +32,36 @@ logger = get_logger(__name__)
 class MetaParser:
     """메타데이터 파서"""
 
-    def __init__(self, config_path: str = "config/document_processing.yaml"):
+    def __init__(
+        self,
+        config_path: str = "config/document_processing.yaml",
+        reload_secs: int = 10,
+    ):
         """초기화
 
         Args:
             config_path: 설정 파일 경로
+            reload_secs: 설정 재로드 체크 주기 (초)
         """
-        self.config = self._load_config(config_path)
+        self._config_path = Path(config_path)
+        self._reload_secs = reload_secs
+        self._last_load_ts = 0.0
+        self._config_mtime = 0.0
 
+        # 초기 설정 로드
+        self.config = self._load_config(self._config_path)
+        self._update_config_attrs()
+
+        logger.info(
+            f"📋 메타 파서 초기화: date_priority={len(self.date_priority)}, "
+            f"author_fields={len(self.author_fields)}, stoplist={len(self.author_stoplist)}, "
+            f"category_rules={len(self.category_rules)}"
+        )
+
+    def _update_config_attrs(self):
+        """설정에서 속성 업데이트"""
         # metadata 섹션에서 설정 로드
-        metadata_config = self.config.get("metadata", {})
+        metadata_config = self.config.get("metadata", {}) or {}
 
         # 날짜 우선순위 (config에서 로드, 없으면 기본값)
         self.date_priority = metadata_config.get(
@@ -52,19 +83,29 @@ class MetaParser:
         self.author_stoplist = metadata_config.get("author_stoplist", [])
 
         # 카테고리 규칙 (이전 호환성 유지)
-        self.category_rules = self.config.get("meta_parsing", {}).get(
-            "category_rules", {}
-        )
-        self.default_category = self.config.get("meta_parsing", {}).get(
-            "default_category", "미분류"
-        )
+        meta_parsing = self.config.get("meta_parsing", {}) or {}
+        self.category_rules = meta_parsing.get("category_rules", {})
+        self.default_category = meta_parsing.get("default_category", "미분류")
 
-        logger.info(
-            f"📋 메타 파서 초기화: 날짜 우선순위 {len(self.date_priority)}개, 작성자 필드 {len(self.author_fields)}개, Stoplist {len(self.author_stoplist)}개, 카테고리 규칙 {len(self.category_rules)}개"
-        )
+    def _hot_reload_if_needed(self):
+        """필요시 설정 핫리로드 (mtime 기반)"""
+        now = time.time()
+        if now - self._last_load_ts < self._reload_secs:
+            return
+
+        if self._config_path.exists():
+            try:
+                mtime = self._config_path.stat().st_mtime
+                if mtime > self._config_mtime:
+                    self.config = self._load_config(self._config_path)
+                    self._update_config_attrs()
+                    logger.info("🔄 MetaParser 설정 핫리로드 완료")
+            except Exception as e:
+                logger.warning(f"⚠️ 핫리로드 실패: {e}")
+        self._last_load_ts = now
 
     def _validate_author(self, author: str) -> bool:
-        """작성자 이름 검증 (한글 2~4음절 + Stoplist)
+        """작성자 이름 검증 (한글 2~4음절 + 영문/혼성 + Stoplist + 부서/직함 차단)
 
         Args:
             author: 작성자 후보 문자열
@@ -72,27 +113,36 @@ class MetaParser:
         Returns:
             검증 통과 여부
         """
-        if not author or not author.strip():
+        if not author or not isinstance(author, str):
             return False
 
-        author = author.strip()
+        a = author.strip()
 
         # Stoplist 체크
-        if author in self.author_stoplist:
-            logger.debug(f"작성자 Stoplist 제외: {author}")
+        if a in self.author_stoplist:
+            logger.debug(f"작성자 Stoplist 제외: {a}")
             return False
 
-        # 한글 2~4음절만 허용 (공백 없이)
+        # 부서/직함 키워드 제외 (오검출 차단)
+        deny_tokens = ("팀", "부", "실", "국", "대표", "이사", "차장", "과장", "담당")
+        if any(tok in a for tok in deny_tokens):
+            logger.debug(f"작성자 부서/직함 키워드 제외: {a}")
+            return False
+
         import re
 
-        pattern = r"^[가-힣]{2,4}$"
-        if not re.match(pattern, author):
-            logger.debug(f"작성자 패턴 불일치 (한글 2~4음절 아님): {author}")
-            return False
+        # 한글 2~4음절
+        if re.fullmatch(r"[가-힣]{2,4}", a):
+            return True
 
-        return True
+        # 영문/이니셜 허용: J. Kim, Lee JH, LEE, JH 등
+        if re.fullmatch(r"[A-Za-z][A-Za-z.\- ,]{1,30}", a):
+            return True
 
-    def _load_config(self, config_path: str) -> Dict[str, Any]:
+        logger.debug(f"작성자 패턴 불일치: {a}")
+        return False
+
+    def _load_config(self, config_path: Path) -> Dict[str, Any]:
         """설정 파일 로드
 
         Args:
@@ -102,18 +152,22 @@ class MetaParser:
             설정 딕셔너리
         """
         try:
-            config_file = Path(config_path)
-            if not config_file.exists():
+            if not config_path.exists():
                 logger.warning(f"⚠️ 설정 파일 없음: {config_path}, 기본값 사용")
+                self._config_mtime = 0.0
+                self._last_load_ts = time.time()
                 return {}
 
-            with open(config_file, "r", encoding="utf-8") as f:
-                config = yaml.safe_load(f)
-                logger.info(f"✓ 설정 로드: {config_path}")
-                return config
+            with open(config_path, "r", encoding="utf-8") as f:
+                cfg = yaml.safe_load(f) or {}
+            self._config_mtime = config_path.stat().st_mtime
+            self._last_load_ts = time.time()
+            logger.info(f"✓ 설정 로드: {config_path}")
+            return cfg
 
         except Exception as e:
             logger.error(f"❌ 설정 로드 실패: {e}")
+            self._last_load_ts = time.time()
             return {}
 
     def parse_dates(self, metadata: Dict[str, Any]) -> Tuple[str, str]:
@@ -127,6 +181,8 @@ class MetaParser:
             - display_date: 우선순위에 따른 대표 날짜 (YYYY-MM-DD)
             - date_detail: "기안일자 / 시행일자" 형식
         """
+        self._hot_reload_if_needed()
+
         # 우선순위에 따라 대표 날짜 선택
         display_date = None
         for date_key in self.date_priority:
@@ -146,6 +202,17 @@ class MetaParser:
         if action_date:
             action_date = self._normalize_date(action_date)
 
+        # 파일명 힌트 (없을 때만)
+        if not (display_date and display_date != "정보 없음"):
+            fname = metadata.get("filename") or ""
+            import re
+
+            # 파일명에서 날짜 패턴 추출: YYYY-MM-DD or YYYY_MM_DD or YYYY.MM.DD
+            m = re.search(r"\b(20\d{2})[-_.]?(0[1-9]|1[0-2])[-_.]?([0-3]\d)\b", fname)
+            if m:
+                display_date = f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+                logger.debug(f"파일명에서 날짜 추출: {display_date} from {fname}")
+
         if draft_date and action_date:
             date_detail = f"{draft_date} / {action_date}"
         elif draft_date:
@@ -162,6 +229,14 @@ class MetaParser:
     def _normalize_date(self, date_str: str) -> str:
         """날짜 문자열 정규화 (YYYY-MM-DD 형식)
 
+        확장 지원 포맷:
+        - YYYY/MM/DD, YYYY.MM.DD
+        - YYYY년 M월 D일
+        - YY-MM-DD, YY. M. D.
+        - YYYYMMDD
+        - 범위 (~, -, 혼용) → 앞 날짜 채택
+        - 괄호/주석 제거
+
         Args:
             date_str: 원본 날짜 문자열
 
@@ -174,51 +249,68 @@ class MetaParser:
         import re
         from datetime import datetime
 
-        date_str = date_str.strip()
+        s = date_str.strip()
 
-        # 1. 범위 형식 처리 (YYYY-MM-DD ~ YYYY-MM-DD → 앞 날짜 채택)
-        range_pattern = r"(\d{4}-\d{1,2}-\d{1,2})\s*~\s*\d{4}-\d{1,2}-\d{1,2}"
-        range_match = re.search(range_pattern, date_str)
+        # 주석/괄호 제거
+        s = re.sub(r"[(){}\[\]]", " ", s)
+
+        # 범위 → 앞 날짜 채택 (구분자 혼용: ~, -)
+        range_match = re.search(
+            r"(\d{2,4}[./-]?\d{1,2}[./-]?\d{1,2})\s*[~\-]\s*\d{2,4}[./-]?\d{1,2}[./-]?\d{1,2}",
+            s,
+        )
         if range_match:
-            date_str = range_match.group(1)
+            s = range_match.group(1)
 
-        # 2. 시간 제거 (YYYY-MM-DD HH:MM:SS → YYYY-MM-DD)
-        date_str = re.sub(r"\s+\d{1,2}:\d{2}(:\d{2})?", "", date_str)
+        # 시간 제거
+        s = re.sub(r"\s+\d{1,2}:\d{2}(:\d{2})?\s*(AM|PM|am|pm)?", "", s)
 
-        # 3. YY. M. D. 형식 → YYYY-MM-DD
-        # 예: "24. 10. 24" → "2024-10-24"
-        yy_pattern = r"(\d{2})\.\s*(\d{1,2})\.\s*(\d{1,2})"
-        yy_match = re.search(yy_pattern, date_str)
-        if yy_match:
-            yy, mm, dd = yy_match.groups()
-            # 2자리 연도를 4자리로 변환 (20YY로 가정)
+        # YYYY년 M월 D일 → YYYY-MM-DD
+        m = re.search(r"(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일", s)
+        if m:
+            y, mm, dd = m.groups()
+            return f"{y}-{mm.zfill(2)}-{dd.zfill(2)}"
+
+        # 24. 10. 24 → 2024-10-24 (20YY 가정)
+        m = re.search(r"\b(\d{2})\.\s*(\d{1,2})\.\s*(\d{1,2})\b", s)
+        if m:
+            yy, mm, dd = m.groups()
             yyyy = f"20{yy}"
             return f"{yyyy}-{mm.zfill(2)}-{dd.zfill(2)}"
 
-        # 4. YYYY-M-D 또는 YYYY.M.D → YYYY-MM-DD
-        date_str = re.sub(r"(\d{4})[./](\d{1,2})[./](\d{1,2})", r"\1-\2-\3", date_str)
+        # 2024/10/24 or 2024.10.24 → 2024-10-24
+        s = re.sub(r"(\d{4})[./](\d{1,2})[./](\d{1,2})", r"\1-\2-\3", s)
 
-        # 5. 패딩 (YYYY-M-D → YYYY-MM-DD)
-        padding_pattern = r"(\d{4})-(\d{1,2})-(\d{1,2})"
-        padding_match = re.search(padding_pattern, date_str)
-        if padding_match:
-            yyyy, mm, dd = padding_match.groups()
-            return f"{yyyy}-{mm.zfill(2)}-{dd.zfill(2)}"
+        # 20241024 → 2024-10-24
+        m = re.search(r"\b(20\d{2})(\d{2})(\d{2})\b", s)
+        if m:
+            y, mm, dd = m.groups()
+            return f"{y}-{mm}-{dd}"
 
-        # 6. 검증 및 반환
+        # YY-MM-DD → 20YY-MM-DD
+        m = re.search(r"\b(\d{2})-(\d{1,2})-(\d{1,2})\b", s)
+        if m:
+            yy, mm, dd = m.groups()
+            return f"20{yy}-{mm.zfill(2)}-{dd.zfill(2)}"
+
+        # YYYY-M-D → 패딩
+        m = re.search(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b", s)
+        if m:
+            y, mm, dd = m.groups()
+            return f"{y}-{mm.zfill(2)}-{dd.zfill(2)}"
+
+        # 최종 검증
         try:
-            # YYYY-MM-DD 형식 검증
-            datetime.strptime(date_str, "%Y-%m-%d")
-            return date_str
+            datetime.strptime(s, "%Y-%m-%d")
+            return s
         except ValueError:
-            # 파싱 실패 시 원본 반환
             logger.debug(f"날짜 정규화 실패 (원본 반환): {date_str}")
             return date_str
 
     def classify_category(
         self, title: str = "", content: str = "", filename: str = ""
     ) -> Tuple[str, str]:
-        """카테고리 분류
+        """카테고리 분류 (근거 포함)
 
         Args:
             title: 문서 제목
@@ -230,49 +322,60 @@ class MetaParser:
             - category: 분류된 카테고리
             - source: 분류 방법 ("rule", "ml", "default")
         """
-        # 분류 대상 텍스트 (제목 > 파일명 > 내용)
-        search_text = f"{title} {filename} {content[:500]}"
-        search_text = search_text.lower()
+        search_text_title = (title or "").lower()
+        search_text_file = (filename or "").lower()
+        search_text_body = (content or "")[:500].lower()
 
-        matched_categories = []
+        matched: List[Tuple[str, str, str]] = []  # (category, source, keyword)
 
-        # 1. 문서 유형 규칙 적용 (우선순위 1)
+        def match_rules(rules: List[Dict[str, Any]], source_name: str):
+            """규칙 매칭 헬퍼"""
+            for rule in rules:
+                for kw in rule.get("keywords", []):
+                    kw_lower = kw.lower()
+                    search_text = (
+                        search_text_title
+                        if source_name == "title"
+                        else search_text_file
+                        if source_name == "filename"
+                        else search_text_body
+                    )
+                    if kw_lower in search_text:
+                        matched.append((rule.get("category", ""), source_name, kw))
+
+        # 1. 문서 유형 규칙
         doc_type_rules = self.category_rules.get("document_type", [])
-        for rule in doc_type_rules:
-            keywords = rule.get("keywords", [])
-            category = rule.get("category", "")
+        match_rules(doc_type_rules, "title")
+        match_rules(doc_type_rules, "filename")
+        match_rules(doc_type_rules, "content")
 
-            if any(kw in search_text for kw in keywords):
-                matched_categories.append(category)
-                logger.debug(f"✓ 문서 유형 매칭: {category} (키워드: {keywords})")
-
-        # 2. 장비 분류 규칙 적용 (우선순위 2)
+        # 2. 장비 분류 규칙
         equipment_rules = self.category_rules.get("equipment_type", [])
-        for rule in equipment_rules:
-            keywords = rule.get("keywords", [])
-            category = rule.get("category", "")
+        match_rules(equipment_rules, "title")
+        match_rules(equipment_rules, "filename")
+        match_rules(equipment_rules, "content")
 
-            if any(kw in search_text for kw in keywords):
-                matched_categories.append(category)
-                logger.debug(f"✓ 장비 분류 매칭: {category} (키워드: {keywords})")
+        # 3. 카테고리 조합 및 근거 로깅
+        if matched:
+            cats_order = []
+            reasons = []
+            for cat, src, kw in matched:
+                if cat and cat not in cats_order:
+                    cats_order.append(cat)
+                reasons.append({"category": cat, "source": src, "keyword": kw})
 
-        # 3. 카테고리 조합
-        if matched_categories:
-            # 중복 제거하고 순서 유지
-            unique_categories = list(dict.fromkeys(matched_categories))
-            combined_category = " / ".join(unique_categories)
-            return combined_category, "rule"
+            combined = " / ".join(cats_order)
+            # 디버그 로그 (근거 포함)
+            logger.debug(f"✓ 카테고리 매칭: {combined} | reasons={reasons}")
+            return combined, "rule"
 
-        # 4. ML 분류 (향후 구현)
-        # TODO: ML 기반 카테고리 분류 추가
-
-        # 5. 기본 카테고리
+        # 4. 기본 카테고리
         return self.default_category, "default"
 
     def parse(
         self, metadata: Dict[str, Any], title: str = "", content: str = ""
     ) -> Dict[str, Any]:
-        """메타데이터 파싱 및 표준화
+        """메타데이터 파싱 및 표준화 (v1.5)
 
         Args:
             metadata: 원본 메타데이터
@@ -280,8 +383,10 @@ class MetaParser:
             content: 문서 내용
 
         Returns:
-            표준화된 메타데이터
+            표준화된 메타데이터 (키 존재 보장)
         """
+        self._hot_reload_if_needed()
+
         # 날짜 파싱
         display_date, date_detail = self.parse_dates(metadata)
 
@@ -290,7 +395,7 @@ class MetaParser:
         for field in self.author_fields:
             if field in metadata and metadata[field]:
                 candidate = metadata[field]
-                # 작성자 검증 (한글 2~4음절 + Stoplist)
+                # 작성자 검증 (한글 2~4음절 + 영문 + Stoplist + 부서/직함 차단)
                 if self._validate_author(candidate):
                     author = candidate
                     break
@@ -308,8 +413,8 @@ class MetaParser:
         filename = metadata.get("filename", "")
         category, category_source = self.classify_category(title, content, filename)
 
-        # 표준화된 메타데이터 구성
-        standardized = {
+        # 표준화된 메타데이터 구성 (키 존재 보장)
+        out = {
             "drafter": author,
             "department": department,
             "doc_number": metadata.get("doc_number")
@@ -320,20 +425,24 @@ class MetaParser:
             or "정보 없음",
             "display_date": display_date,
             "date_detail": date_detail,
-            "category": category,
+            "category": category if category != "정보 없음" else self.default_category,
             "category_source": category_source,
             "filename": filename,
         }
 
-        # "정보 없음"을 미분류로 변경 (카테고리만)
-        if standardized["category"] == "정보 없음":
-            standardized["category"] = self.default_category
-
-        logger.debug(
-            f"📋 메타 파싱 완료: author={author}, category={category} (source={category_source}), date={date_detail}"
+        # 로그 가시성: INFO 요약 + DEBUG 상세
+        logger.info(
+            "메타 파싱 요약 | drafter=%s dept=%s date=%s category=%s(source=%s) file=%s",
+            out["drafter"],
+            out["department"],
+            out["date_detail"],
+            out["category"],
+            out["category_source"],
+            out["filename"],
         )
+        logger.debug("메타 파싱 상세 | raw=%s | std=%s", metadata, out)
 
-        return standardized
+        return out
 
     def format_meta_display(self, parsed_meta: Dict[str, Any]) -> str:
         """메타데이터 표시 형식 생성

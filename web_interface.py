@@ -17,6 +17,8 @@ import warnings
 import re
 from collections import defaultdict
 import base64
+import os
+import threading
 
 # 경고 메시지 억제
 warnings.filterwarnings("ignore")
@@ -25,7 +27,7 @@ warnings.filterwarnings("ignore")
 project_root = Path(__file__).parent.absolute()
 sys.path.insert(0, str(project_root))
 
-from app.config.settings import DOCS_DIR, ALLOWED_EXTS, PROJECT_ROOT  # 프로젝트 설정
+from app.config.settings import settings  # 중앙 설정 객체
 import app.config.settings as config  # config 모듈 이름으로도 사용 (하위 호환성)
 from app.rag.pipeline import RAGPipeline  # 파사드 패턴: 단일 진입점
 from app.core.errors import ErrorCode, ERROR_MESSAGES  # 에러 코드
@@ -46,6 +48,15 @@ st.set_page_config(
 
 # CSS 스타일 적용 (외부 파일에서 로드: main.css + sidebar.css)
 load_all_css()
+
+
+@st.cache_data(ttl=60)
+def count_docs_recursive(base_dir: str) -> tuple[int, int]:
+    """문서 수 재귀 스캔 (하위 폴더 포함, 60초 캐싱)"""
+    base = Path(base_dir)
+    pdf_cnt = sum(1 for _ in base.rglob("*.pdf"))
+    txt_cnt = sum(1 for _ in base.rglob("*.txt"))
+    return pdf_cnt, txt_cnt
 
 
 @st.cache_resource
@@ -139,7 +150,7 @@ def render_document_card(title, info):
                 if 'path' in info:
                     file_path = Path(info['path'])
                 else:
-                    file_path = Path(DOCS_DIR) / info['filename']
+                    file_path = Path(settings.DOCS_DIR) / info['filename']
 
                 if file_path.exists():
                     # 미리보기 버튼 (토글 방식) - 경로 포함하여 유니크 키 생성
@@ -163,7 +174,7 @@ def render_document_card(title, info):
                 if 'path' in info:
                     file_path = Path(info['path'])
                 else:
-                    file_path = Path(DOCS_DIR) / info['filename']
+                    file_path = Path(settings.DOCS_DIR) / info['filename']
 
                 if file_path.exists():
                     try:
@@ -203,7 +214,7 @@ def render_document_card(title, info):
             if 'path' in info:
                 file_path = Path(info['path'])
             else:
-                file_path = Path(DOCS_DIR) / info['filename']
+                file_path = Path(settings.DOCS_DIR) / info['filename']
 
             unique_id = str(file_path) if 'path' in info else info['filename']
             preview_key = f"preview_{hashlib.md5(unique_id.encode()).hexdigest()}"
@@ -220,7 +231,7 @@ def render_document_card(title, info):
                     if 'path' in info:
                         file_path = Path(info['path'])
                     else:
-                        file_path = Path(DOCS_DIR) / info['filename']
+                        file_path = Path(settings.DOCS_DIR) / info['filename']
 
                     if file_path.exists():
                         try:
@@ -299,17 +310,18 @@ def main():
     st.markdown("<hr style='border: 1px solid rgba(255,255,255,0.3); margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.2);'>", unsafe_allow_html=True)
     
     # 문서 개수 동적 계산 (하드코딩 제거)
-    docs_path = Path(DOCS_DIR)
-    pdf_count = len(list(docs_path.glob("*.pdf")))
-    txt_count = len(list(docs_path.glob("*.txt")))
+    docs_path = Path(settings.DOCS_DIR)
+    pdf_count, txt_count = count_docs_recursive(settings.DOCS_DIR)
     
     # 현황 표시
     # 자동 인덱싱 시스템 초기화
     if 'auto_indexer' not in st.session_state:
         from scripts.utils.auto_indexer import AutoIndexer
-        st.session_state.auto_indexer = AutoIndexer(check_interval=60)  # 60초마다 체크
-        st.session_state.auto_indexer.start_monitoring()
-        print("🚀 자동 인덱싱 시스템 시작")
+        if not getattr(st, "_auto_indexer_started", False):
+            st.session_state.auto_indexer = AutoIndexer(check_interval=60)
+            st.session_state.auto_indexer.start_monitoring()
+            st._auto_indexer_started = True
+            st.toast("AutoIndexer 시작됨 (60s 주기)", icon="🧩")
     
     # RAG 시스템 초기화 (개선된 로딩 화면)
     if 'rag' not in st.session_state:
@@ -370,15 +382,18 @@ def main():
         del st.session_state.hybrid_chat_rag
 
     # OCR 캐시 업데이트 체크 (파일 수정 시간)
-    import os
     ocr_cache_path = "docs/.ocr_cache.json"
     if os.path.exists(ocr_cache_path):
-        ocr_cache_mtime = os.path.getmtime(ocr_cache_path)
-        if 'ocr_cache_mtime' not in st.session_state or st.session_state.ocr_cache_mtime != ocr_cache_mtime:
-            # OCR 캐시가 업데이트됨 - 강제 재초기화
+        ocr_mtime = os.path.getmtime(ocr_cache_path)
+        prev_mtime = st.session_state.get("ocr_cache_mtime")
+
+        if prev_mtime is None:
+            st.session_state["ocr_cache_mtime"] = ocr_mtime
+        elif prev_mtime != ocr_mtime:
+            st.session_state["ocr_cache_mtime"] = ocr_mtime
             if 'unified_rag' in st.session_state:
-                del st.session_state.unified_rag
-            st.session_state.ocr_cache_mtime = ocr_cache_mtime
+                st.session_state.pop('unified_rag', None)
+            st.toast("OCR 캐시 갱신 감지 → RAG 재초기화", icon="🔁")
 
     # 최초 1회만 초기화 (rag와 unified_rag는 동일한 인스턴스)
     if 'unified_rag' not in st.session_state:

@@ -19,6 +19,7 @@ from typing import Protocol, List, Optional, Dict, Any
 
 from app.core.logging import get_logger
 from app.core.errors import ModelError, SearchError, ErrorCode, ERROR_MESSAGES
+from app.utils.sqlite_helpers import connect_metadata
 from app.rag.query_router import QueryRouter, QueryMode
 from app.rag.cache_manager import get_cached_result, cache_query_result, get_cache_stats
 from app.rag.persistent_cache import get_cached_result_persistent, cache_query_result_persistent
@@ -39,12 +40,13 @@ logger = get_logger(__name__)
 
 import re
 
-# 스몰토크 패턴
+# 스몰토크 패턴 (전체 일치 또는 문장 단독 위주)
 SMALLTALK_PATTERNS = {
-    '안녕', '안녕하세요', '안녕하십니까', 'hello', 'hi', 'hey',
-    '땡큐', '감사', '고마워', 'thanks', 'thank you',
-    '잘가', '안녕히', 'bye', 'goodbye',
-    '어떻게', '어떠', '어때', '뭐해', '무엇',
+    'hi', 'hello', 'hey',
+    '안녕', '안녕하세요', '안녕하십니까',
+    '감사', '고마워', '감사합니다', '고마워요',
+    'thanks', 'thank you',
+    'bye', 'goodbye', '잘가', '안녕히',
 }
 
 # 도메인 키워드 (장비/프로젝트/기술 용어)
@@ -185,15 +187,18 @@ def route_query(query: str) -> Dict[str, Any]:
 
 
 def is_smalltalk(query: str) -> bool:
-    """스몰토크/인사/감탄사 감지"""
-    q_lower = query.lower().strip()
-    # 길이 체크
-    if len(q_lower) <= 3:
+    """스몰토크/인사/감탄사 감지 (전체 일치 또는 정규식)"""
+    s = query.strip().lower()
+
+    # 1. 직접 패턴 일치 (전체 문장이 스몰토크)
+    if s in SMALLTALK_PATTERNS:
         return True
-    # 패턴 매칭
-    for pattern in SMALLTALK_PATTERNS:
-        if pattern in q_lower:
-            return True
+
+    # 2. 정규식 패턴 (스몰토크만 포함, 구두점 허용)
+    smalltalk_regex = r'^(안녕|안녕하세요|안녕하십니까|감사합니다?|고마워요?|thanks|thank you|hi|hello|hey|bye|goodbye|잘가|안녕히)[.!?\s]*$'
+    if re.fullmatch(smalltalk_regex, s):
+        return True
+
     return False
 
 
@@ -215,11 +220,15 @@ def has_domain_keyword(query: str) -> bool:
 
 
 def get_query_token_count(query: str) -> int:
-    """간이 토큰 카운트 (공백/한글 기준)"""
-    # 한글: 음절 단위, 영문: 단어 단위
-    korean_chars = len([c for c in query if '\uac00' <= c <= '\ud7a3'])
-    english_words = len(query.split())
-    return max(korean_chars, english_words)
+    """간이 토큰 카운트 (한글/영문/숫자/기호 분리)"""
+    # 정규식: [한글 블록]+, [영문숫자하이픈]+를 각각 1토큰으로 계산
+    tokens = re.findall(r'[A-Za-z0-9\-_/]+|[가-힣]+', query)
+    return len(tokens)
+
+
+def _norm_chunk_text(r: Dict[str, Any]) -> str:
+    """청크 텍스트 정규화 (snippet/content/text 통일)"""
+    return (r.get("snippet") or r.get("content") or r.get("text") or "").lower()
 
 
 def get_keyword_coverage(query: str, results: list) -> int:
@@ -239,13 +248,12 @@ def get_keyword_coverage(query: str, results: list) -> int:
     if not query_keywords:
         return 0
 
-    # 검색 결과 청크에서 발견된 키워드
+    # 검색 결과 청크에서 발견된 키워드 (상위 10개)
     found_keywords = set()
-    for result in results[:5]:  # 상위 5개만 체크
-        chunk_text = result.get('snippet', '') + ' ' + result.get('content', '')
-        chunk_lower = chunk_text.lower()
+    for result in results[:10]:
+        chunk_text = _norm_chunk_text(result)
         for kw in query_keywords:
-            if kw in chunk_lower:
+            if kw in chunk_text:
                 found_keywords.add(kw)
 
     return len(found_keywords)
@@ -261,66 +269,67 @@ def force_chat_mode(query: str) -> tuple[bool, str]:
     if is_smalltalk(query):
         return True, "smalltalk"
 
-    # 2. 짧은 질의 (토큰 <4)
-    if get_query_token_count(query) < 4:
-        return True, "short_query"
-
-    # 3. 단순 산술
+    # 2. 단순 산술
     if is_simple_math(query):
         return True, "simple_math"
+
+    # 3. 짧은 질의 (토큰 < 3) - 단, 도메인 키워드가 있으면 제외
+    tokens = get_query_token_count(query)
+    if tokens < 3 and not has_domain_keyword(query):
+        return True, "short_query"
 
     return False, ""
 
 
 def _encode_file_ref(filename: str) -> Optional[str]:
-    """파일명을 base64 ref로 인코딩 (docs 하위 경로 찾기)
+    """파일명을 토큰(해시)으로 변환 (보안 강화, 경로 노출 방지)
 
     Args:
         filename: 파일명
 
     Returns:
-        base64 인코딩된 ref 또는 None
+        doc:{hash} 형식 토큰 또는 None
+
+    Note:
+        - 경로를 base64로 노출하지 않고 해시 토큰 사용
+        - 백엔드에서 /preview?ref=doc:xxx 로 검증 후 제공
     """
+    import hashlib
+
     try:
-        # 1. metadata.db에서 경로 찾기 시도
-        conn = sqlite3.connect("metadata.db")
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT path FROM documents WHERE filename = ? LIMIT 1",
-            (filename,)
-        )
-        result = cursor.fetchone()
-        conn.close()
+        # 1. metadata.db에서 파일 존재 확인
+        with connect_metadata() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT path FROM documents WHERE filename = ? LIMIT 1",
+                (filename,)
+            )
+            result = cursor.fetchone()
 
         if result and result[0]:
-            file_path = Path(result[0])
-            # docs 하위인지 확인
-            if "docs" in file_path.parts and file_path.exists():
-                # base64 인코딩
-                ref = base64.urlsafe_b64encode(str(file_path).encode()).decode()
-                return ref
+            # 해시 토큰 생성 (filename 기준, 10자 단축)
+            token = hashlib.sha1(filename.encode()).hexdigest()[:10]
+            return f"doc:{token}"
 
-        # 2. Fallback: docs 폴더에서 파일 검색 (year 폴더 포함)
-        import re
+        # 2. Fallback: docs 폴더 검색
         year_match = re.search(r'(\d{4})-', filename)
         if year_match:
             year = year_match.group(1)
-            # docs/year_YYYY/ 폴더에서 찾기
             file_path = Path(f"docs/year_{year}") / filename
             if file_path.exists():
-                ref = base64.urlsafe_b64encode(str(file_path).encode()).decode()
-                return ref
+                token = hashlib.sha1(filename.encode()).hexdigest()[:10]
+                return f"doc:{token}"
 
         # 3. Fallback2: docs 폴더 전체 검색
         docs_dir = Path("docs")
         if docs_dir.exists():
             for file_path in docs_dir.rglob(filename):
                 if file_path.is_file():
-                    ref = base64.urlsafe_b64encode(str(file_path).encode()).decode()
-                    return ref
+                    token = hashlib.sha1(filename.encode()).hexdigest()[:10]
+                    return f"doc:{token}"
 
     except Exception as e:
-        logger.warning(f"ref 인코딩 실패: {filename} - {e}")
+        logger.warning(f"ref 토큰 생성 실패: {filename} - {e}")
 
     return None
 
@@ -711,8 +720,21 @@ class RAGPipeline:
             determined_mode = metrics.get("mode", "rag")
             logger.info(f"🎯 모드={determined_mode} → 컨텍스트 최적화 시작")
 
-            # Context Hydrator with mode-aware optimization
-            from app.rag.utils.context_hydrator import hydrate_context
+            # Context Hydrator with mode-aware optimization (폴백 보장)
+            try:
+                from app.rag.utils.context_hydrator import hydrate_context
+            except Exception as e:
+                logger.warning(f"⚠️ hydrate_context import 실패, 폴백 사용: {e}")
+                def hydrate_context(chunks, max_len=10000, mode="rag"):
+                    """안전 폴백: 청크 스니펫 결합"""
+                    parts = []
+                    for c in chunks:
+                        t = (c.get("snippet") or c.get("content") or c.get("text") or "")
+                        if t:
+                            parts.append(t[:800])
+                    ctx = "\n\n".join(parts)[:max_len]
+                    return ctx, {"fallback": True, "joined": len(parts)}
+
             hydrate_start = time.perf_counter()
             context, hydrator_metrics = hydrate_context(compressed, max_len=10000, mode=determined_mode)
             metrics["hydrate_time"] = time.perf_counter() - hydrate_start
@@ -1335,7 +1357,7 @@ class RAGPipeline:
                         "date": doc.get("display_date") or doc.get("date", "날짜 없음"),
                         "doctype": doc.get("doctype", "문서"),
                         "claimed_total": doc.get("claimed_total"),
-                        "text_preview": doc.get("text_preview", "")[:100]
+                        "text_preview": doc.get("text_preview", "")[:400]  # 100 → 400 (evidence snippet 확장)
                     })
                 else:
                     # 기안자 필터가 적용된 경우, 매칭되지 않은 문서는 스킵
@@ -1408,17 +1430,34 @@ class RAGPipeline:
                 else:
                     file_path_str = f"docs/{filename}"
 
-                # 제목 생성 (cards와 동일)
+                # 제목 생성 (폴백용)
                 title = re.sub(r'^\d{4}-\d{2}-\d{2}_', '', filename)
                 title = re.sub(r'\.pdf$', '', title, flags=re.IGNORECASE)
                 title = title.replace('_', ' ')
+
+                # Snippet 폴백 체인: text_preview → BM25 청크 → 제목
+                snippet = doc.get("text_preview", "").strip()
+
+                if not snippet:
+                    # text_preview 없으면 BM25 인덱스에서 청크 가져오기
+                    try:
+                        chunks = self.retriever.search(filename, top_k=1)
+                        if chunks:
+                            chunk_text = _norm_chunk_text(chunks[0])
+                            snippet = chunk_text[:400] if chunk_text else ""
+                    except Exception as e:
+                        logger.debug(f"⚠️ BM25 청크 폴백 실패 ({filename}): {e}")
+
+                # 여전히 없으면 제목 사용
+                if not snippet:
+                    snippet = title[:160]
 
                 evidence.append({
                     "doc_id": filename,
                     "filename": filename,
                     "file_path": file_path_str,
                     "page": 1,
-                    "snippet": title[:160],
+                    "snippet": snippet[:400],  # 최대 400자
                     "ref": None,
                     "meta": {
                         "filename": filename,
@@ -1459,7 +1498,7 @@ class RAGPipeline:
             }
 
     def _answer_cost_sum(self, query: str) -> dict:
-        """비용 합계 직접 조회 (DB claimed_total 활용)
+        """비용 합계 직접 조회 (DB claimed_total 활용, top-N 스캔 + 우선순위 정렬)
 
         Args:
             query: 사용자 질의 (예: "채널에이 중계차 보수 합계 얼마였지?")
@@ -1468,8 +1507,8 @@ class RAGPipeline:
             dict: 표준 응답 구조 (text, citations, evidence, status)
         """
         try:
-            # 1. 검색으로 후보 문서 찾기
-            search_results = self.retriever.search(query, top_k=3)
+            # 1. 검색으로 후보 문서 찾기 (3 → 15 확장)
+            search_results = self.retriever.search(query, top_k=15)
 
             if not search_results:
                 logger.warning(f"비용 질의 검색 실패: {query}")
@@ -1484,10 +1523,11 @@ class RAGPipeline:
                     }
                 }
 
-            # 2. DB에서 claimed_total 조회
+            # 2. DB에서 claimed_total 수집 및 우선순위 정렬
             from modules.metadata_db import MetadataDB
             db = MetadataDB()
 
+            cost_docs = []  # (claimed_total, doc, filename) 튜플 리스트
             for result in search_results:
                 filename = result.get("meta", {}).get("filename") or result.get("doc_id", "")
                 if not filename:
@@ -1495,65 +1535,105 @@ class RAGPipeline:
 
                 doc = db.get_by_filename(filename)
                 if doc and doc.get("claimed_total"):
-                    claimed_total = doc["claimed_total"]
+                    cost_docs.append((doc["claimed_total"], doc, filename))
 
-                    # 3. 답변 포맷팅 (VAT, 검증 배지 포함)
-                    # VAT 판단 (text_preview에서 "VAT" 키워드 검색)
-                    text_preview = doc.get("text_preview", "")
-                    vat_status = "VAT 별도" if "VAT" in text_preview or "부가세" in text_preview else "VAT 포함 추정"
+            if not cost_docs:
+                # claimed_total 없는 경우
+                logger.warning(f"검색된 문서에 비용 정보 없음: {[r.get('doc_id') for r in search_results]}")
+                return {
+                    "text": "검색된 문서에 비용 합계 정보가 없습니다.",
+                    "citations": [],
+                    "evidence": [],
+                    "status": {
+                        "retrieved_count": len(search_results),
+                        "selected_count": 0,
+                        "found": False
+                    }
+                }
 
-                    # sum_match 검증 배지
-                    sum_match = doc.get("sum_match")
-                    if sum_match is None:
-                        verification = "sum_match=없음"
-                    elif sum_match:
-                        verification = "sum_match=일치 ✅"
-                    else:
-                        verification = "sum_match=불일치 ⚠️"
+            # 우선순위 정렬: 금액 큰 순 (내림차순)
+            cost_docs.sort(key=lambda x: x[0], reverse=True)
 
-                    answer_text = f"💰 합계: **₩{claimed_total:,}** ({vat_status})\n"
-                    answer_text += f"출처: {filename} | 날짜: {doc.get('display_date') or doc.get('date') or '정보 없음'} | 기안자: {doc.get('drafter') or '정보 없음'}\n"
-                    answer_text += f"검증: {verification}"
+            # 3. 답변 포맷팅 (복수 문서 지원)
+            total_sum = sum(doc[0] for doc in cost_docs)
+            evidence = []
 
-                    # Evidence 구성
+            if len(cost_docs) == 1:
+                # 단일 문서
+                claimed_total, doc, filename = cost_docs[0]
+                text_preview = doc.get("text_preview", "")
+                vat_status = "VAT 별도" if "VAT" in text_preview or "부가세" in text_preview else "VAT 포함 추정"
+
+                sum_match = doc.get("sum_match")
+                if sum_match is None:
+                    verification = "sum_match=없음"
+                elif sum_match:
+                    verification = "sum_match=일치 ✅"
+                else:
+                    verification = "sum_match=불일치 ⚠️"
+
+                answer_text = f"💰 합계: **₩{claimed_total:,}** ({vat_status})\n"
+                answer_text += f"출처: {filename} | 날짜: {doc.get('display_date') or doc.get('date') or '정보 없음'} | 기안자: {doc.get('drafter') or '정보 없음'}\n"
+                answer_text += f"검증: {verification}"
+
+                ref = _encode_file_ref(filename)
+                evidence = [{
+                    "doc_id": filename,
+                    "filename": filename,
+                    "page": 1,
+                    "snippet": f"비용 합계: ₩{claimed_total:,}",
+                    "ref": ref,
+                    "meta": {
+                        "filename": filename,
+                        "drafter": doc.get("drafter"),
+                        "date": doc.get("display_date") or doc.get("date"),
+                        "claimed_total": claimed_total
+                    }
+                }]
+
+                logger.info(f"💰 비용 질의 성공 (단일): {filename} → ₩{claimed_total:,}")
+
+            else:
+                # 복수 문서
+                answer_text = f"💰 **총 {len(cost_docs)}건 문서 비용 합계: ₩{total_sum:,}**\n\n"
+                answer_text += "**상세 내역:**\n"
+
+                for i, (claimed_total, doc, filename) in enumerate(cost_docs[:10], 1):  # 최대 10건 표시
+                    title = re.sub(r'^\d{4}-\d{2}-\d{2}_', '', filename)
+                    title = re.sub(r'\.pdf$', '', title, flags=re.IGNORECASE)
+                    title = title.replace('_', ' ')
+
+                    answer_text += f"{i}. {title}: ₩{claimed_total:,}\n"
+                    answer_text += f"   📅 {doc.get('display_date') or doc.get('date') or '날짜 없음'} | ✍ {doc.get('drafter') or '정보 없음'}\n"
+
                     ref = _encode_file_ref(filename)
-                    evidence = [{
+                    evidence.append({
                         "doc_id": filename,
                         "filename": filename,
                         "page": 1,
                         "snippet": f"비용 합계: ₩{claimed_total:,}",
-                        "ref": ref,  # 🔴 base64 인코딩된 파일 경로
+                        "ref": ref,
                         "meta": {
                             "filename": filename,
                             "drafter": doc.get("drafter"),
                             "date": doc.get("display_date") or doc.get("date"),
                             "claimed_total": claimed_total
                         }
-                    }]
+                    })
 
-                    logger.info(f"💰 비용 질의 성공: {filename} → ₩{claimed_total:,}")
+                if len(cost_docs) > 10:
+                    answer_text += f"\n... 외 {len(cost_docs) - 10}건 (합계에 포함)"
 
-                    return {
-                        "text": answer_text,
-                        "citations": evidence,
-                        "evidence": evidence,
-                        "status": {
-                            "retrieved_count": len(search_results),
-                            "selected_count": 1,
-                            "found": True
-                        }
-                    }
+                logger.info(f"💰 비용 질의 성공 (복수): {len(cost_docs)}건 → 총 ₩{total_sum:,}")
 
-            # claimed_total 없는 경우
-            logger.warning(f"검색된 문서에 비용 정보 없음: {[r.get('doc_id') for r in search_results]}")
             return {
-                "text": "검색된 문서에 비용 합계 정보가 없습니다.",
-                "citations": [],
-                "evidence": [],
+                "text": answer_text,
+                "citations": evidence,
+                "evidence": evidence,
                 "status": {
                     "retrieved_count": len(search_results),
-                    "selected_count": 0,
-                    "found": False
+                    "selected_count": len(cost_docs),
+                    "found": True
                 }
             }
 
@@ -1590,7 +1670,6 @@ class RAGPipeline:
             - LLM을 사용하지 않고 원문 그대로 반환
         """
         import re
-        import sqlite3
         from pathlib import Path
 
         try:
@@ -1638,19 +1717,18 @@ class RAGPipeline:
                 }
 
             # 2. DB에서 메타데이터 조회
-            conn = sqlite3.connect("metadata.db")
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT filename, drafter, date, display_date, category, doctype
-                FROM documents
-                WHERE filename = ? OR filename LIKE ?
-                LIMIT 1
-                """,
-                (target_filename, f"%{target_filename}%"),
-            )
-            result = cursor.fetchone()
-            conn.close()
+            with connect_metadata() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT filename, drafter, date, display_date, category, doctype
+                    FROM documents
+                    WHERE filename = ? OR filename LIKE ?
+                    LIMIT 1
+                    """,
+                    (target_filename, f"%{target_filename}%"),
+                )
+                result = cursor.fetchone()
 
             if not result:
                 return {
@@ -1666,30 +1744,36 @@ class RAGPipeline:
 
             filename, drafter, date, display_date, category, doctype = result
 
-            # 3. data/extracted/ 에서 전체 텍스트 로드
+            # 3. data/extracted/ 에서 전체 텍스트 로드 (폴백 보장)
             extracted_dir = Path("data/extracted")
             txt_filename = filename.replace('.pdf', '.txt')
             txt_path = extracted_dir / txt_filename
+            full_text = ""
 
-            if not txt_path.exists():
-                return {
-                    "text": f"'{filename}' 문서의 추출된 텍스트 파일을 찾을 수 없습니다.\n경로: {txt_path}",
-                    "citations": [],
-                    "evidence": [],
-                    "status": {
-                        "retrieved_count": 1,
-                        "selected_count": 0,
-                        "found": False
-                    }
-                }
-
-            # 전체 텍스트 읽기
-            with open(txt_path, 'r', encoding='utf-8') as f:
-                full_text = f.read()
+            if txt_path.exists():
+                # 전체 텍스트 읽기
+                with open(txt_path, 'r', encoding='utf-8') as f:
+                    full_text = f.read()
+            else:
+                # txt 파일 없음 → 인덱스 청크 기반 폴백
+                logger.warning(f"⚠️ {txt_path} 없음, 인덱스 청크 폴백 시도")
+                try:
+                    chunks = self._make_chunks_for_doc(filename)
+                    if chunks:
+                        joined = "\n\n".join(
+                            [(ch.get("text") or ch.get("snippet") or ch.get("content") or "")[:2000]
+                             for ch in chunks]
+                        )[:8000]
+                        full_text = joined if joined else ""
+                        logger.info(f"✅ 청크 {len(chunks)}개 결합 → {len(full_text)}자 확보")
+                    else:
+                        logger.warning(f"⚠️ {filename} 청크도 없음")
+                except Exception as e:
+                    logger.warning(f"⚠️ 청크 폴백 실패: {e}")
 
             if not full_text or len(full_text.strip()) < 10:
                 return {
-                    "text": f"'{filename}' 문서의 텍스트가 비어있거나 너무 짧습니다.",
+                    "text": f"'{filename}' 문서의 텍스트를 확보하지 못했습니다. (extracted txt, 인덱스 청크 모두 실패)",
                     "citations": [],
                     "evidence": [],
                     "status": {

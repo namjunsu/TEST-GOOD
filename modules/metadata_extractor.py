@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-고급 메타데이터 추출기 v1.3
+고급 메타데이터 추출기 v1.4
 - 정규식 사전 컴파일 / 날짜·금액 정밀 추출 / 연락처·장비·회사명 보강
+- 통합: amount_parser_v2 (상/하한 가드, 라인아이템 우선)
 """
 
 from app.core.logging import get_logger
@@ -9,6 +10,13 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime
+
+# 강화된 금액 파서 임포트
+from modules.amount_parser_v2 import (
+    select_document_amount,
+    validate_amount,
+    extract_amount_candidates
+)
 
 logger = get_logger(__name__)
 
@@ -51,17 +59,10 @@ class MetadataExtractor:
             (re.compile(r'(20\d{2}|19\d{2})년도?'), 'y'),
         ]
 
-        # === 금액 패턴(문맥 앵커 추가) ===
-        self._amount_patterns = [
-            (re.compile(r'(?<!페이지|p)\s*총\s*금액\s*[:\s]*([0-9\.,]+)\s*원', re.I), 'total'),
-            (re.compile(r'(?<!페이지|p)\s*합계\s*[:\s]*([0-9\.,]+)\s*원', re.I), 'total'),
-            (re.compile(r'계약\s*금액\s*[:\s]*([0-9\.,]+)\s*원', re.I), 'contract'),
-            (re.compile(r'결제\s*금액\s*[:\s]*([0-9\.,]+)\s*원', re.I), 'payment'),
-            (re.compile(r'(?<!페이지|p)\s*([0-9]{1,3}(?:[,\.\s][0-9]{3})+)\s*원'), 'general'),
-            (re.compile(r'￦\s*([0-9\.,]+)'), 'general'),
-            (re.compile(r'KRW\s*([0-9\.,]+)', re.I), 'general'),
-            (re.compile(r'(?:부가세\s*포함|VAT\s*포함)\s*([0-9\.,]+)', re.I), 'vat_included'),
-        ]
+        # === 금액 패턴 (DEPRECATED: v1.4부터 amount_parser_v2 사용) ===
+        # 이전 정규식 기반 파서는 number concatenation 문제로 인해 폐기
+        # 새로운 파서는 라인아이템 우선 + 상/하한 가드 적용
+        # self._amount_patterns = [...]  # 더 이상 사용하지 않음
 
         # === 부서/조직 ===
         self._dept_patterns = [
@@ -224,27 +225,45 @@ class MetadataExtractor:
         return ExtractedDates(main_date=main_date, year=year_hint, all_dates=found)
 
     def _extract_amounts(self, text: str) -> Dict[str, Any]:
+        """
+        금액 추출 (v2: 강화된 파서 사용)
+        - 라인아이템 우선 (unit × qty)
+        - 상/하한 가드 (100k-50M)
+        - 문서 단위 스코프 보장
+        """
         res = {'total': None, 'contract': None, 'all_amounts': []}
-        for rx, kind in self._amount_patterns:
-            for m in rx.finditer(text):
-                amt = int(re.sub(r'[^\d]', '', m.group(1)))
-                if amt <= 0:
-                    continue
-                res['all_amounts'].append({
-                    'amount': amt,
-                    'type': kind,
-                    'formatted': f'{amt:,}원',
-                    'position': m.start()
-                })
-                if kind == 'total' and res['total'] is None:
-                    res['total'] = amt
-                if kind == 'contract' and res['contract'] is None:
-                    res['contract'] = amt
 
-        if res['all_amounts']:
-            res['all_amounts'].sort(key=lambda x: x['amount'], reverse=True)
-            if res['total'] is None:
-                res['total'] = res['all_amounts'][0]['amount']
+        # 1) 강화된 파서로 문서 금액 추출 (doc_id는 임시값, filename이나 hash 사용 가능)
+        doc_id = f"meta_extract_{hash(text[:100]) % 100000}"
+        raw_amount = select_document_amount(doc_id, text)
+
+        # 2) 최종 검증
+        validated_amount, is_valid = validate_amount(raw_amount, context="metadata_extractor")
+
+        if is_valid and validated_amount:
+            res['total'] = validated_amount
+            res['all_amounts'].append({
+                'amount': validated_amount,
+                'type': 'validated_total',
+                'formatted': f'₩{validated_amount:,}',
+                'position': 0
+            })
+            logger.info(f"Amount extracted: ₩{validated_amount:,} (validated)")
+        else:
+            # 폴백: 후보만 수집 (검증 실패 시)
+            candidates = extract_amount_candidates(text)
+            if candidates:
+                for c in candidates:
+                    res['all_amounts'].append({
+                        'amount': c.value,
+                        'type': 'candidate',
+                        'formatted': f'₩{c.value:,}',
+                        'position': c.start
+                    })
+                res['all_amounts'].sort(key=lambda x: x['amount'], reverse=True)
+
+            logger.warning(f"Amount validation failed for doc_id={doc_id}, raw={raw_amount}")
+
         return res
 
     def _extract_department(self, text: str) -> Optional[str]:

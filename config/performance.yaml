@@ -1,40 +1,174 @@
-# AI-CHAT 성능 설정
-# 2025-09-30
+# AI-CHAT 성능 설정 v1
+# 2025-11-12: 병렬 풀 분리 + OCR 모드 통합 + 메모리 안정화
 
-# 병렬 처리 설정
+schema_version: 1
+
+# ============================================================================
+# 병렬 처리 설정 (CPU-bound vs IO-bound 분리)
+# ============================================================================
 parallel:
-  enabled: true           # 병렬 처리 활성화
-  max_workers: 4         # 최대 워커 수
-  chunk_size: 10         # 배치 크기
-  use_multiprocessing: false  # ProcessPoolExecutor 대신 ThreadPoolExecutor 사용
+  enabled: true
 
-# 캐시 설정
+  # 작업 유형별 풀 분리 (v1 신규)
+  pools:
+    # IO-bound: PDF I/O, 메타로드, 네트워크 호출
+    io:
+      executor: "thread"          # ThreadPoolExecutor
+      max_workers: "auto"         # auto → min(8, 2*CPU)
+      chunk_size: 16
+      queue_size: 128             # 큐 크기
+
+    # CPU-bound: OCR, 이미지 변환, PDF 렌더링
+    cpu:
+      executor: "process"         # ProcessPoolExecutor (GIL 우회)
+      max_workers: "auto"         # auto → max(1, CPU-1)
+      chunk_size: 4
+      queue_size: 32
+
+  # 하위호환 필드 (v0 → v1 매핑용)
+  max_workers: 4
+  chunk_size: 10
+  use_multiprocessing: true       # CPU-bound 기본 설정
+
+# ============================================================================
+# 캐시 설정 (LRU + 버전닝)
+# ============================================================================
 cache:
   enabled: true
-  max_size: 1000        # 최대 캐시 항목 수
-  ttl_hours: 24         # 캐시 유효 시간 (시간)
-  preload: true         # 시작시 캐시 사전 로드
+  max_size: 2000                  # 1000 → 2000 (증가)
+  ttl_hours: 24
 
-# OCR 설정
+  # 프리로드 설정
+  preload:
+    enabled: true
+    limit: 200                    # 프리로드 상한 (상위 빈출만)
+    types: ["metadata", "frequent_docs"]
+
+  # 캐시 정책
+  policy: "LRU"                   # LRU (Least Recently Used)
+  version_salt: "v1"              # 스키마 변경 시 무효화용
+
+  # 캐시 별 TTL 오버라이드
+  ttl_overrides:
+    ocr_results: 72               # OCR 결과는 72시간
+    embeddings: 168               # 임베딩은 7일
+    metadata: 24                  # 메타데이터는 24시간
+
+# ============================================================================
+# OCR 설정 (3상태 모드 통합: off|fallback|force)
+# ============================================================================
 ocr:
+  # OCR 모드 (v1 통합)
+  mode: "fallback"                # off | fallback | force
+  cache_enabled: true
+
+  # 타임아웃 (이중 가드)
+  page_timeout_sec: 5             # 페이지 단위 타임아웃
+  doc_timeout_sec: 60             # 문서 전체 타임아웃 가드
+
+  # 파일 크기 제한
+  skip_large_files: true
+  max_file_size_mb: 20            # 10 → 20 (코퍼스 특성 반영)
+  max_pages: 30                   # 대용량 문서 안전 가드
+
+  # 병렬도 제어
+  concurrent_pages: 2             # 페이지 병렬 처리 수
+
+  # 품질 설정
+  dpi: 300                        # OCR 해상도
+  lang: "kor+eng"                 # Tesseract 언어
+
+  # 하위호환 필드 (v0 매핑용)
   enabled: true
-  cache_enabled: true   # OCR 결과 캐싱
-  timeout: 30           # OCR 타임아웃 (초)
-  skip_large_files: true  # 큰 파일 건너뛰기
-  max_file_size_mb: 10
+  timeout: 30
 
-# 문서 처리 설정
+# ============================================================================
+# 문서 처리 설정 (워밍업 추가)
+# ============================================================================
 documents:
-  lazy_loading: true    # 필요시에만 로드
-  batch_size: 10       # 배치 처리 크기
-  index_on_startup: false  # 시작시 인덱싱 (false로 빠른 시작)
+  lazy_loading: true
+  batch_size: 10
+  index_on_startup: false
 
-# 로깅 설정
+  # 워밍업 (v1 신규)
+  warmup:
+    enabled: true
+    top_k: 100                    # 기동 후 백그라운드 워밍업 대상
+    delay_sec: 5                  # 기동 후 지연 시간
+    types: ["metadata", "index"]  # 워밍업 대상
+
+  # 파일 크기 제한
+  max_file_size_mb: 50
+
+# ============================================================================
+# 로깅 설정 (구조화 로그 + 샘플링)
+# ============================================================================
 logging:
-  level: INFO          # DEBUG, INFO, WARNING, ERROR
-  show_progress: true  # 진행 상황 표시
+  level: INFO                     # DEBUG, INFO, WARNING, ERROR
+  show_progress: true
 
-# 메모리 최적화
+  # 구조화 로그 (v1 신규)
+  structured: true                # JSON 라인 로그
+  sample_debug_rate: 0.05         # DEBUG 샘플링 5%
+
+  # 로그 파일 설정
+  file:
+    enabled: true
+    max_mb: 10
+    backup_count: 5
+
+# ============================================================================
+# 메모리 최적화 (소프트/하드 임계값 + 백프레셔)
+# ============================================================================
 memory:
-  garbage_collection_interval: 50  # N개 처리마다 GC 실행
-  max_memory_mb: 2000             # 최대 메모리 사용량 (MB)
+  # 이중 임계값 (v1 신규)
+  soft_limit_mb: 1800             # 소프트 임계: 백프레셔 시작
+  hard_limit_mb: 2200             # 하드 임계: 작업 거부/큐 드롭
+
+  # GC 설정
+  garbage_collection_interval: 50
+
+  # 큐 백프레셔 (v1 신규)
+  queue_backpressure:
+    enabled: true
+    max_inflight_tasks: 64        # 동시 실행 태스크 상한
+    drop_policy: "oldest"         # oldest | newest | priority
+
+  # 메모리 모니터링
+  monitor:
+    enabled: true
+    check_interval_sec: 10
+    alert_threshold_pct: 85       # 85% 이상 시 알림
+
+  # 하위호환 필드 (v0 매핑용)
+  max_memory_mb: 2000
+
+# ============================================================================
+# 성능 모니터링 (v1 신규)
+# ============================================================================
+monitoring:
+  enabled: true
+
+  # 메트릭 수집
+  metrics:
+    enabled: true
+    interval_sec: 60              # 1분마다 수집
+    retention_hours: 24
+
+  # 프로파일링
+  profiling:
+    enabled: false                # 개발 환경에서만 활성화
+    type: "cProfile"              # cProfile | pyinstrument
+    output_dir: "var/profiling"
+
+# ============================================================================
+# 하위호환 매핑 (v0 → v1)
+# ============================================================================
+# 기존 v0 필드는 자동으로 v1 구조로 매핑됨:
+#
+# v0.parallel.max_workers → v1.parallel.pools.*.max_workers
+# v0.parallel.use_multiprocessing → v1.parallel.pools.cpu.executor
+# v0.ocr.enabled → v1.ocr.mode (true → fallback, false → off)
+# v0.memory.max_memory_mb → v1.memory.hard_limit_mb
+#
+# 매핑 로직은 app/config/performance_compat.py 참조

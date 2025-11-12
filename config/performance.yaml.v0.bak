@@ -1,0 +1,40 @@
+# AI-CHAT 성능 설정
+# 2025-09-30
+
+# 병렬 처리 설정
+parallel:
+  enabled: true           # 병렬 처리 활성화
+  max_workers: 4         # 최대 워커 수
+  chunk_size: 10         # 배치 크기
+  use_multiprocessing: false  # ProcessPoolExecutor 대신 ThreadPoolExecutor 사용
+
+# 캐시 설정
+cache:
+  enabled: true
+  max_size: 1000        # 최대 캐시 항목 수
+  ttl_hours: 24         # 캐시 유효 시간 (시간)
+  preload: true         # 시작시 캐시 사전 로드
+
+# OCR 설정
+ocr:
+  enabled: true
+  cache_enabled: true   # OCR 결과 캐싱
+  timeout: 30           # OCR 타임아웃 (초)
+  skip_large_files: true  # 큰 파일 건너뛰기
+  max_file_size_mb: 10
+
+# 문서 처리 설정
+documents:
+  lazy_loading: true    # 필요시에만 로드
+  batch_size: 10       # 배치 처리 크기
+  index_on_startup: false  # 시작시 인덱싱 (false로 빠른 시작)
+
+# 로깅 설정
+logging:
+  level: INFO          # DEBUG, INFO, WARNING, ERROR
+  show_progress: true  # 진행 상황 표시
+
+# 메모리 최적화
+memory:
+  garbage_collection_interval: 50  # N개 처리마다 GC 실행
+  max_memory_mb: 2000             # 최대 메모리 사용량 (MB)

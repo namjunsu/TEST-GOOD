@@ -47,6 +47,14 @@ class DocumentTypeClassifier:
         # 미리 컴파일된 정규식 (가중치/음수 키워드 포함)
         self._compiled = self._compile_rules(self.config.get("doctype", {}))
 
+        # 메트릭 (v1 스키마)
+        self._metrics = {
+            "total_classifications": 0,
+            "by_doctype": {},
+            "avg_confidence": 0.0,
+            "low_confidence_count": 0,  # confidence < 0.5
+        }
+
     # ---------- 설정 로드/핫리로드 ----------
     def _load_config(self) -> Dict[str, Any]:
         """설정 파일 로드 (mtime 추적)"""
@@ -341,11 +349,38 @@ class DocumentTypeClassifier:
         # confidence 정규화 (0~1): score / (score + 1)
         conf = float(top["score"] / (top["score"] + 1.0))
 
-        return {
+        result = {
             "doctype": top["doctype"],
             "confidence": round(conf, 4),
             "reasons": top["reasons"],
         }
+
+        # 메트릭 업데이트 (v1 스키마)
+        self._update_metrics(result["doctype"], result["confidence"])
+
+        return result
+
+    def _update_metrics(self, doctype: str, confidence: float) -> None:
+        """분류 메트릭 업데이트"""
+        self._metrics["total_classifications"] += 1
+
+        # doctype별 카운트
+        if doctype not in self._metrics["by_doctype"]:
+            self._metrics["by_doctype"][doctype] = 0
+        self._metrics["by_doctype"][doctype] += 1
+
+        # 평균 confidence 업데이트 (incremental)
+        total = self._metrics["total_classifications"]
+        prev_avg = self._metrics["avg_confidence"]
+        self._metrics["avg_confidence"] = (prev_avg * (total - 1) + confidence) / total
+
+        # Low confidence 카운트
+        if confidence < 0.5:
+            self._metrics["low_confidence_count"] += 1
+
+    def get_metrics(self) -> Dict[str, Any]:
+        """분류 메트릭 반환"""
+        return self._metrics.copy()
 
     def get_doctype_name_korean(self, doctype: str) -> str:
         """doctype 코드 → 한글 이름"""

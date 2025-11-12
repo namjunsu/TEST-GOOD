@@ -34,6 +34,11 @@ from modules.metadata_db import MetadataDB
 
 logger = get_logger(__name__)
 
+# OCR 모드 상수
+OCR_MODE_OFF = "off"
+OCR_MODE_FALLBACK = "fallback"
+OCR_MODE_FORCE = "force"
+
 
 def extract_claimed_total_fallback(text: str) -> Optional[int]:
     """본문에서 비용 합계 금액을 폴백 추출
@@ -91,7 +96,8 @@ class DocumentIngester:
         quarantine_dir: str = "docs/quarantine",
         extracted_dir: str = "data/extracted",
         db_path: str = "metadata.db",
-        ocr_enabled: bool = False,
+        ocr_enabled: bool = False,  # Deprecated: use ocr_mode instead
+        ocr_mode: Optional[str] = None,  # "off" | "fallback" | "force"
         dry_run: bool = False,
     ):
         self.incoming_dir = Path(incoming_dir)
@@ -100,8 +106,21 @@ class DocumentIngester:
         self.quarantine_dir = Path(quarantine_dir)
         self.extracted_dir = Path(extracted_dir)
         self.db_path = db_path
-        self.ocr_enabled = ocr_enabled
         self.dry_run = dry_run
+
+        # OCR 모드 결정 (v1 스키마 지원)
+        if ocr_mode is not None:
+            # v1: 명시적 ocr_mode 우선
+            self.ocr_mode = ocr_mode
+        elif ocr_enabled:
+            # v0 호환: ocr_enabled=True → fallback 모드
+            self.ocr_mode = OCR_MODE_FALLBACK
+        else:
+            # 기본값: off
+            self.ocr_mode = OCR_MODE_OFF
+
+        # 하위 호환 속성 유지
+        self.ocr_enabled = (self.ocr_mode != OCR_MODE_OFF)
 
         # 폴더 생성
         for d in [
@@ -173,10 +192,19 @@ class DocumentIngester:
 
             full_text = "\n\n".join(text_pages)
 
-            # OCR 폴백 조건: 텍스트가 없거나, 페이지당 평균 300자 미만
+            # OCR 모드별 처리 (v1 스키마)
             page_count = metadata.get("page_count", 1)
             avg_chars_per_page = len(full_text) / page_count if page_count > 0 else 0
-            needs_ocr = (not full_text or avg_chars_per_page < 300) and self.ocr_enabled
+
+            # OCR 필요 여부 판단
+            needs_ocr = False
+            if self.ocr_mode == OCR_MODE_FORCE:
+                # force: 항상 OCR 사용
+                needs_ocr = True
+                logger.info(f"OCR force 모드: {pdf_path.name}")
+            elif self.ocr_mode == OCR_MODE_FALLBACK:
+                # fallback: 텍스트가 없거나 페이지당 평균 300자 미만일 때만
+                needs_ocr = not full_text or avg_chars_per_page < 300
 
             if needs_ocr:
                 if not full_text:
@@ -455,7 +483,7 @@ class DocumentIngester:
         logger.info("📥 문서 투입 인덱싱 시작")
         logger.info(f"incoming: {self.incoming_dir}")
         logger.info(f"dry_run: {self.dry_run}")
-        logger.info(f"ocr: {self.ocr_enabled}")
+        logger.info(f"ocr_mode: {self.ocr_mode}")
         logger.info("=" * 80)
 
         # PDF 파일 목록 가져오기
@@ -538,7 +566,8 @@ class DocumentIngester:
         log_data = {
             "timestamp": timestamp,
             "dry_run": self.dry_run,
-            "ocr_enabled": self.ocr_enabled,
+            "ocr_mode": self.ocr_mode,
+            "ocr_enabled": self.ocr_enabled,  # v0 호환
             "stats": self.stats,
             "results": self.results,
         }
@@ -553,14 +582,30 @@ def main():
     parser = argparse.ArgumentParser(description="문서 투입 인덱싱 CLI")
     parser.add_argument("--limit", type=int, help="처리할 최대 파일 수")
     parser.add_argument("--only", type=str, help="파일명 패턴 (glob)")
-    parser.add_argument("--ocr", action="store_true", help="OCR 활성화")
+    parser.add_argument(
+        "--ocr-mode",
+        type=str,
+        choices=["off", "fallback", "force"],
+        help="OCR 모드: off (비활성), fallback (실패 시), force (항상 사용)",
+    )
+    parser.add_argument(
+        "--ocr",
+        action="store_true",
+        help="OCR 활성화 (Deprecated: --ocr-mode fallback 사용 권장)",
+    )
     parser.add_argument(
         "--dry-run", action="store_true", help="실제 이동/업서트 없이 리포트만"
     )
 
     args = parser.parse_args()
 
-    ingester = DocumentIngester(ocr_enabled=args.ocr, dry_run=args.dry_run)
+    # OCR 모드 결정 (v1 우선, v0 폴백)
+    ocr_mode = args.ocr_mode if args.ocr_mode else None
+    ocr_enabled = args.ocr
+
+    ingester = DocumentIngester(
+        ocr_mode=ocr_mode, ocr_enabled=ocr_enabled, dry_run=args.dry_run
+    )
 
     ingester.run(limit=args.limit, pattern=args.only)
 

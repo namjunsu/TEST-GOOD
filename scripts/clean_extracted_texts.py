@@ -23,7 +23,23 @@ def clean_text(text: str) -> str:
     # 원본 텍스트 백업
     original_text = text
 
-    # 제거할 패턴 목록
+    # STEP 1: 중복 콘텐츠 제거 (마커 제거 전에 먼저 수행!)
+    # "[OCR 추출 텍스트]" 이후 모든 내용 삭제
+    ocr_marker_patterns = [
+        '\n[OCR 추출 텍스트]\n',
+        '\n[OCR 추출 텍스트]',
+        '[OCR 추출 텍스트]\n',
+        '[OCR 추출 텍스트]',
+    ]
+
+    for marker in ocr_marker_patterns:
+        ocr_marker_idx = text.find(marker)
+        if ocr_marker_idx != -1:
+            text = text[:ocr_marker_idx]
+            logger.debug(f"[OCR 추출 텍스트] 이후 중복 콘텐츠 제거 ({len(original_text) - len(text)}자)")
+            break
+
+    # STEP 2: 개별 패턴 제거
     patterns_to_remove = [
         # 그룹웨어 URL 전체 라인 제거
         r'.*gw\.channela-mt\.com/groupware/approval/.*\n?',
@@ -40,6 +56,11 @@ def clean_text(text: str) -> str:
         r'.*menu_depth=\d+.*\n?',
         r'.*is_mark=.*\n?',
         r'.*idx=\d+.*\n?',
+
+        # OCR 중복 마커 제거
+        r'^\[페이지 \d+\]\s*\n',
+        r'^\[OCR 추출 텍스트\]\s*\n',
+        r'^\[OCR 페이지 \d+\]\s*\n',
 
         # 빈 줄이 3개 이상 연속되면 2개로 축소
         r'\n{4,}',

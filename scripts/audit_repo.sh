@@ -1,28 +1,45 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+# 스크립트 위치 기준으로 레포 루트 이동 (예: scripts/audit_repo.sh)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${SCRIPT_DIR}/.."  # 레포 루트로 이동
+
+# Python 실행 파일 (기본: python, 환경변수로 변경 가능)
+PYTHON_BIN="${PYTHON_BIN:-python}"
+
 mkdir -p reports
+
 echo "[1/5] Freeze"
-python -V | tee reports/python_version.txt
-pip freeze > reports/pip_freeze.txt || true
+"$PYTHON_BIN" -V | tee reports/python_version.txt
+"$PYTHON_BIN" -m pip freeze > reports/pip_freeze.txt || true
 
 echo "[2/5] Pip dependency tree"
-pip install -q pipdeptree vulture >/dev/null 2>&1 || true
-pipdeptree --json > reports/pipdeptree.json 2>/dev/null || true
+"$PYTHON_BIN" -m pip install -q pipdeptree vulture >/dev/null 2>&1 || true
+"$PYTHON_BIN" -m pipdeptree --json > reports/pipdeptree.json 2>/dev/null || true
 
 echo "[3/5] Dead code"
-vulture . --min-confidence 80 --sort-by-size > reports/vulture.txt 2>/dev/null || true
+vulture . --min-confidence 80 --sort-by-size \
+  --exclude ".venv,venv,archive,__pycache__" \
+  > reports/vulture.txt 2>/dev/null || true
 
 echo "[4/5] Repo stats"
-python - <<'PY'
+"$PYTHON_BIN" - <<'PY'
 import json, os
 from pathlib import Path
 
 # Count Python files and lines
 stats = {"py_files": 0, "lines": 0, "folders": set(), "modules": set()}
 
+# Skip these directories
+SKIP_DIRS = {'.git', '.idea', '.venv', 'venv', '__pycache__', 'archive'}
+
 for root, dirs, files in os.walk("."):
-    # Skip hidden and cache directories
-    dirs[:] = [d for d in dirs if not d.startswith('.') and d != '__pycache__']
+    # Skip hidden, cache, and venv directories
+    dirs[:] = [
+        d for d in dirs
+        if d not in SKIP_DIRS and not d.startswith(".")
+    ]
 
     for file in files:
         if file.endswith('.py'):
@@ -30,9 +47,10 @@ for root, dirs, files in os.walk("."):
             filepath = Path(root) / file
             stats["folders"].add(root)
 
-            # Extract module name
+            # Extract top-level module name (e.g., app, scripts)
             if root != '.':
-                stats["modules"].add(root.replace('./', '').replace('/', '.').split('.')[0])
+                top_level = root.replace('./', '').split('/', 1)[0]
+                stats["modules"].add(top_level)
 
             try:
                 with open(filepath, encoding="utf-8", errors="ignore") as f:
@@ -97,4 +115,4 @@ cat > reports/entrypoints.md <<'EOF'
 EOF
 
 echo "✅ Audit complete -> reports/"
-ls -la reports/
+ls -lh reports/

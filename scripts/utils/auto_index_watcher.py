@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from rag_system.bm25_store import BM25Store
+from rag_system.active.bm25_store import BM25Store
 from rag_system.korean_vector_store import KoreanVectorStore
 import pdfplumber
 
@@ -62,12 +62,12 @@ class AutoIndexWatcher:
         """RAG 스토어 로드 (지연 로딩)"""
         if self.bm25_store is None:
             logger.info("BM25Store 로드 중...")
-            self.bm25_store = BM25Store(index_path="rag_system/db/bm25_index.pkl")
+            self.bm25_store = BM25Store(index_path="var/index/bm25_index.pkl")
 
         if self.vector_store is None:
             logger.info("KoreanVectorStore 로드 중...")
             self.vector_store = KoreanVectorStore(
-                index_path="rag_system/db/korean_vector_index.faiss"
+                index_path="var/index/korean_vector_index.faiss"
             )
 
     def _get_file_hash(self, file_path: Path) -> str:

@@ -15,7 +15,7 @@ import pdfplumber
 # 프로젝트 루트를 PYTHONPATH에 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from modules.amount_parser_v2 import select_document_amount, validate_amount
+from app.data.amount_parser_v2 import select_document_amount, validate_amount
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)

@@ -48,6 +48,7 @@ fi
 PORT="${AI_CHAT_PORT:-8501}"
 HOST="${AI_CHAT_HOST:-0.0.0.0}"
 API_PORT="${AI_CHAT_API_PORT:-7860}"
+PY="${PROJECT_ROOT}/.venv/bin/python"
 
 : "${MODEL_PATH:?MODEL_PATH가 비어있습니다 (.env 확인)}"
 [[ -f "$MODEL_PATH" ]] || { log ERROR "MODEL_PATH 파일 없음: $MODEL_PATH"; exit 2; }
@@ -59,6 +60,21 @@ if [[ "$RETRIEVER_BACKEND" == "bm25" ]]; then
 fi
 log INFO "MODEL_PATH 적용: $(basename "$MODEL_PATH")"
 log INFO "RETRIEVER_BACKEND: $RETRIEVER_BACKEND"
+
+# ---------- 연도 폴더 → incoming 동기화 + 인제스트 ----------
+log INFO "="
+log INFO "Step 0: 연도 폴더 → incoming 동기화 시작..."
+"${PY}" scripts/sync_year_docs_to_incoming.py 2>&1 | tee -a "$LOG_FILE" || {
+  log WARN "동기화 실행 중 경고 발생 (계속 진행)"
+}
+log SUCCESS "Step 0: 동기화 완료"
+
+log INFO "Step 1: 신규 문서 ingest 시작..."
+"${PY}" scripts/ingest_from_docs.py 2>&1 | tee -a "$LOG_FILE" || {
+  log WARN "Ingest 실행 중 경고 발생 (계속 진행)"
+}
+log SUCCESS "Step 1: ingest 완료"
+log INFO "="
 
 # ---------- BM25 인덱스 가드 (존재/정합성/자동복구) ----------
 if [[ "$RETRIEVER_BACKEND" == "bm25" ]]; then
@@ -77,7 +93,7 @@ if [[ "$RETRIEVER_BACKEND" == "bm25" ]]; then
   set +e  # 일시적으로 exit-on-error 비활성화
   PYTHONPATH="${PROJECT_ROOT}" python - <<'PYCHECK'
 import sqlite3, os, sys
-from rag_system.bm25_store import BM25Store  # 인덱서와 동일 모듈 사용
+from rag_system.active.bm25_store import BM25Store  # 인덱서와 동일 모듈 사용
 
 try:
     index_path = os.environ.get("BM25_INDEX_PATH", "var/index/bm25_index.pkl")

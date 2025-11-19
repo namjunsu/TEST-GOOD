@@ -17,7 +17,7 @@ import time
 from typing import Any, Dict, List, Set, Tuple
 
 from app.core.logging import get_logger
-from modules.metadata_db import MetadataDB
+from app.data.metadata_db import MetadataDB
 
 logger = get_logger(__name__)
 

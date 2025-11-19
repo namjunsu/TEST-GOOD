@@ -1,13 +1,24 @@
 """
 Document Loader Module
-데이터베이스에서 문서 메타데이터를 로드하고 처리
+메타데이터 DB에서 문서 정보를 로드하고 처리
+
+Version: 2.0
+- 경로 버그 수정 (self.metadata_db 일관성)
+- everything_index.db 미사용 코드 제거
+- 중복 DB 조회 제거 (단일 패스 처리)
+- logging 시스템 전환
+- 타입 안전성 강화
 """
 
+import logging
 import sqlite3
 import pandas as pd
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
+
+# 로깅 설정
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -16,7 +27,7 @@ class DocumentInfo:
     filename: str
     title: str
     date: str
-    year: str
+    year: Optional[int]  # 숫자형으로 변경
     category: str
     drafter: str
     size: str
@@ -27,9 +38,7 @@ class DocumentInfo:
 class DocumentLoader:
     """문서 메타데이터 로더
 
-    두 개의 SQLite 데이터베이스에서 문서 정보를 조회:
-    - everything_index.db: 문서 목록 및 메타데이터
-    - metadata.db: 추가 기안자 정보
+    metadata.db에서 문서 정보를 조회하고 기안자 정보를 추출
     """
 
     # 카테고리 분류 키워드
@@ -46,51 +55,15 @@ class DocumentLoader:
         '영상', '카메라', '조명', '중계', 'DVR', '스튜디오', '송출',
         '구매', '수리', '교체', '검토', '폐기',
         '방송기술팀', '영상취재팀', '영상제작팀', '기술관리팀',
-        '명상제작팀', '그래픽디자인파트'
+        '그래픽디자인파트'  # '명상제작팀' 제거 (오타로 보임)
     ]
 
-    def __init__(
-        self,
-        everything_db: str = "everything_index.db",
-        metadata_db: str = "metadata.db"
-    ):
+    def __init__(self, metadata_db: str = "metadata.db"):
         """
         Args:
-            everything_db: 메인 문서 DB 경로
             metadata_db: 메타데이터 DB 경로
         """
-        self.everything_db = Path(everything_db)
         self.metadata_db = Path(metadata_db)
-
-    def _load_metadata_drafters(self) -> Dict[str, str]:
-        """metadata.db에서 기안자 정보 로드
-
-        Returns:
-            파일명 -> 기안자 매핑 딕셔너리
-        """
-        drafters = {}
-
-        if not self.metadata_db.exists():
-            return drafters
-
-        try:
-            conn = sqlite3.connect(str(self.metadata_db))
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT filename, drafter FROM documents "
-                "WHERE drafter IS NOT NULL AND drafter != ''"
-            )
-
-            for fname, drafter in cursor.fetchall():
-                if drafter and drafter.strip():
-                    drafters[fname] = drafter.strip()
-
-            conn.close()
-
-        except Exception as e:
-            print(f"⚠️ metadata.db 로드 실패: {e}")
-
-        return drafters
 
     def _classify_category(self, filename: str, db_category: Optional[str]) -> str:
         """파일명을 기반으로 카테고리 분류
@@ -143,7 +116,7 @@ class DocumentLoader:
             if any(char.isdigit() for char in potential_name):
                 continue
 
-            # 제외 키워드 체크
+            # 제외 키워드 체크 (부분 문자열 매칭)
             if any(exc in potential_name for exc in self.EXCLUDED_KEYWORDS):
                 continue
 
@@ -154,122 +127,41 @@ class DocumentLoader:
     def _determine_drafter(
         self,
         filename: str,
-        metadata_drafters: Dict[str, str],
-        department: Optional[str]
+        db_drafter: Optional[str],
+        department: Optional[str] = None
     ) -> str:
         """기안자 결정 (우선순위 적용)
 
         우선순위:
         1. metadata.db의 drafter 필드
         2. 파일명에서 추출
-        3. department (부서명)
+        3. department (부서명) - 제외 키워드 검증
 
         Args:
             filename: 파일명
-            metadata_drafters: metadata DB의 기안자 정보
-            department: 부서명
+            db_drafter: DB의 기안자 정보
+            department: 부서명 (optional)
 
         Returns:
             기안자 이름 (확인 안되면 "미확인")
         """
-        # 1순위: metadata.db
-        if filename in metadata_drafters:
-            return metadata_drafters[filename]
+        # 1순위: DB drafter
+        if db_drafter and db_drafter.strip():
+            return db_drafter.strip()
 
         # 2순위: 파일명 추출
-        drafter = self._extract_drafter_from_filename(filename)
-        if drafter:
-            return drafter
+        extracted = self._extract_drafter_from_filename(filename)
+        if extracted:
+            return extracted
 
-        # 3순위: department (부서명이 실제 카테고리가 아닌 경우)
-        if department and department not in self.EXCLUDED_KEYWORDS:
-            return department
+        # 3순위: department (부분 문자열 체크)
+        if department:
+            # 제외 키워드가 포함되어 있는지 체크
+            is_excluded = any(exc in department for exc in self.EXCLUDED_KEYWORDS)
+            if not is_excluded:
+                return department
 
         return "미확인"
-
-    def load_documents(self, version: str = "v3.3") -> pd.DataFrame:
-        """문서 메타데이터 로드
-
-        Args:
-            version: 버전 (현재 미사용, 하위 호환용)
-
-        Returns:
-            문서 정보 DataFrame
-        """
-        print("🚀 초고속 문서 로드 시작 (DB 직접 조회)")
-
-        try:
-            # 1. metadata.db에서 기안자 정보 로드
-            metadata_drafters = self._load_metadata_drafters()
-            if metadata_drafters:
-                unique_drafters = len(set(metadata_drafters.values()))
-                print(f"📋 metadata.db에서 {len(metadata_drafters)}개 문서의 기안자 정보 로드 (고유 기안자 {unique_drafters}명)")
-
-            # 2. metadata.db 연결 (everything_index.db 대신)
-            metadata_db_path = Path("metadata.db")
-            if not metadata_db_path.exists():
-                print(f"❌ metadata.db 파일이 없습니다")
-                return pd.DataFrame()
-
-            conn = sqlite3.connect(str(metadata_db_path))
-            cursor = conn.cursor()
-
-            # 3. 문서 목록 조회 (documents 테이블 사용)
-            cursor.execute("""
-                SELECT filename, path, date, year, category, drafter, keywords
-                FROM documents
-                ORDER BY year DESC, filename ASC
-            """)
-
-            rows = cursor.fetchall()
-            print(f"📊 metadata.db에서 {len(rows)}개 문서 로드됨")
-
-            # 4. 문서 정보 처리
-            documents: List[Dict[str, str]] = []
-
-            for filename, path, date, year, category, drafter, keywords in rows:
-                # 카테고리 분류
-                doc_category = self._classify_category(filename, category)
-
-                # 기안자는 이미 metadata.db에서 가져옴 (department 필요 없음)
-                if not drafter:
-                    drafter = self._determine_drafter(
-                        filename,
-                        metadata_drafters,
-                        None
-                    )
-
-                # 문서 정보 구성
-                documents.append({
-                    'filename': filename,
-                    'title': filename.replace('.pdf', '').replace('_', ' '),
-                    'date': date or '날짜없음',
-                    'year': year or '연도없음',
-                    'category': doc_category,
-                    'drafter': drafter,
-                    'size': '알 수 없음',
-                    'path': path,
-                    'keywords': keywords or ''
-                })
-
-            conn.close()
-
-            # 5. DataFrame 생성 및 정렬
-            df = pd.DataFrame(documents)
-            if not df.empty:
-                df = df.sort_values(['year', 'filename'], ascending=[False, True])
-
-            # 6. 통계 출력
-            self._print_statistics(df)
-
-            print(f"✅ {len(documents)}개 문서 초고속 로드 완료!")
-            return df
-
-        except Exception as e:
-            print(f"❌ 초고속 로드 실패: {e}")
-            import traceback
-            traceback.print_exc()
-            return pd.DataFrame()
 
     def _is_likely_korean_name(self, name: str) -> bool:
         """한글 이름 여부 판별 (장비명 필터링)
@@ -293,6 +185,92 @@ class DocumentLoader:
 
         return False
 
+    def load_documents(self, version: str = "v3.3") -> pd.DataFrame:
+        """문서 메타데이터 로드 (단일 패스 처리)
+
+        Args:
+            version: 버전 (현재 미사용, 하위 호환용)
+
+        Returns:
+            문서 정보 DataFrame
+        """
+        logger.info("문서 로드 시작 (DB 직접 조회)")
+
+        try:
+            # 1. DB 경로 확인 (self.metadata_db 사용)
+            if not self.metadata_db.exists():
+                logger.error(f"metadata.db 파일이 없습니다: {self.metadata_db}")
+                return pd.DataFrame()
+
+            # 2. DB 연결 및 전체 데이터 조회 (단일 쿼리)
+            conn = sqlite3.connect(str(self.metadata_db))
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT filename, path, date, year, category, drafter, keywords
+                FROM documents
+                ORDER BY year DESC, filename ASC
+            """)
+
+            rows = cursor.fetchall()
+            conn.close()
+
+            logger.info(f"metadata.db에서 {len(rows)}개 문서 로드됨")
+
+            # 3. 문서 정보 처리
+            documents: List[Dict] = []
+
+            for filename, path, date, year, category, drafter, keywords in rows:
+                # 카테고리 분류
+                doc_category = self._classify_category(filename, category)
+
+                # 기안자 결정
+                doc_drafter = self._determine_drafter(filename, drafter)
+
+                # year를 숫자형으로 변환
+                try:
+                    year_int = int(year) if year else None
+                except (ValueError, TypeError):
+                    year_int = None
+
+                # title 생성 (대소문자 안전)
+                stem = Path(filename).stem  # 확장자 제거
+                title = stem.replace('_', ' ')
+
+                # 문서 정보 구성
+                documents.append({
+                    'filename': filename,
+                    'title': title,
+                    'date': date or '날짜없음',
+                    'year': year_int,  # 숫자형 또는 None
+                    'year_display': str(year_int) if year_int else '연도없음',  # UI 표시용
+                    'category': doc_category,
+                    'drafter': doc_drafter,
+                    'size': '알 수 없음',  # TODO: 실제 파일 크기 계산 가능
+                    'path': path,
+                    'keywords': keywords or ''
+                })
+
+            # 4. DataFrame 생성 및 정렬
+            df = pd.DataFrame(documents)
+            if not df.empty:
+                # year(숫자)로 정렬, None은 맨 뒤로
+                df = df.sort_values(
+                    ['year', 'filename'],
+                    ascending=[False, True],
+                    na_position='last'
+                )
+
+            # 5. 통계 출력
+            self._print_statistics(df)
+
+            logger.info(f"{len(documents)}개 문서 로드 완료")
+            return df
+
+        except Exception as e:
+            logger.error(f"문서 로드 실패: {e}", exc_info=True)
+            return pd.DataFrame()
+
     def _print_statistics(self, df: pd.DataFrame) -> None:
         """로드 통계 출력
 
@@ -303,31 +281,35 @@ class DocumentLoader:
             return
 
         total_count = len(df)
-        df_with_drafter = df[df['drafter'].notna() & (df['drafter'] != '미확인') & (df['drafter'] != '')]
+        df_with_drafter = df[
+            df['drafter'].notna() &
+            (df['drafter'] != '미확인') &
+            (df['drafter'] != '')
+        ]
         drafter_count = len(df_with_drafter)
         percentage = drafter_count * 100 // max(total_count, 1)
 
-        # 전체 고유 기안자 (장비명 포함)
+        # 전체 고유 기안자
         all_unique_drafters = df_with_drafter['drafter'].unique() if drafter_count > 0 else []
         all_unique_count = len(all_unique_drafters)
 
-        # 한글 이름만 필터링 (장비명 제외)
+        # 한글 이름만 필터링
         korean_drafters = [d for d in all_unique_drafters if self._is_likely_korean_name(d)]
         korean_count = len(korean_drafters)
 
-        print(f"📈 기안자 통계:")
-        print(f"  - 총 문서 수: {total_count}개")
-        print(f"  - 기안자 확인: {drafter_count}개 ({percentage}%)")
-        print(f"  - 기안자 미확인: {total_count - drafter_count}개")
-        print(f"  - 고유 기안자(한글 이름만): {korean_count}명")
+        logger.info("기안자 통계:")
+        logger.info(f"  - 총 문서 수: {total_count}개")
+        logger.info(f"  - 기안자 확인: {drafter_count}개 ({percentage}%)")
+        logger.info(f"  - 기안자 미확인: {total_count - drafter_count}개")
+        logger.info(f"  - 고유 기안자(한글 이름만): {korean_count}명")
 
         if all_unique_count > korean_count:
-            print(f"  - 장비명 등 제외: {all_unique_count - korean_count}개")
+            logger.info(f"  - 장비명 등 제외: {all_unique_count - korean_count}개")
 
-        # 기안자 샘플 (한글 이름만, 상위 10명)
+        # 기안자 샘플
         if korean_count > 0:
             sample = ', '.join(korean_drafters[:10])
-            print(f"  - 기안자 샘플: {sample}")
+            logger.info(f"  - 기안자 샘플: {sample}")
 
 
 # 하위 호환을 위한 함수 래퍼

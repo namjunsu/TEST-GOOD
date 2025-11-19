@@ -59,9 +59,18 @@ def _to_won_from_human(m: re.Match) -> Optional[int]:
     Returns:
         정수 원 (실패시 None)
     """
-    eok = m.group("eok")
-    man = m.group("man")
-    justman = m.group("justman")
+    try:
+        eok = m.group("eok")
+    except (IndexError, AttributeError):
+        eok = None
+    try:
+        man = m.group("man")
+    except (IndexError, AttributeError):
+        man = None
+    try:
+        justman = m.group("justman")
+    except (IndexError, AttributeError):
+        justman = None
     val = 0.0
     if eok:
         val += float(eok) * 100_000_000
@@ -163,8 +172,11 @@ class TableParser:
         # 3) 숫자+단위 (1.2만원, 3억)
         m = _KR_NUM.search(s)
         if m:
-            raw = m.group("num").replace(",", "")
-            unit = (m.group("unit") or "").strip()
+            try:
+                raw = m.group("num").replace(",", "")
+                unit = (m.group("unit") or "").strip()
+            except (IndexError, AttributeError):
+                return None
             try:
                 base = float(raw)
                 if unit in ("억", "억원"):

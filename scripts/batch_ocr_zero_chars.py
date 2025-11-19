@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from pdf2image import convert_from_path
 import pytesseract
 from app.core.logging import get_logger
-from modules.metadata_db import MetadataDB
+from app.data.metadata_db import MetadataDB
 
 logger = get_logger(__name__)
 

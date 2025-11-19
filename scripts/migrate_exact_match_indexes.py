@@ -20,7 +20,7 @@ from pathlib import Path
 # 프로젝트 루트 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from modules.metadata_db import MetadataDB
+from app.data.metadata_db import MetadataDB
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)

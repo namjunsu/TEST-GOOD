@@ -6,7 +6,7 @@ metadata_db.get_page_text() 메서드의 동작을 검증합니다.
 """
 
 import pytest
-from modules.metadata_db import MetadataDB
+from app.data.metadata_db import MetadataDB
 
 
 @pytest.fixture

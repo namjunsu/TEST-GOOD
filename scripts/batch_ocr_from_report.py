@@ -6,15 +6,18 @@ import sys
 import time
 from pathlib import Path
 
-# 프로젝트 루트를 sys.path에 추가
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# 프로젝트 루트 고정
+BASE_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(BASE_DIR))
 
 from pdf2image import convert_from_path
 import pytesseract
 from app.core.logging import get_logger
-from modules.metadata_db import MetadataDB
+from app.data.metadata_db import MetadataDB
 
 logger = get_logger(__name__)
+
+EXTRACTED_DIR = BASE_DIR / "data" / "extracted"
 
 
 def read_file_list(report_file: str) -> list:
@@ -24,8 +27,8 @@ def read_file_list(report_file: str) -> list:
     with open(report_file, 'r', encoding='utf-8') as f:
         for line in f:
             line = line.strip()
-            # PDF 경로만 추출
-            if line.endswith('.pdf') and (line.startswith('/') or line.startswith('docs/')):
+            # PDF 경로만 추출 (대소문자 무관)
+            if line.lower().endswith('.pdf') and (line.startswith('/') or line.startswith('docs/')):
                 file_list.append(line)
 
     return file_list
@@ -50,19 +53,19 @@ def ocr_pdf(pdf_path: Path, dpi: int = 300) -> str:
         return ""
 
 
-def save_extracted_text(filename: str, ocr_text: str):
-    """추출된 텍스트 저장"""
-    output_dir = Path("data/extracted")
-    output_dir.mkdir(parents=True, exist_ok=True)
+def save_extracted_text(pdf_path: Path, ocr_text: str) -> Path:
+    """추출된 텍스트 저장 (대소문자 무관 확장자 처리)"""
+    # PDF 확장자를 .txt로 변경 (with_suffix로 대소문자 무관)
+    txt_filename = pdf_path.with_suffix(".txt").name
+    txt_file = EXTRACTED_DIR / txt_filename
 
-    # PDF 확장자를 txt로 변경
-    txt_filename = filename.replace('.pdf', '.txt')
-    output_file = output_dir / txt_filename
+    # 디렉터리 생성
+    EXTRACTED_DIR.mkdir(parents=True, exist_ok=True)
 
-    with output_file.open('w', encoding='utf-8') as f:
+    with txt_file.open('w', encoding='utf-8') as f:
         f.write(ocr_text)
 
-    return output_file
+    return txt_file
 
 
 def main():
@@ -77,7 +80,10 @@ def main():
     logger.info(f"보고서 파일 읽기: {args.report}")
     file_paths = read_file_list(args.report)
 
-    if args.limit:
+    if args.limit is not None:
+        if args.limit <= 0:
+            logger.warning("limit <= 0이므로 처리할 파일이 없습니다.")
+            return 0
         file_paths = file_paths[:args.limit]
 
     logger.info(f"\n총 {len(file_paths)}개 파일 OCR 처리 예정")
@@ -99,15 +105,22 @@ def main():
 
     # 각 파일 OCR 처리
     for idx, file_path_str in enumerate(file_paths, 1):
-        # 경로 정규화
+        # 경로 정규화 (BASE_DIR 기준)
         pdf_path = Path(file_path_str)
         if not pdf_path.is_absolute():
-            # 상대 경로면 절대 경로로 변환
-            pdf_path = Path.cwd() / pdf_path
+            pdf_path = BASE_DIR / pdf_path
 
-        filename = pdf_path.name
+        pdf_path = pdf_path.resolve()
 
-        logger.info(f"\n[{idx}/{len(file_paths)}] {filename}")
+        # DB 업데이트용 상대경로 (docs/...pdf 형식)
+        try:
+            relative_path = pdf_path.relative_to(BASE_DIR)
+        except ValueError:
+            logger.warning(f"  ⚠️  프로젝트 외부 파일: {pdf_path}")
+            fail_count += 1
+            continue
+
+        logger.info(f"\n[{idx}/{len(file_paths)}] {relative_path}")
 
         # 파일 존재 확인
         if not pdf_path.exists():
@@ -115,8 +128,8 @@ def main():
             fail_count += 1
             continue
 
-        # 이미 처리된 파일인지 확인
-        txt_file = Path("data/extracted") / filename.replace('.pdf', '.txt')
+        # 이미 처리된 파일인지 확인 (with_suffix로 대소문자 무관)
+        txt_file = EXTRACTED_DIR / pdf_path.with_suffix(".txt").name
         if txt_file.exists():
             txt_size = txt_file.stat().st_size
             if txt_size > 1000:  # 1KB 이상이면 스킵
@@ -136,11 +149,11 @@ def main():
                 continue
 
             # 텍스트 파일로 저장
-            saved_file = save_extracted_text(filename, ocr_text)
+            saved_file = save_extracted_text(pdf_path, ocr_text)
 
-            # MetadataDB 업데이트 (path 사용)
-            db.update_text_preview(str(pdf_path), ocr_text)
-            logger.info(f"  📊 DB 업데이트: {pdf_path}")
+            # MetadataDB 업데이트 (레포 기준 상대경로 사용)
+            db.update_text_preview(str(relative_path), ocr_text)
+            logger.info(f"  📊 DB 업데이트: {relative_path}")
 
             total_chars += len(ocr_text)
             success_count += 1

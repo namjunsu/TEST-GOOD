@@ -27,7 +27,7 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env", override=True)
 
 # Clear any cached LLM instances before starting
-from rag_system.llm_singleton import LLMSingleton
+from rag_system.active.llm_singleton import LLMSingleton
 LLMSingleton.clear()
 
 from app.rag.pipeline import RAGPipeline

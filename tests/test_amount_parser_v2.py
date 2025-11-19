@@ -5,7 +5,7 @@
 - 근접도 기반 랭킹
 """
 import pytest
-from modules.amount_parser_v2 import (
+from app.data.amount_parser_v2 import (
     extract_amounts,
     nearest_amount_to_keyword,
     format_krw,

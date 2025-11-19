@@ -27,8 +27,8 @@ from app.rag.parallel_executor import get_parallel_executor
 from app.rag.query_expander import get_query_expander
 from app.rag.query_parser import QueryParser
 from app.rag.retrievers.exact_match import ExactMatchRetriever
-from modules.metadata_db import MetadataDB
-from rag_system.bm25_store import BM25Store  # 인덱서와 동일 모듈 사용
+from app.data.metadata_db import MetadataDB
+from rag_system.active.bm25_store import BM25Store  # 인덱서와 동일 모듈 사용
 
 logger = get_logger(__name__)
 
@@ -98,29 +98,64 @@ class HybridRetriever:
             raise
 
     def _load_router_keywords(self):
-        """라우터 키워드 YAML 로드 (운영 중 수정 가능)"""
+        """라우터 키워드 YAML v2 로드 (프로파일 기반 구조)"""
         try:
             config_path = Path("config/router_keywords.yaml")
             if config_path.exists():
                 config = yaml.safe_load(config_path.read_text())
-                allow_patterns = config["doc_anchored"]["allow"]
-                self.device_pattern = "|".join(allow_patterns)
-                logger.info(f"✅ DOC_ANCHORED 키워드 로드 완료 ({len(allow_patterns)}개 패턴)")
+
+                # YAML v2 프로파일 구조 파싱
+                doc_cfg = config.get("doc_anchored", {})
+                profiles = doc_cfg.get("profiles", {})
+
+                if not profiles:
+                    raise ValueError("doc_anchored.profiles 섹션이 비어있음")
+
+                # 모든 프로파일의 allow 패턴 병합
+                all_allow_patterns = []
+                all_deny_patterns = []
+
+                for _profile_name, profile_data in profiles.items():
+                    allow_list = profile_data.get("allow", [])
+                    deny_list = profile_data.get("deny", [])
+
+                    # {KBL}/{KBR} 매크로 치환
+                    allow_list = [self._expand_macros(p) for p in allow_list]
+                    deny_list = [self._expand_macros(p) for p in deny_list]
+
+                    all_allow_patterns.extend(allow_list)
+                    all_deny_patterns.extend(deny_list)
+
+                # 병합된 패턴으로 device_pattern 생성
+                self.device_pattern = "|".join(all_allow_patterns) if all_allow_patterns else None
+                self.deny_pattern = "|".join(all_deny_patterns) if all_deny_patterns else None
+
+                logger.info(
+                    f"✅ 라우터 키워드 로드 완료: {len(profiles)}개 프로파일, "
+                    f"{len(all_allow_patterns)}개 allow 패턴, {len(all_deny_patterns)}개 deny 패턴"
+                )
             else:
                 # 폴백: 하드코딩 패턴 사용
-                self.device_pattern = (
-                    r"\bHRD[-\s]?\d{3,4}\b|DVR|NVR|"
-                    r"Hanwha(?:\s+(?:Techwin|Vision))?|"
-                    r"보존용|녹화용|교체|노후|장비|카메라|모니터"
-                )
+                self._set_fallback_patterns()
                 logger.warning("⚠️ router_keywords.yaml 없음, 폴백 패턴 사용")
         except Exception as e:
             logger.error(f"❌ 키워드 로드 실패: {e}, 폴백 패턴 사용")
-            self.device_pattern = (
-                r"\bHRD[-\s]?\d{3,4}\b|DVR|NVR|"
-                r"Hanwha(?:\s+(?:Techwin|Vision))?|"
-                r"보존용|녹화용|교체|노후|장비|카메라|모니터"
-            )
+            self._set_fallback_patterns()
+
+    def _expand_macros(self, pattern: str) -> str:
+        """YAML 패턴의 {KBL}/{KBR} 매크로를 정규표현식으로 치환"""
+        pattern = pattern.replace("{KBL}", r"(?<![가-힣A-Za-z0-9])")
+        pattern = pattern.replace("{KBR}", r"(?![가-힣A-Za-z0-9])")
+        return pattern
+
+    def _set_fallback_patterns(self):
+        """폴백 패턴 설정 (YAML 로드 실패 시)"""
+        self.device_pattern = (
+            r"\bHRD[-\s]?\d{3,4}\b|DVR|NVR|"
+            r"Hanwha(?:\s+(?:Techwin|Vision))?|"
+            r"보존용|녹화용|교체|노후|장비|카메라|모니터"
+        )
+        self.deny_pattern = None
 
     def _get_index_mtime(self) -> float:
         """인덱스 파일의 수정 시간 반환"""

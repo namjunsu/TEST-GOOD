@@ -9,27 +9,28 @@ Example:
     >>> print(response.answer)
 """
 
-import os
-import time
 import base64
+import os
 import sqlite3
-from pathlib import Path
+import time
 from dataclasses import dataclass, field
-from typing import Protocol, List, Optional, Dict, Any
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Protocol
 
+from app.core.errors import ERROR_MESSAGES, ErrorCode, ModelError, SearchError
 from app.core.logging import get_logger
-from app.core.errors import ModelError, SearchError, ErrorCode, ERROR_MESSAGES
-from app.utils.sqlite_helpers import connect_metadata
-from app.rag.query_router import QueryRouter, QueryMode
-from app.rag.cache_manager import get_cached_result, cache_query_result, get_cache_stats
-from app.rag.persistent_cache import get_cached_result_persistent, cache_query_result_persistent
-from app.utils.text_normalizer import normalize_query, is_detailed_mode, detect_section
 from app.prompts.document_prompts import (
     build_detailed_prompt,
+    build_qa_prompt,
     build_section_prompt,
     build_summary_prompt,
-    build_qa_prompt,
 )
+from app.rag.cache_manager import cache_query_result, get_cache_stats, get_cached_result
+from app.rag.domain_synonyms import expand_for_strict_content
+from app.rag.persistent_cache import cache_query_result_persistent, get_cached_result_persistent
+from app.rag.query_router import QueryMode, QueryRouter
+from app.utils.sqlite_helpers import connect_metadata
+from app.utils.text_normalizer import detect_section, is_detailed_mode, normalize_query
 
 logger = get_logger(__name__)
 
@@ -404,6 +405,7 @@ class Retriever(Protocol):
         *,
         mode: str = "chat",
         selected_filename: Optional[str] = None,
+        strict_content: bool = False,
     ) -> List[Dict[str, Any]]:
         """검색 수행 (정규화 스키마 반환)
 
@@ -412,6 +414,7 @@ class Retriever(Protocol):
             top_k: 상위 K개 결과
             mode: 검색 모드 ("chat", "doc_anchored" 등)
             selected_filename: 우선 검색할 문서명
+            strict_content: 정밀 내용 검색 모드 (본문 일치만, 2025-11-19 추가)
 
         Returns:
             [
@@ -962,7 +965,7 @@ class RAGPipeline:
                     candidate_title = re.sub(r'^\d{4}[-_]\d{2}[-_]\d{2}[-_]', '', candidate_title)
 
                     # metadata_db에서 제목으로 문서 검색
-                    from modules.metadata_db import MetadataDB
+                    from app.data.metadata_db import MetadataDB
                     db = MetadataDB()
                     try:
                         # 제목 정규화 (특수문자, 공백 처리)
@@ -1026,6 +1029,10 @@ class RAGPipeline:
             # 🔍 SEARCH 모드: 문서 검색 (통합: LIST + SEARCH + LIST_FIRST)
             if route_decision.mode == QueryMode.SEARCH:
                 return self._answer_search(actual_query)
+
+            # 🎯 SEARCH_CONTENT_ONLY 모드: 정밀 내용 검색 (2025-11-19 추가)
+            if route_decision.mode == QueryMode.SEARCH_CONTENT_ONLY:
+                return self._answer_search_content_only(actual_query)
 
             # 🔍 디버깅: 실제 pattern matching 대상 로깅
             logger.info(f"🔍 Pattern matching 대상 쿼리: '{actual_query[:100]}'")
@@ -1197,8 +1204,9 @@ class RAGPipeline:
             - 불용어: "문서", "파일", "기안서", "찾아줘", "찾아", "검색", "관련", "좀", "해줘"
             - 검색 실패 시 count=0, found=False 반환
         """
-        from modules.metadata_db import MetadataDB
         import re
+
+        from app.data.metadata_db import MetadataDB
 
         try:
             # 검색 키워드 추출 (불용어 제거)
@@ -1497,6 +1505,231 @@ class RAGPipeline:
                 }
             }
 
+    def _answer_search_content_only(self, query: str) -> dict:
+        """정밀 내용 검색 (2025-11-19 추가)
+
+        사용자가 "문서내용에 X 들어간 문서만" 같은 정밀 검색을 요청했을 때,
+        QueryExpander/파일명 보너스/메타데이터 라우팅을 비활성화하고
+        BM25 기반으로 본문에 실제로 키워드가 포함된 문서만 반환합니다.
+
+        Args:
+            query (str): 사용자 질의.
+                예: "문서내용에 티비로직이 들어간 문서만"
+                    "내용에 SPG9000 포함된 문서"
+                    "본문에 ECO8000 있는 문서"
+
+        Returns:
+            dict: 표준 응답 구조
+                {
+                    "mode": "SEARCH_CONTENT_ONLY",
+                    "text": str,  # 포맷팅된 카드 목록
+                    "files": list[str],  # 파일명 목록
+                    "count": int,  # 검색된 문서 수
+                    "citations": list[dict],  # Evidence 정보
+                    "evidence": list[dict],  # 하위 호환용 (citations와 동일)
+                    "status": {
+                        "retrieved_count": int,
+                        "selected_count": int,
+                        "found": bool
+                    }
+                }
+        """
+        import re
+
+        from app.data.metadata_db import MetadataDB
+
+        try:
+            # 검색 키워드 추출 (불용어 제거)
+            # 2025-11-19: 단어 경계 고려 (젠하이저 → 젠하 저 방지)
+            stop_words = ["문서", "파일", "기안서", "찾아줘", "찾아", "검색", "관련", "좀", "해줘",
+                          "내용", "본문", "들어간", "포함", "포함된", "있는", "만"]
+            # 조사는 단어 경계에서만 제거 (앞뒤 공백/시작/끝 확인)
+            postpositions = [" 에 ", " 에서 ", " 이 ", " 가 ", " 을 ", " 를 "]
+
+            keywords = " " + query + " "  # 앞뒤 공백 추가
+            for word in stop_words:
+                keywords = keywords.replace(word, " ")
+            for postposition in postpositions:
+                keywords = keywords.replace(postposition, " ")
+            keywords = keywords.strip()
+
+            # 빈 키워드 검증 (2025-11-19: 안전장치)
+            if not keywords:
+                logger.warning("⚠️ 정밀 내용 검색: 불용어 제거 후 키워드가 비어있음")
+                return {
+                    "mode": "SEARCH_CONTENT_ONLY",
+                    "text": (
+                        "⚠️ **정밀 내용 검색을 위해서는 검색할 키워드가 필요합니다.**\n\n"
+                        "예시:\n"
+                        "- 문서내용에 **티비로직** 들어간 문서만\n"
+                        "- 내용에 **SPG9000** 포함된 문서\n"
+                        "- 본문에 **ECO8000** 있는 문서만"
+                    ),
+                    "files": [],
+                    "count": 0,
+                    "citations": [],
+                    "evidence": [],
+                    "status": {
+                        "retrieved_count": 0,
+                        "selected_count": 0,
+                        "found": False,
+                    },
+                }
+
+            # 🔧 도메인 동의어 확장 (2025-11-19 추가)
+            # QueryExpander 없이도 브랜드/모델명의 한영/대소문자 변형 처리
+            expanded_query = expand_for_strict_content(keywords)
+
+            logger.info(f"🎯 정밀 내용 검색: raw='{keywords}', expanded='{expanded_query}'")
+
+            # 🔥 CRITICAL: strict_content=True로 검색 (QueryExpander/파일명보너스 비활성화)
+            if not hasattr(self.retriever, 'search'):
+                logger.error("❌ Retriever에 search 메서드가 없습니다")
+                return {
+                    "mode": "SEARCH_CONTENT_ONLY",
+                    "text": "검색 기능을 사용할 수 없습니다.",
+                    "files": [],
+                    "count": 0,
+                    "citations": [],
+                    "evidence": [],
+                    "status": {
+                        "retrieved_count": 0,
+                        "selected_count": 0,
+                        "found": False
+                    }
+                }
+
+            # strict_content=True로 정밀 검색 실행 (동의어 확장된 쿼리 사용)
+            search_results = self.retriever.search(expanded_query, top_k=50, strict_content=True)
+
+            if not search_results:
+                logger.info("⚠️ 정밀 내용 검색 결과 없음")
+                return {
+                    "mode": "SEARCH_CONTENT_ONLY",
+                    "text": f"📄 **'{keywords}' 관련 문서 (0건)**\n\n검색 결과가 없습니다.",
+                    "files": [],
+                    "count": 0,
+                    "citations": [],
+                    "evidence": [],
+                    "status": {
+                        "retrieved_count": 0,
+                        "selected_count": 0,
+                        "found": False
+                    }
+                }
+
+            # DB에서 메타데이터 조회 (중복 제거 포함)
+            db = MetadataDB()
+            doc_details = []
+
+            # 파일명 중복 제거 (2025-11-19: 안전장치)
+            filenames = []
+            seen_filenames = set()
+            for r in search_results:
+                fname = r.get("filename")
+                if not fname:
+                    continue
+                if fname in seen_filenames:
+                    continue
+                seen_filenames.add(fname)
+                filenames.append(fname)
+
+            for filename in filenames[:10]:  # 최대 10개
+                conn = db._get_conn()
+                cursor = conn.execute("SELECT * FROM documents WHERE filename = ? LIMIT 1", [filename])
+                row = cursor.fetchone()
+
+                if row:
+                    doc = dict(row)
+                    doc_details.append({
+                        "filename": filename,
+                        "title": doc.get("title", filename),
+                        "category": doc.get("category", "기안서"),
+                        "date": doc.get("display_date") or doc.get("date", "날짜 없음"),
+                        "drafter": doc.get("drafter", "작성자 미상"),
+                        "claimed_total": doc.get("claimed_total", 0),
+                        "text_preview": doc.get("text_preview", "")[:100],
+                        "path": doc.get("path", "")
+                    })
+
+            # 응답 포맷팅 (카드 형식)
+            response_text = f"📄 **'{keywords}' 내용 포함 문서 ({len(doc_details)}건)**\n\n"
+
+            for i, doc in enumerate(doc_details, 1):
+                title = doc["title"] or doc["filename"]
+                category_emoji = "📋" if "기안서" in doc["category"] else "📄"
+                drafter_str = f"✍ {doc['drafter']}" if doc["drafter"] else ""
+                date_str = f"📅 {doc['date']}" if doc["date"] else ""
+
+                meta_parts = [p for p in [category_emoji + " " + doc["category"], date_str, drafter_str] if p]
+                meta_line = " | ".join(meta_parts)
+
+                response_text += f"**{i}.** {title}\n"
+                if meta_line:
+                    response_text += f"   {meta_line}\n"
+
+                # 금액 표시
+                if doc["claimed_total"]:
+                    response_text += f"   💰 {doc['claimed_total']:,}원\n"
+
+                # 미리보기
+                if doc["text_preview"]:
+                    response_text += f"   📝 {doc['text_preview']}...\n"
+
+                response_text += "\n"
+
+            # Evidence 구성
+            citations = []
+            for doc in doc_details:
+                citations.append({
+                    "doc_id": doc["filename"],
+                    "filename": doc["filename"],
+                    "page": 1,
+                    "snippet": doc["text_preview"],
+                    "file_path": doc["path"],
+                    "meta": {
+                        "filename": doc["filename"],
+                        "date": doc["date"],
+                        "drafter": doc["drafter"],
+                        "category": doc["category"]
+                    }
+                })
+
+            logger.info(f"✅ 정밀 내용 검색 완료: {len(doc_details)}건")
+
+            return {
+                "mode": "SEARCH_CONTENT_ONLY",
+                "text": response_text,
+                "files": filenames[:10],
+                "count": len(doc_details),
+                "citations": citations,
+                "evidence": citations,
+                "status": {
+                    "retrieved_count": len(search_results),
+                    "selected_count": len(citations),
+                    "found": len(citations) > 0
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"❌ 정밀 내용 검색 실패: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+
+            return {
+                "mode": "SEARCH_CONTENT_ONLY",
+                "text": f"검색 중 오류가 발생했습니다: {str(e)}",
+                "files": [],
+                "count": 0,
+                "citations": [],
+                "evidence": [],
+                "status": {
+                    "retrieved_count": 0,
+                    "selected_count": 0,
+                    "found": False
+                }
+            }
+
     def _answer_cost_sum(self, query: str) -> dict:
         """비용 합계 직접 조회 (DB claimed_total 활용, top-N 스캔 + 우선순위 정렬)
 
@@ -1524,7 +1757,7 @@ class RAGPipeline:
                 }
 
             # 2. DB에서 claimed_total 수집 및 우선순위 정렬
-            from modules.metadata_db import MetadataDB
+            from app.data.metadata_db import MetadataDB
             db = MetadataDB()
 
             cost_docs = []  # (claimed_total, doc, filename) 튜플 리스트
@@ -1861,10 +2094,10 @@ class RAGPipeline:
                         elif needs_summary:
                             # 요약 모드: 구조화된 요약 시스템 사용 (summary_templates.py)
                             from app.rag.summary_templates import (
-                                detect_doc_kind,
                                 build_prompt,
+                                detect_doc_kind,
+                                format_summary_output,
                                 parse_summary_json,
-                                format_summary_output
                             )
 
                             # 1. 문서 종류 감지
@@ -2105,8 +2338,8 @@ class RAGPipeline:
             추출된 텍스트
         """
         try:
-            from pdf2image import convert_from_path
             import pytesseract
+            from pdf2image import convert_from_path
             from PIL import Image
 
             # PDF를 이미지로 변환 (끝 3페이지만)
@@ -2168,8 +2401,9 @@ class RAGPipeline:
         Returns:
             수집된 컨텍스트 텍스트 (최대 ~3600자, 약 1.8k 토큰)
         """
-        import pdfplumber
         import re
+
+        import pdfplumber
         parts = []
 
         # 1) PDF 끝 2~3페이지 추출 → 비활성화 (인덱스 청크 우선 전략)
@@ -2356,7 +2590,7 @@ class RAGPipeline:
             _LLMAdapter: LLM 어댑터 인스턴스
         """
         try:
-            from rag_system.llm_singleton import LLMSingleton
+            from rag_system.active.llm_singleton import LLMSingleton
 
             model_path = os.getenv("MODEL_PATH", "./models/ggml-model-Q4_K_M.gguf")
             logger.info(f"🔍 DEBUG: Attempting to load LLM with model_path={model_path}")
@@ -2375,7 +2609,7 @@ class RAGPipeline:
             set: 고유 기안자 이름 집합
         """
         try:
-            from modules.metadata_db import MetadataDB
+            from app.data.metadata_db import MetadataDB
 
             db = MetadataDB()
             drafters = db.list_unique_drafters()
@@ -2396,7 +2630,15 @@ class RAGPipeline:
 class _DummyRetriever:
     """더미 검색기 (폴백용)"""
 
-    def search(self, query: str, top_k: int, mode: str = "chat", selected_filename: Optional[str] = None) -> List[Dict[str, Any]]:
+    def search(
+        self,
+        query: str,
+        top_k: int,
+        *,
+        mode: str = "chat",
+        selected_filename: Optional[str] = None,
+        strict_content: bool = False,
+    ) -> List[Dict[str, Any]]:
         logger.warning("Dummy retriever: 빈 결과 반환")
         return []
 

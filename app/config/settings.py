@@ -113,14 +113,14 @@ if os.getenv("BM25_INDEX_PATH"):
     _BM25_CANDIDATES.append(_as_path("BM25_INDEX_PATH", _PROJECT_ROOT / "var/index/bm25_index.pkl"))
 else:
     _BM25_CANDIDATES.append(_PROJECT_ROOT / "var/index/bm25_index.pkl")
-_BM25_CANDIDATES.append(_PROJECT_ROOT / "rag_system/db/bm25_index.pkl")
+# rag_system/db/ 경로는 제거됨 (var/index/가 기본)
 
 _FAISS_CANDIDATES: List[Path] = []
 if os.getenv("FAISS_INDEX_PATH"):
     _FAISS_CANDIDATES.append(_as_path("FAISS_INDEX_PATH", _PROJECT_ROOT / "var/index/faiss.index"))
 else:
     _FAISS_CANDIDATES.append(_PROJECT_ROOT / "var/index/faiss.index")
-_FAISS_CANDIDATES.append(_PROJECT_ROOT / "rag_system/db/faiss.index")
+# rag_system/db/ 경로는 제거됨 (var/index/가 기본)
 
 settings = Settings(
     PROJECT_ROOT=_PROJECT_ROOT,

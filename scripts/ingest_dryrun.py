@@ -29,7 +29,7 @@ from typing import Dict, List, Optional, Tuple
 # 프로젝트 루트 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from rag_system.enhanced_ocr_processor import EnhancedOCRProcessor
+from rag_system.active.enhanced_ocr_processor import EnhancedOCRProcessor
 
 logging.basicConfig(
     level=logging.INFO,

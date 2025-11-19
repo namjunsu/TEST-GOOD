@@ -1,9 +1,15 @@
+# Streamlit 테마 설정 (블루 톤 통일)
+[theme]
+primaryColor="#2A7FBE"             # 포커스/강조 색상
+backgroundColor="#0F4F87"          # 페이지 배경(메인)
+secondaryBackgroundColor="#1E6BA5" # 카드/사이드바 기본
+textColor="#E9F4FF"                # 텍스트 색상
+font="sans-serif"                  # 폰트 (Inter 등으로 변경 가능)
+
 [server]
-address = "0.0.0.0"
-port = 8501
 headless = true
 enableCORS = false
-enableXsrfProtection = false
+enableXsrfProtection = true
 
 [browser]
 gatherUsageStats = false

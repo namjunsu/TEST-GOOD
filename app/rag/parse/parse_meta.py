@@ -270,7 +270,10 @@ class MetaParser:
             # 파일명에서 날짜 패턴 추출: YYYY-MM-DD or YYYY_MM_DD or YYYY.MM.DD
             m = re.search(r"\b(20\d{2})[-_.]?(0[1-9]|1[0-2])[-_.]?([0-3]\d)\b", fname)
             if m:
-                display_date = f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+                try:
+                    display_date = f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+                except (IndexError, AttributeError):
+                    logger.debug("파일명 날짜 그룹 추출 실패")
                 logger.debug(f"파일명에서 날짜 추출: {display_date} from {fname}")
 
         if draft_date and action_date:
@@ -320,7 +323,10 @@ class MetaParser:
             s,
         )
         if range_match:
-            s = range_match.group(1)
+            try:
+                s = range_match.group(1)
+            except (IndexError, AttributeError):
+                pass  # 에러 발생시 원본 s 유지
 
         # 시간 제거
         s = re.sub(r"\s+\d{1,2}:\d{2}(:\d{2})?\s*(AM|PM|am|pm)?", "", s)
@@ -328,15 +334,21 @@ class MetaParser:
         # YYYY년 M월 D일 → YYYY-MM-DD
         m = re.search(r"(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일", s)
         if m:
-            y, mm, dd = m.groups()
-            return f"{y}-{mm.zfill(2)}-{dd.zfill(2)}"
+            try:
+                y, mm, dd = m.groups()
+                return f"{y}-{mm.zfill(2)}-{dd.zfill(2)}"
+            except (IndexError, AttributeError, ValueError):
+                pass
 
         # 24. 10. 24 → 2024-10-24 (20YY 가정)
         m = re.search(r"\b(\d{2})\.\s*(\d{1,2})\.\s*(\d{1,2})\b", s)
         if m:
-            yy, mm, dd = m.groups()
-            yyyy = f"20{yy}"
-            return f"{yyyy}-{mm.zfill(2)}-{dd.zfill(2)}"
+            try:
+                yy, mm, dd = m.groups()
+                yyyy = f"20{yy}"
+                return f"{yyyy}-{mm.zfill(2)}-{dd.zfill(2)}"
+            except (IndexError, AttributeError, ValueError):
+                pass
 
         # 2024/10/24 or 2024.10.24 → 2024-10-24
         s = re.sub(r"(\d{4})[./](\d{1,2})[./](\d{1,2})", r"\1-\2-\3", s)
@@ -344,20 +356,29 @@ class MetaParser:
         # 20241024 → 2024-10-24
         m = re.search(r"\b(20\d{2})(\d{2})(\d{2})\b", s)
         if m:
-            y, mm, dd = m.groups()
-            return f"{y}-{mm}-{dd}"
+            try:
+                y, mm, dd = m.groups()
+                return f"{y}-{mm}-{dd}"
+            except (IndexError, AttributeError, ValueError):
+                pass
 
         # YY-MM-DD → 20YY-MM-DD
         m = re.search(r"\b(\d{2})-(\d{1,2})-(\d{1,2})\b", s)
         if m:
-            yy, mm, dd = m.groups()
-            return f"20{yy}-{mm.zfill(2)}-{dd.zfill(2)}"
+            try:
+                yy, mm, dd = m.groups()
+                return f"20{yy}-{mm.zfill(2)}-{dd.zfill(2)}"
+            except (IndexError, AttributeError, ValueError):
+                pass
 
         # YYYY-M-D → 패딩
         m = re.search(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b", s)
         if m:
-            y, mm, dd = m.groups()
-            return f"{y}-{mm.zfill(2)}-{dd.zfill(2)}"
+            try:
+                y, mm, dd = m.groups()
+                return f"{y}-{mm.zfill(2)}-{dd.zfill(2)}"
+            except (IndexError, AttributeError, ValueError):
+                pass
 
         # 최종 검증
         try:

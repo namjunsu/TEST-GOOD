@@ -1,110 +1,287 @@
 /*
  * Sidebar Styles - Theme-aware button and divider styles
- * Supports both light and dark themes
+ * Version: 2.0 - Improved structure and maintainability
+ * Supports both light and dark themes with CSS variables
  */
 
-/* ===== Light Theme Styles ===== */
+/* ===== CSS Variables for Theme Management ===== */
+:root {
+    /* Default (Dark) Theme Colors */
+    --sidebar-text: #FFFFFF;
+    --sidebar-text-hover: #FFFFFF;
+    --sidebar-bg-hover: rgba(255, 255, 255, 0.1);
+    --sidebar-border: rgba(255, 255, 255, 0.2);
+    --sidebar-divider: rgba(255, 255, 255, 0.2);
 
-/* Light theme - Sidebar buttons */
+    /* Button Styles */
+    --button-padding: 3px 10px;
+    --button-font-size: 13px;
+    --button-line-height: 22px;
+    --button-min-height: 26px;
+
+    /* Typography */
+    --font-stack: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+
+    /* Transitions */
+    --transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Light Theme Variables */
+[data-theme="light"] {
+    --sidebar-text: #000000;
+    --sidebar-text-hover: #000000;
+    --sidebar-bg-hover: rgba(0, 0, 0, 0.05);
+    --sidebar-border: rgba(0, 0, 0, 0.15);
+    --sidebar-divider: rgba(0, 0, 0, 0.15);
+}
+
+/* ===== Base Sidebar Styles ===== */
+[data-testid="stSidebar"] {
+    font-family: var(--font-stack);
+
+    /* Firefox scrollbar support */
+    scrollbar-width: thin;
+    scrollbar-color: var(--sidebar-border) transparent;
+}
+
+/* ===== Button Styles ===== */
+
+/* Base button styles - common across themes */
+[data-testid="stSidebar"] .stButton > button {
+    /* Layout */
+    width: 100%;
+    padding: var(--button-padding);
+    margin: 2px 0;
+    min-height: var(--button-min-height);
+    box-sizing: border-box;
+
+    /* Typography */
+    font-family: var(--font-stack);
+    font-size: var(--button-font-size);
+    line-height: var(--button-line-height);
+    font-weight: 400;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    /* Appearance */
+    background: transparent;
+    border: none;
+    color: var(--sidebar-text);
+    opacity: 1;
+
+    /* Interaction */
+    cursor: pointer;
+    transition: var(--transition);
+    justify-content: flex-start;
+}
+
+/* Button hover state */
+[data-testid="stSidebar"] .stButton > button:hover:not(:disabled) {
+    background: var(--sidebar-bg-hover);
+    color: var(--sidebar-text-hover);
+    box-shadow: inset 2px 0 0 0 var(--sidebar-text);
+}
+
+/* Button active state */
+[data-testid="stSidebar"] .stButton > button:active:not(:disabled) {
+    box-shadow: inset 3px 0 0 0 var(--sidebar-text);
+    opacity: 0.8;
+}
+
+/* Button disabled state */
+[data-testid="stSidebar"] .stButton > button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Button focus state for accessibility */
+[data-testid="stSidebar"] .stButton > button:focus-visible {
+    outline: 2px solid var(--sidebar-border);
+    outline-offset: 2px;
+}
+
+/* ===== Theme-specific overrides ===== */
+
+/* Light theme button styles */
 .stApp[data-theme="light"] [data-testid="stSidebar"] .stButton > button,
 [data-testid="stAppViewContainer"][data-theme="light"] [data-testid="stSidebar"] .stButton > button {
-    color: #000000 !important;
-    opacity: 1 !important;
+    color: var(--sidebar-text) !important;
 }
 
 .stApp[data-theme="light"] [data-testid="stSidebar"] .stButton > button:hover,
 [data-testid="stAppViewContainer"][data-theme="light"] [data-testid="stSidebar"] .stButton > button:hover {
-    background: rgba(0, 0, 0, 0.05) !important;
-    color: #000000 !important;
+    background: var(--sidebar-bg-hover) !important;
+    color: var(--sidebar-text-hover) !important;
 }
 
-/* Light theme - Year dividers */
-.stApp[data-theme="light"] .year-divider,
-[data-testid="stAppViewContainer"][data-theme="light"] .year-divider {
-    color: #000000 !important;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.15) !important;
-}
-
-/* ===== Dark Theme Styles ===== */
-
-/* Dark theme - Sidebar buttons */
+/* Dark theme button styles */
 .stApp[data-theme="dark"] [data-testid="stSidebar"] .stButton > button,
 [data-testid="stAppViewContainer"][data-theme="dark"] [data-testid="stSidebar"] .stButton > button {
-    color: #FFFFFF !important;
-    opacity: 1 !important;
+    color: var(--sidebar-text) !important;
 }
 
 .stApp[data-theme="dark"] [data-testid="stSidebar"] .stButton > button:hover,
 [data-testid="stAppViewContainer"][data-theme="dark"] [data-testid="stSidebar"] .stButton > button:hover {
-    background: rgba(255, 255, 255, 0.1) !important;
-    color: #FFFFFF !important;
+    background: var(--sidebar-bg-hover) !important;
+    color: var(--sidebar-text-hover) !important;
 }
 
-/* Dark theme - Year dividers */
-.stApp[data-theme="dark"] .year-divider,
-[data-testid="stAppViewContainer"][data-theme="dark"] .year-divider {
-    color: #FFFFFF !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
-}
-
-/* ===== Common Button Styles ===== */
-
-[data-testid="stSidebar"] .stButton > button {
-    padding: 3px 10px !important;
-    font-size: 13px !important;
-    line-height: 22px !important;
-    min-height: 26px !important;
-    margin: 2px 0 !important;
-    border: none !important;
-    background: transparent !important;
-    text-align: left !important;
-    justify-content: flex-start !important;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif !important;
-    font-weight: 400 !important;
-    transition: all 0.15s ease !important;
-    width: 100% !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-}
-
-/* ===== Year Divider Common Styles ===== */
+/* ===== Year Divider Styles ===== */
 
 .year-divider {
+    /* Typography */
     font-size: 12px;
     font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+
+    /* Layout */
     padding: 6px 0 3px;
     margin: 12px 0 6px;
-    letter-spacing: 0.5px;
-}
 
-/* ===== Sidebar General Styles ===== */
-
-[data-testid="stSidebar"] {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif !important;
+    /* Appearance - uses CSS variables defined in :root and [data-theme] */
+    color: var(--sidebar-text);
+    border-bottom: 1px solid var(--sidebar-divider);
 }
 
 /* ===== Tab Styles ===== */
 
 [data-testid="stSidebar"] .stTabs [data-baseweb="tab-list"] {
     gap: 8px;
+    padding: 0 8px;
 }
 
 [data-testid="stSidebar"] .stTabs [data-baseweb="tab"] {
     padding: 8px 16px;
     font-size: 14px;
     font-weight: 500;
+    color: var(--sidebar-text);
+    background: transparent;
+    border-radius: 8px;
+    transition: var(--transition);
 }
 
-/* ===== Search Input Styles ===== */
-
-[data-testid="stSidebar"] input[type="text"] {
-    font-size: 13px !important;
-    padding: 8px 12px !important;
+[data-testid="stSidebar"] .stTabs [data-baseweb="tab"]:hover {
+    background: var(--sidebar-bg-hover);
 }
 
-/* ===== SelectBox Styles ===== */
+[data-testid="stSidebar"] .stTabs [aria-selected="true"] {
+    background: var(--sidebar-bg-hover);
+    font-weight: 600;
+}
 
+/* ===== Form Elements in Sidebar ===== */
+
+/* Search Input */
+[data-testid="stSidebar"] input[type="text"],
+[data-testid="stSidebar"] input[type="search"] {
+    font-size: var(--button-font-size);
+    padding: 8px 12px;
+    background: transparent;
+    border: 1px solid var(--sidebar-border);
+    border-radius: 6px;
+    color: var(--sidebar-text);
+    transition: var(--transition);
+    box-sizing: border-box;
+}
+
+[data-testid="stSidebar"] input[type="text"]:focus,
+[data-testid="stSidebar"] input[type="search"]:focus {
+    outline: none;
+    border-color: var(--sidebar-text);
+    background: var(--sidebar-bg-hover);
+}
+
+[data-testid="stSidebar"] input[type="text"]::placeholder,
+[data-testid="stSidebar"] input[type="search"]::placeholder {
+    color: var(--sidebar-text);
+    opacity: 0.7;  /* Improved readability */
+}
+
+/* SelectBox */
 [data-testid="stSidebar"] [data-baseweb="select"] {
-    font-size: 13px !important;
+    font-size: var(--button-font-size);
+}
+
+[data-testid="stSidebar"] [data-baseweb="select"] > div {
+    background: transparent;
+    border: 1px solid var(--sidebar-border);
+    color: var(--sidebar-text);
+    box-sizing: border-box;
+}
+
+[data-testid="stSidebar"] [data-baseweb="select"] > div:hover {
+    border-color: var(--sidebar-text);
+    background: var(--sidebar-bg-hover);
+}
+
+/* ===== Scrollbar Styles ===== */
+
+[data-testid="stSidebar"]::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+[data-testid="stSidebar"]::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+[data-testid="stSidebar"]::-webkit-scrollbar-thumb {
+    background: var(--sidebar-border);
+    border-radius: 4px;
+}
+
+[data-testid="stSidebar"]::-webkit-scrollbar-thumb:hover {
+    background: var(--sidebar-text);
+    opacity: 0.5;
+}
+
+/* ===== Responsive Adjustments ===== */
+
+@media (max-width: 768px) {
+    :root {
+        --button-font-size: 14px;
+        --button-padding: 4px 12px;
+        --button-min-height: 32px;
+    }
+
+    .year-divider {
+        font-size: 13px;
+        padding: 8px 0 4px;
+        margin: 16px 0 8px;
+    }
+}
+
+/* ===== High Contrast Mode Support ===== */
+
+@media (prefers-contrast: high) {
+    [data-testid="stSidebar"] .stButton > button {
+        border: 1px solid var(--sidebar-text);
+    }
+
+    .year-divider {
+        border-bottom-width: 2px;
+    }
+}
+
+/* ===== Reduced Motion Support ===== */
+
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --transition: none;
+    }
+
+    [data-testid="stSidebar"] .stButton > button {
+        box-shadow: none !important;
+    }
+}
+
+/* ===== Print Styles ===== */
+
+@media print {
+    [data-testid="stSidebar"] {
+        display: none !important;
+    }
 }

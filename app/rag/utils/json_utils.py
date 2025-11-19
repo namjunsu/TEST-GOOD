@@ -211,7 +211,7 @@ def extract_amounts_from_text(text: str) -> list:
     Returns:
         추출된 금액 리스트 [(금액, 컨텍스트), ...]
     """
-    from modules.amount_parser_v2 import extract_amounts
+    from app.data.amount_parser_v2 import extract_amounts
 
     # amount_parser_v2를 호출 (억/만 단위 포함)
     amounts_dict = extract_amounts(text)
@@ -233,7 +233,7 @@ def validate_numeric_fields(json_data: Dict[str, Any], source_text: str) -> Dict
     import re
 
     from app.core.logging import get_logger
-    from modules.amount_parser_v2 import nearest_amount_to_keyword
+    from app.data.amount_parser_v2 import nearest_amount_to_keyword
 
     logger = get_logger(__name__)
 

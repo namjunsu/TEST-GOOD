@@ -10,9 +10,13 @@ ChatGPT 스타일의 채팅 인터페이스 UI를 렌더링하는 컴포넌트
 - 메모리 관리 (자동 메시지 정리)
 - 입력 검증 및 보안 강화
 - 포괄적인 문서화
+- 툴바 (초기화/내보내기/옵션)
+- JSON 내보내기
+- 옵션 UI (top_k, 스트리밍 속도)
 """
 
 import os
+import json
 import streamlit as st
 import requests
 from typing import List, Dict, Optional, Protocol, Any
@@ -33,22 +37,42 @@ DIAG_RAG = os.getenv('DIAG_RAG', 'false').lower() == 'true'
 
 
 # ===== 타입 정의 =====
-class ChatMessage(TypedDict):
+class Evidence(TypedDict, total=False):
+    """출처 문서 증거 구조"""
+    doc_id: str
+    filename: str
+    page: int
+    snippet: str
+    file_path: str
+    meta: Dict[str, Any]
+
+
+class ChatMessage(TypedDict, total=False):
     """채팅 메시지 구조"""
     role: Literal["user", "assistant"]
     content: str
     timestamp: str
+    evidence: List[Evidence]  # NotRequired: total=False로 모든 필드가 선택적
 
 
 class RAGProtocol(Protocol):
-    """RAG Pipeline 인터페이스 정의 (Evidence 포함)"""
-    def answer(self, query: str, top_k: Optional[int] = None) -> dict:
+    """RAG Pipeline 인터페이스 정의 (Evidence 포함)
+
+    가변 인자를 지원하여 top_k, selected_filename 등 다양한 옵션 전달 가능
+    """
+    def answer(self, query: str, /, **kwargs: Any) -> dict:
         """질문에 대한 답변 생성
+
+        Args:
+            query: 사용자 질문
+            **kwargs: 옵션 (top_k, selected_filename 등)
 
         Returns:
             dict: {
                 "text": 답변 텍스트,
-                "evidence": [{"doc_id": str, "page": int, "snippet": str, "meta": dict}, ...]
+                "evidence": [Evidence, ...],
+                "status": {"from_cache": bool, ...},
+                "diagnostics": {...}
             }
         """
         ...
@@ -57,13 +81,17 @@ class RAGProtocol(Protocol):
 # ===== 상수 정의 =====
 class ChatConfig:
     """채팅 인터페이스 설정 상수"""
-    # 역할 정의
-    ROLE_USER = "user"
-    ROLE_ASSISTANT = "assistant"
+    # 역할 정의 (Literal 타입으로 명시하여 Mypy 오류 방지)
+    ROLE_USER: Literal["user"] = "user"
+    ROLE_ASSISTANT: Literal["assistant"] = "assistant"
 
     # 한글 역할명
     ROLE_DISPLAY_USER = "사용자"
     ROLE_DISPLAY_ASSISTANT = "AI"
+
+    # 아바타
+    AVATAR_USER = "👤"
+    AVATAR_ASSISTANT = "🤖"
 
     # 메모리 관리
     MAX_MESSAGES = 100  # 최대 메시지 수
@@ -72,20 +100,25 @@ class ChatConfig:
 
     # UI 문자열
     INPUT_PLACEHOLDER = "💬 무엇을 도와드릴까요?"
-    SPINNER_TEXT = "🔍 문서 검색 중... (캐시 확인 → 인덱스 검색 → 답변 생성)"
+    SPINNER_TEXT = "문서 검색 및 응답 생성 중… (캐시 확인 → 인덱스 검색 → 생성)"
     DIVIDER = "---"
 
-    # 에러 메시지
-    ERROR_GENERIC = "죄송합니다. 오류가 발생했습니다."
-    ERROR_TIMEOUT = "⏱️ 응답 시간이 초과되었습니다. 다시 시도해주세요."
-    ERROR_MEMORY = "💾 메모리가 부족합니다. 대화 내역을 정리해주세요."
-    ERROR_NETWORK = "🌐 네트워크 오류가 발생했습니다."
-    ERROR_INITIALIZATION = "⚙️ 시스템 초기화가 필요합니다."
-    ERROR_INVALID_INPUT = "⚠️ 입력이 너무 깁니다. 더 짧게 작성해주세요."
+    # 에러 메시지 (사과 표현 제거, 운영 톤 통일)
+    ERROR_GENERIC = "오류가 발생했다. 잠시 후 다시 시도하라."
+    ERROR_TIMEOUT = "응답 시간이 초과됐다. 요청을 단순화해 재시도하라."
+    ERROR_MEMORY = "메모리가 부족하다. 대화 내역을 정리하거나 입력을 줄여라."
+    ERROR_NETWORK = "네트워크 오류가 발생했다. 연결 상태를 점검하라."
+    ERROR_INITIALIZATION = "시스템 초기화가 필요하다. 페이지 새로고침 후 재시도하라."
+    ERROR_INVALID_INPUT = "입력이 너무 길다. 더 짧게 작성하라."
 
     # 컨텍스트 구성
     CONTEXT_PREFIX = "이전 대화 맥락:"
     CURRENT_QUERY_PREFIX = "현재 질문:"
+
+    # 옵션 기본값
+    DEFAULT_TOP_K = 5
+    DEFAULT_STREAMING_SPEED = "medium"
+    DEFAULT_SHOW_EVIDENCE = True
 
 
 # ===== 헬퍼 함수 =====
@@ -224,35 +257,37 @@ def _normalize_rag_response(resp: Any) -> dict:
     """RAG 응답을 안전하게 dict로 정규화
 
     RAG Pipeline이 반환할 수 있는 다양한 타입(객체, dict, str)을
-    통일된 dict 형식으로 변환합니다.
+    통일된 dict 형식으로 변환하며, status/diagnostics를 보존합니다.
 
     Args:
         resp: RAG Pipeline의 응답 (RAGResponse 객체, dict, str 등)
 
     Returns:
-        dict: {"text": str, "evidence": list} 형식의 정규화된 응답
+        dict: {
+            "text": str,
+            "evidence": list,
+            "status": dict (from_cache 등),
+            "diagnostics": dict (메트릭 정보)
+        } 형식의 정규화된 응답
 
     Examples:
         >>> _normalize_rag_response(RAGResponse(text="답변", evidence=[...]))
-        {"text": "답변", "evidence": [...]}
+        {"text": "답변", "evidence": [...], "status": {}, "diagnostics": {}}
 
-        >>> _normalize_rag_response(RAGResponse(answer="답변", sources=[...]))
-        {"text": "답변", "evidence": [...]}
-
-        >>> _normalize_rag_response({"text": "답변", "evidence": [...]})
-        {"text": "답변", "evidence": [...]}
+        >>> _normalize_rag_response({"text": "답변", "evidence": [...], "status": {"from_cache": True}})
+        {"text": "답변", "evidence": [...], "status": {"from_cache": True}, "diagnostics": {}}
 
         >>> _normalize_rag_response("직접 문자열 답변")
-        {"text": "직접 문자열 답변", "evidence": []}
+        {"text": "직접 문자열 답변", "evidence": [], "status": {}, "diagnostics": {}}
     """
     # None 체크
     if resp is None:
         logger.warning("Received None response from RAG")
-        return {"text": "", "evidence": []}
+        return {"text": "", "evidence": [], "status": {}, "diagnostics": {}}
 
     # 문자열인 경우
     if isinstance(resp, str):
-        return {"text": resp, "evidence": []}
+        return {"text": resp, "evidence": [], "status": {}, "diagnostics": {}}
 
     # 객체인 경우 (RAGResponse 등)
     # text, answer 필드 모두 지원
@@ -266,7 +301,14 @@ def _normalize_rag_response(resp: Any) -> dict:
             getattr(resp, "sources_cited", None) or
             []
         )
-        return {"text": str(text), "evidence": evidence}
+        status = getattr(resp, "status", {})
+        diagnostics = getattr(resp, "diagnostics", {})
+        return {
+            "text": str(text),
+            "evidence": evidence,
+            "status": status,
+            "diagnostics": diagnostics
+        }
 
     # dict인 경우
     if isinstance(resp, dict):
@@ -278,21 +320,130 @@ def _normalize_rag_response(resp: Any) -> dict:
             resp.get("sources_cited") or
             []
         )
-        return {"text": str(text), "evidence": evidence}
+        status = resp.get("status", {})
+        diagnostics = resp.get("diagnostics", {})
+        return {
+            "text": str(text),
+            "evidence": evidence,
+            "status": status,
+            "diagnostics": diagnostics
+        }
 
     # 그 외 알 수 없는 타입
     logger.warning(f"Unknown response type: {type(resp)}")
-    return {"text": str(resp), "evidence": []}
+    return {"text": str(resp), "evidence": [], "status": {}, "diagnostics": {}}
 
 
 def _initialize_chat_state() -> None:
     """채팅 세션 상태 초기화
 
-    세션 상태에 messages 리스트가 없으면 빈 리스트로 초기화합니다.
+    세션 상태에 messages 리스트와 chat_options가 없으면 초기화합니다.
     """
     if 'messages' not in st.session_state:
         st.session_state.messages = []
         logger.info("Chat session initialized")
+
+    if 'chat_options' not in st.session_state:
+        st.session_state.chat_options = {
+            "top_k": ChatConfig.DEFAULT_TOP_K,
+            "streaming_speed": ChatConfig.DEFAULT_STREAMING_SPEED,
+            "show_evidence": ChatConfig.DEFAULT_SHOW_EVIDENCE,
+        }
+        logger.info("Chat options initialized")
+
+
+def _export_history() -> str:
+    """대화 기록을 JSON 형식으로 내보내기
+
+    Returns:
+        str: JSON 형식의 대화 기록
+    """
+    return json.dumps(st.session_state.messages, ensure_ascii=False, indent=2)
+
+
+def _render_toolbar() -> None:
+    """채팅 인터페이스 상단 툴바 렌더링
+
+    기능:
+    - 대화 초기화
+    - JSON 내보내기
+    - 옵션 설정 (top_k, 스트리밍 속도, 출처 표시)
+
+    Note:
+        현재 비활성화됨. 필요 시 render_chat_interface()에서
+        _render_toolbar() 호출을 추가하여 재활성화 가능
+    """
+    col1, col2, col3 = st.columns([1, 1, 2])
+
+    with col1:
+        if st.button("🗑 대화 초기화", use_container_width=True, help="모든 대화 기록을 삭제합니다"):
+            st.session_state.messages = []
+            logger.info("Chat history cleared by user")
+            st.rerun()
+
+    with col2:
+        # JSON 내보내기는 다운로드 버튼으로 구현
+        if len(st.session_state.messages) > 0:
+            st.download_button(
+                label="📥 JSON 내보내기",
+                data=_export_history(),
+                file_name=f"chat_history_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                mime="application/json",
+                use_container_width=True,
+                help="대화 기록을 JSON 파일로 저장합니다"
+            )
+        else:
+            st.button("📥 JSON 내보내기", use_container_width=True, disabled=True, help="대화 기록이 없습니다")
+
+    with col3:
+        with st.popover("⚙️ 옵션", use_container_width=True):
+            st.markdown("**검색 및 표시 옵션**")
+
+            # top_k 설정
+            new_top_k = st.slider(
+                "검색 문서 수 (top_k)",
+                min_value=1,
+                max_value=20,
+                value=st.session_state.chat_options["top_k"],
+                help="RAG 검색 시 가져올 최대 문서 수"
+            )
+            if new_top_k != st.session_state.chat_options["top_k"]:
+                st.session_state.chat_options["top_k"] = new_top_k
+                logger.info(f"top_k changed to {new_top_k}")
+
+            # 스트리밍 속도 설정
+            speed_options = {
+                "slow": "느리게 (가독성)",
+                "medium": "보통 (권장)",
+                "fast": "빠르게 (효율성)"
+            }
+            current_speed = st.session_state.chat_options["streaming_speed"]
+            new_speed = st.selectbox(
+                "스트리밍 속도",
+                options=list(speed_options.keys()),
+                index=list(speed_options.keys()).index(current_speed),
+                format_func=lambda x: speed_options[x],
+                help="응답을 표시하는 속도 조절"
+            )
+            if new_speed != current_speed:
+                st.session_state.chat_options["streaming_speed"] = new_speed
+                logger.info(f"Streaming speed changed to {new_speed}")
+
+            # 출처 표시 옵션
+            new_show_evidence = st.checkbox(
+                "출처 문서 표시",
+                value=st.session_state.chat_options["show_evidence"],
+                help="AI 응답의 근거가 된 문서를 표시합니다"
+            )
+            if new_show_evidence != st.session_state.chat_options["show_evidence"]:
+                st.session_state.chat_options["show_evidence"] = new_show_evidence
+                logger.info(f"Show evidence changed to {new_show_evidence}")
+
+            # 현재 설정 요약
+            st.markdown("---")
+            st.caption(f"현재 설정: top_k={st.session_state.chat_options['top_k']}, "
+                      f"속도={speed_options[st.session_state.chat_options['streaming_speed']]}, "
+                      f"출처={'표시' if st.session_state.chat_options['show_evidence'] else '숨김'}")
 
 
 def _display_evidence_section(evidence_list: List, msg_idx: int) -> None:
@@ -384,10 +535,14 @@ def _validate_message_structure(message: Any) -> bool:
 
     Returns:
         bool: 유효한 메시지 구조면 True, 아니면 False
+
+    Note:
+        role과 content는 필수, timestamp와 evidence는 선택적 (total=False)
     """
     if not isinstance(message, dict):
         return False
 
+    # 필수 필드만 검사 (timestamp, evidence는 선택적)
     required_keys = {'role', 'content'}
     if not required_keys.issubset(message.keys()):
         return False
@@ -546,29 +701,29 @@ def _handle_error(error: Exception) -> dict:
     # 로깅 (디버깅용)
     logger.error(f"Chat error occurred: {error_type} - {error_msg}", exc_info=True)
 
-    # 타입별 처리
+    # 타입별 처리 (사과 표현 제거)
     if isinstance(error, TimeoutError):
         user_message = ChatConfig.ERROR_TIMEOUT
-        details = f"요청 처리 시간이 초과되었습니다. 서버가 응답하지 않거나 요청이 너무 복잡할 수 있습니다."
+        details = "요청 처리 시간이 초과됐다. 서버가 무응답 상태이거나 요청이 너무 복잡하다."
     elif isinstance(error, MemoryError):
         user_message = ChatConfig.ERROR_MEMORY
-        details = f"사용 가능한 메모리가 부족합니다. 대화 기록을 정리하거나 더 짧은 질문을 시도해보세요."
+        details = "사용 가능한 메모리가 부족하다. 대화 기록을 정리하거나 입력을 줄여라."
     elif isinstance(error, ConnectionError):
         user_message = ChatConfig.ERROR_NETWORK
-        details = f"네트워크 연결에 문제가 발생했습니다. 인터넷 연결을 확인해주세요."
+        details = "네트워크 연결에 문제가 발생했다. 인터넷 연결을 점검하라."
     elif isinstance(error, AttributeError):
         # UnifiedRAG 인스턴스 문제일 가능성
         user_message = ChatConfig.ERROR_INITIALIZATION
-        details = f"시스템 초기화에 문제가 있습니다. 페이지를 새로고침해주세요."
+        details = "시스템 초기화에 문제가 있다. 페이지를 새로고침하라."
     elif isinstance(error, KeyError):
         # 메시지 구조 문제
         logger.error(f"Message structure error: {error_msg}")
         user_message = ChatConfig.ERROR_GENERIC
-        details = f"메시지 구조에 문제가 발생했습니다. 다시 시도해주세요."
+        details = "메시지 구조에 문제가 발생했다. 다시 시도하라."
     else:
         # 일반 에러 - 민감한 정보는 노출하지 않음
         user_message = ChatConfig.ERROR_GENERIC
-        details = f"예상치 못한 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+        details = "예상치 못한 오류가 발생했다. 잠시 후 다시 시도하라."
 
     return {
         "message": user_message,
@@ -593,11 +748,16 @@ def _display_chat_history(messages: List[Dict[str, str]]) -> None:
             continue
 
         try:
-            with st.chat_message(message["role"]):
+            # 아바타 설정
+            avatar = ChatConfig.AVATAR_USER if message["role"] == ChatConfig.ROLE_USER else ChatConfig.AVATAR_ASSISTANT
+
+            with st.chat_message(message["role"], avatar=avatar):
                 st.markdown(message["content"])
 
-                # Evidence 표시 (assistant 메시지에만)
-                if message["role"] == "assistant" and message.get("evidence"):
+                # Evidence 표시 (assistant 메시지에만, 옵션 확인)
+                if (message["role"] == "assistant" and
+                    message.get("evidence") and
+                    st.session_state.chat_options.get("show_evidence", True)):
                     _display_evidence_section(message["evidence"], msg_idx)
 
         except Exception as e:
@@ -624,7 +784,7 @@ def _generate_ai_response(
         selected_filename: 선택된 문서 파일명 (우선 검색용, 선택사항)
 
     Returns:
-        Optional[dict]: {"text": str, "evidence": []} 또는 None (에러 시)
+        Optional[dict]: {"text": str, "evidence": [], "status": {}, "diagnostics": {}} 또는 None (에러 시)
     """
     try:
         # RAG 인스턴스 검증
@@ -634,9 +794,18 @@ def _generate_ai_response(
         if not hasattr(rag_instance, 'answer'):
             raise AttributeError("RAG instance has no 'answer' method")
 
+        # 옵션에서 top_k 가져오기
+        opts = st.session_state.chat_options
+        top_k = opts.get("top_k", ChatConfig.DEFAULT_TOP_K)
+
         # 응답 생성 (다양한 타입 가능: RAGResponse 객체, dict, str 등)
-        # 선택된 문서가 있으면 우선 검색을 위해 전달
-        raw_response = rag_instance.answer(query, selected_filename=selected_filename)
+        # 선택된 문서와 top_k 모두 전달
+        raw_response = rag_instance.answer(
+            query,
+            top_k=top_k,
+            selected_filename=selected_filename
+        )
+        logger.info(f"RAG query executed with top_k={top_k}, selected_filename={selected_filename}")
 
         # 응답 정규화: 모든 타입을 dict로 통일
         response = _normalize_rag_response(raw_response)
@@ -664,7 +833,7 @@ def _generate_ai_response(
         return {"text": error_info["message"], "evidence": []}  # 에러 메시지 반환
 
 
-def _add_message(role: str, content: str, evidence: Optional[List] = None) -> None:
+def _add_message(role: Literal["user", "assistant"], content: str, evidence: Optional[List] = None) -> None:
     """메시지 추가
 
     세션 상태에 새로운 메시지를 추가합니다.
@@ -698,6 +867,7 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
 
     ChatGPT 스타일의 대화형 인터페이스를 렌더링합니다.
     - 세션 상태 관리
+    - 툴바 (초기화/내보내기/옵션)
     - 기존 대화 표시
     - 사용자 입력 처리
     - AI 응답 생성
@@ -718,7 +888,17 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
             title = selected_doc.get('title', '알 수 없음')
             col1, col2 = st.columns([10, 1])
             with col1:
-                st.info(f"🎯 **문서 컨텍스트 모드**: {title} 문서를 우선적으로 검색합니다")
+                # 얇은 배너 스타일로 표시
+                st.markdown(
+                    f"""
+                    <div class="doc-context-banner">
+                        <span class="icon">🎯</span>
+                        <span class="doc-context-label">문서 컨텍스트 모드:</span>
+                        <span>{title} 문서를 우선적으로 검색합니다</span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
             with col2:
                 if st.button("❌", key="clear_doc_context", help="문서 컨텍스트 해제"):
                     st.session_state.show_doc_preview = False
@@ -740,12 +920,12 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
         # 3-2. 사용자 메시지 추가
         _add_message(ChatConfig.ROLE_USER, prompt)
 
-        # 3-3. 사용자 메시지 표시
-        with st.chat_message(ChatConfig.ROLE_USER):
+        # 3-3. 사용자 메시지 표시 (아바타 포함)
+        with st.chat_message(ChatConfig.ROLE_USER, avatar=ChatConfig.AVATAR_USER):
             st.markdown(prompt)
 
-        # 3-4. AI 응답 생성 및 표시
-        with st.chat_message(ChatConfig.ROLE_ASSISTANT):
+        # 3-4. AI 응답 생성 및 표시 (아바타 포함)
+        with st.chat_message(ChatConfig.ROLE_ASSISTANT, avatar=ChatConfig.AVATAR_ASSISTANT):
             message_placeholder = st.empty()
 
             # 대화 맥락 구성
@@ -789,15 +969,15 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                         # 캐시된 응답은 즉시 표시 (스트리밍 효과 없음)
                         message_placeholder.markdown(response["text"])
                     else:
-                        # 새로 생성된 응답은 점진적으로 표시
-                        streaming_speed = os.getenv("STREAMING_SPEED", "medium")  # slow, medium, fast
+                        # 새로 생성된 응답은 점진적으로 표시 (옵션에서 속도 가져오기)
+                        streaming_speed = st.session_state.chat_options.get("streaming_speed", "medium")
                         for partial_text in stream_text_smart(response["text"], speed=streaming_speed):
                             message_placeholder.markdown(partial_text + "▌")  # 커서 효과
                         # 최종 텍스트 (커서 제거)
                         message_placeholder.markdown(response["text"])
 
-                    # Evidence 표시 (session_state 관리로 미리보기 클릭 시에도 유지됨)
-                    if response.get("evidence"):
+                    # Evidence 표시 (옵션 확인, session_state 관리로 미리보기 클릭 시에도 유지됨)
+                    if response.get("evidence") and st.session_state.chat_options.get("show_evidence", True):
                         # 새 응답의 인덱스는 메시지 리스트의 마지막 인덱스가 될 것임
                         # 하지만 아직 메시지가 저장되지 않았으므로 현재 길이를 사용
                         current_msg_idx = len(st.session_state.messages)

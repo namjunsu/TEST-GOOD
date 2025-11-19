@@ -3,109 +3,151 @@ Document Preview Component
 선택된 문서의 미리보기 및 질문 기능을 제공하는 컴포넌트
 """
 
-import streamlit as st
 import hashlib
+import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
+
+import streamlit as st
 
 from utils.path_validator import validate_and_resolve_path
 
+# 환경 변수로 용량 상한 제어 (기본 64MB)
+MAX_DL_MB = int(os.getenv("MAX_PREVIEW_DL_MB", "64"))
+MAX_PREVIEW_BYTES = MAX_DL_MB * 1024 * 1024
+
+
+def _doc_safe_get(doc: Dict[str, Any], key: str, default: str = "미상") -> str:
+    """문서 딕셔너리에서 안전하게 값 추출"""
+    v = doc.get(key)
+    return str(v) if v not in (None, "", "None") else default
+
+
+@st.cache_data(show_spinner=False, ttl=300)
+def _load_pdf_bytes(file_path: str, max_bytes: int) -> Optional[bytes]:
+    """PDF 파일을 캐시와 함께 로드 (용량 제한 포함)"""
+    p = Path(file_path)
+    if not p.exists() or not p.is_file():
+        return None
+    size = p.stat().st_size
+    if size > max_bytes:
+        return None
+    with p.open("rb") as f:
+        return f.read()
+
 
 def render_document_preview(rag_instance: Any, config_module: Any) -> None:
-    """문서 미리보기 패널 렌더링
+    """
+    문서 미리보기 패널 렌더링
 
     Args:
         rag_instance: RAG 시스템 인스턴스 (st.session_state.rag)
-        config_module: config 모듈 (config.settings.DOCS_DIR 접근용) - app.config.settings
+        config_module: 구성 모듈(예: app.config.settings). settings.DOCS_DIR를 포함해야 함.
     """
+    # 외부에서 주입된 설정 사용 (테스트/DI 대응)
+    settings = getattr(config_module, "settings", None)
+    if settings is None or not hasattr(settings, "DOCS_DIR"):
+        st.error("구성 오류: settings.DOCS_DIR 미정의")
+        return
+
     from components.pdf_viewer import show_pdf_preview
-    from app.config.settings import settings
 
-    # 선택된 문서 미리보기 (사이드바에서 선택시)
-    if 'selected_doc' in st.session_state and st.session_state.get('show_doc_preview', False):
-        doc: Dict[str, str] = st.session_state.selected_doc
+    # selected_doc가 None이거나 show_doc_preview가 False면 종료
+    if "selected_doc" not in st.session_state or not st.session_state.get("show_doc_preview", False):
+        return
 
-        # 문서 정보 헤더
-        st.markdown(f"### 📄 {doc['title']}")
+    doc_raw = st.session_state.selected_doc
 
-        # 메타데이터와 컨트롤 버튼
-        col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
+    # pandas Series인 경우 dict로 변환
+    doc: Dict[str, Any] = doc_raw.to_dict() if hasattr(doc_raw, "to_dict") else doc_raw
 
-        with col1:
-            st.caption(f"**기안자**: {doc['drafter'] if doc['drafter'] != '미상' else '미상'} | **날짜**: {doc['date']}")
+    title = _doc_safe_get(doc, "title", "알 수 없음")
+    drafter = _doc_safe_get(doc, "drafter")
+    date = _doc_safe_get(doc, "date")
+    category = _doc_safe_get(doc, "category", "-")
+    filename = _doc_safe_get(doc, "filename", "document.pdf")
 
-        with col2:
-            st.caption(f"**카테고리**: {doc['category']} | **파일**: {doc['filename']}")
+    # 경로 1회 검증 후 재사용
+    resolved_path: Optional[Path] = validate_and_resolve_path(
+        file_path_str=doc.get("path"),
+        base_dir=Path(settings.DOCS_DIR).parent,
+        fallback_filename=f"docs/{filename}" if filename else None,
+    )
 
-        with col3:
-            # 파일 경로 검증 (디렉터리 트래버설 방지)
-            file_path = validate_and_resolve_path(
-                file_path_str=doc.get('path'),
-                base_dir=Path(settings.DOCS_DIR).parent,  # docs의 상위 디렉터리 (프로젝트 루트)
-                fallback_filename=f"docs/{doc.get('filename')}" if doc.get('filename') else None
-            )
+    # 문서별 상태 키(미리보기 토글). 파일 경로/파일명 해시로 고유화
+    id_seed = (str(resolved_path) if resolved_path else filename).encode("utf-8", "ignore")
+    doc_key = hashlib.md5(id_seed).hexdigest()[:10]
+    preview_state_key = f"pdf_preview_shown__{doc_key}"
 
-            if file_path and file_path.exists():
-                with open(file_path, 'rb') as f:
-                    pdf_bytes = f.read()
+    if preview_state_key not in st.session_state:
+        st.session_state[preview_state_key] = False
 
+    st.markdown(f"### 📄 {title}")
+
+    col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
+    with col1:
+        st.caption(f"**기안자**: {drafter} | **날짜**: {date}")
+    with col2:
+        st.caption(f"**카테고리**: {category} | **파일**: {filename}")
+
+    with col3:
+        if resolved_path and resolved_path.exists():
+            # 대용량 차단 + 캐시 로드
+            pdf_bytes = _load_pdf_bytes(str(resolved_path), MAX_PREVIEW_BYTES)
+            if pdf_bytes is not None:
                 st.download_button(
                     label="📥 다운로드",
                     data=pdf_bytes,
-                    file_name=doc.get('filename', 'document.pdf'),
+                    file_name=filename,
                     mime="application/pdf",
-                    key=f"dl_{hashlib.md5(doc.get('filename', 'unknown').encode()).hexdigest()}",
-                    width="stretch"
+                    key=f"dl_{doc_key}",
+                    use_container_width=True,
                 )
             else:
-                st.warning("⚠️ 파일을 찾을 수 없거나 접근이 거부되었습니다")
+                st.warning(f"⚠️ 파일이 너무 크거나 접근할 수 없습니다 (>{MAX_DL_MB}MB)")
+        else:
+            st.warning("⚠️ 파일을 찾을 수 없거나 접근이 거부되었습니다")
 
-        with col4:
-            if st.button("❌ 닫기", key="close_preview_btn", use_container_width=True):
-                st.session_state.show_doc_preview = False
-                if 'selected_doc' in st.session_state:
-                    del st.session_state.selected_doc
-                # st.rerun() 제거 - 버튼 클릭 시 자동 재렌더링 (버그 수정 2025-10-31)
+    with col4:
+        if st.button("❌ 닫기", key=f"close_preview_{doc_key}", use_container_width=True):
+            st.session_state.show_doc_preview = False
+            st.session_state.pop("selected_doc", None)
 
-        # PDF 미리보기 섹션 (탭 제거, 직접 표시)
-        st.info("📖 PDF 문서를 브라우저에서 직접 확인할 수 있습니다")
+    # 얇은 배너 스타일로 표시
+    st.markdown(
+        """
+        <div class="doc-preview-banner">
+            <span class="icon">📖</span>
+            <span>PDF 문서를 브라우저에서 직접 확인할 수 있습니다.</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
-        # PDF 미리보기 제어 (성능 고려)
-        if 'pdf_preview_shown' not in st.session_state:
-            st.session_state.pdf_preview_shown = False
+    # 토글 버튼(표시/숨김 통합)
+    c1, c2 = st.columns([1, 3])
+    with c1:
+        toggled = st.button(
+            "👁️ 미리보기 토글",
+            key=f"toggle_preview_{doc_key}",
+            use_container_width=True,
+            type="primary",
+        )
+        if toggled:
+            st.session_state[preview_state_key] = not st.session_state[preview_state_key]
 
-        col1, col2, col3 = st.columns([2, 2, 1])
-        with col1:
-            if st.button("👁️ PDF 미리보기 표시", type="primary", disabled=st.session_state.pdf_preview_shown):
-                st.session_state.pdf_preview_shown = True
-                # st.rerun() 제거 - Streamlit 자동 재렌더링 사용 (버그 수정 2025-10-31)
+    # 높이 선택(표시 중일 때만)
+    height = 700
+    if st.session_state[preview_state_key]:
+        with c2:
+            height = st.selectbox("미리보기 높이", [500, 700, 900], index=1)
 
-        with col2:
-            if st.session_state.pdf_preview_shown:
-                if st.button("🔄 미리보기 숨기기"):
-                    st.session_state.pdf_preview_shown = False
-                    # st.rerun() 제거 - session_state 안정성 향상 (버그 수정 2025-10-31)
+    # 실제 미리보기
+    if st.session_state[preview_state_key]:
+        if resolved_path and resolved_path.exists():
+            with st.spinner("📄 PDF 로딩 중..."):
+                show_pdf_preview(str(resolved_path), height)
+        else:
+            st.error("⚠️ PDF 파일을 찾을 수 없거나 접근이 거부되었습니다")
 
-        with col3:
-            # 미리보기 높이 조절
-            if st.session_state.pdf_preview_shown:
-                height = st.selectbox("높이", [500, 700, 900], index=1, label_visibility="collapsed")
-            else:
-                height = 700
-
-        # PDF 미리보기 표시
-        if st.session_state.pdf_preview_shown:
-            # 파일 경로 검증 (디렉터리 트래버설 방지)
-            file_path = validate_and_resolve_path(
-                file_path_str=doc.get('path'),
-                base_dir=Path(settings.DOCS_DIR).parent,  # docs의 상위 디렉터리 (프로젝트 루트)
-                fallback_filename=f"docs/{doc.get('filename')}" if doc.get('filename') else None
-            )
-
-            if file_path and file_path.exists():
-                with st.spinner("📄 PDF 로딩 중..."):
-                    show_pdf_preview(file_path, height)
-            else:
-                st.error("⚠️ PDF 파일을 찾을 수 없거나 접근이 거부되었습니다")
-
-        st.markdown("---")
+    st.markdown("---")

@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import logging
-from rag_system.llm_singleton import LLMSingleton
+from rag_system.active.llm_singleton import LLMSingleton
 
 logger = logging.getLogger(__name__)
 

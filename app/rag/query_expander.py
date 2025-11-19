@@ -13,7 +13,7 @@ import unicodedata
 from pathlib import Path
 from typing import List, Dict, Any, Set, Optional, TypedDict
 from app.core.logging import get_logger
-from rag_system.llm_singleton import LLMSingleton
+from rag_system.active.llm_singleton import LLMSingleton
 
 logger = get_logger(__name__)
 

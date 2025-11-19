@@ -17,7 +17,7 @@ sys.path.insert(0, '/home/wnstn4647/AI-CHAT')
 
 def rebuild_bm25():
     """BM25 인덱스만 재구축"""
-    from rag_system.bm25_store import BM25Store
+    from rag_system.active.bm25_store import BM25Store
 
     logger.info("BM25 인덱스 재구축 시작...")
 
@@ -53,7 +53,7 @@ def rebuild_bm25():
     logger.info(f"텍스트 추출 완료: {len(texts)}개")
 
     # BM25Store 초기화 및 인덱싱
-    bm25 = BM25Store(index_path="rag_system/db/bm25_index.pkl")
+    bm25 = BM25Store(index_path="var/index/bm25_index.pkl")
 
     # 인덱스 초기화
     bm25.documents = []

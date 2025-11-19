@@ -30,7 +30,7 @@ from app.rag.parse.doctype import classify_document
 from app.rag.parse.parse_meta import MetaParser
 from app.rag.parse.parse_tables import TableParser
 from app.rag.preprocess.clean_text import TextCleaner
-from modules.metadata_db import MetadataDB
+from app.data.metadata_db import MetadataDB
 
 logger = get_logger(__name__)
 
@@ -66,7 +66,10 @@ def extract_claimed_total_fallback(text: str) -> Optional[int]:
     if not match:
         return None
 
-    amount_str = match.group(1)
+    try:
+        amount_str = match.group(1)
+    except (IndexError, AttributeError):
+        return None
 
     try:
         # 숫자 정규화: , ₩ 원 공백 제거
@@ -78,7 +81,11 @@ def extract_claimed_total_fallback(text: str) -> Optional[int]:
             logger.warning(f"claimed_total={claimed_total:,}원 너무 작음, 수량 오인 가능성으로 제외")
             return None
 
-        logger.info(f"claimed_total_fallback={claimed_total:,}원 (패턴: {match.group(0)[:50]})")
+        try:
+            pattern_preview = match.group(0)[:50] if match else "N/A"
+        except (IndexError, AttributeError):
+            pattern_preview = "N/A"
+        logger.info(f"claimed_total_fallback={claimed_total:,}원 (패턴: {pattern_preview})")
         return claimed_total
     except (ValueError, OverflowError) as e:
         logger.warning(f"claimed_total 변환 실패: {amount_str} - {e}")
@@ -323,7 +330,7 @@ class DocumentIngester:
 
             # 6. 메타데이터 파싱
             # 간단한 메타 추출 (실제로는 PDF 메타데이터를 더 상세히 파싱해야 함)
-            from modules.metadata_extractor import MetadataExtractor
+            from modules_legacy.metadata_extractor import MetadataExtractor
             import re
 
             extractor = MetadataExtractor()
@@ -335,27 +342,42 @@ class DocumentIngester:
             # 시행일자 추출
             action_date_match = re.search(r"시행일자\s+(\d{4}[-./]\d{1,2}[-./]\d{1,2}(?:\s*~\s*\d{4}[-./]\d{1,2}[-./]\d{1,2})?)", raw_text)
             if action_date_match:
-                korean_fields["시행일자"] = action_date_match.group(1)
+                try:
+                    korean_fields["시행일자"] = action_date_match.group(1)
+                except (IndexError, AttributeError):
+                    logger.debug("시행일자 그룹 추출 실패")
 
             # 기안일자 추출
             draft_date_match = re.search(r"기안일자\s+(\d{4}[-./]\d{1,2}[-./]\d{1,2}(?:\s+\d{1,2}:\d{2})?)", raw_text)
             if draft_date_match:
-                korean_fields["기안일자"] = draft_date_match.group(1)
+                try:
+                    korean_fields["기안일자"] = draft_date_match.group(1)
+                except (IndexError, AttributeError):
+                    logger.debug("기안일자 그룹 추출 실패")
 
             # 작성일자 추출
             created_date_match = re.search(r"작성일자\s+(\d{4}[-./]\d{1,2}[-./]\d{1,2})", raw_text)
             if created_date_match:
-                korean_fields["작성일자"] = created_date_match.group(1)
+                try:
+                    korean_fields["작성일자"] = created_date_match.group(1)
+                except (IndexError, AttributeError):
+                    logger.debug("작성일자 그룹 추출 실패")
 
             # 기안자 추출
             drafter_match = re.search(r"기안자\s+([가-힣]{2,4})", raw_text)
             if drafter_match:
-                korean_fields["기안자"] = drafter_match.group(1)
+                try:
+                    korean_fields["기안자"] = drafter_match.group(1)
+                except (IndexError, AttributeError):
+                    logger.debug("기안자 그룹 추출 실패")
 
             # 기안부서 추출
             dept_match = re.search(r"기안부서\s+([^\n]+)", raw_text)
             if dept_match:
-                korean_fields["기안부서"] = dept_match.group(1).strip()
+                try:
+                    korean_fields["기안부서"] = dept_match.group(1).strip()
+                except (IndexError, AttributeError):
+                    logger.debug("기안부서 그룹 추출 실패")
 
             # 한글 필드와 영문 필드 병합
             merged_meta = {**extracted_meta, **korean_fields}

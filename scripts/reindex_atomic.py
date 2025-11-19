@@ -79,8 +79,8 @@ def _load_text_from_metadata_db(filename: str, db_conn) -> str | None:
 def reindex_bm25(source_dir: Path, output_path: Path) -> bool:
     """BM25 인덱스 재구축 (metadata.db 기반)"""
     try:
-        from rag_system.bm25_store import BM25Store
-        from modules.metadata_db import MetadataDB
+        from rag_system.active.bm25_store import BM25Store
+        from app.data.metadata_db import MetadataDB
         import pdfplumber
 
         logger.info("BM25 인덱스 재구축 시작...")

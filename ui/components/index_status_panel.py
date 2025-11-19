@@ -10,8 +10,88 @@
 
 import streamlit as st
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Dict, Any, Optional
+
+# 프로젝트 루트 상수 (상대 경로 문제 해결)
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+# 인제스트 상태 아이콘 매핑
+INGEST_STATUS_ICONS = {
+    "idle": "🟢",
+    "running": "🟡",
+    "failed": "🔴",
+}
+
+
+def fetch_index_metrics(api_base_url: str, timeout: int = 5) -> Dict[str, Any]:
+    """인덱스 메트릭 조회 (테스트 가능한 순수 함수)
+
+    Args:
+        api_base_url: FastAPI 백엔드 URL
+        timeout: 요청 타임아웃 (초)
+
+    Returns:
+        메트릭 딕셔너리
+
+    Raises:
+        requests.exceptions.RequestException: API 호출 실패
+    """
+    response = requests.get(
+        f"{api_base_url}/metrics",
+        headers={"Cache-Control": "no-cache"},
+        timeout=timeout
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def _format_last_reindex(timestamp: Optional[str]) -> str:
+    """최근 재색인 시각 포맷팅 (안전한 datetime 파싱)
+
+    Args:
+        timestamp: ISO8601 형식 문자열 (예: "2025-11-17T12:34:56Z")
+
+    Returns:
+        사람이 읽기 쉬운 형식 (예: "2025-11-17 12:34:56")
+    """
+    if not timestamp or timestamp == "unknown":
+        return "N/A"
+
+    try:
+        # UTC 'Z' 처리 (Python 3.11 미만에서는 'Z'를 인식 못 함)
+        ts_normalized = timestamp.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(ts_normalized)
+
+        # UTC로 명시적 변환
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+    except (ValueError, AttributeError):
+        # 파싱 실패 시 원본 반환
+        return timestamp
+
+
+def _get_int_metric(metrics: Dict[str, Any], key: str, default: int = 0) -> int:
+    """타입 안전한 정수 메트릭 추출
+
+    Args:
+        metrics: 메트릭 딕셔너리
+        key: 추출할 키
+        default: 기본값
+
+    Returns:
+        정수 값 (타입 보장)
+    """
+    value = metrics.get(key, default)
+    if isinstance(value, int):
+        return value
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
 
 
 def render_index_status_panel(api_base_url: str = "http://localhost:7860"):
@@ -23,14 +103,9 @@ def render_index_status_panel(api_base_url: str = "http://localhost:7860"):
     st.markdown("### 📊 Index Status")
 
     try:
-        # /metrics 호출 (캐시 금지)
-        response = requests.get(
-            f"{api_base_url}/metrics",
-            headers={"Cache-Control": "no-cache"},
-            timeout=5
-        )
-        response.raise_for_status()
-        metrics = response.json()
+        # /metrics 호출 (UX 개선: 스피너 표시)
+        with st.spinner("📡 인덱스 메트릭 조회 중..."):
+            metrics = fetch_index_metrics(api_base_url)
 
         # 상단 배지: 인덱스 버전 및 최근 재색인 시각
         col1, col2 = st.columns(2)
@@ -40,36 +115,27 @@ def render_index_status_panel(api_base_url: str = "http://localhost:7860"):
 
         with col2:
             last_reindex = metrics.get("last_reindex_at", "unknown")
-            if last_reindex != "unknown":
-                try:
-                    # ISO8601을 더 읽기 쉬운 형식으로 변환
-                    dt = datetime.fromisoformat(last_reindex)
-                    last_reindex_display = dt.strftime("%Y-%m-%d %H:%M:%S")
-                except:
-                    last_reindex_display = last_reindex
-            else:
-                last_reindex_display = "N/A"
-
+            last_reindex_display = _format_last_reindex(last_reindex)
             st.metric(label="Last Reindex", value=last_reindex_display)
 
-        # 문서 수 표시
+        # 문서 수 표시 (타입 안전)
         st.markdown("#### 문서 수")
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
-            docstore_count = metrics.get("docstore_count", 0)
+            docstore_count = _get_int_metric(metrics, "docstore_count")
             st.metric(label="DB", value=docstore_count)
 
         with col2:
-            faiss_count = metrics.get("faiss_count", 0)
+            faiss_count = _get_int_metric(metrics, "faiss_count")
             st.metric(label="FAISS", value=faiss_count)
 
         with col3:
-            bm25_count = metrics.get("bm25_count", 0)
+            bm25_count = _get_int_metric(metrics, "bm25_count")
             st.metric(label="BM25", value=bm25_count)
 
         with col4:
-            unindexed_count = metrics.get("unindexed_count", 0)
+            unindexed_count = _get_int_metric(metrics, "unindexed_count")
             st.metric(label="Unindexed", value=unindexed_count)
 
         # 정합성 경고
@@ -84,34 +150,29 @@ def render_index_status_panel(api_base_url: str = "http://localhost:7860"):
 
         # 인제스트 상태
         ingest_status = metrics.get("ingest_status", "idle")
-        status_icon = {
-            "idle": "🟢",
-            "running": "🟡",
-            "failed": "🔴"
-        }.get(ingest_status, "⚪")
-
+        status_icon = INGEST_STATUS_ICONS.get(ingest_status, "⚪")
         st.markdown(f"**인제스트 상태:** {status_icon} `{ingest_status}`")
 
-        # Reports 링크
+        # Reports 링크 (프로젝트 루트 기준 경로)
         st.markdown("#### 📄 Reports")
 
         report_files = [
-            ("INGEST_DIAG_REPORT.md", "reports/INGEST_DIAG_REPORT.md"),
-            ("chunk_stats.csv", "reports/chunk_stats.csv"),
-            ("index_consistency.md", "reports/index_consistency.md"),
-            ("ocr_audit.md", "reports/ocr_audit.md"),
+            ("INGEST_DIAG_REPORT.md", BASE_DIR / "reports" / "INGEST_DIAG_REPORT.md"),
+            ("chunk_stats.csv", BASE_DIR / "reports" / "chunk_stats.csv"),
+            ("index_consistency.md", BASE_DIR / "reports" / "index_consistency.md"),
+            ("ocr_audit.md", BASE_DIR / "reports" / "ocr_audit.md"),
         ]
 
         cols = st.columns(len(report_files))
         for i, (label, path) in enumerate(report_files):
             with cols[i]:
-                if Path(path).exists():
+                if path.exists() and path.is_file():
                     with open(path, 'rb') as f:
                         st.download_button(
                             label=label,
                             data=f,
                             file_name=label,
-                            mime="text/markdown" if path.endswith(".md") else "text/csv",
+                            mime="text/markdown" if path.suffix == ".md" else "text/csv",
                             key=f"download_{label}"
                         )
                 else:

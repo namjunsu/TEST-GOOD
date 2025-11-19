@@ -6,6 +6,11 @@
 #   bash ops/start_services.sh
 #   bash ops/start_services.sh --check-only  # 상태 확인만
 #
+# NOTE:
+# 이 스크립트는 "서비스 프로세스(API/Streamlit)만" 시작합니다.
+# 문서 동기화/인덱싱(ingest_from_docs.py, sync_year_docs_to_incoming.py 등)은
+# 별도 스크립트에서 수행해야 합니다.
+#
 
 set -euo pipefail
 
@@ -17,6 +22,15 @@ echo "==========================================================================
                       AI-CHAT 서비스 시작
 ================================================================================"
 echo "프로젝트 루트: $PROJECT_ROOT"
+
+# .venv 및 실행 파일 존재 체크
+if [ ! -x ".venv/bin/uvicorn" ] || [ ! -x ".venv/bin/streamlit" ]; then
+    echo "❌ .venv 환경 또는 uvicorn/streamlit 실행 파일을 찾을 수 없습니다."
+    echo "   먼저 가상환경 생성 및 pip install 을 완료해야 합니다:"
+    echo "   python -m venv .venv"
+    echo "   .venv/bin/pip install -r requirements.txt"
+    exit 1
+fi
 
 # 환경 변수 로드
 if [ -f .env ]; then
@@ -60,14 +74,23 @@ API_PID=$!
 echo "  PID: $API_PID"
 sleep 2
 
-# API 헬스체크
-if pgrep -f "uvicorn.*app.api.main" > /dev/null; then
-    echo "  ✓ FastAPI 시작 완료"
-else
-    echo "  ❌ FastAPI 시작 실패"
-    echo "  로그: tail /tmp/api.log"
-    exit 1
-fi
+# API 헬스체크 (HTTP 기반)
+echo "  → API 헬스체크 (/_healthz)..."
+RETRY_COUNT=0
+MAX_RETRIES=10
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    if curl -sf "http://127.0.0.1:7860/_healthz" >/dev/null 2>&1; then
+        echo "  ✓ FastAPI 시작 및 헬스체크 통과"
+        break
+    fi
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+        echo "  ❌ FastAPI 헬스체크 실패 (/_healthz)"
+        echo "  로그: tail -n 50 /tmp/api.log"
+        exit 1
+    fi
+    sleep 1
+done
 
 # UI 서비스 시작
 echo ""
@@ -81,14 +104,23 @@ UI_PID=$!
 echo "  PID: $UI_PID"
 sleep 3
 
-# UI 헬스체크
-if pgrep -f "streamlit.*web_interface" > /dev/null; then
-    echo "  ✓ Streamlit 시작 완료"
-else
-    echo "  ❌ Streamlit 시작 실패"
-    echo "  로그: tail /tmp/ui.log"
-    exit 1
-fi
+# UI 헬스체크 (HTTP 기반)
+echo "  → Streamlit 헬스체크 (port 8501)..."
+RETRY_COUNT=0
+MAX_RETRIES=15
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    if curl -sf "http://127.0.0.1:8501" >/dev/null 2>&1; then
+        echo "  ✓ Streamlit 시작 및 헬스체크 통과"
+        break
+    fi
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+        echo "  ❌ Streamlit 헬스체크 실패 (port 8501)"
+        echo "  로그: tail -n 50 /tmp/ui.log"
+        exit 1
+    fi
+    sleep 1
+done
 
 # 최종 상태 확인
 echo ""
@@ -108,12 +140,15 @@ echo "🔍 상태 확인:"
 echo "   bash ops/start_services.sh --check-only"
 echo ""
 echo "🛑 종료:"
-echo "   pkill -f 'uvicorn|streamlit'"
+echo "   모두 종료:  pkill -f 'uvicorn|streamlit'"
+echo "   개별 종료:"
+echo "     kill $API_PID  # API 서버만"
+echo "     kill $UI_PID   # UI 서버만"
 echo ""
 echo "================================================================================"
 
 # 포트 확인
 echo "=== 포트 확인 ==="
-ss -lntp 2>/dev/null | grep -E ':7860|:8501' || echo "⚠️  포트 확인 실패"
+ss -lntp 2>/dev/null | grep -E ':7860|:8501' || echo "⚠️  7860/8501 포트에서 리스닝 중인 프로세스를 찾지 못했습니다."
 
 exit 0

@@ -1,0 +1,235 @@
+# 도메인 동의어 사전 (방송 장비 전문)
+# 2025-11-19: 473개 문서 분석 기반
+#
+# 사용법:
+#   - SEARCH_CONTENT_ONLY 모드에서 브랜드/모델명 검색 시 사용
+#   - 한글↔영문, 대소문자, 띄어쓰기 변형 자동 처리
+#
+# 구조:
+#   키: 검색어 (소문자)
+#   값: 동의어 리스트 (정확한 표기)
+
+# ========== 방송 장비 브랜드 (카메라/영상) ==========
+camera_video_brands:
+  소니:
+    - 소니
+    - Sony
+    - SONY
+    - sony
+
+  캐논:
+    - 캐논
+    - Canon
+    - CANON
+    - canon
+
+  파나소닉:
+    - 파나소닉
+    - Panasonic
+    - PANASONIC
+    - panasonic
+
+  jvc:
+    - JVC
+    - jvc
+
+  샤프:
+    - 샤프
+    - Sharp
+    - SHARP
+    - sharp
+
+# ========== 방송 장비 브랜드 (믹서/스위처/모니터) ==========
+mixer_switcher_brands:
+  블랙매직:
+    - 블랙매직
+    - Blackmagic
+    - BlackMagic
+    - BLACKMAGIC
+    - Black Magic
+    - Black-Magic
+    - blackmagic
+
+  로스:
+    - 로스
+    - Ross
+    - ROSS
+    - ross
+
+  뉴텍:
+    - 뉴텍
+    - Newtek
+    - NewTek
+    - NEWTEK
+    - newtek
+
+  데이터비디오:
+    - 데이터비디오
+    - Datavideo
+    - DataVideo
+    - DATAVIDEO
+    - Data Video
+    - datavideo
+
+  티비로직:
+    - 티비로직
+    - TVLogic
+    - TVLOGIC
+    - TV Logic
+    - tvlogic
+
+# ========== 오디오 장비 브랜드 ==========
+audio_brands:
+  젠하이저:
+    - 젠하이저
+    - Sennheiser
+    - SENNHEISER
+    - sennheiser
+
+  슈어:
+    - 슈어
+    - Shure
+    - SHURE
+    - shure
+
+  오디오테크니카:
+    - 오디오테크니카
+    - Audio-Technica
+    - Audio Technica
+    - AUDIO-TECHNICA
+    - audio-technica
+
+  로데:
+    - Rode
+    - RODE
+    - rode
+    - 로데
+
+  줌:
+    - Zoom
+    - ZOOM
+    - zoom
+    - 줌
+
+# ========== 조명 브랜드 ==========
+lighting_brands:
+  오스람:
+    - OSRAM
+    - Osram
+    - osram
+    - 오스람
+
+# ========== 한국 제조사 ==========
+korean_manufacturers:
+  삼성:
+    - 삼성
+    - Samsung
+    - SAMSUNG
+    - samsung
+
+  엘지:
+    - LG
+    - lg
+    - 엘지
+
+# ========== 카메라 모델명 ==========
+camera_models:
+  pmw500:
+    - PMW-500
+    - PMW500
+    - pmw-500
+    - pmw500
+
+  pmwex3:
+    - PMW-EX3
+    - PMW EX3
+    - PMWEX3
+    - pmw-ex3
+    - EX-3
+    - EX3
+
+# ========== 모니터 모델명 ==========
+monitor_models:
+  lvm180a:
+    - LVM-180A
+    - LVM180A
+    - lvm-180a
+    - lvm180a
+
+  lvm172w:
+    - LVM-172W
+    - LVM172W
+    - lvm-172w
+    - lvm172w
+
+  lvm242w:
+    - LVM-242W
+    - LVM242W
+    - lvm-242w
+    - lvm242w
+
+# ========== 싱크 제너레이터/기타 장비 ==========
+sync_equipment:
+  eco8000:
+    - ECO8000
+    - ECO-8000
+    - eco8000
+    - eco-8000
+    - 에코8000
+
+  spg9000:
+    - SPG9000
+    - SPG-9000
+    - spg9000
+    - spg-9000
+
+  sk9000:
+    - SK9000
+    - SK-9000
+    - SK 9000
+    - sk9000
+
+  sk5212:
+    - SK5212
+    - SK-5212
+    - SK 5212
+    - sk5212
+
+# ========== 무선 마이크 모델 ==========
+wireless_mic_models:
+  ewdp:
+    - EW-DP
+    - EWDP
+    - ew-dp
+    - ewdp
+
+# ========== 일반 용어/약어 ==========
+general_terms:
+  nvr:
+    - NVR
+    - nvr
+
+  sdi:
+    - SDI
+    - sdi
+    - HD-SDI
+
+  hdmi:
+    - HDMI
+    - hdmi
+
+  ups:
+    - UPS
+    - ups
+
+  led:
+    - LED
+    - led
+
+  iptv:
+    - IPTV
+    - iptv
+
+  ccu:
+    - CCU
+    - ccu

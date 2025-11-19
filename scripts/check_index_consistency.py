@@ -35,8 +35,8 @@ class IndexConsistencyChecker:
     def __init__(
         self,
         db_path: str = "metadata.db",
-        bm25_path: str = "rag_system/db/bm25_index.pkl",
-        faiss_path: str = "rag_system/db/faiss.index"
+        bm25_path: str = "var/index/bm25_index.pkl",
+        faiss_path: str = "var/index/faiss.index"
     ):
         self.db_path = db_path
         self.bm25_path = bm25_path
@@ -233,8 +233,8 @@ class IndexConsistencyChecker:
 def main():
     parser = argparse.ArgumentParser(description="인덱스 정합성 검증")
     parser.add_argument("--db", default="metadata.db", help="DocStore DB 경로")
-    parser.add_argument("--bm25", default="rag_system/db/bm25_index.pkl", help="BM25 인덱스 경로")
-    parser.add_argument("--faiss", default="rag_system/db/faiss.index", help="FAISS 인덱스 경로")
+    parser.add_argument("--bm25", default="var/index/bm25_index.pkl", help="BM25 인덱스 경로")
+    parser.add_argument("--faiss", default="var/index/faiss.index", help="FAISS 인덱스 경로")
     parser.add_argument("--report", default="reports/index_consistency.md", help="보고서 출력 경로")
 
     args = parser.parse_args()

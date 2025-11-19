@@ -49,6 +49,11 @@ def _load_domain_synonyms() -> Dict[str, List[str]]:
         with open(yaml_path, 'r', encoding='utf-8') as f:
             yaml_data = yaml.safe_load(f)
 
+        if not yaml_data:
+            logger.warning(f"⚠️ 동의어 사전 파일이 비어있음: {yaml_path}")
+            _LOADED = True
+            return {}
+
         # YAML 구조를 flat dict로 변환
         # {"camera_brands": {"소니": ["소니", "Sony"]}}
         # → {"소니": ["소니", "Sony"], "sony": ["소니", "Sony"]}
@@ -56,10 +61,12 @@ def _load_domain_synonyms() -> Dict[str, List[str]]:
 
         for category, brands in yaml_data.items():
             if not isinstance(brands, dict):
+                logger.warning(f"⚠️ 카테고리 '{category}'가 dict가 아님, 건너뜀")
                 continue
 
             for key, synonyms in brands.items():
                 if not isinstance(synonyms, list):
+                    logger.warning(f"⚠️ 키 '{key}'의 동의어가 list가 아님, 건너뜀")
                     continue
 
                 # 원래 키 (예: "소니", "pmw500")
@@ -77,8 +84,16 @@ def _load_domain_synonyms() -> Dict[str, List[str]]:
         logger.info(f"✅ 동의어 사전 로드 완료: {len(flat_dict)}개 키, {yaml_path}")
         return flat_dict
 
+    except yaml.YAMLError as e:
+        logger.error(f"❌ YAML 파싱 에러: {e}, 빈 사전으로 계속 진행")
+        _LOADED = True
+        return {}
+    except IOError as e:
+        logger.error(f"❌ 파일 읽기 에러: {e}, 빈 사전으로 계속 진행")
+        _LOADED = True
+        return {}
     except Exception as e:
-        logger.error(f"❌ 동의어 사전 로드 실패: {e}")
+        logger.error(f"❌ 동의어 사전 로드 실패 (알 수 없는 오류): {e}, 빈 사전으로 계속 진행")
         _LOADED = True
         return {}
 

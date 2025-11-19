@@ -93,7 +93,12 @@ def _score(qn: str, tn: str) -> float:
 
 
 class QueryMode(Enum):
-    """쿼리 모드 (단순화: 8개 → 4개)
+    """쿼리 모드 (단순화: 8개 → 5개)
+
+    2025-11-19: SEARCH_CONTENT_ONLY 추가
+    - 사용자가 "내용에 X 들어간 문서만" 요청 시 정밀 검색 모드
+    - QueryExpander, 파일명/메타데이터 가중치 비활성화
+    - BM25 기반 본문 일치만 반환
 
     2025-11-07: 모드 구조 재설계
     - DOC_ANCHORED 제거 (과도한 필드 추출 문제)
@@ -104,6 +109,7 @@ class QueryMode(Enum):
     COST = "cost"  # 비용 조회 (renamed from COST_SUM)
     DOCUMENT = "document"  # 문서 내용/요약 (통합: PREVIEW + SUMMARY)
     SEARCH = "search"  # 문서 검색 (통합: LIST + SEARCH + LIST_FIRST)
+    SEARCH_CONTENT_ONLY = "search_content_only"  # 정밀 내용 검색 (본문 일치만)
     QA = "qa"  # 질답 모드 (RAG 파이프라인, 기본)
 
 
@@ -156,6 +162,30 @@ class QueryRouter:
         r"기안서\s*(찾|검색|있)|"        # "기안서 찾아"
         r"(있어\??|있나요|있는지)|"     # "있어?", "있나요"
         r"(몇\s*개|개수|총|count|number))",  # "몇개", "개수", "총" (NEW)
+        re.IGNORECASE,
+    )
+
+    # 정밀 내용 검색 패턴 (2025-11-19 추가)
+    # "내용에 X 들어간/포함된 문서만" 같은 정밀 검색 요청
+    CONTENT_ONLY_PATTERN = re.compile(
+        r"("
+        r"(내용|본문|텍스트)\s*(에|에서)?\s*.*(들어간|포함|포함된|있는)\s*(문서|파일)|"  # "내용에 X 들어간 문서"
+        r"(문서|파일)\s*(내용|본문)\s*.*(들어간|포함|포함된)|"  # "문서내용에 X 들어간"
+        r"본문\s*(에|에서)?\s*.*(들어간|포함|포함된|있는)|"  # "본문에 X 있는"
+        r"실제로?\s*(내용|본문)\s*(에|에서)?\s*.*(들어간|포함|있는)"  # "실제 내용에 X 포함된"
+        r")",
+        re.IGNORECASE,
+    )
+
+    # 문서 존재 확인 패턴 (2025-11-19 추가)
+    # "문서에 X가 있는지", "문서 안에 X 내용이 있어?" 등
+    EXISTS_CHECK_PATTERN = re.compile(
+        r"("
+        r"(문서|파일|본문)\s*(내용\s*)?(안에|에)?\s*.{1,20}\s*(관련\s*)?(내용|단어|키워드|정보)?\s*(이?\s*있[어는냐니]|포함|들어[있가])|"  # "문서 안에 DVR 관련 내용이 있어?"
+        r"(문서|파일|본문)\s*(에|안에)?\s*.{1,20}\s*(이?\s*있는지|포함.*여부)|"  # "문서에 DVR이 있는지"
+        r"(YES|NO|예|아니오).*알려|"  # "YES/NO만 알려줘"
+        r"(있[냐니는]|없[냐니는]|포함|들어있)\s*\?"  # "있니?" "없니?" 등 질문형
+        r")",
         re.IGNORECASE,
     )
 
@@ -407,7 +437,56 @@ class QueryRouter:
         # 의도 플래그 감지 (Phase 1: 단일화된 메서드 사용)
         intents = self._detect_intents(query)
 
-        # 1. 비용 질의 체크 (최우선)
+        # 파일명/문서 참조 패턴 체크 (먼저 수행)
+        has_filename = self.filename_re.search(query) is not None
+        has_doc_reference = self.DOC_REFERENCE_PATTERN.search(query) is not None
+
+        # 1. 존재 확인 체크 (최우선 - 2025-11-19 추가)
+        # "문서에 DVR이 있는지", "YES/NO만 알려줘" 등
+        if self.EXISTS_CHECK_PATTERN.search(query):
+            # 특정 문서가 지정된 경우 DOCUMENT 모드로
+            if has_filename or has_doc_reference:
+                logger.info("🎯 모드 결정: DOCUMENT (특정 문서 내용 확인)")
+                reason = "exists_check_with_doc_reference"
+                self._log_routing_decision(query, QueryMode.DOCUMENT, confidence=0.95, reason=reason)
+                return RouteDecision(
+                    mode=QueryMode.DOCUMENT,
+                    reason=reason,
+                    confidence=0.95,
+                    content_intent=True,
+                    year=params.get("year"),
+                    drafter=params.get("drafter")
+                )
+            else:
+                # 문서 미지정 시 QA 모드로 (일반적인 질문)
+                logger.info("🎯 모드 결정: QA (존재 확인 질의)")
+                reason = "exists_check_query"
+                self._log_routing_decision(query, QueryMode.QA, confidence=0.9, reason=reason)
+                return RouteDecision(
+                    mode=QueryMode.QA,
+                    reason=reason,
+                    confidence=0.9,
+                    content_intent=True,  # QA는 내용 질의이므로
+                    year=params.get("year"),
+                    drafter=params.get("drafter")
+                )
+
+        # 2. 정밀 내용 검색 체크 (2025-11-19 추가)
+        # "문서내용에 X 들어간 문서만", "내용에 포함된 문서" 등
+        if self.CONTENT_ONLY_PATTERN.search(query):
+            logger.info("🎯 모드 결정: SEARCH_CONTENT_ONLY (정밀 내용 검색 감지)")
+            reason = "content_only_pattern_matched"
+            self._log_routing_decision(query, QueryMode.SEARCH_CONTENT_ONLY, confidence=0.98, reason=reason)
+            return RouteDecision(
+                mode=QueryMode.SEARCH_CONTENT_ONLY,
+                reason=reason,
+                confidence=0.98,
+                list_intent=True,  # 검색 의도는 유지
+                year=params.get("year"),
+                drafter=params.get("drafter")
+            )
+
+        # 2. 비용 질의 체크
         if intents["cost"]:
             logger.info("🎯 모드 결정: COST (비용 질의 감지)")
             reason = self.get_routing_reason(query)
@@ -421,11 +500,7 @@ class QueryRouter:
                 drafter=params.get("drafter")
             )
 
-        # 2. 파일명 패턴 체크 (Phase 1: 사전 컴파일된 정규식 사용)
-        has_filename = self.filename_re.search(query) is not None
-
-        # 3. 문서 지시어 체크 (이문서, 해당 문서 등)
-        has_doc_reference = self.DOC_REFERENCE_PATTERN.search(query) is not None
+        # (이미 상단에서 체크함)
 
         # 4. 문서 타입 키워드 체크 (검토서, 기안서, 견적서 등)
         has_doc_type_keyword = bool(

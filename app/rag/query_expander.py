@@ -124,14 +124,25 @@ def _variants(token: str) -> List[str]:
 
 
 def _filter_tokens(tokens: List[str], stopwords: Set[str]) -> List[str]:
-    """토큰 필터링 (정규화 + 불용어 + 조사 제거)"""
+    """토큰 필터링 (정규화 + 불용어 + 조사 제거)
+
+    중요: 도메인 키워드(DVR, NVR 등)는 보호
+    """
     filtered = []
+
+    # 도메인 키워드 패턴 (대문자+숫자 조합, 장비명 등)
+    DOMAIN_PATTERN = re.compile(r'^[A-Z]{2,}[-\d]*|^[A-Z]+\d+|^(DVR|NVR|SDI|HDMI|UPS|LED|CCU)$', re.IGNORECASE)
 
     for token in tokens:
         normalized = _normalize_token(token)
 
-        # 길이 1 이하 제거
+        # 길이 1 이하 제거 (단, 도메인 키워드는 예외)
         if len(normalized) <= 1:
+            continue
+
+        # 도메인 키워드는 무조건 유지
+        if DOMAIN_PATTERN.match(normalized.upper()):
+            filtered.append(normalized)
             continue
 
         # 조사/불용어 제거

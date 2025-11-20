@@ -100,10 +100,22 @@ class PDFViewer:
     def __init__(self, file_path: str, height: int = 700):
         """
         Args:
-            file_path: PDF 파일 경로
+            file_path: PDF 파일 경로 (상대/절대 경로 모두 지원)
             height: 뷰어 높이 (픽셀)
         """
-        self.file_path = Path(file_path)
+        file_path_obj = Path(file_path)
+
+        # 상대 경로인 경우 DOCS_DIR 기준으로 변환
+        if not file_path_obj.is_absolute():
+            try:
+                from app.config.settings import settings
+                self.file_path = settings.DOCS_DIR / file_path_obj
+            except Exception:
+                # settings import 실패 시 그대로 사용 (fallback)
+                self.file_path = file_path_obj
+        else:
+            self.file_path = file_path_obj
+
         self.height = height
         self.info: Optional[PDFInfo] = None
 

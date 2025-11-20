@@ -2137,12 +2137,24 @@ class RAGPipeline:
                             else:
                                 system_msg = "당신은 문서 분석 전문가입니다. 문서 내용을 기반으로 정확하게 답변하세요."
 
+                            # 동적 토큰 제한: 문서 길이에 따라 조정하여 hallucination 방지
+                            # 문서가 짧을 때 과도한 토큰으로 인한 반복 생성 방지
+                            content_length = len(full_text)
+                            if detailed_mode:
+                                # 상세 모드: 문서 길이의 50% 정도로 제한 (최대 1500)
+                                adjusted_tokens = min(max_tokens, max(300, content_length // 3))
+                            else:
+                                # 일반 모드: 문서 길이의 30% 정도로 제한 (최대 800)
+                                adjusted_tokens = min(max_tokens, max(200, content_length // 4))
+
+                            logger.debug(f"토큰 조정: 원본 {max_tokens} → {adjusted_tokens} (문서 {content_length}자)")
+
                             output = llm.llm.create_chat_completion(
                                 messages=[
                                     {"role": "system", "content": system_msg},
                                     {"role": "user", "content": llm_prompt}
                                 ],
-                                max_tokens=max_tokens,
+                                max_tokens=adjusted_tokens,
                                 temperature=0.3
                             )
                             llm_raw = output['choices'][0]['message']['content']

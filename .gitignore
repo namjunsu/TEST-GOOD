@@ -87,6 +87,9 @@ data/
 *.db.bak*
 *.db.backup*
 
+# Runtime variable data (indexes, cache, locks, etc.)
+var/
+
 # Test artifacts
 test_*.py
 verify_*.py

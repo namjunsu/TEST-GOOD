@@ -3,7 +3,10 @@ Year field utility functions
 연도 필드 타입 변환 및 처리를 위한 유틸리티
 """
 
+import re
 from typing import Any, List, Union, Optional
+
+YEAR_PATTERN = re.compile(r"(\d{4})")  # 4자리 숫자만 추출
 
 
 def safe_year_to_int(year_value: Any) -> Optional[int]:
@@ -14,24 +17,41 @@ def safe_year_to_int(year_value: Any) -> Optional[int]:
 
     Returns:
         정수로 변환된 year 또는 None
+
+    Examples:
+        >>> safe_year_to_int("2024년")
+        2024
+        >>> safe_year_to_int(" 2024 ")
+        2024
+        >>> safe_year_to_int("2024.")
+        2024
+        >>> safe_year_to_int("연도없음")
+        None
     """
-    if year_value is None or year_value == '':
+    if year_value is None:
         return None
 
-    try:
-        # 문자열이면 정수로 변환
-        if isinstance(year_value, str):
-            # '연도없음', 'N/A' 등의 특수 값 처리
-            if year_value in ['연도없음', 'N/A', '없음', '-']:
-                return None
-            return int(year_value)
-        # 이미 정수면 그대로 반환
-        elif isinstance(year_value, int):
-            return year_value
-        else:
+    # 문자열 처리
+    if isinstance(year_value, str):
+        s = year_value.strip()
+
+        # 특수 문자열 처리
+        if s in ["", "연도없음", "N/A", "없음", "-", "none", "None"]:
             return None
-    except (ValueError, TypeError):
+
+        # "2024년", "2024.", " 2024 " 등 숫자만 추출
+        match = YEAR_PATTERN.search(s)
+        if match:
+            year_int = int(match.group(1))
+            return year_int if year_int > 0 else None
+
         return None
+
+    # 정수형 처리
+    if isinstance(year_value, int):
+        return year_value if year_value > 0 else None
+
+    return None
 
 
 def normalize_year_list(years: List[Any]) -> List[int]:
@@ -41,20 +61,24 @@ def normalize_year_list(years: List[Any]) -> List[int]:
         years: year 값들의 리스트
 
     Returns:
-        정수로 변환된 year 리스트 (None 값 제외)
+        정수로 변환된 year 리스트 (None 값 제외, 중복 제거, 내림차순 정렬)
+
+    Examples:
+        >>> normalize_year_list(["2024년", 2023, " 2022 ", "2024"])
+        [2024, 2023, 2022]
     """
     normalized = []
-    for year in years:
-        converted = safe_year_to_int(year)
-        if converted is not None and converted > 0:  # 0이나 음수는 제외
+    for y in years:
+        converted = safe_year_to_int(y)
+        if converted:
             normalized.append(converted)
 
     # 중복 제거하고 정렬
-    return sorted(list(set(normalized)), reverse=True)
+    return sorted(set(normalized), reverse=True)
 
 
 def compare_year(df_year: Any, target_year: Union[int, str]) -> bool:
-    """DataFrame의 year 값과 대상 year 값을 비교
+    """DataFrame의 year 값과 대상 year 값을 비교 (정수 기준 우선)
 
     Args:
         df_year: DataFrame의 year 값
@@ -62,16 +86,23 @@ def compare_year(df_year: Any, target_year: Union[int, str]) -> bool:
 
     Returns:
         두 값이 같으면 True
+
+    Examples:
+        >>> compare_year("2024년", "2024")
+        True
+        >>> compare_year(" 2024 ", 2024)
+        True
     """
     # 둘 다 정수로 변환하여 비교
     df_int = safe_year_to_int(df_year)
     target_int = safe_year_to_int(target_year)
 
-    if df_int is None or target_int is None:
-        # 하나라도 None이면 문자열로 비교
-        return str(df_year) == str(target_year)
+    # 둘 다 정수로 파싱 가능하면 정수 비교
+    if df_int is not None and target_int is not None:
+        return df_int == target_int
 
-    return df_int == target_int
+    # 둘 다 파싱 불가한 문자열일 경우에만 문자열 비교
+    return str(df_year).strip() == str(target_year).strip()
 
 
 def get_year_display(year_value: Any, default: str = "연도없음") -> str:
@@ -83,8 +114,14 @@ def get_year_display(year_value: Any, default: str = "연도없음") -> str:
 
     Returns:
         표시용 문자열
+
+    Examples:
+        >>> get_year_display("2024년")
+        '2024년'
+        >>> get_year_display(2024)
+        '2024년'
+        >>> get_year_display("N/A")
+        '연도없음'
     """
     year_int = safe_year_to_int(year_value)
-    if year_int is None:
-        return default
-    return f"{year_int}년"
+    return f"{year_int}년" if year_int else default

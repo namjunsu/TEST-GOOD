@@ -485,18 +485,32 @@ def _display_evidence_section(evidence_list: List, msg_idx: int) -> None:
                 file_path_str = getattr(ev, "file_path", None)
                 meta = getattr(ev, "meta", {})
 
-            # 파일 경로 생성 (year 폴더 지원)
+            # 파일 경로 생성 (year 폴더 지원) - 절대 경로 사용
             if file_path_str:
                 file_path = Path(file_path_str)
+                # 상대 경로인 경우 DOCS_DIR 기준으로 변환
+                if not file_path.is_absolute():
+                    from app.config.settings import settings
+                    # DB path가 'docs/'로 시작하면 제거 (중복 방지)
+                    path_str = str(file_path)
+                    if path_str.startswith('docs/'):
+                        path_str = path_str[5:]  # 'docs/' 제거
+                    file_path = settings.DOCS_DIR / path_str
             else:
-                # Fallback: year 폴더 추출
+                # Fallback: year 폴더 추출 (절대 경로 생성)
+                from app.config.settings import settings
                 import re
                 year_match = re.search(r'(\d{4})-', filename)
                 if year_match:
                     year = year_match.group(1)
-                    file_path = Path(f"docs/year_{year}") / filename
+                    file_path = settings.DOCS_DIR / f"year_{year}" / filename
                 else:
-                    file_path = Path("docs") / filename
+                    file_path = settings.DOCS_DIR / filename
+
+            # 디버깅: 생성된 경로 확인
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"[출처 문서] filename={filename}, file_path_str={file_path_str}, generated_path={file_path}, exists={file_path.exists() if isinstance(file_path, Path) else 'N/A'}")
 
             # 메타 데이터 추출
             doctype = meta.get("doctype") if isinstance(meta, dict) else None

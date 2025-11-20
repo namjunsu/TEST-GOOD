@@ -14,6 +14,34 @@ from typing import Any, Dict, List
 
 from app.core.logging import get_logger
 
+
+def _resolve_doc_id(metadata: dict, doc_idx: int) -> str:
+    """DocStore/BM25/FAISS 공통 doc_id 생성 규칙
+
+    Args:
+        metadata: 문서 메타데이터 (id 필드 필수)
+        doc_idx: 문서 인덱스 (폴백용)
+
+    Returns:
+        정규화된 doc_id (문자열)
+
+    Raises:
+        ValueError: metadata['id']가 없는 경우
+
+    Note:
+        - 1순위: metadata["id"] (DB PK) → 문자열 변환
+        - metadata.db의 INTEGER PK를 기준으로 통일
+        - id 없는 문서는 구조적 문제로 간주하여 에러 발생
+    """
+    db_id = metadata.get("id")
+    if db_id is None:
+        raise ValueError(
+            f"metadata['id'] 누락 (doc_idx={doc_idx}). "
+            f"DocStore 기반 시스템에서 id는 필수입니다. meta={metadata}"
+        )
+    return str(db_id)
+
+
 # 한국어 불용어 세트 (방송·기술 문서 특화)
 KOREAN_STOPWORDS = {
     # 조사·어미
@@ -331,14 +359,20 @@ class BM25Store:
                 batch_texts = texts[batch_start:batch_end]
                 batch_metadatas = metadatas[batch_start:batch_end]
 
-                for text, metadata in zip(batch_texts, batch_metadatas):
+                for doc_idx, (text, metadata) in enumerate(zip(batch_texts, batch_metadatas), start=len(self.documents)):
                     # 토큰화 및 불용어 필터링
                     tokens = self.tokenizer.tokenize(text)
                     tokens = self._filter_tokens(tokens)
 
+                    # doc_id 정규화 (DB PK → 문자열)
+                    # 원본 metadata를 변경하지 않고 복사본 생성
+                    normalized_metadata = dict(metadata)
+                    if 'id' in normalized_metadata and not isinstance(normalized_metadata['id'], str):
+                        normalized_metadata['id'] = str(normalized_metadata['id'])
+
                     # 문서 추가
                     self.documents.append(text)
-                    self.metadata.append(metadata)
+                    self.metadata.append(normalized_metadata)
 
                     # 용어 빈도 계산
                     term_freq = defaultdict(int)
@@ -440,8 +474,13 @@ class BM25Store:
                 # 메타데이터 안전 접근 (IndexError 방지)
                 metadata = self.metadata[doc_idx] if doc_idx < len(self.metadata) else {}
 
-                # 중복 체크 (doc_id 또는 filename 기준)
-                doc_id = metadata.get("id", metadata.get("filename", f"doc_{doc_idx}"))
+                # 중복 체크 (doc_id 기준 - DB PK 사용)
+                try:
+                    doc_id = _resolve_doc_id(metadata, doc_idx)
+                except ValueError as e:
+                    self.logger.warning(f"doc_id 생성 실패, 건너뜀: {e}")
+                    continue
+
                 if doc_id in seen_ids:
                     continue  # 이미 추가된 문서면 스킵
                 seen_ids.add(doc_id)

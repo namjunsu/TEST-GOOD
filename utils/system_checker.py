@@ -19,7 +19,7 @@ import time
 import hashlib
 from pathlib import Path
 from typing import Dict, List, Tuple, Any, Optional, Callable
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from enum import Enum
 import json
@@ -77,6 +77,16 @@ class CheckItem:
             result += f"\n   → {self.action}"
         return result
 
+    def to_dict(self) -> Dict[str, Any]:
+        """JSON 직렬화 가능한 딕셔너리로 변환"""
+        return {
+            'name': self.name,
+            'status': self.status.name,  # Enum을 문자열로 변환
+            'message': self.message,
+            'details': self.details,
+            'action': self.action
+        }
+
 
 @dataclass
 class CheckResult:
@@ -118,13 +128,13 @@ class CheckResult:
         return len(self.warnings) > 0
 
     def to_dict(self) -> Dict[str, Any]:
-        """딕셔너리로 변환"""
+        """딕셔너리로 변환 (JSON 직렬화 가능)"""
         return {
             'success': self.is_success(),
             'has_warnings': self.has_warnings(),
-            'errors': [asdict(item) for item in self.errors],
-            'warnings': [asdict(item) for item in self.warnings],
-            'passed': [asdict(item) for item in self.passed],
+            'errors': [item.to_dict() for item in self.errors],
+            'warnings': [item.to_dict() for item in self.warnings],
+            'passed': [item.to_dict() for item in self.passed],
             'metrics': self.metrics,
             'timestamp': self.timestamp,
             'duration': self.duration
@@ -161,6 +171,7 @@ class SystemChecker:
     # 캐시 설정
     CACHE_FILE: Path = project_root / '.system_check_cache.pkl'
     CACHE_TTL: int = 3600  # 1시간
+    CACHE_VERSION: int = 2  # 캐시 구조 변경 시 증가
 
     def __init__(
         self,
@@ -196,9 +207,11 @@ class SystemChecker:
         if self.use_cache:
             cached = self._load_cache()
             if cached:
+                self.result = cached  # self.result 갱신 (to_json() 호환)
                 if self.verbose:
                     print("📦 캐시된 결과 사용 (빠른 검증)")
-                return cached
+                    self._print_results()
+                return self.result
 
         # 검사 실행
         checks: List[Tuple[str, Callable[[], None]]] = [
@@ -266,7 +279,7 @@ class SystemChecker:
                         action="로그를 확인하세요"
                     ))
                     if LOGGING_AVAILABLE and logger:
-                        logger.error(f"{name} 검사 실패", exception=e)
+                        logger.exception(f"{name} 검사 실패")
 
     def _run_sequential_checks(
         self,
@@ -288,7 +301,7 @@ class SystemChecker:
                     action="로그를 확인하세요"
                 ))
                 if LOGGING_AVAILABLE and logger:
-                    logger.error(f"{name} 검사 실패", exception=e)
+                    logger.exception(f"{name} 검사 실패")
 
     def _show_progress(self, current: int, total: int, name: str) -> None:
         """진행 상황 표시"""
@@ -629,12 +642,12 @@ class SystemChecker:
         if not config_file.exists():
             self.result.add_item(CheckItem(
                 name="config_file",
-                status=CheckStatus.FAIL,
-                message="config.py 파일 없음",
+                status=CheckStatus.WARN,
+                message="config.py 파일 없음 (app.config.settings 사용 가능)",
                 details={'path': str(config_file)},
-                action="config.py 파일을 생성하세요"
+                action="필요시 config.py 파일을 생성하세요"
             ))
-            return
+            # config.py가 없어도 app.config.settings로 동작 가능하므로 계속 진행
 
         try:
             # 필수 설정 체크 (app.config.settings 모듈 사용)
@@ -694,7 +707,7 @@ class SystemChecker:
             ))
 
     def _load_cache(self) -> Optional[CheckResult]:
-        """캐시 로드"""
+        """캐시 로드 (버전 확인 포함)"""
         if not self.CACHE_FILE.exists():
             return None
 
@@ -705,10 +718,20 @@ class SystemChecker:
                 return None
 
             with open(self.CACHE_FILE, 'rb') as f:
-                cached_result = pickle.load(f)
+                payload = pickle.load(f)
+
+            # 버전 확인
+            if not isinstance(payload, dict) or payload.get("version") != self.CACHE_VERSION:
+                if LOGGING_AVAILABLE and logger:
+                    logger.debug("캐시 버전 불일치, 재검사 필요")
+                return None
+
+            cached_result = payload.get("result")
+            if cached_result is None:
+                return None
 
             if LOGGING_AVAILABLE and logger:
-                logger.debug("캐시된 결과 로드 성공")
+                logger.debug(f"캐시된 결과 로드 성공 (v{self.CACHE_VERSION})")
 
             return cached_result
 
@@ -718,13 +741,17 @@ class SystemChecker:
             return None
 
     def _save_cache(self, result: CheckResult) -> None:
-        """캐시 저장"""
+        """캐시 저장 (버전 메타데이터 포함)"""
         try:
+            payload = {
+                "version": self.CACHE_VERSION,
+                "result": result
+            }
             with open(self.CACHE_FILE, 'wb') as f:
-                pickle.dump(result, f)
+                pickle.dump(payload, f)
 
             if LOGGING_AVAILABLE and logger:
-                logger.debug("검사 결과 캐시 저장 완료")
+                logger.debug(f"검사 결과 캐시 저장 완료 (v{self.CACHE_VERSION})")
 
         except Exception as e:
             if LOGGING_AVAILABLE and logger:

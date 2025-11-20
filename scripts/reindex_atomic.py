@@ -93,13 +93,14 @@ def reindex_bm25(source_dir: Path, output_path: Path) -> bool:
             import sqlite3
             db_conn = db._get_conn()
             cursor = db_conn.cursor()
-            cursor.execute("SELECT filename, date, drafter, category FROM documents")
+            cursor.execute("SELECT id, filename, date, drafter, category FROM documents")
             for row in cursor.fetchall():
                 all_docs.append({
-                    'filename': row[0],
-                    'date': row[1],
-                    'drafter': row[2],
-                    'category': row[3]
+                    'id': row[0],           # DB PK 추가
+                    'filename': row[1],
+                    'date': row[2],
+                    'drafter': row[3],
+                    'category': row[4]
                 })
         except Exception as e:
             logger.error(f"metadata.db 읽기 실패: {e}")
@@ -178,10 +179,13 @@ def reindex_bm25(source_dir: Path, output_path: Path) -> bool:
                     missing_count += 1
 
                 texts.append(text)
+                # doc_id를 문자열로 변환 (정합성 확보)
+                doc_id = doc_meta.get('id')
+                doc_id_str = str(doc_id) if doc_id is not None else f'doc_{i}'
                 metadatas.append({
                     'filename': filename,
                     'path': str(pdf_path),
-                    'id': f'doc_{i}',
+                    'id': doc_id_str,  # DB PK를 문자열로 변환
                     'date': doc_meta.get('date', ''),
                     'drafter': doc_meta.get('drafter', ''),
                     'category': doc_meta.get('category', 'pdf')
@@ -190,10 +194,12 @@ def reindex_bm25(source_dir: Path, output_path: Path) -> bool:
                 logger.warning(f"처리 실패: {filename} - {e}")
                 # 실패해도 파일명으로 인덱싱
                 texts.append(f"[파일명: {filename}] (처리 실패: {e})")
+                doc_id = doc_meta.get('id')
+                doc_id_str = str(doc_id) if doc_id is not None else f'doc_{i}'
                 metadatas.append({
                     'filename': filename,
                     'path': str(pdf_path),
-                    'id': f'doc_{i}'
+                    'id': doc_id_str  # DB PK를 문자열로 변환
                 })
                 missing_count += 1
 

@@ -254,7 +254,7 @@ class HybridRetriever:
                 fts_query = " OR ".join(f'"{word}"' for word in query.split())
 
             cursor = conn.execute("""
-                SELECT d.filename, d.title, d.drafter, d.date, d.category, d.text_preview
+                SELECT d.filename, d.title, d.drafter, d.date, d.category, d.text_preview, d.path
                 FROM documents_fts fts
                 JOIN documents d ON fts.rowid = d.rowid
                 WHERE documents_fts MATCH ?
@@ -264,7 +264,7 @@ class HybridRetriever:
 
             results = []
             for row in cursor.fetchall():
-                filename, title, drafter, date, category, text_preview = row
+                filename, title, drafter, date, category, text_preview, path = row
 
                 results.append({
                     "doc_id": filename,
@@ -272,7 +272,7 @@ class HybridRetriever:
                     "score": 1.0,  # FTS는 rank만 제공, 임의 스코어
                     "page": 1,
                     "filename": filename,
-                    "file_path": None,  # FTS에서는 path 없음
+                    "file_path": path,  # DB에서 path 가져오기
                     "meta": {
                         "filename": filename,
                         "date": date,
@@ -356,14 +356,17 @@ class HybridRetriever:
 
         return max(0.0, min(10.0, final_score))
 
-    def search(self, query: str, top_k: int, mode: str = "chat", selected_filename: Optional[str] = None) -> List[Dict[str, Any]]:
-        """검색 수행 v2.0
+    def search(self, query: str, top_k: int, mode: str = "chat", selected_filename: Optional[str] = None, strict_content: bool = False) -> List[Dict[str, Any]]:
+        """검색 수행 v2.1
 
         Args:
             query: 검색 질의
             top_k: 상위 K개 결과
             mode: 검색 모드 ("chat", "doc_anchored" 등)
             selected_filename: 선택된 문서 파일명 (우선 검색용, 선택사항)
+            strict_content: 정밀 내용 검색 모드 (2025-11-19 추가)
+                True일 때: QueryExpander/파일명 보너스/메타데이터 라우팅 비활성화,
+                BM25-only 검색으로 본문 일치만 반환
 
         Returns:
             정규화된 검색 결과 리스트 (score_stats 속성 포함):
@@ -380,6 +383,86 @@ class HybridRetriever:
         try:
             # 인덱스 갱신 체크
             self._reload_if_index_rotated()
+
+            # 🔍 STRICT CONTENT MODE: 정밀 내용 검색 (2025-11-19 추가)
+            if strict_content:
+                logger.info(f"🎯 STRICT CONTENT MODE 활성화: QueryExpander/파일명보너스/메타라우팅 비활성화")
+                if self.use_bm25 and self.bm25:
+                    # BM25-only 검색 (넉넉히 가져옴)
+                    bm25_results = self.bm25.search(query, top_k=top_k * 5)
+
+                    # 결과를 표준 형식으로 변환
+                    converted_results = []
+                    for result in bm25_results:
+                        converted_results.append({
+                            "doc_id": result.get("filename", "unknown"),
+                            "snippet": result.get("content", "")[:self.snippet_max_length],
+                            "score": result.get("score", 0.0),
+                            "page": 1,
+                            "filename": result.get("filename"),
+                            "file_path": result.get("path"),
+                            "meta": {
+                                "filename": result.get("filename"),
+                                "date": result.get("date"),
+                                "drafter": result.get("drafter"),
+                                "category": result.get("category"),
+                            }
+                        })
+
+                    # 후처리: 실제 content에 query 키워드가 포함된 것만 필터링
+                    filtered_results = []
+                    # 불용어 제거하여 핵심 키워드 추출
+                    stop_words = ["문서", "파일", "기안서", "찾아줘", "찾아", "검색", "관련", "좀", "해줘",
+                                  "내용", "본문", "들어간", "포함", "포함된", "있는", "만", "에", "에서", "이", "가"]
+                    core_keyword = query
+                    for word in stop_words:
+                        core_keyword = core_keyword.replace(word, " ")
+                    core_keyword = core_keyword.strip()
+
+                    logger.info(f"🔍 핵심 키워드 추출: '{query}' → '{core_keyword}'")
+
+                    # 동의어 확장된 경우 각 variant를 분리 (공백 기준)
+                    keyword_variants = core_keyword.split()
+
+                    for doc in converted_results:
+                        content = doc.get("snippet", "") or ""
+                        # variant 중 하나라도 content에 포함되면 통과
+                        matched = False
+                        for variant in keyword_variants:
+                            if variant and variant in content:
+                                matched = True
+                                break
+                        if matched:
+                            filtered_results.append(doc)
+                            if len(filtered_results) >= top_k:
+                                break
+
+                    logger.info(f"✅ STRICT CONTENT 검색 완료: {len(bm25_results)}개 → 필터링 {len(filtered_results)}개")
+
+                    # 스코어 통계
+                    scores = [r["score"] for r in filtered_results]
+                    top1 = scores[0] if len(scores) > 0 else 0.0
+                    top2 = scores[1] if len(scores) > 1 else 0.0
+                    top3 = scores[2] if len(scores) > 2 else 0.0
+
+                    score_stats = {
+                        "hits": len(filtered_results),
+                        "top1": top1,
+                        "top2": top2,
+                        "top3": top3,
+                        "delta12": max(0.0, top1 - top2),
+                        "delta13": max(0.0, top1 - top3)
+                    }
+
+                    class ResultsWithStats(list):
+                        def __init__(self, items, stats):
+                            super().__init__(items)
+                            self.score_stats = stats
+
+                    return ResultsWithStats(filtered_results, score_stats)
+                else:
+                    logger.warning("⚠️ BM25 비활성화 상태에서 STRICT CONTENT 모드 요청됨, 빈 결과 반환")
+                    return []
 
             # Stage 0: ExactMatch (코드 정확일치 최우선 - v2.0 추가)
             if self.exact_match_enabled and self.exact_match:

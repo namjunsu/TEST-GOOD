@@ -207,7 +207,8 @@ class DocumentLoader:
             cursor = conn.cursor()
 
             cursor.execute("""
-                SELECT filename, path, date, year, category, drafter, keywords
+                SELECT filename, path, date, year, category, drafter, keywords,
+                       title, page_count, created_at, display_date, file_size
                 FROM documents
                 ORDER BY year DESC, filename ASC
             """)
@@ -220,7 +221,7 @@ class DocumentLoader:
             # 3. 문서 정보 처리
             documents: List[Dict] = []
 
-            for filename, path, date, year, category, drafter, keywords in rows:
+            for filename, path, date, year, category, drafter, keywords, title, page_count, created_at, display_date, file_size in rows:
                 # 카테고리 분류
                 doc_category = self._classify_category(filename, category)
 
@@ -233,9 +234,20 @@ class DocumentLoader:
                 except (ValueError, TypeError):
                     year_int = None
 
-                # title 생성 (대소문자 안전)
-                stem = Path(filename).stem  # 확장자 제거
-                title = stem.replace('_', ' ')
+                # title이 없으면 파일명에서 생성
+                if not title:
+                    stem = Path(filename).stem  # 확장자 제거
+                    title = stem.replace('_', ' ')
+
+                # 파일 크기를 읽기 쉬운 형식으로 변환
+                if file_size:
+                    try:
+                        size_mb = int(file_size) / (1024 * 1024)
+                        size_str = f"{size_mb:.1f} MB"
+                    except (ValueError, TypeError):
+                        size_str = '알 수 없음'
+                else:
+                    size_str = '알 수 없음'
 
                 # 문서 정보 구성
                 documents.append({
@@ -246,9 +258,12 @@ class DocumentLoader:
                     'year_display': str(year_int) if year_int else '연도없음',  # UI 표시용
                     'category': doc_category,
                     'drafter': doc_drafter,
-                    'size': '알 수 없음',  # TODO: 실제 파일 크기 계산 가능
+                    'size': size_str,
                     'path': path,
-                    'keywords': keywords or ''
+                    'keywords': keywords or '',
+                    'page_count': page_count or 0,
+                    'created_at': created_at or '',
+                    'display_date': display_date or date or ''
                 })
 
             # 4. DataFrame 생성 및 정렬

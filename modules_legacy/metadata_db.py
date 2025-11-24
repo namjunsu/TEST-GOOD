@@ -38,8 +38,8 @@ class MetadataDB:
         )
         conn.row_factory = sqlite3.Row
 
-        # Performance optimizations (WAL + memory tuning)
-        conn.execute("PRAGMA journal_mode=WAL;")
+        # Performance optimizations (memory tuning)
+        # Note: journal_mode를 강제하지 않음 - 기존 설정 유지
         conn.execute("PRAGMA busy_timeout=5000;")
         conn.execute("PRAGMA synchronous=NORMAL;")
         conn.execute("PRAGMA temp_store=MEMORY;")

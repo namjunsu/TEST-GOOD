@@ -62,22 +62,26 @@ log INFO "MODEL_PATH 적용: $(basename "$MODEL_PATH")"
 log INFO "RETRIEVER_BACKEND: $RETRIEVER_BACKEND"
 
 # ---------- 연도 폴더 → incoming 동기화 + 인제스트 ----------
-log INFO "="
-log INFO "Step 0: 연도 폴더 → incoming 동기화 시작..."
-"${PY}" scripts/sync_year_docs_to_incoming.py 2>&1 | tee -a "$LOG_FILE" || {
-  log WARN "동기화 실행 중 경고 발생 (계속 진행)"
-}
-log SUCCESS "Step 0: 동기화 완료"
+if [[ "${SKIP_SYNC_INGEST:-0}" != "1" ]]; then
+  log INFO "="
+  log INFO "Step 0: 연도 폴더 → incoming 동기화 시작..."
+  "${PY}" scripts/sync_year_docs_to_incoming.py 2>&1 | tee -a "$LOG_FILE" || {
+    log WARN "동기화 실행 중 경고 발생 (계속 진행)"
+  }
+  log SUCCESS "Step 0: 동기화 완료"
 
-log INFO "Step 1: 신규 문서 ingest 시작..."
-"${PY}" scripts/ingest_from_docs.py 2>&1 | tee -a "$LOG_FILE" || {
-  log WARN "Ingest 실행 중 경고 발생 (계속 진행)"
-}
-log SUCCESS "Step 1: ingest 완료"
-log INFO "="
+  log INFO "Step 1: 신규 문서 ingest 시작..."
+  "${PY}" scripts/ingest_from_docs.py 2>&1 | tee -a "$LOG_FILE" || {
+    log WARN "Ingest 실행 중 경고 발생 (계속 진행)"
+  }
+  log SUCCESS "Step 1: ingest 완료"
+  log INFO "="
+else
+  log INFO "SKIP_SYNC_INGEST=1 설정: Step 0/1 (동기화/ingest) 건너뜀"
+fi
 
 # ---------- BM25 인덱스 가드 (존재/정합성/자동복구) ----------
-if [[ "$RETRIEVER_BACKEND" == "bm25" ]]; then
+if [[ "$RETRIEVER_BACKEND" == "bm25" && "${SKIP_BM25_GUARD:-0}" != "1" ]]; then
   log INFO "BM25 인덱스 가드 실행: ${BM25_INDEX_PATH}"
 
   # 1. 인덱스 파일 존재 확인
@@ -122,6 +126,8 @@ PYCHECK
   fi
 
   log SUCCESS "BM25 인덱스 가드 통과"
+elif [[ "$RETRIEVER_BACKEND" == "bm25" ]]; then
+  log INFO "SKIP_BM25_GUARD=1 설정: BM25 인덱스 가드/재인덱싱 건너뜀"
 fi
 
 # ---------- 기존 프로세스 자동 종료 ----------

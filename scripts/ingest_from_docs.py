@@ -30,7 +30,7 @@ from app.rag.parse.doctype import classify_document
 from app.rag.parse.parse_meta import MetaParser
 from app.rag.parse.parse_tables import TableParser
 from app.rag.preprocess.clean_text import TextCleaner
-from app.data.metadata_db import MetadataDB
+from modules_legacy.metadata_db import MetadataDB
 
 logger = get_logger(__name__)
 
@@ -329,14 +329,18 @@ class DocumentIngester:
             result["actions"].append(f"doctype={doctype}")
 
             # 6. 메타데이터 파싱
-            # 간단한 메타 추출 (실제로는 PDF 메타데이터를 더 상세히 파싱해야 함)
-            from modules_legacy.metadata_extractor import MetadataExtractor
-            import re
+            # MetaParser를 사용한 메타데이터 추출
+            parsed_meta = self.meta_parser.parse(
+                metadata={},
+                title=pdf_path.stem,
+                content=cleaned_text[:1000]
+            )
 
-            extractor = MetadataExtractor()
-            extracted_meta = extractor.extract_all(raw_text, pdf_path.name)
+            # TableParser를 사용한 비용 정보 추출
+            cost_data = self.table_parser.extract_cost_table(raw_text)
 
             # 한글 필드명 직접 추출 (기안서 프린트뷰 전용)
+            import re
             korean_fields = {}
 
             # 시행일자 추출
@@ -379,13 +383,9 @@ class DocumentIngester:
                 except (IndexError, AttributeError):
                     logger.debug("기안부서 그룹 추출 실패")
 
-            # 한글 필드와 영문 필드 병합
-            merged_meta = {**extracted_meta, **korean_fields}
-
-            # 날짜/작성자/부서 파싱
-            parsed_meta = self.meta_parser.parse(
-                merged_meta, title=pdf_path.stem, content=cleaned_text[:1000]
-            )
+            # parsed_meta에 한글 필드 병합
+            if korean_fields:
+                parsed_meta.update(korean_fields)
             result["actions"].append("meta_parsed")
 
             # 7. 표 파싱 (비용표)
@@ -430,42 +430,62 @@ class DocumentIngester:
                 extracted_file.write_text(cleaned_text, encoding="utf-8")
                 result["actions"].append(f"saved→{extracted_file.name}")
 
-            # 9. 메타DB 업서트
+            # 9. 메타DB 업서트 (실패 시 파일 이동 금지)
+            db_save_success = False
             if not self.dry_run and self.db:
-                doc_metadata = {
-                    "path": str(pdf_path.resolve().relative_to(Path.cwd())),
-                    "filename": pdf_path.name,
-                    "title": parsed_meta.get("title", pdf_path.stem),
-                    "date": parsed_meta.get("display_date", ""),
-                    "year": (
-                        parsed_meta.get("display_date", "")[:4]
-                        if parsed_meta.get("display_date")
-                        else ""
-                    ),
-                    "month": (
-                        parsed_meta.get("display_date", "")[:7]
-                        if len(parsed_meta.get("display_date", "")) >= 7
-                        else ""
-                    ),
-                    "category": parsed_meta.get("category", ""),
-                    "drafter": parsed_meta.get("drafter", ""),
-                    "amount": cost_data.get("total", 0) if cost_data else 0,
-                    "file_size": pdf_meta.get("file_size", 0),
-                    "page_count": pdf_meta.get("page_count", 0),
-                    "text_preview": cleaned_text[:500],
-                    "keywords": [],
-                    "doctype": doctype,
-                    "display_date": parsed_meta.get("display_date", ""),
-                    "claimed_total": claimed_total,
-                    "sum_match": sum_match,
-                }
-                self.db.add_document(doc_metadata)
-                result["actions"].append("db_upserted")
+                try:
+                    # Path should be the final location after moving to processed
+                    final_path = self.processed_dir / pdf_path.name
+                    # Convert to absolute path before computing relative path
+                    final_path_abs = final_path.resolve()
+                    docs_dir_abs = (Path.cwd() / "docs").resolve()
+                    doc_metadata = {
+                        "path": str(final_path_abs.relative_to(docs_dir_abs)),
+                        "filename": pdf_path.name,
+                        "title": parsed_meta.get("title", pdf_path.stem),
+                        "date": parsed_meta.get("display_date", ""),
+                        "year": (
+                            parsed_meta.get("display_date", "")[:4]
+                            if parsed_meta.get("display_date")
+                            else ""
+                        ),
+                        "month": (
+                            parsed_meta.get("display_date", "")[:7]
+                            if len(parsed_meta.get("display_date", "")) >= 7
+                            else ""
+                        ),
+                        "category": parsed_meta.get("category", ""),
+                        "drafter": parsed_meta.get("drafter", ""),
+                        "amount": cost_data.get("total", 0) if cost_data else 0,
+                        "file_size": pdf_meta.get("file_size", 0),
+                        "page_count": pdf_meta.get("page_count", 0),
+                        "text_preview": cleaned_text[:500],
+                        "keywords": [],
+                        "doctype": doctype,
+                        "display_date": parsed_meta.get("display_date", ""),
+                        "claimed_total": claimed_total,
+                        "sum_match": sum_match,
+                    }
+                    self.db.add_document(doc_metadata)
+                    db_save_success = True
+                    result["actions"].append("db_upserted")
+                    logger.info(f"DB 저장 성공: {pdf_path.name}")
+                except Exception as e:
+                    logger.error(f"DB 저장 실패: {pdf_path.name} - {e}")
+                    result["actions"].append(f"db_failed({str(e)[:50]})")
+                    # DB 저장 실패 시 파일 이동하지 않음
 
-            # 10. processed/로 이동
-            if not self.dry_run:
+            elif not self.dry_run:
+                # DB 인스턴스가 없는 경우
+                logger.warning(f"DB 인스턴스 없음, 파일 이동 취소: {pdf_path.name}")
+
+            # 10. processed/로 이동 (DB 저장 성공 시에만)
+            if not self.dry_run and db_save_success:
                 self._move_file(pdf_path, self.processed_dir)
                 result["actions"].append("→processed")
+            elif not self.dry_run and not db_save_success:
+                logger.warning(f"DB 저장 실패로 파일 이동 취소: {pdf_path.name}")
+                result["actions"].append("→kept_in_incoming")
 
             result["status"] = "success"
             self.stats["success"] += 1

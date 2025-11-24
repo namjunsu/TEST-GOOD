@@ -30,7 +30,7 @@ from app.rag.parse.doctype import classify_document
 from app.rag.parse.parse_meta import MetaParser
 from app.rag.parse.parse_tables import TableParser
 from app.rag.preprocess.clean_text import TextCleaner
-from modules_legacy.metadata_db import MetadataDB
+from app.data.metadata_db import MetadataDB
 
 logger = get_logger(__name__)
 
@@ -123,8 +123,9 @@ class DocumentIngester:
             # v0 호환: ocr_enabled=True → fallback 모드
             self.ocr_mode = OCR_MODE_FALLBACK
         else:
-            # 기본값: off
-            self.ocr_mode = OCR_MODE_OFF
+            # 기본값: fallback (2024-11-24 변경: off → fallback)
+            # 텍스트 추출 실패 시 자동으로 OCR 실행
+            self.ocr_mode = OCR_MODE_FALLBACK
 
         # 하위 호환 속성 유지
         self.ocr_enabled = (self.ocr_mode != OCR_MODE_OFF)
@@ -432,23 +433,37 @@ class DocumentIngester:
 
             # 9. 메타DB 업서트 (실패 시 파일 이동 금지)
             db_save_success = False
+            # Determine year from display_date or filename (BEFORE try block)
+            year = None
+            if parsed_meta.get("display_date"):
+                year = parsed_meta.get("display_date", "")[:4]
+            else:
+                # Extract year from filename (e.g., 2024-01-15_...)
+                import re
+                year_match = re.match(r'^(\d{4})', pdf_path.name)
+                if year_match:
+                    year = year_match.group(1)
+
             if not self.dry_run and self.db:
                 try:
-                    # Path should be the final location after moving to processed
-                    final_path = self.processed_dir / pdf_path.name
-                    # Convert to absolute path before computing relative path
-                    final_path_abs = final_path.resolve()
+
+                    # Determine final path: year_YYYY/ if year available, else processed/
+                    if year:
+                        final_path = Path("docs") / f"year_{year}" / pdf_path.name
+                    else:
+                        final_path = self.processed_dir / pdf_path.name
+
+                    # Convert to relative path from docs/
                     docs_dir_abs = (Path.cwd() / "docs").resolve()
+                    final_path_abs = (Path.cwd() / final_path).resolve()
+                    relative_path = str(final_path_abs.relative_to(docs_dir_abs))
+
                     doc_metadata = {
-                        "path": str(final_path_abs.relative_to(docs_dir_abs)),
+                        "path": relative_path,
                         "filename": pdf_path.name,
                         "title": parsed_meta.get("title", pdf_path.stem),
                         "date": parsed_meta.get("display_date", ""),
-                        "year": (
-                            parsed_meta.get("display_date", "")[:4]
-                            if parsed_meta.get("display_date")
-                            else ""
-                        ),
+                        "year": year or "",
                         "month": (
                             parsed_meta.get("display_date", "")[:7]
                             if len(parsed_meta.get("display_date", "")) >= 7
@@ -466,10 +481,12 @@ class DocumentIngester:
                         "claimed_total": claimed_total,
                         "sum_match": sum_match,
                     }
-                    self.db.add_document(doc_metadata)
+                    doc_id = self.db.add_document(doc_metadata)
+                    if not doc_id or doc_id <= 0:
+                        raise RuntimeError(f"메타데이터 DB 저장 실패 (doc_id={doc_id})")
                     db_save_success = True
-                    result["actions"].append("db_upserted")
-                    logger.info(f"DB 저장 성공: {pdf_path.name}")
+                    result["actions"].append(f"db_upserted(id={doc_id})")
+                    logger.info(f"DB 저장 성공: {pdf_path.name} (id={doc_id})")
                 except Exception as e:
                     logger.error(f"DB 저장 실패: {pdf_path.name} - {e}")
                     result["actions"].append(f"db_failed({str(e)[:50]})")
@@ -479,10 +496,42 @@ class DocumentIngester:
                 # DB 인스턴스가 없는 경우
                 logger.warning(f"DB 인스턴스 없음, 파일 이동 취소: {pdf_path.name}")
 
-            # 10. processed/로 이동 (DB 저장 성공 시에만)
+            # 10. year_YYYY/ 또는 processed/로 이동 (DB 저장 성공 시에만)
             if not self.dry_run and db_save_success:
-                self._move_file(pdf_path, self.processed_dir)
-                result["actions"].append("→processed")
+                # Move to year_YYYY/ if year is available, else processed/
+                if year:
+                    year_dir = Path("docs") / f"year_{year}"
+                    year_dir.mkdir(parents=True, exist_ok=True)
+                    dest = year_dir / pdf_path.name
+
+                    # 목적지에 동일 파일명이 이미 존재하는 경우 처리
+                    if dest.exists():
+                        # 해시 비교 후 완전 동일하면 중복으로 보고 incoming만 삭제
+                        try:
+                            existing_hash = self._compute_hash(dest)
+                        except Exception as e:
+                            logger.error(f"기존 파일 해시 계산 실패: {dest} ({e})")
+                            existing_hash = None
+
+                        if existing_hash is not None and existing_hash == file_hash:
+                            logger.warning(f"중복 파일 (동일 해시), incoming만 삭제: {dest}")
+                            pdf_path.unlink(missing_ok=True)
+                            result["actions"].append("→already_exists_same_hash_skipped")
+                        else:
+                            # 내용이 다를 가능성: 자동 rename 대신 '충돌' 상태만 로그
+                            logger.error(
+                                f"year 폴더에 동일 이름 다른 파일 존재. 자동 rename 금지: src={pdf_path}, dest={dest}"
+                            )
+                            result["actions"].append("→conflict_existing_different_file")
+                            # incoming에 그대로 남겨서 수동 처리 유도
+                    else:
+                        # 목적지에 없으면 정상 이동
+                        shutil.move(str(pdf_path), str(dest))
+                        logger.info(f"이동: {pdf_path.name} → {dest}")
+                        result["actions"].append(f"→year_{year}")
+                else:
+                    self._move_file(pdf_path, self.processed_dir)
+                    result["actions"].append("→processed")
             elif not self.dry_run and not db_save_success:
                 logger.warning(f"DB 저장 실패로 파일 이동 취소: {pdf_path.name}")
                 result["actions"].append("→kept_in_incoming")

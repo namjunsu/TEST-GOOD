@@ -2,6 +2,10 @@
 streamlit>=1.50.0
 python-dotenv>=1.0.0
 
+# Web Framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+
 # Document Processing
 pdfplumber>=0.11.7
 pypdf>=6.1.2
@@ -27,6 +31,7 @@ numpy>=2.3.4
 pandas>=2.3.3
 tqdm>=4.67.1
 Pillow>=11.3.0
+PyYAML>=6.0.0
 
 # Logging
 loguru>=0.7.3

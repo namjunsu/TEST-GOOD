@@ -62,7 +62,9 @@ log INFO "MODEL_PATH 적용: $(basename "$MODEL_PATH")"
 log INFO "RETRIEVER_BACKEND: $RETRIEVER_BACKEND"
 
 # ---------- 연도 폴더 → incoming 동기화 + 인제스트 ----------
-if [[ "${SKIP_SYNC_INGEST:-0}" != "1" ]]; then
+# 기본값: 자동 실행 비활성화 (순환 복사 방지)
+# 필요 시 ENABLE_AUTO_SYNC=1 환경변수로 활성화
+if [[ "${ENABLE_AUTO_SYNC:-0}" == "1" ]]; then
   log INFO "="
   log INFO "Step 0: 연도 폴더 → incoming 동기화 시작..."
   "${PY}" scripts/sync_year_docs_to_incoming.py 2>&1 | tee -a "$LOG_FILE" || {
@@ -77,7 +79,7 @@ if [[ "${SKIP_SYNC_INGEST:-0}" != "1" ]]; then
   log SUCCESS "Step 1: ingest 완료"
   log INFO "="
 else
-  log INFO "SKIP_SYNC_INGEST=1 설정: Step 0/1 (동기화/ingest) 건너뜀"
+  log INFO "Auto sync/ingest 비활성화 (ENABLE_AUTO_SYNC=1 설정 시 활성화)"
 fi
 
 # ---------- BM25 인덱스 가드 (존재/정합성/자동복구) ----------

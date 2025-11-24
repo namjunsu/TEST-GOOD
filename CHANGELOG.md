@@ -1,5 +1,107 @@
 # Changelog
 
+## [2024-11-24-2] OCR Auto-Fallback & PPT Generation
+
+**Impact**: Text Extraction, Documentation, Presentations
+**Status**: Completed
+
+### Summary
+Enabled automatic OCR fallback for poorly-extracted PDFs and generated professional PowerPoint presentation materials.
+
+### Changes
+
+#### Text Extraction Improvements
+- **Auto-Fallback OCR**: Changed default `ocr_mode` from `off` to `fallback`
+  - Automatically triggers OCR when text extraction yields <300 chars/page
+  - Improves coverage from 87% to near-100% without manual intervention
+  - Location: `scripts/ingest_from_docs.py:126-128`
+
+- **OCR Reprocessing Script**: Created `scripts/reprocess_poor_docs_with_ocr.py`
+  - Identifies 62 poorly-extracted documents (<100 chars)
+  - Batch OCR reprocessing with progress tracking
+  - Dry-run mode for preview
+
+#### Presentation Materials
+- **PowerPoint Generator**: `scripts/create_ppt.py`
+  - 13-slide professional presentation
+  - Accurate performance metrics (removed speculative numbers)
+  - Korean bilingual support
+
+- **Updated Slides**:
+  - Removed unverified metrics (0.3s response time, 60% cache hit rate, 99.5% uptime)
+  - Added accurate stats: 87% text extraction, 13% OCR candidates, Dual-Server architecture
+  - File: `docs/발표자료/채널A_AI문서검색시스템.pptx` (40.9 KB)
+
+### Files Modified
+- `scripts/ingest_from_docs.py` - Auto-fallback OCR enabled
+- `scripts/create_ppt.py` - Performance metrics corrected
+- `CHANGELOG.md` - This entry
+
+### Files Created
+- `scripts/reprocess_poor_docs_with_ocr.py` - OCR batch reprocessing tool
+- `docs/발표자료/채널A_AI문서검색시스템.pptx` - Updated presentation (v2)
+
+### Technical Details
+- **OCR Threshold**: 300 characters/page
+- **Poor Extraction**: 62 documents (13%) with <100 chars
+- **Fallback Speed**: 50-100x slower than normal extraction (only used when needed)
+
+---
+
+## [2024-11-24] Documentation & Maintenance Update
+
+**Impact**: Documentation, Dependencies, Database
+**Status**: Completed
+
+### Summary
+Updated project documentation, cleaned up obsolete files, and stabilized database at 475 documents (2014-2025).
+
+### Changes
+
+#### Documentation
+- Created presentation materials in `docs/발표자료/`:
+  - `01_시스템_개요_쉬운설명.md` - Beginner-friendly system overview (Korean)
+  - `02_주요코드_설명.md` - Detailed code explanations
+  - `03_PPT발표자료.md` - 20-slide PPT template
+  - `README.md` - Presentation preparation guide
+- Archived 20 outdated validation/audit reports to `docs/archive_old/`
+- Updated `README.md` with current system stats (475 docs, WAL mode, OCR support)
+
+#### Dependencies
+- Updated `requirements.txt` with missing packages:
+  - Added `fastapi>=0.115.0` (web API framework)
+  - Added `uvicorn[standard]>=0.30.0` (ASGI server)
+  - Added `PyYAML>=6.0.0` (YAML parser)
+- Regenerated `requirements.lock.txt` from `.venv` (190 packages)
+
+#### Database
+- Stabilized at 475 documents (added 3 missing 2025 docs)
+- Fixed year classification bug (documents showing as "미상년")
+- Standardized file paths to `docs/year_YYYY/` format
+- Removed 5 obsolete backup files (~15.5MB freed)
+
+#### Scripts Cleanup
+- Deleted 15 obsolete scripts from `scripts/`:
+  - Migration scripts (model codes, exact match indexes)
+  - One-time update scripts (OCR dates, DVR extraction)
+  - Cleanup/recovery scripts (completed tasks)
+
+### Files Modified
+- `README.md` - Updated document count and system info
+- `requirements.txt` - Added 3 missing packages
+- `requirements.lock.txt` - Regenerated with 190 packages
+- `CHANGELOG.md` - This entry
+
+### Files Created
+- `docs/발표자료/` (4 files, ~40KB total)
+
+### Files Deleted
+- 15 obsolete scripts (~150KB)
+- 5 database backups (~15.5MB)
+- 20 old reports moved to archive
+
+---
+
 ## [2025-10-31] Operations Stabilization Package (Option A)
 
 **Impact**: Operations, Quality Assurance, Data Extraction

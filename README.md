@@ -52,11 +52,12 @@ streamlit run web_interface.py --port 8501
 
 ## 📊 System Information
 
-- **Documents**: 483 PDFs indexed
-- **Database**: SQLite with FTS5
+- **Documents**: 475 PDFs indexed (2014-2025)
+- **Database**: SQLite with WAL mode
 - **Architecture**: RAG (Retrieval-Augmented Generation)
-- **Language**: Korean document support
-- **Python**: 3.12+
+- **Language**: Korean document support with OCR
+- **Python**: 3.11+
+- **Last Updated**: 2024-11-24
 
 ## 🎯 Query Modes
 

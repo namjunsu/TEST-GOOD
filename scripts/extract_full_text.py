@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 완전한 텍스트 추출 스크립트
 - PDF에서 전체 텍스트 추출 (500자 제한 없음)

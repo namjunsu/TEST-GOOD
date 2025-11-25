@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 Build code dependency map and module atlas for the codebase.
 Generates import graphs and module metadata.

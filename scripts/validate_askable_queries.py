@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 DB 기반 질문 프리셋 검증 스크립트
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 연도 폴더(year_YYYY)에 넣어둔 신규 PDF를
 docs/incoming/으로 복사해 주는 동기화 스크립트.

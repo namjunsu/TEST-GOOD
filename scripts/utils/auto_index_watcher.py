@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 자동 인덱싱 감시 시스템
 docs/ 폴더에 신규 PDF가 추가되면 자동으로 인덱싱

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 문서 투입 인덱싱 CLI
 docs/incoming/*.pdf를 스캔하여 메타DB 및 벡터 인덱스에 추가합니다.
@@ -368,8 +368,8 @@ class DocumentIngester:
                 except (IndexError, AttributeError):
                     logger.debug("작성일자 그룹 추출 실패")
 
-            # 기안자 추출
-            drafter_match = re.search(r"기안자\s+([가-힣]{2,4})", raw_text)
+            # 기안자 추출 (다양한 구분자 허용: 공백, 탭, ㅣ, |)
+            drafter_match = re.search(r"기안자[\s\|ㅣ]+([가-힣]{2,4})", raw_text)
             if drafter_match:
                 try:
                     korean_fields["기안자"] = drafter_match.group(1)

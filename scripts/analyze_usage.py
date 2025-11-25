@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 Analyze code usage by tracing imports from entry points.
 Identifies used and unused files through dependency analysis.

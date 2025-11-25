@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """향상된 OCR 처리기 - 2017년 문서 재처리"""
 
 import pytesseract

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 부분 재인덱싱 스크립트 - 금액 필드만 재추출
 - 이상치 doc_id 목록을 읽어서 금액만 재추출

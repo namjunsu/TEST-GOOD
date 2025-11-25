@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 Convert DOT file to HTML-based graph visualization.
 Alternative to graphviz when dot binary is not available.

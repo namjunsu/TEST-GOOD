@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """모델/부품 코드 검색 검증 스크립트
 
 suites/model_codes.yaml 테스트 케이스 실행 및 메트릭 산출

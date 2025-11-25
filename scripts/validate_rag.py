@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 RAG Pipeline Quality Assurance Validator
 파싱 커버리지, 스키마 적합도, 인용률 검증

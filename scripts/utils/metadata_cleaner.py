@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 metadata.db Cleaner - Stale 레코드 정리 유틸리티
 물리적으로 존재하지 않는 파일의 메타데이터를 정리합니다.

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 기존 문서 OCR 재처리 스크립트
 페이지당 평균 300자 미만인 문서를 OCR로 재처리합니다.

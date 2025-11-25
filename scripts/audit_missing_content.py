@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 결손 문서 점검 스크립트
 content가 비어있거나 짧은 문서를 찾아서 재인덱싱 큐에 등록

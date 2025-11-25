@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """
-SQLite 연결 유틸리티 v2.0
-busy_timeout, 캐시 튜닝, 스레드 내성을 갖춘 공용 메타DB 커넥터
+SQLite 연결 유틸리티 v2.1
+busy_timeout, WAL 모드, 트랜잭션 컨텍스트를 갖춘 공용 메타DB 커넥터
 
 핵심:
 1. check_same_thread=False: 멀티스레드 환경 지원 (단, 커넥션 공유 금지)
 2. executescript: PRAGMA 일괄 설정으로 연결 오버헤드 감소
-3. journal_mode는 DB 파일 설정을 존중 (코드에서 강제 변경하지 않음)
-4. 환경변수 제어: SQLITE_SYNC_MODE, SQLITE_CACHE_SIZE로 동기화·캐시 설정 조정
+3. journal_mode=WAL: 동시성 개선 및 안정성 강화
+4. foreign_keys=ON: 무결성 제약 조건 강제
+5. metadata_txn: 트랜잭션 컨텍스트 매니저 (롤백 문제 방지)
 """
 import logging
 import os
 import sqlite3
 import time
+from contextlib import contextmanager
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -62,12 +65,15 @@ def connect_metadata(
         check_same_thread=False,   # 멀티스레드 접근 허용
     )
 
-    # PRAGMA 일괄 설정 (성능 최적화)
-    # Note: journal_mode를 강제하지 않음 - 기존 설정 유지
+    # PRAGMA 일괄 설정 (성능 + 안정성 최적화)
+    # WAL 모드: 동시성 개선 및 롤백 문제 방지
+    # foreign_keys: 무결성 제약 조건 강제
     conn.executescript(f"""
+        PRAGMA journal_mode = WAL;
         PRAGMA synchronous = {sync_mode};
         PRAGMA busy_timeout = 5000;
         PRAGMA cache_size = -{cache_size};
+        PRAGMA foreign_keys = ON;
     """)
 
     # Row Factory 설정 (dict-like access)
@@ -81,6 +87,54 @@ def connect_metadata(
     )
 
     return conn
+
+
+@contextmanager
+def metadata_txn(mode: str = "IMMEDIATE", db_path: Optional[str] = None):
+    """
+    트랜잭션 컨텍스트 매니저 (문서 개수 롤백 문제 방지)
+
+    Args:
+        mode: 트랜잭션 모드
+            - "IMMEDIATE": 쓰기 락 확보 (권장, 일반 쓰기 작업용)
+            - "EXCLUSIVE": 독점 락 (대량 작업용, 재인덱싱 등)
+            - "DEFERRED": 읽기 전용 또는 지연 락 (비권장)
+        db_path: DB 경로 (None이면 기본값)
+
+    Yields:
+        sqlite3.Connection: 트랜잭션이 시작된 연결
+
+    Example:
+        ```python
+        from app.utils.sqlite_helpers import metadata_txn
+
+        # 일반 쓰기
+        with metadata_txn(mode="IMMEDIATE") as conn:
+            conn.execute("INSERT INTO documents (...) VALUES (...)")
+            # 예외 발생 시 자동 rollback, 정상 시 commit
+
+        # 대량 작업
+        with metadata_txn(mode="EXCLUSIVE") as conn:
+            for doc in docs:
+                conn.execute("INSERT INTO documents (...) VALUES (...)", doc)
+        ```
+
+    Important:
+        - autocommit 모드(isolation_level=None)에서는 수동 트랜잭션 필요
+        - 예외 발생 시 자동 rollback
+        - 정상 완료 시 자동 commit
+    """
+    conn = connect_metadata(db_path, enable_row_factory=False)
+    try:
+        conn.execute(f"BEGIN {mode}")
+        yield conn
+        conn.commit()
+    except Exception as e:
+        logger.error(f"metadata_txn rollback ({mode}): {e}")
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def _cleanup_stale_wal(db_path: str, max_age_hours: int = 24) -> None:

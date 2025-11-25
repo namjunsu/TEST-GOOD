@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 추출된 텍스트에서 불필요한 URL과 노이즈를 제거하는 스크립트
 """

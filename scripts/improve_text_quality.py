@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 P1: 텍스트 품질 개선 스크립트
 - 텍스트 누락/부족 문서를 대상으로 OCR 재처리

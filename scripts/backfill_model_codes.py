@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """기존 documents에서 model_codes 백필
 
 data/extracted/*.txt에서 텍스트를 읽어 model_codes 테이블을 채웁니다.

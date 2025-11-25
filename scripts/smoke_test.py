@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 기능 스모크 테스트 (실사용 시나리오 6건)
 실제 RAG 시스템을 호출하여 기능 검증

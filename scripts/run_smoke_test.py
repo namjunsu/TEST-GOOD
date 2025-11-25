@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 E2E 스모크 테스트: Evidence 출력 및 검색 정확도 검증
 """

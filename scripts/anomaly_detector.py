@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """메타데이터 이상 감지 및 알림 시스템
 
 메타데이터 품질 이상을 감지하고 알림을 발송합니다.

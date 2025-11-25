@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 Security and License Scanner for Repository Hygiene.
 Generates comprehensive license report for all dependencies.

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 데이터베이스 무결성 검증 도구
 - 파일 존재 여부 검증

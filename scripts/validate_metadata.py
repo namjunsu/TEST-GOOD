@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """메타데이터 검증 및 동기화 상태 점검 스크립트
 
 정기적으로 실행하여 메타데이터 품질을 모니터링합니다.

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 RAG 인제스트 드라이런 (E2E 진단 전용, 삭제/변경 금지)
 

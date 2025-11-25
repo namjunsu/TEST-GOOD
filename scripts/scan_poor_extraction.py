@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """모든 문서의 텍스트 추출 품질 검사"""
 
 import sys

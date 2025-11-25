@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 문서 목록 조회 스크립트
 metadata.db에 인덱싱된 문서 정보를 깔끔하게 출력합니다.

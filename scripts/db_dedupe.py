@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 데이터베이스 중복 제거 도구
 content_hash 기준으로 중복 문서를 탐지하고 제거합니다.

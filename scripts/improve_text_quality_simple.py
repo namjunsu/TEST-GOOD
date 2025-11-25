@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 P1: 텍스트 품질 개선 (간소화 버전)
 - pdfplumber로 전체 페이지 재추출

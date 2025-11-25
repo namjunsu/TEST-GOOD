@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 LLM Preload Script
 Preloads the LLM model at server startup to reduce first-query latency

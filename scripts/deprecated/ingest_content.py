@@ -1,7 +1,31 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
-컨텐츠 적재 스크립트: OCR 캐시에서 텍스트 추출 → documents 테이블 + documents_fts 적재
+[DEPRECATED - 2025-11-24]
+
+이 스크립트는 scripts/ingest_from_docs.py로 통합되었습니다.
+
+→ 사용 금지: 대신 scripts/ingest_from_docs.py를 사용하십시오.
+  예: ./scripts/ingest_from_docs.py
+
+통합 사유:
+- OCR 캐시 기반 적재 기능은 ingest_from_docs.py의 --use-cache 옵션으로 흡수됨
+- 중복 코드 제거 및 유지보수성 향상
 """
+
+import sys
+raise RuntimeError(
+    "\n"
+    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    "  [DEPRECATED] ingest_content.py는 사용 중지되었습니다.\n"
+    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    "\n"
+    "  대신 사용하세요:\n"
+    "    ./scripts/ingest_from_docs.py\n"
+    "\n"
+    "  상세 정보:\n"
+    "    docs/dev/SCRIPTS_INVENTORY.md 참조\n"
+    "\n"
+)
 
 import json
 import sqlite3

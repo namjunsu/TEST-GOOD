@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """
 채널A AI 문서검색시스템 PowerPoint 생성 스크립트
 Markdown 파일을 읽어서 실제 .pptx 파일 생성

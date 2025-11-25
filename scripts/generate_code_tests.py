@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """실제 DB 기반 코드 검색 테스트 자동 생성
 
 model_codes 테이블에서 상위 N개 코드를 추출하여

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
 """스캔 보고서 기반 일괄 OCR 처리"""
 
 import argparse

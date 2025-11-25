@@ -28,6 +28,13 @@ streamlit.log
 .streamlit/
 .cache/
 *.cache
+
+# SQLite WAL files
+*.db-shm
+*.db-wal
+
+# BM25 index artifacts
+var/index/
 .ocr_cache.json
 cache/
 indexes/

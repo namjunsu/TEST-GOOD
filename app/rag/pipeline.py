@@ -17,20 +17,29 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol
 
-from app.core.errors import ERROR_MESSAGES, ErrorCode, ModelError, SearchError
+from app.core.errors import (
+    ERROR_MESSAGES,
+    ErrorCode,
+    ModelError,
+    SearchError,
+)
 from app.core.logging import get_logger
 from app.prompts.document_prompts import (
     build_detailed_prompt,
     build_qa_prompt,
     build_section_prompt,
-    build_summary_prompt,
 )
-from app.rag.cache_manager import cache_query_result, get_cache_stats, get_cached_result
-from app.rag.domain_synonyms import expand_for_strict_content
+from app.rag.cache_manager import cache_query_result, get_cached_result
 from app.rag.persistent_cache import cache_query_result_persistent, get_cached_result_persistent
 from app.rag.query_router import QueryMode, QueryRouter
 from app.utils.sqlite_helpers import connect_metadata
 from app.utils.text_normalizer import detect_section, is_detailed_mode, normalize_query
+from app.config.settings import settings
+from config.constants import SearchConfig
+from app.rag.utils.text import (
+    get_query_token_count,
+    norm_chunk_text as _norm_chunk_text,
+)
 
 logger = get_logger(__name__)
 
@@ -152,23 +161,23 @@ def route_query(query: str) -> Dict[str, Any]:
         "max_context_tokens": 3200 if detailed else 2000,
     }
 
-    # 5) 프롬프트/토큰
+    # 5) 프롬프트/토큰 (settings 중앙 설정 사용)
     if detailed:
         mode = "DETAILED"
         prompt_type = "detailed"
-        max_tokens = int(os.getenv("LLM_MAX_TOKENS_DETAILED", "1500"))
+        max_tokens = settings.LLM_MAX_TOKENS_DETAILED
     elif section:
         mode = "SECTION"
         prompt_type = "section"
-        max_tokens = int(os.getenv("LLM_MAX_TOKENS_SECTION", "900"))
+        max_tokens = settings.LLM_MAX_TOKENS_SECTION
     elif needs_summary:
         mode = "SUMMARY"
         prompt_type = "summary"
-        max_tokens = int(os.getenv("LLM_MAX_TOKENS_SUMMARY", "600"))
+        max_tokens = settings.LLM_MAX_TOKENS_SUMMARY
     else:
         mode = "QA"
         prompt_type = "qa"
-        max_tokens = int(os.getenv("LLM_MAX_TOKENS_QA", "800"))
+        max_tokens = settings.LLM_MAX_TOKENS_QA
 
     logger.info(
         f"🎯 라우팅 결정: mode={mode}, detailed={detailed}, section={section}, "
@@ -220,16 +229,7 @@ def has_domain_keyword(query: str) -> bool:
     return False
 
 
-def get_query_token_count(query: str) -> int:
-    """간이 토큰 카운트 (한글/영문/숫자/기호 분리)"""
-    # 정규식: [한글 블록]+, [영문숫자하이픈]+를 각각 1토큰으로 계산
-    tokens = re.findall(r'[A-Za-z0-9\-_/]+|[가-힣]+', query)
-    return len(tokens)
-
-
-def _norm_chunk_text(r: Dict[str, Any]) -> str:
-    """청크 텍스트 정규화 (snippet/content/text 통일)"""
-    return (r.get("snippet") or r.get("content") or r.get("text") or "").lower()
+# get_query_token_count, _norm_chunk_text → app.rag.utils.text에서 import
 
 
 def get_keyword_coverage(query: str, results: list) -> int:
@@ -334,9 +334,9 @@ def _encode_file_ref(filename: str) -> Optional[str]:
 
     return None
 
-# 진단 모드 설정
-DIAG_RAG = os.getenv("DIAG_RAG", "false").lower() == "true"
-DIAG_LOG_LEVEL = os.getenv("DIAG_LOG_LEVEL", "INFO").upper()
+# 진단 모드 설정 (settings 중앙 설정 사용)
+DIAG_RAG = settings.DIAG_RAG
+DIAG_LOG_LEVEL = settings.DIAG_LOG_LEVEL
 
 
 # ============================================================================
@@ -506,19 +506,26 @@ class RAGPipeline:
         # 🔒 Closed-World Validation: 고유 기안자 캐싱
         self.known_drafters = self._load_known_drafters()
 
+        # 🎯 Handler 초기화 (Strangler Fig 패턴)
+        from app.rag.handlers import SearchHandler, DocumentHandler, CostSumHandler
+        self._search_handler = SearchHandler(self)
+        self._document_handler = DocumentHandler(self)
+        self._cost_sum_handler = CostSumHandler(self)
+
         logger.info(f"RAG Pipeline initialized (known_drafters: {len(self.known_drafters)}명)")
 
     def _load_full_text_if_short(self, filename: str, snippet: str) -> str:
         """스니펫이 짧으면 data/extracted에서 전체 텍스트 로드"""
-        EXTRACTED_DIR = Path(os.getenv("EXTRACTED_DIR", "data/extracted"))
-        MIN_SNIPPET_LEN = int(os.getenv("DOC_ANCHOR_MIN_SNIPPET", "1200"))
+        # settings 중앙 설정 사용
+        extracted_dir = settings.EXTRACTED_DIR
+        min_snippet_len = settings.DOC_ANCHOR_MIN_SNIPPET
 
-        if len(snippet) >= MIN_SNIPPET_LEN:
+        if len(snippet) >= min_snippet_len:
             return snippet
 
         # 파일명에서 확장자 제거 후 .txt 찾기
         stem = os.path.splitext(filename)[0]
-        txt_path = EXTRACTED_DIR / f"{stem}.txt"
+        txt_path = extracted_dir / f"{stem}.txt"
 
         if txt_path.exists():
             try:
@@ -658,7 +665,7 @@ class RAGPipeline:
 
             # 🎯 STEP 2: 모드 결정 로직
             # CRITICAL: Determine mode BEFORE context hydration to apply mode-aware context limits
-            mode_env = os.getenv('MODE', 'AUTO').upper()
+            mode_env = settings.MODE
             top_score = results[0].get('score', 0.0) if results else 0.0
             metrics["top_score"] = top_score
 
@@ -674,10 +681,10 @@ class RAGPipeline:
                     has_keyword = has_domain_keyword(query)
                     token_count = get_query_token_count(query)
 
-                    # 환경변수에서 절대값 임계값 읽기
-                    use_absolute = os.getenv('RAG_MIN_SCORE_POLICY', 'normalized') == 'absolute'
-                    bm25_min = float(os.getenv('BM25_MIN_ABS', '5.0'))
-                    vec_min = float(os.getenv('VEC_MIN_ABS', '0.25'))
+                    # settings 중앙 설정에서 절대값 임계값 읽기
+                    use_absolute = settings.RAG_MIN_SCORE_POLICY == 'absolute'
+                    bm25_min = settings.BM25_MIN_ABS
+                    vec_min = settings.VEC_MIN_ABS
 
                     # 절대값 정책 사용 시 (권장)
                     if use_absolute:
@@ -690,7 +697,7 @@ class RAGPipeline:
 
                         # 🔒 Coverage Gate: 검색 결과에서 실제로 키워드가 발견되는지 확인
                         keyword_coverage = get_keyword_coverage(query, results)
-                        min_coverage = int(os.getenv('MIN_KEYWORD_COVERAGE', '2'))
+                        min_coverage = settings.MIN_KEYWORD_COVERAGE
                         pass_coverage = keyword_coverage >= min_coverage
 
                         should_use_rag = pass_abs_threshold and pass_domain and pass_length and pass_coverage
@@ -705,7 +712,7 @@ class RAGPipeline:
                         )
                     else:
                         # 기존 정규화 정책 (fallback)
-                        rag_min_score = float(os.getenv('RAG_MIN_SCORE', '0.35'))
+                        rag_min_score = settings.RAG_MIN_SCORE
                         metrics["mode"] = "rag" if top_score >= rag_min_score else "chat"
                         logger.info(
                             f"🎯 AUTO 모드 (정규화): top_score={top_score:.3f}, "
@@ -728,7 +735,11 @@ class RAGPipeline:
                 from app.rag.utils.context_hydrator import hydrate_context
             except Exception as e:
                 logger.warning(f"⚠️ hydrate_context import 실패, 폴백 사용: {e}")
-                def hydrate_context(chunks, max_len=10000, mode="rag"):
+                def hydrate_context(
+                    chunks: List[Dict[str, Any]],
+                    max_len: int = 10000,
+                    mode: str = "rag"
+                ) -> tuple[str, Dict[str, Any]]:
                     """안전 폴백: 청크 스니펫 결합"""
                     parts = []
                     for c in chunks:
@@ -1156,53 +1167,14 @@ class RAGPipeline:
         return result["text"]
 
     def _answer_search(self, query: str) -> dict:
-        """문서 검색 (키워드 기반 BM25 검색, 상세 정보 포함)
+        """문서 검색 - SearchHandler로 위임 (Strangler Fig 패턴)"""
+        return self._search_handler.handle(query)
 
-        SEARCH 모드 핸들러로, 사용자의 키워드를 기반으로 관련 문서를 검색하고
-        메타데이터(기안자, 날짜, 비용)와 함께 카드 형식으로 반환합니다.
+    def _answer_search_legacy(self, query: str) -> dict:
+        """[LEGACY] 문서 검색 - 점진적 마이그레이션용 백업
 
-        처리 흐름:
-            1. 불용어 제거하여 검색 키워드 추출
-            2. BM25 retriever로 상위 10개 문서 검색
-            3. 각 문서의 메타데이터를 DB에서 조회
-            4. 카드 형식으로 포맷팅 (제목, 기안자, 날짜, 비용, 미리보기)
-
-        Args:
-            query (str): 사용자 질의.
-                예: "중계차 카메라 렌즈관련 문서 찾아줘"
-                    "유인혁 기안서 문서 찾아줘"
-                    "렌즈 오버홀 문서 있어?"
-
-        Returns:
-            dict: 표준 응답 구조
-                {
-                    "mode": "SEARCH",
-                    "text": str,  # 포맷팅된 카드 목록
-                    "files": list[str],  # 파일명 목록
-                    "count": int,  # 검색된 문서 수
-                    "citations": list[dict],  # Evidence 정보
-                    "evidence": list[dict],  # 하위 호환용 (citations와 동일)
-                    "status": {
-                        "retrieved_count": int,
-                        "selected_count": int,
-                        "found": bool
-                    }
-                }
-
-        Example:
-            >>> pipeline._answer_search("중계차 카메라 문서 찾아줘")
-            {
-                "mode": "SEARCH",
-                "text": "📄 **'중계차 카메라' 관련 문서 (3건)**\\n\\n1. **중계차 카메라 렌즈 오버홀**\\n   📋 기안서 | 📅 2024-03-15 | ✍ 유인혁\\n   💰 2,500,000원\\n   📝 Canon HJ40x10B 렌즈 오버홀...",
-                "files": ["2024-03-15_중계차_카메라_렌즈_오버홀.pdf", ...],
-                "count": 3,
-                ...
-            }
-
-        Note:
-            - 최대 10개 문서까지 반환
-            - 불용어: "문서", "파일", "기안서", "찾아줘", "찾아", "검색", "관련", "좀", "해줘"
-            - 검색 실패 시 count=0, found=False 반환
+        NOTE: 이 메서드는 SearchHandler로 마이그레이션 완료 후 삭제 예정.
+        문제 발생 시 _answer_search에서 이 메서드를 직접 호출하여 롤백 가능.
         """
         import re
 
@@ -1234,7 +1206,7 @@ class RAGPipeline:
             # 🔧 "리스트 보여줘" 의도나 기안자 필터가 있으면 검색 개수를 늘림
             needs_all = any(kw in query.lower() for kw in ["전부", "모두", "모든", "전체", "all", "몇", "몆", "개수", "총"])
             wants_list = any(kw in query.lower() for kw in ["리스트", "목록", "보여", "알려"])
-            search_top_k = 200 if (needs_all or wants_list or drafter_filter) else 10  # 131개 문서도 커버하도록 200으로 증가
+            search_top_k = SearchConfig.ALL_DOCS_TOP_K if (needs_all or wants_list or drafter_filter) else SearchConfig.SEARCH_TOP_K
             logger.info(f"🔍 검색 top_k: {search_top_k} (needs_all={needs_all}, wants_list={wants_list}, has_drafter={bool(drafter_filter)})")
 
             # BM25 검색 실행
@@ -1418,9 +1390,9 @@ class RAGPipeline:
 
             if is_count_query:
                 # 개수만 간단히 답변
-                answer_text = f"**'{keywords}' 관련 문서는 총 {len(doc_details)}개**입니다.\n\n" + "\n\n".join(cards[:10])
-                if len(cards) > 10:
-                    answer_text += f"\n\n... 외 {len(cards) - 10}개 문서 (\"전부 보여줘\"를 입력하면 모든 문서를 볼 수 있습니다)"
+                answer_text = f"**'{keywords}' 관련 문서는 총 {len(doc_details)}개**입니다.\n\n" + "\n\n".join(cards[:SearchConfig.CARD_DISPLAY_LIMIT])
+                if len(cards) > SearchConfig.CARD_DISPLAY_LIMIT:
+                    answer_text += f"\n\n... 외 {len(cards) - SearchConfig.CARD_DISPLAY_LIMIT}개 문서 (\"전부 보여줘\"를 입력하면 모든 문서를 볼 수 있습니다)"
             else:
                 # 일반 검색 결과
                 answer_text = f"📄 **'{keywords}' 관련 문서 ({len(doc_details)}건)**\n\n" + "\n\n".join(cards)
@@ -1452,20 +1424,20 @@ class RAGPipeline:
                         chunks = self.retriever.search(filename, top_k=1)
                         if chunks:
                             chunk_text = _norm_chunk_text(chunks[0])
-                            snippet = chunk_text[:400] if chunk_text else ""
+                            snippet = chunk_text[:SearchConfig.SNIPPET_MAX_LENGTH] if chunk_text else ""
                     except Exception as e:
                         logger.debug(f"⚠️ BM25 청크 폴백 실패 ({filename}): {e}")
 
                 # 여전히 없으면 제목 사용
                 if not snippet:
-                    snippet = title[:160]
+                    snippet = title[:SearchConfig.TITLE_MAX_LENGTH]
 
                 evidence.append({
                     "doc_id": filename,
                     "filename": filename,
                     "file_path": file_path_str,
                     "page": 1,
-                    "snippet": snippet[:400],  # 최대 400자
+                    "snippet": snippet[:SearchConfig.SNIPPET_MAX_LENGTH],
                     "ref": None,
                     "meta": {
                         "filename": filename,
@@ -1506,238 +1478,17 @@ class RAGPipeline:
             }
 
     def _answer_search_content_only(self, query: str) -> dict:
-        """정밀 내용 검색 (2025-11-19 추가)
-
-        사용자가 "문서내용에 X 들어간 문서만" 같은 정밀 검색을 요청했을 때,
-        QueryExpander/파일명 보너스/메타데이터 라우팅을 비활성화하고
-        BM25 기반으로 본문에 실제로 키워드가 포함된 문서만 반환합니다.
-
-        Args:
-            query (str): 사용자 질의.
-                예: "문서내용에 티비로직이 들어간 문서만"
-                    "내용에 SPG9000 포함된 문서"
-                    "본문에 ECO8000 있는 문서"
-
-        Returns:
-            dict: 표준 응답 구조
-                {
-                    "mode": "SEARCH_CONTENT_ONLY",
-                    "text": str,  # 포맷팅된 카드 목록
-                    "files": list[str],  # 파일명 목록
-                    "count": int,  # 검색된 문서 수
-                    "citations": list[dict],  # Evidence 정보
-                    "evidence": list[dict],  # 하위 호환용 (citations와 동일)
-                    "status": {
-                        "retrieved_count": int,
-                        "selected_count": int,
-                        "found": bool
-                    }
-                }
-        """
-        import re
-
-        from app.data.metadata_db import MetadataDB
-
-        try:
-            # 검색 키워드 추출 (불용어 제거)
-            # 2025-11-19: 단어 경계 고려 (젠하이저 → 젠하 저 방지)
-            stop_words = ["문서", "파일", "기안서", "찾아줘", "찾아", "검색", "관련", "좀", "해줘",
-                          "내용", "본문", "들어간", "포함", "포함된", "있는", "만"]
-            # 조사는 단어 경계에서만 제거 (앞뒤 공백/시작/끝 확인)
-            postpositions = [" 에 ", " 에서 ", " 이 ", " 가 ", " 을 ", " 를 "]
-
-            keywords = " " + query + " "  # 앞뒤 공백 추가
-            for word in stop_words:
-                keywords = keywords.replace(word, " ")
-            for postposition in postpositions:
-                keywords = keywords.replace(postposition, " ")
-            keywords = keywords.strip()
-
-            # 빈 키워드 검증 (2025-11-19: 안전장치)
-            if not keywords:
-                logger.warning("⚠️ 정밀 내용 검색: 불용어 제거 후 키워드가 비어있음")
-                return {
-                    "mode": "SEARCH_CONTENT_ONLY",
-                    "text": (
-                        "⚠️ **정밀 내용 검색을 위해서는 검색할 키워드가 필요합니다.**\n\n"
-                        "예시:\n"
-                        "- 문서내용에 **티비로직** 들어간 문서만\n"
-                        "- 내용에 **SPG9000** 포함된 문서\n"
-                        "- 본문에 **ECO8000** 있는 문서만"
-                    ),
-                    "files": [],
-                    "count": 0,
-                    "citations": [],
-                    "evidence": [],
-                    "status": {
-                        "retrieved_count": 0,
-                        "selected_count": 0,
-                        "found": False,
-                    },
-                }
-
-            # 🔧 도메인 동의어 확장 (2025-11-19 추가)
-            # QueryExpander 없이도 브랜드/모델명의 한영/대소문자 변형 처리
-            expanded_query = expand_for_strict_content(keywords)
-
-            logger.info(f"🎯 정밀 내용 검색: raw='{keywords}', expanded='{expanded_query}'")
-
-            # 🔥 CRITICAL: strict_content=True로 검색 (QueryExpander/파일명보너스 비활성화)
-            if not hasattr(self.retriever, 'search'):
-                logger.error("❌ Retriever에 search 메서드가 없습니다")
-                return {
-                    "mode": "SEARCH_CONTENT_ONLY",
-                    "text": "검색 기능을 사용할 수 없습니다.",
-                    "files": [],
-                    "count": 0,
-                    "citations": [],
-                    "evidence": [],
-                    "status": {
-                        "retrieved_count": 0,
-                        "selected_count": 0,
-                        "found": False
-                    }
-                }
-
-            # strict_content=True로 정밀 검색 실행 (동의어 확장된 쿼리 사용)
-            search_results = self.retriever.search(expanded_query, top_k=50, strict_content=True)
-
-            if not search_results:
-                logger.info("⚠️ 정밀 내용 검색 결과 없음")
-                return {
-                    "mode": "SEARCH_CONTENT_ONLY",
-                    "text": f"📄 **'{keywords}' 관련 문서 (0건)**\n\n검색 결과가 없습니다.",
-                    "files": [],
-                    "count": 0,
-                    "citations": [],
-                    "evidence": [],
-                    "status": {
-                        "retrieved_count": 0,
-                        "selected_count": 0,
-                        "found": False
-                    }
-                }
-
-            # DB에서 메타데이터 조회 (중복 제거 포함)
-            db = MetadataDB()
-            doc_details = []
-
-            # 파일명 중복 제거 (2025-11-19: 안전장치)
-            filenames = []
-            seen_filenames = set()
-            for r in search_results:
-                fname = r.get("filename")
-                if not fname:
-                    continue
-                if fname in seen_filenames:
-                    continue
-                seen_filenames.add(fname)
-                filenames.append(fname)
-
-            for filename in filenames[:10]:  # 최대 10개
-                conn = db._get_conn()
-                cursor = conn.execute("SELECT * FROM documents WHERE filename = ? LIMIT 1", [filename])
-                row = cursor.fetchone()
-
-                if row:
-                    doc = dict(row)
-                    doc_details.append({
-                        "filename": filename,
-                        "title": doc.get("title", filename),
-                        "category": doc.get("category", "기안서"),
-                        "date": doc.get("display_date") or doc.get("date", "날짜 없음"),
-                        "drafter": doc.get("drafter", "작성자 미상"),
-                        "claimed_total": doc.get("claimed_total", 0),
-                        "text_preview": doc.get("text_preview", "")[:100],
-                        "path": doc.get("path", "")
-                    })
-
-            # 응답 포맷팅 (카드 형식)
-            response_text = f"📄 **'{keywords}' 내용 포함 문서 ({len(doc_details)}건)**\n\n"
-
-            for i, doc in enumerate(doc_details, 1):
-                title = doc["title"] or doc["filename"]
-                category_emoji = "📋" if "기안서" in doc["category"] else "📄"
-                drafter_str = f"✍ {doc['drafter']}" if doc["drafter"] else ""
-                date_str = f"📅 {doc['date']}" if doc["date"] else ""
-
-                meta_parts = [p for p in [category_emoji + " " + doc["category"], date_str, drafter_str] if p]
-                meta_line = " | ".join(meta_parts)
-
-                response_text += f"**{i}.** {title}\n"
-                if meta_line:
-                    response_text += f"   {meta_line}\n"
-
-                # 금액 표시
-                if doc["claimed_total"]:
-                    response_text += f"   💰 {doc['claimed_total']:,}원\n"
-
-                # 미리보기
-                if doc["text_preview"]:
-                    response_text += f"   📝 {doc['text_preview']}...\n"
-
-                response_text += "\n"
-
-            # Evidence 구성
-            citations = []
-            for doc in doc_details:
-                citations.append({
-                    "doc_id": doc["filename"],
-                    "filename": doc["filename"],
-                    "page": 1,
-                    "snippet": doc["text_preview"],
-                    "file_path": doc["path"],
-                    "meta": {
-                        "filename": doc["filename"],
-                        "date": doc["date"],
-                        "drafter": doc["drafter"],
-                        "category": doc["category"]
-                    }
-                })
-
-            logger.info(f"✅ 정밀 내용 검색 완료: {len(doc_details)}건")
-
-            return {
-                "mode": "SEARCH_CONTENT_ONLY",
-                "text": response_text,
-                "files": filenames[:10],
-                "count": len(doc_details),
-                "citations": citations,
-                "evidence": citations,
-                "status": {
-                    "retrieved_count": len(search_results),
-                    "selected_count": len(citations),
-                    "found": len(citations) > 0
-                }
-            }
-
-        except Exception as e:
-            logger.error(f"❌ 정밀 내용 검색 실패: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-
-            return {
-                "mode": "SEARCH_CONTENT_ONLY",
-                "text": f"검색 중 오류가 발생했습니다: {str(e)}",
-                "files": [],
-                "count": 0,
-                "citations": [],
-                "evidence": [],
-                "status": {
-                    "retrieved_count": 0,
-                    "selected_count": 0,
-                    "found": False
-                }
-            }
+        """정밀 내용 검색 - SearchHandler로 위임 (Strangler Fig 패턴)"""
+        return self._search_handler.handle(query, content_only=True)
 
     def _answer_cost_sum(self, query: str) -> dict:
-        """비용 합계 직접 조회 (DB claimed_total 활용, top-N 스캔 + 우선순위 정렬)
+        """비용 합계 조회 - CostSumHandler로 위임 (Strangler Fig 패턴)"""
+        return self._cost_sum_handler.handle(query)
 
-        Args:
-            query: 사용자 질의 (예: "채널에이 중계차 보수 합계 얼마였지?")
+    def _answer_cost_sum_legacy(self, query: str) -> dict:
+        """[LEGACY] 비용 합계 직접 조회 - 점진적 마이그레이션용 백업
 
-        Returns:
-            dict: 표준 응답 구조 (text, citations, evidence, status)
+        NOTE: 이 메서드는 CostSumHandler로 마이그레이션 완료 후 삭제 예정.
         """
         try:
             # 1. 검색으로 후보 문서 찾기 (3 → 15 확장)
@@ -1884,23 +1635,13 @@ class RAGPipeline:
             }
 
     def _answer_document(self, query: str, selected_filename: Optional[str] = None) -> dict:
-        """문서 내용 조회 (DOCUMENT 모드: PREVIEW + SUMMARY 통합)
+        """문서 내용 조회 - DocumentHandler로 위임 (Strangler Fig 패턴)"""
+        return self._document_handler.handle(query, selected_filename=selected_filename)
 
-        DOC_ANCHORED 모드를 대체하여, 문서 전체 내용을 반환합니다.
-        5개 필드만 추출하던 구조적 제한을 제거하고, 사용자가 요청한 문서의
-        전체 텍스트를 제공합니다.
+    def _answer_document_legacy(self, query: str, selected_filename: Optional[str] = None) -> dict:
+        """[LEGACY] 문서 내용 조회 - 점진적 마이그레이션용 백업
 
-        Args:
-            query: 사용자 질의 (예: "미러클랩 카메라 삼각대 기술검토서 이문서 내용 알려줘")
-            selected_filename: 선택된 문서 파일명 (우선 검색용, 선택사항)
-
-        Returns:
-            dict: 표준 응답 구조 (전체 문서 텍스트 포함)
-
-        Note:
-            - 과거 DOC_ANCHORED의 5-field 추출 문제를 해결하기 위해 생성됨
-            - 전체 문서 텍스트를 data/extracted/ 에서 직접 로드
-            - LLM을 사용하지 않고 원문 그대로 반환
+        NOTE: 이 메서드는 DocumentHandler로 마이그레이션 완료 후 삭제 예정.
         """
         import re
         from pathlib import Path
@@ -2541,9 +2282,7 @@ class RAGPipeline:
         - true: HybridRetrieverV2 사용 (신규 2-layer 아키텍처)
         - false/없음: HybridRetriever 사용 (기존 레거시)
         """
-        import os
-
-        use_v2 = os.getenv("USE_V2_RETRIEVER", "false").lower() == "true"
+        use_v2 = settings.USE_V2_RETRIEVER
 
         if use_v2:
             # V2 Retriever는 archive로 이동되었습니다 (20251026)
@@ -2592,7 +2331,7 @@ class RAGPipeline:
             logger.error(f"Generator 생성 실패: {e}")
             return _DummyGenerator()
 
-    def _create_legacy_adapter(self):
+    def _create_legacy_adapter(self) -> Optional["_LLMAdapter"]:
         """레거시 구현 어댑터 생성 (캡슐화)
 
         QwenLLM을 래핑하여 기존 레거시 시스템과 연결합니다.
@@ -2604,7 +2343,7 @@ class RAGPipeline:
         try:
             from rag_system.active.llm_singleton import LLMSingleton
 
-            model_path = os.getenv("MODEL_PATH", "./models/ggml-model-Q4_K_M.gguf")
+            model_path = settings.MODEL_PATH
             logger.info(f"🔍 DEBUG: Attempting to load LLM with model_path={model_path}")
             logger.info(f"🔍 DEBUG: Model file exists: {Path(model_path).exists()}")
             llm = LLMSingleton.get_instance(model_path=model_path)
@@ -2671,7 +2410,7 @@ class _LLMAdapter:
     QwenLLM을 _QuickFixGenerator가 기대하는 인터페이스로 변환합니다.
     """
 
-    def __init__(self, llm):
+    def __init__(self, llm: Any) -> None:
         self.llm = llm
 
     def generate_from_context(self, query: str, context: str, temperature: float = 0.1, mode: str = "rag") -> str:
@@ -2705,9 +2444,9 @@ class _LLMAdapter:
 class _QuickFixGenerator:
     """QuickFixRAG 래퍼 (기존 구현 활용)"""
 
-    def __init__(self, rag):
+    def __init__(self, rag: Any) -> None:
         self.rag = rag
-        self.compressed_chunks = None  # Store chunks for LLM
+        self.compressed_chunks: Optional[List[Dict[str, Any]]] = None  # Store chunks for LLM
 
     def generate(self, query: str, context: str, temperature: float, mode: str = "rag") -> str:
         # 재검색 금지. 컨텍스트 기반 생성으로 우선 시도.
@@ -2784,7 +2523,7 @@ class _V2RetrieverAdapter:
         ]
     """
 
-    def __init__(self, v2_retriever):
+    def __init__(self, v2_retriever: Any) -> None:
         """
         Args:
             v2_retriever: HybridRetrieverV2 instance
@@ -2878,7 +2617,7 @@ class _V2RetrieverAdapter:
             logger.error(f"V2 Adapter search failed: {e}", exc_info=True)
             return []
 
-    def warmup(self):
+    def warmup(self) -> None:
         """워밍업 (v2는 필요 시 자동 로드)"""
         logger.info("V2 Adapter warmup (no-op)")
 

@@ -72,7 +72,15 @@ BULK_PATTERNS = [
 # ============================================================================
 
 def extract_keywords(query: str, stop_words: List[str]) -> str:
-    """쿼리에서 불용어를 제거하고 키워드 추출"""
+    """쿼리에서 불용어를 제거하고 키워드 추출
+
+    Args:
+        query: 사용자 원본 쿼리
+        stop_words: 제거할 불용어 목록
+
+    Returns:
+        불용어가 제거된 키워드 문자열
+    """
     keywords = query
     for word in stop_words:
         keywords = keywords.replace(word, " ")
@@ -80,7 +88,14 @@ def extract_keywords(query: str, stop_words: List[str]) -> str:
 
 
 def extract_drafter_filter(query: str) -> Optional[str]:
-    """쿼리에서 기안자명 추출"""
+    """쿼리에서 기안자명 추출
+
+    Args:
+        query: 사용자 쿼리
+
+    Returns:
+        추출된 기안자명. 없으면 None
+    """
     for name in COMMON_DRAFTERS:
         if name in query:
             logger.info(f"🔍 기안자 필터 적용: {name}")
@@ -89,7 +104,14 @@ def extract_drafter_filter(query: str) -> Optional[str]:
 
 
 def extract_year_filter(query: str) -> Optional[str]:
-    """쿼리에서 연도 추출"""
+    """쿼리에서 연도 추출
+
+    Args:
+        query: 사용자 쿼리
+
+    Returns:
+        추출된 연도 문자열 (예: "2024"). 없으면 None
+    """
     year_match = re.search(r'(20\d{2})년?', query)
     if year_match:
         year = year_match.group(1)
@@ -99,29 +121,66 @@ def extract_year_filter(query: str) -> Optional[str]:
 
 
 def is_count_query(query: str) -> bool:
-    """개수만 묻는 질의인지 확인"""
+    """개수만 묻는 질의인지 확인
+
+    Args:
+        query: 사용자 쿼리
+
+    Returns:
+        "몇개", "개수" 등이 포함되면 True
+    """
     return any(kw in query.lower() for kw in COUNT_KEYWORDS)
 
 
 def is_list_query(query: str) -> bool:
-    """리스트 요청 질의인지 확인"""
+    """리스트 요청 질의인지 확인
+
+    Args:
+        query: 사용자 쿼리
+
+    Returns:
+        "리스트", "목록" 등이 포함되면 True
+    """
     return any(kw in query.lower() for kw in LIST_KEYWORDS)
 
 
 def is_all_query(query: str) -> bool:
-    """전체 요청 질의인지 확인"""
+    """전체 요청 질의인지 확인
+
+    Args:
+        query: 사용자 쿼리
+
+    Returns:
+        "전부", "모두" 등이 포함되면 True
+    """
     return any(kw in query.lower() for kw in ALL_KEYWORDS)
 
 
 def needs_expanded_search(query: str, drafter_filter: Optional[str]) -> bool:
-    """확장 검색이 필요한지 확인"""
+    """확장 검색이 필요한지 확인
+
+    Args:
+        query: 사용자 쿼리
+        drafter_filter: 기안자 필터 (있으면 확장 검색)
+
+    Returns:
+        전체/리스트 요청이거나 기안자 필터가 있으면 True
+    """
     needs_all = is_all_query(query) or is_count_query(query)
     wants_list = is_list_query(query)
     return needs_all or wants_list or bool(drafter_filter)
 
 
 def calculate_max_docs(query: str, drafter_filter: Optional[str]) -> int:
-    """검색할 최대 문서 수 계산"""
+    """검색할 최대 문서 수 계산
+
+    Args:
+        query: 사용자 쿼리
+        drafter_filter: 기안자 필터
+
+    Returns:
+        BULK_SEARCH_TOP_K(200) 또는 NORMAL_SEARCH_TOP_K(10)
+    """
     is_detail = any(ind in query for ind in DETAIL_INDICATORS)
     is_explicit_list = any(kw in query.lower() for kw in EXPLICIT_LIST_KEYWORDS)
     is_bulk = any(re.search(p, query) for p in BULK_PATTERNS)
@@ -131,14 +190,28 @@ def calculate_max_docs(query: str, drafter_filter: Optional[str]) -> int:
 
 
 def format_title_from_filename(filename: str) -> str:
-    """파일명에서 제목 추출"""
+    """파일명에서 제목 추출
+
+    Args:
+        filename: 원본 파일명 (예: "2024-01-15_문서제목.pdf")
+
+    Returns:
+        날짜 접두사와 확장자가 제거된 제목
+    """
     title = re.sub(r'^\d{4}-\d{2}-\d{2}_', '', filename)
     title = re.sub(r'\.pdf$', '', title, flags=re.IGNORECASE)
     return title.replace('_', ' ')
 
 
 def build_file_path(filename: str) -> str:
-    """파일명에서 경로 생성"""
+    """파일명에서 경로 생성
+
+    Args:
+        filename: 파일명
+
+    Returns:
+        연도별 폴더 경로 (예: "docs/year_2024/파일.pdf")
+    """
     year_match = re.search(r'(\d{4})-', filename)
     if year_match:
         year = year_match.group(1)
@@ -147,7 +220,14 @@ def build_file_path(filename: str) -> str:
 
 
 def clean_text_preview(text: str) -> str:
-    """텍스트 미리보기에서 노이즈 제거"""
+    """텍스트 미리보기에서 노이즈 제거
+
+    Args:
+        text: 원본 미리보기 텍스트
+
+    Returns:
+        [페이지 N], [OCR ...] 등이 제거된 정제된 텍스트
+    """
     clean = re.sub(r'\[페이지\s*\d+\]', '', text)
     clean = re.sub(r'\[OCR[^\]]*\]', '', clean)
     clean = re.sub(r'\s+', ' ', clean).strip()

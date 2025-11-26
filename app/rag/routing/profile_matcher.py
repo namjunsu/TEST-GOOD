@@ -6,11 +6,12 @@
 """
 
 import re
-import unicodedata
+import threading
 import yaml
 from pathlib import Path
 from typing import Dict, List, Set, Any, Optional
 from app.core.logging import get_logger
+from app.textproc.normalizer import normalize_text
 
 logger = get_logger(__name__)
 
@@ -79,27 +80,6 @@ class ProfileMatcher:
 
         return compiled
 
-    def normalize_text(self, text: str) -> str:
-        """
-        텍스트 정규화
-
-        Args:
-            text: 원본 텍스트
-
-        Returns:
-            정규화된 텍스트 (NFKC, 하이픈 통일, 공백 압축)
-        """
-        # NFKC 정규화
-        text = unicodedata.normalize("NFKC", text)
-
-        # 하이픈 통일 (전각/반각 → 표준 하이픈)
-        text = re.sub(r"[‐‑‒–—―−]", "-", text)
-
-        # 공백 압축
-        text = re.sub(r"\s+", " ", text).strip()
-
-        return text
-
     def match_profiles(self, query: str) -> List[str]:
         """
         쿼리에서 프로파일 후보 탐지
@@ -110,7 +90,7 @@ class ProfileMatcher:
         Returns:
             매칭된 프로파일 이름 리스트 (우선순위 정렬)
         """
-        query_norm = self.normalize_text(query)
+        query_norm = normalize_text(query)
         matched = set()
 
         for profile_name, patterns in self.profile_patterns.items():
@@ -146,11 +126,14 @@ class ProfileMatcher:
 
 # 싱글톤 인스턴스
 _matcher = None
+_matcher_lock = threading.Lock()
 
 
 def get_profile_matcher() -> ProfileMatcher:
-    """프로파일 매칭 싱글톤 반환"""
+    """프로파일 매칭 싱글톤 반환 (thread-safe)"""
     global _matcher
     if _matcher is None:
-        _matcher = ProfileMatcher()
+        with _matcher_lock:
+            if _matcher is None:  # Double-check locking
+                _matcher = ProfileMatcher()
     return _matcher

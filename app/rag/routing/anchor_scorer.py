@@ -10,11 +10,12 @@
 """
 
 import re
-import unicodedata
+import threading
 import yaml
 from pathlib import Path
 from typing import Dict, List, Tuple, Any, Optional
 from app.core.logging import get_logger
+from app.textproc.normalizer import normalize_text
 
 logger = get_logger(__name__)
 
@@ -107,27 +108,6 @@ class AnchorScorer:
             except Exception as e:
                 logger.warning(f"⚠️ 패턴 컴파일 실패: {pattern} - {e}")
         return compiled
-
-    def normalize_text(self, text: str) -> str:
-        """
-        텍스트 정규화
-
-        Args:
-            text: 원본 텍스트
-
-        Returns:
-            정규화된 텍스트
-        """
-        # NFKC 정규화
-        text = unicodedata.normalize("NFKC", text)
-
-        # 하이픈 통일
-        text = re.sub(r"[‐‑‒–—―−]", "-", text)
-
-        # 공백 압축
-        text = re.sub(r"\s+", " ", text).strip()
-
-        return text
 
     def _check_allow(
         self, text: str, patterns: List[re.Pattern]
@@ -270,7 +250,7 @@ class AnchorScorer:
             return None
 
         profile = self.profiles[profile_name]
-        text_norm = self.normalize_text(text)
+        text_norm = normalize_text(text)
 
         # 1. allow 체크 (필수)
         allow_pass, allow_matched = self._check_allow(text_norm, profile["allow"])
@@ -343,11 +323,14 @@ class AnchorScorer:
 
 # 싱글톤 인스턴스
 _scorer = None
+_scorer_lock = threading.Lock()
 
 
 def get_anchor_scorer() -> AnchorScorer:
-    """앵커 스코어 싱글톤 반환"""
+    """앵커 스코어 싱글톤 반환 (thread-safe)"""
     global _scorer
     if _scorer is None:
-        _scorer = AnchorScorer()
+        with _scorer_lock:
+            if _scorer is None:  # Double-check locking
+                _scorer = AnchorScorer()
     return _scorer

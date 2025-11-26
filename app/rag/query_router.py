@@ -28,6 +28,7 @@ import yaml
 
 from app.core.logging import get_logger
 from app.rag.routing_monitor import get_monitor
+from config.constants import RouterConfig
 
 logger = get_logger(__name__)
 
@@ -84,11 +85,11 @@ def _norm(s: str) -> str:
 def _score(qn: str, tn: str) -> float:
     """부분 포함 + 길이 근접 혼합 스코어 (0~1)"""
     if qn in tn or tn in qn:
-        base = 0.8
+        base = RouterConfig.PARTIAL_MATCH_BASE
     else:
         base = 0.0
     diff = abs(len(qn) - len(tn))
-    length_bonus = max(0.0, 0.4 - diff * 0.01)
+    length_bonus = max(0.0, RouterConfig.LENGTH_BONUS_MAX - diff * RouterConfig.LENGTH_PENALTY_FACTOR)
     return min(1.0, base + length_bonus)
 
 
@@ -342,6 +343,233 @@ class QueryRouter:
             ),
         }
 
+    # ============================================================================
+    # classify_mode 헬퍼 메서드들 (Phase 12: 복잡도 분리)
+    # ============================================================================
+
+    def _check_exists_intent(
+        self,
+        query: str,
+        params: Dict[str, Any],
+        has_filename: bool,
+        has_doc_reference: bool
+    ) -> Optional[RouteDecision]:
+        """존재 확인 질의 체크 ("문서에 X가 있는지", "YES/NO만 알려줘")
+
+        Returns:
+            RouteDecision if matched, None otherwise
+        """
+        if not self.EXISTS_CHECK_PATTERN.search(query):
+            return None
+
+        if has_filename or has_doc_reference:
+            logger.info("🎯 모드 결정: DOCUMENT (특정 문서 내용 확인)")
+            reason = "exists_check_with_doc_reference"
+            self._log_routing_decision(query, QueryMode.DOCUMENT, confidence=0.95, reason=reason)
+            return RouteDecision(
+                mode=QueryMode.DOCUMENT,
+                reason=reason,
+                confidence=0.95,
+                content_intent=True,
+                year=params.get("year"),
+                drafter=params.get("drafter")
+            )
+        else:
+            logger.info("🎯 모드 결정: QA (존재 확인 질의)")
+            reason = "exists_check_query"
+            self._log_routing_decision(query, QueryMode.QA, confidence=0.9, reason=reason)
+            return RouteDecision(
+                mode=QueryMode.QA,
+                reason=reason,
+                confidence=0.9,
+                content_intent=True,
+                year=params.get("year"),
+                drafter=params.get("drafter")
+            )
+
+    def _check_content_only(
+        self,
+        query: str,
+        params: Dict[str, Any]
+    ) -> Optional[RouteDecision]:
+        """정밀 내용 검색 체크 ("내용에 X 들어간 문서만")
+
+        Returns:
+            RouteDecision if matched, None otherwise
+        """
+        if not self.CONTENT_ONLY_PATTERN.search(query):
+            return None
+
+        logger.info("🎯 모드 결정: SEARCH_CONTENT_ONLY (정밀 내용 검색 감지)")
+        reason = "content_only_pattern_matched"
+        self._log_routing_decision(query, QueryMode.SEARCH_CONTENT_ONLY, confidence=0.98, reason=reason)
+        return RouteDecision(
+            mode=QueryMode.SEARCH_CONTENT_ONLY,
+            reason=reason,
+            confidence=0.98,
+            list_intent=True,
+            year=params.get("year"),
+            drafter=params.get("drafter")
+        )
+
+    def _check_cost_intent(
+        self,
+        query: str,
+        params: Dict[str, Any],
+        intents: Dict[str, bool]
+    ) -> Optional[RouteDecision]:
+        """비용 질의 체크 ("합계", "총액", "금액")
+
+        Returns:
+            RouteDecision if matched, None otherwise
+        """
+        if not intents["cost"]:
+            return None
+
+        logger.info("🎯 모드 결정: COST (비용 질의 감지)")
+        reason = self.get_routing_reason(query)
+        self._log_routing_decision(query, QueryMode.COST, confidence=0.95, reason=reason)
+        return RouteDecision(
+            mode=QueryMode.COST,
+            reason=reason,
+            confidence=0.95,
+            cost_intent=True,
+            year=params.get("year"),
+            drafter=params.get("drafter")
+        )
+
+    def _check_document_mode(
+        self,
+        query: str,
+        params: Dict[str, Any],
+        intents: Dict[str, bool],
+        has_filename: bool,
+        has_doc_reference: bool,
+        has_doc_type_keyword: bool
+    ) -> Optional[RouteDecision]:
+        """DOCUMENT 모드 체크 (문서 참조 + 내용 요청)
+
+        Returns:
+            RouteDecision if matched, None otherwise
+        """
+        has_doc_context = has_filename or has_doc_reference or has_doc_type_keyword
+
+        # 문서 참조 + 내용 의도
+        if has_doc_context and intents["content"]:
+            logger.info("🎯 모드 결정: DOCUMENT (문서 내용/요약)")
+            reason = self.get_routing_reason(query)
+            self._log_routing_decision(query, QueryMode.DOCUMENT, confidence=0.9, reason=reason)
+            return RouteDecision(
+                mode=QueryMode.DOCUMENT,
+                reason=reason,
+                confidence=0.9,
+                content_intent=True,
+                year=params.get("year"),
+                drafter=params.get("drafter"),
+            )
+
+        # 상세 내용 요청 ("자세히 알려줘")
+        from app.utils.text_normalizer import is_detailed_mode
+        if is_detailed_mode(query) and has_doc_context:
+            logger.info("🎯 모드 결정: DOCUMENT (상세 내용 요청)")
+            reason = "detailed_mode_with_doc_reference"
+            self._log_routing_decision(query, QueryMode.DOCUMENT, confidence=0.95, reason=reason)
+            return RouteDecision(
+                mode=QueryMode.DOCUMENT,
+                reason=reason,
+                confidence=0.95,
+                content_intent=True,
+                year=params.get("year"),
+                drafter=params.get("drafter"),
+            )
+
+        return None
+
+    def _check_search_mode(
+        self,
+        query: str,
+        params: Dict[str, Any],
+        intents: Dict[str, bool],
+        has_filename: bool,
+        has_doc_reference: bool
+    ) -> Optional[RouteDecision]:
+        """SEARCH 모드 체크 (목록/검색 의도)
+
+        Returns:
+            RouteDecision if matched, None otherwise
+        """
+        # 목록/검색 의도
+        if intents["list"]:
+            logger.info("🎯 모드 결정: SEARCH (문서 검색)")
+            reason = self.get_routing_reason(query)
+            self._log_routing_decision(query, QueryMode.SEARCH, confidence=0.9, reason=reason)
+            return RouteDecision(
+                mode=QueryMode.SEARCH,
+                reason=reason,
+                confidence=0.9,
+                list_intent=True,
+                year=params.get("year"),
+                drafter=params.get("drafter"),
+            )
+
+        # 문서 참조만 있고 의도 불명확
+        if has_filename or has_doc_reference:
+            logger.info("🎯 모드 결정: SEARCH (문서 참조 감지, 목록 우선)")
+            reason = self.get_routing_reason(query)
+            self._log_routing_decision(query, QueryMode.SEARCH, confidence=0.7, reason=reason)
+            return RouteDecision(
+                mode=QueryMode.SEARCH,
+                reason=reason,
+                confidence=0.7,
+                list_intent=True,
+                year=params.get("year"),
+                drafter=params.get("drafter"),
+            )
+
+        return None
+
+    def _check_qa_intent(
+        self,
+        query: str,
+        params: Dict[str, Any],
+        has_qa_intent: bool
+    ) -> Optional[RouteDecision]:
+        """QA 의도 키워드 체크
+
+        Returns:
+            RouteDecision if matched, None otherwise
+        """
+        if not has_qa_intent:
+            return None
+
+        logger.info("🎯 모드 결정: QA (의도 키워드 감지)")
+        reason = self.get_routing_reason(query)
+        self._log_routing_decision(query, QueryMode.QA, confidence=0.8, reason=reason)
+        return RouteDecision(
+            mode=QueryMode.QA,
+            reason=reason,
+            confidence=0.8,
+            year=params.get("year"),
+            drafter=params.get("drafter")
+        )
+
+    def _default_qa_mode(self, query: str, params: Dict[str, Any]) -> RouteDecision:
+        """기본 QA 모드 반환"""
+        logger.info("🎯 모드 결정: QA (기본)")
+        reason = "default_qa"
+        self._log_routing_decision(query, QueryMode.QA, confidence=0.5, reason=reason)
+        return RouteDecision(
+            mode=QueryMode.QA,
+            reason=reason,
+            confidence=0.5,
+            year=params.get("year"),
+            drafter=params.get("drafter")
+        )
+
+    # ============================================================================
+    # 기존 메서드들
+    # ============================================================================
+
     def _extract_query_params(self, query: str) -> Dict[str, Any]:
         """쿼리에서 파라미터 추출 (기안자, 연도 등)
 
@@ -388,213 +616,49 @@ class QueryRouter:
         return params
 
     def classify_mode(self, query: str) -> RouteDecision:
-        """쿼리 모드 자동 분류 및 라우팅 (단순화 버전)
+        """쿼리 모드 자동 분류 및 라우팅 (리팩토링 버전)
 
-        사용자 질의를 분석하여 가장 적절한 QueryMode로 자동 라우팅합니다.
-        패턴 매칭과 키워드 감지를 통해 우선순위에 따라 모드를 결정합니다.
+        Phase 12: 헬퍼 메서드로 분리하여 복잡도 감소 (224줄 → ~50줄)
 
         우선순위 (높음 → 낮음):
-            1. COST: 비용 조회 질의 (예: "합계", "총액")
-            2. DOCUMENT: 문서 내용/요약 요청 (파일명 or 문서지시어 + 내용/요약 의도)
-            3. SEARCH: 문서 검색 (찾기, 검색, 목록 등)
-            4. QA: 질답 모드 (기본)
-
-        모드 판단 기준:
-            COST: COST_INTENT_PATTERN 매칭
-            DOCUMENT: (파일명 or 문서지시어 or 문서타입) & (미리보기 or 요약 or 내용 의도)
-            SEARCH: LIST_INTENT_PATTERN or SEARCH_INTENT_PATTERN 매칭
-                    (예: "찾아줘", "검색", "관련 문서", "2024년 문서")
-            QA: qa_keywords 매칭 또는 모든 조건 불만족 시 기본값
+            1. EXISTS: 존재 확인 질의
+            2. CONTENT_ONLY: 정밀 내용 검색
+            3. COST: 비용 조회 질의
+            4. DOCUMENT: 문서 내용/요약 요청
+            5. SEARCH: 문서 검색
+            6. QA: 질답 모드 (기본)
 
         Args:
-            query (str): 사용자 질의.
-                예: "2024년 남준수 문서 전부" → SEARCH
-                    "중계차 렌즈 문서 찾아줘" → SEARCH
-                    "이 문서 요약해줘" → DOCUMENT
-                    "미러클랩 카메라 삼각대 기술검토서 내용 알려줘" → DOCUMENT
-                    "비용 합계는?" → COST
+            query: 사용자 질의
 
         Returns:
-            RouteDecision: 모드 + 의도 플래그 + 추출된 파라미터를 포함하는 결정 객체
-
-        Example:
-            >>> router = QueryRouter()
-            >>> router.classify_mode("중계차 카메라 문서 찾아줘")
-            QueryMode.SEARCH
-            >>> router.classify_mode("2024년 남준수 문서 전부")
-            QueryMode.SEARCH
-            >>> router.classify_mode("이 문서 요약해줘")
-            QueryMode.DOCUMENT
-            >>> router.classify_mode("미러클랩 삼각대 기술검토서 내용 알려줘")
-            QueryMode.DOCUMENT
-
-        Note:
-            - 로깅을 통해 결정 과정 추적 가능
-            - 모든 조건 불만족 시 QueryMode.QA 반환 (fallback)
+            RouteDecision: 모드 + 의도 플래그 + 추출된 파라미터
         """
         query_lower = query.lower()
 
-        # 파라미터 추출 (기안자, 연도 등)
+        # 1. 컨텍스트 추출
         params = self._extract_query_params(query)
-
-        # 의도 플래그 감지 (Phase 1: 단일화된 메서드 사용)
         intents = self._detect_intents(query)
-
-        # 파일명/문서 참조 패턴 체크 (먼저 수행)
         has_filename = self.filename_re.search(query) is not None
         has_doc_reference = self.DOC_REFERENCE_PATTERN.search(query) is not None
+        has_doc_type_keyword = bool(re.search(
+            r"(검토서|기안서|견적서|제안서|보고서|계획서|공문|발주서|납품서|영수증|검토의\s*건|구매\s*건|수리\s*건|교체\s*건)",
+            query, re.IGNORECASE
+        ))
+        has_qa_intent = any(kw in query_lower for kw in self.qa_keywords)
 
-        # 1. 존재 확인 체크 (최우선 - 2025-11-19 추가)
-        # "문서에 DVR이 있는지", "YES/NO만 알려줘" 등
-        if self.EXISTS_CHECK_PATTERN.search(query):
-            # 특정 문서가 지정된 경우 DOCUMENT 모드로
-            if has_filename or has_doc_reference:
-                logger.info("🎯 모드 결정: DOCUMENT (특정 문서 내용 확인)")
-                reason = "exists_check_with_doc_reference"
-                self._log_routing_decision(query, QueryMode.DOCUMENT, confidence=0.95, reason=reason)
-                return RouteDecision(
-                    mode=QueryMode.DOCUMENT,
-                    reason=reason,
-                    confidence=0.95,
-                    content_intent=True,
-                    year=params.get("year"),
-                    drafter=params.get("drafter")
-                )
-            else:
-                # 문서 미지정 시 QA 모드로 (일반적인 질문)
-                logger.info("🎯 모드 결정: QA (존재 확인 질의)")
-                reason = "exists_check_query"
-                self._log_routing_decision(query, QueryMode.QA, confidence=0.9, reason=reason)
-                return RouteDecision(
-                    mode=QueryMode.QA,
-                    reason=reason,
-                    confidence=0.9,
-                    content_intent=True,  # QA는 내용 질의이므로
-                    year=params.get("year"),
-                    drafter=params.get("drafter")
-                )
-
-        # 2. 정밀 내용 검색 체크 (2025-11-19 추가)
-        # "문서내용에 X 들어간 문서만", "내용에 포함된 문서" 등
-        if self.CONTENT_ONLY_PATTERN.search(query):
-            logger.info("🎯 모드 결정: SEARCH_CONTENT_ONLY (정밀 내용 검색 감지)")
-            reason = "content_only_pattern_matched"
-            self._log_routing_decision(query, QueryMode.SEARCH_CONTENT_ONLY, confidence=0.98, reason=reason)
-            return RouteDecision(
-                mode=QueryMode.SEARCH_CONTENT_ONLY,
-                reason=reason,
-                confidence=0.98,
-                list_intent=True,  # 검색 의도는 유지
-                year=params.get("year"),
-                drafter=params.get("drafter")
-            )
-
-        # 2. 비용 질의 체크
-        if intents["cost"]:
-            logger.info("🎯 모드 결정: COST (비용 질의 감지)")
-            reason = self.get_routing_reason(query)
-            self._log_routing_decision(query, QueryMode.COST, confidence=0.95, reason=reason)
-            return RouteDecision(
-                mode=QueryMode.COST,
-                reason=reason,
-                confidence=0.95,
-                cost_intent=True,
-                year=params.get("year"),
-                drafter=params.get("drafter")
-            )
-
-        # (이미 상단에서 체크함)
-
-        # 4. 문서 타입 키워드 체크 (검토서, 기안서, 견적서 등)
-        # "검토의 건", "구매 건", "수리 건" 등도 포함
-        has_doc_type_keyword = bool(
-            re.search(
-                r"(검토서|기안서|견적서|제안서|보고서|계획서|공문|발주서|납품서|영수증|검토의\s*건|구매\s*건|수리\s*건|교체\s*건)",
-                query,
-                re.IGNORECASE,
-            )
+        # 2. 우선순위에 따라 헬퍼 메서드 호출 (Chain of Responsibility 패턴)
+        decision = (
+            self._check_exists_intent(query, params, has_filename, has_doc_reference)
+            or self._check_content_only(query, params)
+            or self._check_cost_intent(query, params, intents)
+            or self._check_document_mode(query, params, intents, has_filename, has_doc_reference, has_doc_type_keyword)
+            or self._check_search_mode(query, params, intents, has_filename, has_doc_reference)
+            or self._check_qa_intent(query, params, has_qa_intent)
+            or self._default_qa_mode(query, params)
         )
 
-        # 5. Q&A 의도 키워드 체크
-        has_qa_intent = any(keyword in query_lower for keyword in self.qa_keywords)
-
-        # 6. DOCUMENT 모드 우선: 문서 참조 + 내용 요청
-        # "이 문서 요약해줘", "XXX 기술검토서 내용 알려줘", "파일명.pdf 미리보기"
-        if (has_filename or has_doc_reference or has_doc_type_keyword) and intents[
-            "content"
-        ]:
-            logger.info("🎯 모드 결정: DOCUMENT (문서 내용/요약)")
-            reason = self.get_routing_reason(query)
-            self._log_routing_decision(
-                query, QueryMode.DOCUMENT, confidence=0.9, reason=reason
-            )
-            return RouteDecision(
-                mode=QueryMode.DOCUMENT,
-                reason=reason,
-                confidence=0.9,
-                content_intent=True,
-                year=params.get("year"),
-                drafter=params.get("drafter"),
-            )
-
-        # 7. SEARCH 모드: 목록/검색 의도
-        # "2024년 남준수 문서 전부", "중계차 카메라 문서 찾아줘"
-        if intents["list"]:
-            logger.info("🎯 모드 결정: SEARCH (문서 검색)")
-            reason = self.get_routing_reason(query)
-            self._log_routing_decision(
-                query, QueryMode.SEARCH, confidence=0.9, reason=reason
-            )
-            return RouteDecision(
-                mode=QueryMode.SEARCH,
-                reason=reason,
-                confidence=0.9,
-                list_intent=True,
-                year=params.get("year"),
-                drafter=params.get("drafter"),
-            )
-
-        # 10. Q&A 의도 키워드 체크 (일반 QA 키워드)
-        if has_qa_intent:
-            logger.info("🎯 모드 결정: QA (의도 키워드 감지)")
-            reason = self.get_routing_reason(query)
-            self._log_routing_decision(query, QueryMode.QA, confidence=0.8, reason=reason)
-            return RouteDecision(
-                mode=QueryMode.QA,
-                reason=reason,
-                confidence=0.8,
-                year=params.get("year"),
-                drafter=params.get("drafter")
-            )
-
-        # 8. 문서 참조만 있고 의도 불명확 → SEARCH (Phase 1: 개선, list_intent=True)
-        # 레거시: DOCUMENT(0.6) → 개선: SEARCH(0.7) + list_intent
-        if has_filename or has_doc_reference:
-            logger.info("🎯 모드 결정: SEARCH (문서 참조 감지, 목록 우선)")
-            reason = self.get_routing_reason(query)
-            self._log_routing_decision(
-                query, QueryMode.SEARCH, confidence=0.7, reason=reason
-            )
-            return RouteDecision(
-                mode=QueryMode.SEARCH,
-                reason=reason,
-                confidence=0.7,
-                list_intent=True,
-                year=params.get("year"),
-                drafter=params.get("drafter"),
-            )
-
-        # 12. 기본: Q&A 모드
-        logger.info("🎯 모드 결정: QA (기본)")
-        reason = "default_qa"
-        self._log_routing_decision(query, QueryMode.QA, confidence=0.5, reason=reason)
-        return RouteDecision(
-            mode=QueryMode.QA,
-            reason=reason,
-            confidence=0.5,
-            year=params.get("year"),
-            drafter=params.get("drafter")
-        )
+        return decision
 
     def get_routing_reason(self, query: str) -> str:
         """모드 라우팅 이유 반환 (로깅용)
@@ -786,8 +850,8 @@ class QueryRouter:
                 top = ranked[0]
                 top_score = _score(qn, _norm(top.get("title") or top.get("filename", "")))
 
-                # 단일 후보 확정 조건: 1개만 있거나, 상위 스코어가 0.66 이상
-                if len(ranked) == 1 or top_score >= 0.66:
+                # 단일 후보 확정 조건: 1개만 있거나, 상위 스코어가 임계값 이상
+                if len(ranked) == 1 or top_score >= RouterConfig.SINGLE_CANDIDATE_THRESHOLD:
                     logger.info(f"✅ 요약/내용 의도 감지 + 단일 후보 확정 (score={top_score:.2f}) → DOCUMENT 모드")
                     # RouteDecision 생성
                     decision = RouteDecision(

@@ -7,9 +7,10 @@
 
 import json
 import os
+import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, asdict
 from collections import Counter
 
@@ -122,7 +123,7 @@ class RoutingMonitor:
             logger.error(f"통계 조회 실패: {e}")
             return {"error": str(e)}
 
-    def suggest_patterns(self, min_occurrences: int = 5) -> list:
+    def suggest_patterns(self, min_occurrences: int = 5) -> List[Dict[str, Any]]:
         """반복되는 질의에서 패턴 제안
 
         Args:
@@ -172,11 +173,14 @@ class RoutingMonitor:
 
 # 전역 인스턴스
 _monitor = None
+_monitor_lock = threading.Lock()
 
 
 def get_monitor() -> RoutingMonitor:
-    """싱글톤 모니터 인스턴스 반환"""
+    """싱글톤 모니터 인스턴스 반환 (thread-safe)"""
     global _monitor
     if _monitor is None:
-        _monitor = RoutingMonitor()
+        with _monitor_lock:
+            if _monitor is None:  # Double-check locking
+                _monitor = RoutingMonitor()
     return _monitor

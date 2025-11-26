@@ -131,7 +131,7 @@ class PersistentCache:
         conn.execute("PRAGMA busy_timeout=5000;")
         return conn
 
-    def _init_db(self):
+    def _init_db(self) -> None:
         """데이터베이스 스키마 초기화"""
         with self._connect() as conn:
             cur = conn.cursor()
@@ -223,7 +223,7 @@ class PersistentCache:
         )
         return result
 
-    def set(self, query: str, result: Any, mode: str | None = None):
+    def set(self, query: str, result: Any, mode: str | None = None) -> None:
         """결과 캐싱
 
         Args:
@@ -265,13 +265,13 @@ class PersistentCache:
 
     # ---- 유지보수 --------------------------------------------------------------
 
-    def clear(self):
+    def clear(self) -> None:
         """모든 캐시 삭제"""
         with self._connect() as conn:
             conn.execute("DELETE FROM query_cache")
         logger.info("Persistent cache cleared")
 
-    def _cleanup_expired(self):
+    def _cleanup_expired(self) -> None:
         """만료 항목 제거"""
         now = time.time()
         ref_col = "created_at" if self.ttl_mode == "absolute" else "MAX(created_at, accessed_at)"
@@ -296,7 +296,7 @@ class PersistentCache:
             return 0.0
         return os.path.getsize(self.db_path) / (1024 * 1024)
 
-    def _enforce_size_limit(self):
+    def _enforce_size_limit(self) -> None:
         """크기 제한 강제 (LRU 축출)"""
         size = self._db_file_size_mb()
         if size <= self.max_db_mb:
@@ -324,7 +324,7 @@ class PersistentCache:
 
     # ---- 통계 & 유틸리티 -------------------------------------------------------
 
-    def invalidate(self, prefix: str):
+    def invalidate(self, prefix: str) -> None:
         """프리픽스로 캐시 무효화
 
         Args:

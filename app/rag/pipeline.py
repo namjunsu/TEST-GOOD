@@ -9,9 +9,7 @@ Example:
     >>> print(response.answer)
 """
 
-import base64
 import os
-import sqlite3
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -46,30 +44,30 @@ import re
 
 # 스몰토크 패턴 (전체 일치 또는 문장 단독 위주)
 SMALLTALK_PATTERNS = {
-    'hi', 'hello', 'hey',
-    '안녕', '안녕하세요', '안녕하십니까',
-    '감사', '고마워', '감사합니다', '고마워요',
-    'thanks', 'thank you',
-    'bye', 'goodbye', '잘가', '안녕히',
+    "hi", "hello", "hey",
+    "안녕", "안녕하세요", "안녕하십니까",
+    "감사", "고마워", "감사합니다", "고마워요",
+    "thanks", "thank you",
+    "bye", "goodbye", "잘가", "안녕히",
 }
 
 # 도메인 키워드 (장비/프로젝트/기술 용어)
 DOMAIN_KEYWORDS = {
     # 장비
-    'nvr', 'sync', 'eco8000', 'lvm-180a', 'odin', 'vmix', 'faiss',
-    'tri-level', 'sdi', 'lut', 'intercom', 'di box', 'dibox',
-    '무선마이크', '마이크', '카메라', '렌즈', '삼각대', '케이블',
-    '건전지', '배터리', '소모품', '장비', '중계차',
+    "nvr", "sync", "eco8000", "lvm-180a", "odin", "vmix", "faiss",
+    "tri-level", "sdi", "lut", "intercom", "di box", "dibox",
+    "무선마이크", "마이크", "카메라", "렌즈", "삼각대", "케이블",
+    "건전지", "배터리", "소모품", "장비", "중계차",
     # 프로젝트/프로그램
-    '돌직구쇼', '뉴스', '스튜디오', '광화문', '오픈스튜디오',
-    '중계', '방송', '채널에이',
+    "돌직구쇼", "뉴스", "스튜디오", "광화문", "오픈스튜디오",
+    "중계", "방송", "채널에이",
     # 기술/문서
-    '기안서', '구매', '수리', '교체', '검토', '기술검토',
-    '오버홀', '도입', '노후화', '단종',
-    '작성', '작성된', '문서', '리스트', '목록',
+    "기안서", "구매", "수리", "교체", "검토", "기술검토",
+    "오버홀", "도입", "노후화", "단종",
+    "작성", "작성된", "문서", "리스트", "목록",
     # 작성자 (실제 기안자 이름)
-    '최새름', '유인혁', '남준수', '박준서', '이원구',
-    '최정은', '한건희', '김경현', '김수연', '김창수', '송경원',
+    "최새름", "유인혁", "남준수", "박준서", "이원구",
+    "최정은", "한건희", "김경현", "김수연", "김창수", "송경원",
 }
 
 
@@ -86,19 +84,19 @@ def clean_ui_metadata(query: str) -> str:
     original = query
 
     # 패턴 1: 🏷 [텍스트] · 형태 제거
-    query = re.sub(r'🏷[^·]+·\s*', '', query)
+    query = re.sub(r"🏷[^·]+·\s*", "", query)
 
     # 패턴 2: 📅 [날짜] · 형태 제거
-    query = re.sub(r'📅[^·]+·\s*', '', query)
+    query = re.sub(r"📅[^·]+·\s*", "", query)
 
     # 패턴 3: ✍ [텍스트] (마지막 항목, · 없음)
-    query = re.sub(r'✍[^·]+', '', query)
+    query = re.sub(r"✍[^·]+", "", query)
 
     # 패턴 4: "pdf", "해 줘" 같은 불필요한 확장자 언급 제거
-    query = re.sub(r'\s+pdf\s+', ' ', query)
+    query = re.sub(r"\s+pdf\s+", " ", query)
 
     # 연속 공백 정리
-    query = re.sub(r'\s+', ' ', query).strip()
+    query = re.sub(r"\s+", " ", query).strip()
 
     # 변경사항이 있으면 로그 출력
     if query != original:
@@ -199,7 +197,7 @@ def is_smalltalk(query: str) -> bool:
         return True
 
     # 2. 정규식 패턴 (스몰토크만 포함, 구두점 허용)
-    smalltalk_regex = r'^(안녕|안녕하세요|안녕하십니까|감사합니다?|고마워요?|thanks|thank you|hi|hello|hey|bye|goodbye|잘가|안녕히)[.!?\s]*$'
+    smalltalk_regex = r"^(안녕|안녕하세요|안녕하십니까|감사합니다?|고마워요?|thanks|thank you|hi|hello|hey|bye|goodbye|잘가|안녕히)[.!?\s]*$"
     if re.fullmatch(smalltalk_regex, s):
         return True
 
@@ -210,7 +208,7 @@ def is_simple_math(query: str) -> bool:
     """단순 산술 질의 감지 (예: 1+1은?, 2*3=?)"""
     q_stripped = query.strip()
     # 정규식: 숫자 연산자 숫자 (옵션: = 결과)
-    math_pattern = r'^\s*\d+\s*[\+\-\*/]\s*\d+\s*(=\s*\d+)?\s*[은?]*\s*$'
+    math_pattern = r"^\s*\d+\s*[\+\-\*/]\s*\d+\s*(=\s*\d+)?\s*[은?]*\s*$"
     return bool(re.match(math_pattern, q_stripped))
 
 
@@ -307,7 +305,7 @@ def _encode_file_ref(filename: str) -> Optional[str]:
             return f"doc:{token}"
 
         # 2. Fallback: docs 폴더 검색
-        year_match = re.search(r'(\d{4})-', filename)
+        year_match = re.search(r"(\d{4})-", filename)
         if year_match:
             year = year_match.group(1)
             file_path = Path(f"docs/year_{year}") / filename
@@ -327,6 +325,7 @@ def _encode_file_ref(filename: str) -> Optional[str]:
         logger.warning(f"ref 토큰 생성 실패: {filename} - {e}")
 
     return None
+
 
 # 진단 모드 설정 (settings 중앙 설정 사용)
 DIAG_RAG = settings.DIAG_RAG
@@ -536,7 +535,7 @@ class RAGPipeline:
         query: str,
         top_k: int = 5,
         compression_ratio: float = 0.7,
-        use_hyde: bool = False,
+        _use_hyde: bool = False,  # Reserved for future HyDE implementation
         temperature: float = 0.1,
         selected_filename: Optional[str] = None,
     ) -> RAGResponse:
@@ -546,7 +545,7 @@ class RAGPipeline:
             query: 사용자 질문
             top_k: 검색 결과 개수
             compression_ratio: 압축 비율
-            use_hyde: HyDE 사용 여부
+            _use_hyde: HyDE 사용 여부 (미구현, 향후 지원 예정)
             temperature: LLM 생성 온도
             selected_filename: 선택된 문서 파일명 (우선 검색용, 선택사항)
 
@@ -570,7 +569,7 @@ class RAGPipeline:
             # 0. 검색 전 pre-routing: 장비 질의 감지 (DOC_ANCHORED 필터링용)
             # QueryRouter의 device term 감지 로직 활용 (공개 API 우선, fallback to 비공개)
             preliminary_mode = "chat"
-            if hasattr(self, 'query_router'):
+            if hasattr(self, "query_router"):
                 has_device = (
                     getattr(self.query_router, "has_device_terms", None) or
                     getattr(self.query_router, "_has_device_terms", None)
@@ -587,9 +586,9 @@ class RAGPipeline:
             # [검색 결과 Top-N 진단 로그]
             logger.info(f"RETRIEVE_TOPN mode={preliminary_mode}")
             for i, doc in enumerate(results[:10], 1):
-                score = doc.get('score', 0.0)
-                doc_id = doc.get('doc_id', 'unknown')
-                snippet_preview = doc.get('snippet', '')[:60].replace('\n', ' ')
+                score = doc.get("score", 0.0)
+                doc_id = doc.get("doc_id", "unknown")
+                snippet_preview = doc.get("snippet", "")[:60].replace("\n", " ")
                 logger.info(f"  #{i} score={score:.4f} doc={doc_id} preview={snippet_preview}...")
 
             # [DIAG] 검색 결과 진단
@@ -631,8 +630,6 @@ class RAGPipeline:
                     )
 
             # 3. 생성: 모드 결정 → 컨텍스트 최적화 → 생성
-            gen_start = time.perf_counter()
-
             # CRITICAL: Inject compressed chunks into generator for proper LLM context
             if hasattr(self.generator, "compressed_chunks"):
                 self.generator.compressed_chunks = compressed
@@ -660,10 +657,10 @@ class RAGPipeline:
             # 🎯 STEP 2: 모드 결정 로직
             # CRITICAL: Determine mode BEFORE context hydration to apply mode-aware context limits
             mode_env = settings.MODE
-            top_score = results[0].get('score', 0.0) if results else 0.0
+            top_score = results[0].get("score", 0.0) if results else 0.0
             metrics["top_score"] = top_score
 
-            if mode_env == 'AUTO':
+            if mode_env == "AUTO":
                 # ━━━ 1. 강제 CHAT 모드 체크 (스몰토크/산술/짧은 질의) ━━━
                 should_force, force_reason = force_chat_mode(query)
                 if should_force:
@@ -676,8 +673,8 @@ class RAGPipeline:
                     token_count = get_query_token_count(query)
 
                     # settings 중앙 설정에서 절대값 임계값 읽기
-                    use_absolute = settings.RAG_MIN_SCORE_POLICY == 'absolute'
-                    bm25_min = settings.BM25_MIN_ABS
+                    use_absolute = settings.RAG_MIN_SCORE_POLICY == "absolute"
+                    # bm25_min reserved for future BM25-specific scoring
                     vec_min = settings.VEC_MIN_ABS
 
                     # 절대값 정책 사용 시 (권장)
@@ -713,12 +710,12 @@ class RAGPipeline:
                             f"threshold={rag_min_score}, selected_mode={metrics['mode']}"
                         )
 
-            elif mode_env == 'CHAT':
+            elif mode_env == "CHAT":
                 metrics["mode"] = "chat"
                 metrics["top_score"] = 0.0
             else:  # RAG, SUMMARIZE
                 metrics["mode"] = "rag"
-                metrics["top_score"] = results[0].get('score', 0.0) if results else 0.0
+                metrics["top_score"] = results[0].get("score", 0.0) if results else 0.0
 
             # 🎯 STEP 2: 모드 기반 컨텍스트 최적화
             determined_mode = metrics.get("mode", "rag")
@@ -729,6 +726,7 @@ class RAGPipeline:
                 from app.rag.utils.context_hydrator import hydrate_context
             except Exception as e:
                 logger.warning(f"⚠️ hydrate_context import 실패, 폴백 사용: {e}")
+
                 def hydrate_context(
                     chunks: List[Dict[str, Any]],
                     max_len: int = 10000,
@@ -925,7 +923,7 @@ class RAGPipeline:
             # 파일명 정규화 (NFKC, 공백 정규화, 대소문자 통일)
             import unicodedata
             normalized_filename = unicodedata.normalize("NFKC", selected_filename).strip()
-            normalized_filename = re.sub(r'\s+', ' ', normalized_filename)
+            normalized_filename = re.sub(r"\s+", " ", normalized_filename)
 
             # UI 메타데이터 제거
             actual_query = clean_ui_metadata(query)
@@ -946,8 +944,6 @@ class RAGPipeline:
 
         # 🔥 CRITICAL: 기안자/날짜 검색은 QuickFixRAG에 위임 (전문 로직 보유)
         if hasattr(self.generator, "rag"):
-            import sqlite3
-
             # ✅ 확장된 쿼리에서 실제 질문 추출 (chat_interface.py 대응)
             actual_query = query
             if "현재 질문:" in query:
@@ -962,19 +958,19 @@ class RAGPipeline:
             # 🔍 쿼리에서 문서명 추출 (사용자가 직접 타이핑한 경우)
             # 패턴: "문서제목 이 문서/해당 문서 ..."
             if not selected_filename:
-                doc_ref_pattern = r'^(.+?)\s+(이\s?문서|해당\s?문서|이문서)'
+                doc_ref_pattern = r"^(.+?)\s+(이\s?문서|해당\s?문서|이문서)"
                 match = re.match(doc_ref_pattern, actual_query, re.IGNORECASE)
                 if match:
                     candidate_title = match.group(1).strip()
                     # 날짜 패턴 제거 (예: "2025-01-09_광화문_스튜디오..." → "광화문_스튜디오...")
-                    candidate_title = re.sub(r'^\d{4}[-_]\d{2}[-_]\d{2}[-_]', '', candidate_title)
+                    candidate_title = re.sub(r"^\d{4}[-_]\d{2}[-_]\d{2}[-_]", "", candidate_title)
 
                     # metadata_db에서 제목으로 문서 검색
                     from app.data.metadata_db import MetadataDB
                     db = MetadataDB()
                     try:
                         # 제목 정규화 (특수문자, 공백 처리)
-                        normalized_title = candidate_title.replace('_', ' ').replace('&', '').strip()
+                        normalized_title = candidate_title.replace("_", " ").replace("&", "").strip()
 
                         # DB에서 제목 유사도 검색 (LIKE 패턴)
                         conn = db.conn
@@ -1012,7 +1008,7 @@ class RAGPipeline:
 
             # 🔧 요약 의도 + 쿼리에 날짜/문서명 패턴이 있으면 DOCUMENT 모드로 강제
             has_summary_intent = self.query_router.SUMMARY_INTENT_PATTERN.search(actual_query) or "내용" in actual_query.lower()
-            has_date_pattern = re.search(r'\d{4}[-_]\d{2}[-_]\d{2}', actual_query)  # 2025-06-10 형식
+            has_date_pattern = re.search(r"\d{4}[-_]\d{2}[-_]\d{2}", actual_query)  # 2025-06-10 형식
 
             if has_summary_intent and has_date_pattern and not selected_filename:
                 logger.info(f"🎯 요약 의도 + 날짜 패턴 감지 → DOCUMENT 모드로 강제")
@@ -1212,13 +1208,13 @@ class RAGPipeline:
         """
         try:
             # BM25 인덱스에서 직접 해당 문서 찾기 (검색 대신 직접 접근)
-            if hasattr(self.retriever, 'bm25') and self.retriever.bm25:
+            if hasattr(self.retriever, "bm25") and self.retriever.bm25:
                 bm25_store = self.retriever.bm25
 
                 # metadata에서 filename이 일치하는 문서의 인덱스 찾기
                 target_indices = []
                 for i, meta in enumerate(bm25_store.metadata):
-                    if meta.get('filename') == filename:
+                    if meta.get("filename") == filename:
                         target_indices.append(i)
                         logger.info(f"✅ BM25 인덱스에서 발견: {filename} (index={i})")
 
@@ -1229,11 +1225,11 @@ class RAGPipeline:
                     if content and len(content.strip()) > 0:
                         # 전체 문서를 하나의 큰 청크로 사용
                         chunks.append({
-                            'doc_id': filename,
-                            'page': 1,
-                            'text': content,  # 전체 텍스트
-                            'score': 1.0,  # 직접 매칭이므로 최고 스코어
-                            'filename': filename
+                            "doc_id": filename,
+                            "page": 1,
+                            "text": content,  # 전체 텍스트
+                            "score": 1.0,  # 직접 매칭이므로 최고 스코어
+                            "filename": filename
                         })
                         logger.info(f"✓ 문서 content 로드: {len(content)}자")
 
@@ -1243,23 +1239,23 @@ class RAGPipeline:
 
             # BM25 사용 불가 시 폴백: 키워드 검색
             logger.warning("⚠️ BM25 직접 접근 불가, 검색으로 폴백")
-            search_query = filename.replace('.pdf', '').replace('_', ' ')
+            search_query = filename.replace(".pdf", "").replace("_", " ")
             results = self.retriever.search(search_query, top_k=20)
 
             # 검색 결과를 해당 문서로 필터링
             chunks = []
             for result in results:
                 # doc_id 또는 meta.filename이 일치하는 경우만 포함
-                doc_id = result.get('doc_id', '')
-                meta_filename = result.get('meta', {}).get('filename', '')
+                doc_id = result.get("doc_id", "")
+                meta_filename = result.get("meta", {}).get("filename", "")
 
                 if filename in doc_id or filename in meta_filename:
                     chunks.append({
-                        'doc_id': result.get('doc_id', filename),
-                        'page': result.get('page', 1),
-                        'text': result.get('snippet', result.get('text', '')),
-                        'score': result.get('score', 0.0),
-                        'filename': filename
+                        "doc_id": result.get("doc_id", filename),
+                        "page": result.get("page", 1),
+                        "text": result.get("snippet", result.get("text", "")),
+                        "score": result.get("score", 0.0),
+                        "filename": filename
                     })
 
             if not chunks:
@@ -1287,7 +1283,6 @@ class RAGPipeline:
         try:
             import pytesseract
             from pdf2image import convert_from_path
-            from PIL import Image
 
             # PDF를 이미지로 변환 (끝 3페이지만)
             images = convert_from_path(
@@ -1300,7 +1295,7 @@ class RAGPipeline:
             for i, img in enumerate(images):
                 try:
                     # pytesseract 사용
-                    page_text = pytesseract.image_to_string(img, lang='kor+eng')
+                    page_text = pytesseract.image_to_string(img, lang="kor+eng")
                     text += page_text + "\n"
                     logger.info(f"✓ OCR (pytesseract) 페이지 {start_page + i + 1}: {len(page_text)}자")
                 except Exception as e:
@@ -1313,7 +1308,7 @@ class RAGPipeline:
             logger.info("🔄 paddleocr 폴백 시도...")
             try:
                 from paddleocr import PaddleOCR
-                ocr = PaddleOCR(use_angle_cls=True, lang='korean')
+                ocr = PaddleOCR(use_angle_cls=True, lang="korean")
 
                 text = ""
                 for i, img in enumerate(images):
@@ -1350,7 +1345,6 @@ class RAGPipeline:
         """
         import re
 
-        import pdfplumber
         parts = []
 
         # 1) PDF 끝 2~3페이지 추출 → 비활성화 (인덱스 청크 우선 전략)
@@ -1378,7 +1372,7 @@ class RAGPipeline:
 
         # 2) 인덱스 청크 기반 컨텍스트 수집 (섹션 가중치 적용)
         # 우선순위 키워드: 개요, 배경, 검토사유, 대안, 견적, 결론, 비용, 도입사유
-        priority_keywords = r'(개요|배경|검토사유|검토\s*사유|대안|견적|결론|비용|도입사유|도입\s*사유|구매목적|구매\s*목적|선정|권고|총액|합계)'
+        priority_keywords = r"(개요|배경|검토사유|검토\s*사유|대안|견적|결론|비용|도입사유|도입\s*사유|구매목적|구매\s*목적|선정|권고|총액|합계)"
 
         try:
             if doc_locked:
@@ -1390,7 +1384,7 @@ class RAGPipeline:
                 priority_chunks = []
                 normal_chunks = []
                 for chunk in chunks:
-                    chunk_text = chunk.get('text') or chunk.get('snippet') or chunk.get('content') or ""
+                    chunk_text = chunk.get("text") or chunk.get("snippet") or chunk.get("content") or ""
                     if re.search(priority_keywords, chunk_text):
                         priority_chunks.append(chunk)
                     else:
@@ -1400,7 +1394,7 @@ class RAGPipeline:
                 sorted_chunks = (priority_chunks + normal_chunks)[:10]
 
                 for i, chunk in enumerate(sorted_chunks, 1):
-                    chunk_text = chunk.get('text') or chunk.get('snippet') or chunk.get('content') or ""
+                    chunk_text = chunk.get("text") or chunk.get("snippet") or chunk.get("content") or ""
                     if chunk_text:
                         parts.append(f"=== [문서 청크 {i}] ===\n" + chunk_text[:5000])
 
@@ -1408,9 +1402,9 @@ class RAGPipeline:
                     logger.info(f"✓ 문서 고정 청크 {len(sorted_chunks)}개 추출 (우선순위: {len(priority_chunks)}개)")
             else:
                 # 일반 모드: 키워드 검색 후 같은 파일 필터링
-                search_keywords = re.sub(r'^\d{4}-\d{2}-\d{2}_', '', filename)  # 날짜 제거
-                search_keywords = re.sub(r'\.pdf$', '', search_keywords, flags=re.IGNORECASE)
-                search_keywords = search_keywords.replace('_', ' ')
+                search_keywords = re.sub(r"^\d{4}-\d{2}-\d{2}_", "", filename)  # 날짜 제거
+                search_keywords = re.sub(r"\.pdf$", "", search_keywords, flags=re.IGNORECASE)
+                search_keywords = search_keywords.replace("_", " ")
 
                 hits = self.retriever.search(search_keywords, top_k=10)
                 same_file_hits = [h for h in hits if h.get("filename") == filename]
@@ -1419,7 +1413,7 @@ class RAGPipeline:
                 priority_hits = []
                 normal_hits = []
                 for h in same_file_hits:
-                    chunk_text = h.get('text') or h.get('snippet') or h.get('content') or ""
+                    chunk_text = h.get("text") or h.get("snippet") or h.get("content") or ""
                     if re.search(priority_keywords, chunk_text):
                         priority_hits.append(h)
                     else:
@@ -1428,7 +1422,7 @@ class RAGPipeline:
                 sorted_hits = (priority_hits + normal_hits)[:10]
 
                 for i, h in enumerate(sorted_hits, 1):
-                    chunk_text = h.get('text') or h.get('snippet') or h.get('content') or ""
+                    chunk_text = h.get("text") or h.get("snippet") or h.get("content") or ""
                     if chunk_text:
                         parts.append(f"=== [관련 청크 {i}] ===\n" + chunk_text[:5000])
 

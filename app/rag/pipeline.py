@@ -30,7 +30,6 @@ from app.rag.query_router import QueryMode, QueryRouter
 from app.utils.sqlite_helpers import connect_metadata
 from app.utils.text_normalizer import detect_section, is_detailed_mode, normalize_query
 from app.config.settings import settings
-from config.constants import SearchConfig
 from app.rag.utils.text import (
     get_query_token_count,
     norm_chunk_text as _norm_chunk_text,

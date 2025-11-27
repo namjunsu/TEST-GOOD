@@ -28,6 +28,8 @@ streamlit.log
 .streamlit/
 .cache/
 *.cache
+.mypy_cache/
+.pytest_cache/
 
 # SQLite WAL files
 *.db-shm
@@ -43,12 +45,15 @@ rag-indexes/
 
 # Backup folders
 backup/
+backups/
 archive/
 old_files/
 old_backups/
 backup_*/
 *_backup_*.py
 unused_files/
+*.bak
+modules_legacy/
 
 # IDE
 .vscode/
@@ -91,6 +96,7 @@ coverage.xml
 logs/
 *.log
 data/
+!app/data/
 *.db.bak*
 *.db.backup*
 

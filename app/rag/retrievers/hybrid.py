@@ -18,17 +18,21 @@ BM25Store를 사용하여 전체 텍스트 기반 검색 수행
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
 import yaml
 
 from app.core.logging import get_logger
-from app.rag.parallel_executor import get_parallel_executor
+from app.data.metadata_db import MetadataDB
+from app.rag.parallel_executor import ParallelSearchExecutor, get_parallel_executor
 from app.rag.query_expander import get_query_expander
 from app.rag.query_parser import QueryParser
 from app.rag.retrievers.exact_match import ExactMatchRetriever
-from app.data.metadata_db import MetadataDB
+from config.constants import ScoringConfig
 from rag_system.active.bm25_store import BM25Store  # 인덱서와 동일 모듈 사용
+
+if TYPE_CHECKING:
+    from app.rag.query_expander import QueryExpander
 
 logger = get_logger(__name__)
 
@@ -40,7 +44,25 @@ class HybridRetriever:
     내부적으로 BM25Store를 사용해 전체 텍스트 기반 검색을 수행합니다.
     """
 
-    def __init__(self):
+    # 클래스 속성 타입 선언
+    snippet_max_length: int
+    retrieve_topk: int
+    display_limit: int
+    use_bm25: bool
+    enable_parallel: bool
+    parallel_executor: Optional[ParallelSearchExecutor]
+    metadata_db: MetadataDB
+    known_drafters: Set[str]
+    parser: QueryParser
+    exact_match_enabled: bool
+    exact_match: Optional[ExactMatchRetriever]
+    query_expander: Optional["QueryExpander"]
+    bm25: Optional[BM25Store]
+    device_pattern: Optional[str]
+    deny_pattern: Optional[str]
+    _last_index_mtime: float
+
+    def __init__(self) -> None:
         """초기화 - BM25Store 및 MetadataDB 로드"""
         try:
             # 스니펫 길이 설정 (3600자 = ~1200 토큰)
@@ -55,6 +77,7 @@ class HybridRetriever:
 
             # 병렬 처리 설정
             self.enable_parallel = os.getenv("ENABLE_PARALLEL_SEARCH", "true").lower() == "true"
+            self.parallel_executor = None  # 기본값
             if self.enable_parallel:
                 self.parallel_executor = get_parallel_executor(max_workers=3)
                 logger.info("✅ Parallel search execution enabled")
@@ -97,7 +120,7 @@ class HybridRetriever:
             logger.error(f"❌ HybridRetriever 초기화 실패: {e}")
             raise
 
-    def _load_router_keywords(self):
+    def _load_router_keywords(self) -> None:
         """라우터 키워드 YAML v2 로드 (프로파일 기반 구조)"""
         try:
             config_path = Path("config/router_keywords.yaml")
@@ -148,7 +171,7 @@ class HybridRetriever:
         pattern = pattern.replace("{KBR}", r"(?![가-힣A-Za-z0-9])")
         return pattern
 
-    def _set_fallback_patterns(self):
+    def _set_fallback_patterns(self) -> None:
         """폴백 패턴 설정 (YAML 로드 실패 시)"""
         self.device_pattern = (
             r"\bHRD[-\s]?\d{3,4}\b|DVR|NVR|"
@@ -164,7 +187,7 @@ class HybridRetriever:
         index_path = os.getenv("BM25_INDEX_PATH", "var/index/bm25_index.pkl")
         return os.path.getmtime(index_path) if os.path.exists(index_path) else 0.0
 
-    def _reload_if_index_rotated(self):
+    def _reload_if_index_rotated(self) -> None:
         """인덱스 파일이 갱신되면 자동 리로드"""
         if not self.use_bm25:
             return
@@ -179,7 +202,7 @@ class HybridRetriever:
 
     def _find_selected_document(self, selected_filename: str) -> Optional[Dict[str, Any]]:
         """
-        선택된 문서를 MetadataDB에서 직접 검색
+        선택된 문서를 MetadataDB에서 직접 검색 (SQL 레벨 필터링)
 
         Args:
             selected_filename: 검색할 파일명
@@ -188,24 +211,24 @@ class HybridRetriever:
             변환된 문서 딕셔너리 또는 None
         """
         try:
-            all_docs = self.metadata_db.search_documents(limit=500)
-            for doc in all_docs:
-                if doc.get("filename") == selected_filename:
-                    # BM25 result 형식으로 변환
-                    return {
-                        "doc_id": doc.get("filename", "unknown"),
-                        "snippet": doc.get("text_preview") or "",  # 전체 문서 사용
-                        "score": 99.9,  # 최우선 스코어
-                        "page": 1,
+            # N+1 쿼리 최적화: get_by_filename()으로 직접 조회
+            doc = self.metadata_db.get_by_filename(selected_filename)
+            if doc:
+                # BM25 result 형식으로 변환
+                return {
+                    "doc_id": doc.get("filename", "unknown"),
+                    "snippet": doc.get("text_preview") or "",
+                    "score": 99.9,  # 최우선 스코어
+                    "page": 1,
+                    "filename": doc.get("filename"),
+                    "file_path": doc.get("path"),
+                    "meta": {
                         "filename": doc.get("filename"),
-                        "file_path": doc.get("path"),
-                        "meta": {
-                            "filename": doc.get("filename"),
-                            "date": doc.get("date"),
-                            "drafter": doc.get("drafter"),
-                            "category": doc.get("category"),
-                        }
+                        "date": doc.get("date"),
+                        "drafter": doc.get("drafter"),
+                        "category": doc.get("category"),
                     }
+                }
             logger.warning(f"⚠️ 선택된 문서를 찾을 수 없음: {selected_filename}")
             return None
         except Exception as e:
@@ -338,23 +361,29 @@ class HybridRetriever:
             # 파일명에 정확히 일치하는 토큰이 있으면 보너스
             if token in filename:
                 filename_exact_match_count += 1
-                filename_bonus += 0.4  # 토큰당 +0.4점 (5개 매칭 시 2.0)
+                filename_bonus += ScoringConfig.FILENAME_TOKEN_BONUS
 
         # 파일명에서 연속된 구문 매칭 시 추가 보너스
         if len(query_tokens) >= 2 and query.lower() in filename:
-            filename_bonus += 1.5  # 완전 구문 매칭 +1.5점
+            filename_bonus += ScoringConfig.FILENAME_PHRASE_BONUS
 
-        # 보너스 상한 제한 (+4.0)
-        filename_bonus = min(4.0, filename_bonus)
+        # 텍스트 길이 기반 페널티 (OCR 불량 문서 억제)
+        text_len = len(doc.get("snippet") or "")
+        if text_len < ScoringConfig.SHORT_TEXT_THRESHOLD:
+            filename_bonus *= ScoringConfig.SHORT_TEXT_PENALTY
+        elif text_len < ScoringConfig.VERY_SHORT_TEXT_THRESHOLD:
+            filename_bonus *= ScoringConfig.VERY_SHORT_TEXT_PENALTY
 
-        # 최종 스코어: 기본 스코어(0~1) * 6.0 + 파일명 보너스(0~4.0) = 최대 10점
-        # (match_ratio를 6배로 스케일링하여 기본 스코어의 영향력 유지)
-        final_score = (match_ratio * 6.0) + filename_bonus
+        # 보너스 상한 제한
+        filename_bonus = min(ScoringConfig.FILENAME_BONUS_CAP, filename_bonus)
+
+        # 최종 스코어: 기본 스코어(0~1) * MATCH_RATIO_SCALE + 파일명 보너스
+        final_score = (match_ratio * ScoringConfig.MATCH_RATIO_SCALE) + filename_bonus
 
         if filename_bonus > 0:
             logger.debug(f"📊 Scoring '{filename[:50]}': match={match_ratio:.2f}, filename_bonus={filename_bonus:.1f}, final={final_score:.1f}")
 
-        return max(0.0, min(10.0, final_score))
+        return max(0.0, min(ScoringConfig.MAX_FINAL_SCORE, final_score))
 
     def search(self, query: str, top_k: int, mode: str = "chat", selected_filename: Optional[str] = None, strict_content: bool = False) -> List[Dict[str, Any]]:
         """검색 수행 v2.1
@@ -386,7 +415,7 @@ class HybridRetriever:
 
             # 🔍 STRICT CONTENT MODE: 정밀 내용 검색 (2025-11-19 추가)
             if strict_content:
-                logger.info(f"🎯 STRICT CONTENT MODE 활성화: QueryExpander/파일명보너스/메타라우팅 비활성화")
+                logger.info("🎯 STRICT CONTENT MODE 활성화: QueryExpander/파일명보너스/메타라우팅 비활성화")
                 if self.use_bm25 and self.bm25:
                     # BM25-only 검색 (넉넉히 가져옴)
                     bm25_results = self.bm25.search(query, top_k=top_k * 5)
@@ -725,6 +754,20 @@ class HybridRetriever:
                 f"🔍 HybridRetriever ({backend}): {len(normalized)}건 검색 완료 "
                 f"(top1={top1:.2f}, delta12={score_stats['delta12']:.2f})"
             )
+
+            # 검색 품질 로깅 (Phase 3 추가)
+            try:
+                from app.rag.monitoring.search_quality_logger import SearchQualityLogger
+                quality_logger = SearchQualityLogger()
+                quality_logger.log_search(
+                    query=query,
+                    results=normalized,
+                    score_stats=score_stats,
+                    metadata={"mode": mode, "backend": backend}
+                )
+            except Exception as e:
+                logger.debug(f"품질 로깅 실패 (무시): {e}")
+
             return results_with_stats
 
         except Exception as e:
@@ -786,18 +829,14 @@ class HybridRetriever:
             # 최종 유사도 점수 (둘 중 높은 값 사용)
             similarity = max(jaccard_score, query_coverage)
 
-            # 보너스 점수 계산 (0~30점 범위)
-            # - 80% 이상 유사: +30점
-            # - 60~80% 유사: +20점
-            # - 40~60% 유사: +10점
-            # - 40% 미만: 보너스 없음
+            # 보너스 점수 계산 (유사도 기반)
             bonus = 0.0
-            if similarity >= 0.8:
-                bonus = 30.0
-            elif similarity >= 0.6:
-                bonus = 20.0
-            elif similarity >= 0.4:
-                bonus = 10.0
+            if similarity >= ScoringConfig.HIGH_SIM_THRESHOLD:
+                bonus = ScoringConfig.HIGH_SIM_BONUS
+            elif similarity >= ScoringConfig.MED_SIM_THRESHOLD:
+                bonus = ScoringConfig.MED_SIM_BONUS
+            elif similarity >= ScoringConfig.LOW_SIM_THRESHOLD:
+                bonus = ScoringConfig.LOW_SIM_BONUS
 
             # 보너스 적용
             if bonus > 0:

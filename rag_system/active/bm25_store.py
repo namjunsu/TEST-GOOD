@@ -3,6 +3,7 @@
 kiwipiepy 기반 토크나이저 사용
 """
 
+import logging
 import math
 import pickle
 import re
@@ -10,7 +11,7 @@ import time
 from collections import defaultdict
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, DefaultDict, Dict, List, Optional, Set
 
 from app.core.logging import get_logger
 
@@ -110,7 +111,15 @@ class KoreanTokenizer:
     TOKEN_PATTERN = r"[^\w\s가-힣]"  # 한글, 영문, 숫자 외 제거
     CACHE_SIZE = 2048  # 토큰 캐시 크기
 
-    def __init__(self):
+    # 클래스 속성 타입 선언
+    logger: logging.Logger
+    _compiled_token_pattern: re.Pattern[str]
+    tokenize_count: int
+    cache_hits: int
+    kiwi: Optional[Any]  # kiwipiepy.Kiwi
+    use_kiwi: bool
+
+    def __init__(self) -> None:
         self.logger = get_logger(__name__)
 
         # 패턴 컴파일
@@ -166,15 +175,15 @@ class KoreanTokenizer:
 
 
 def build_dynamic_stopwords(doc_freqs: Dict[str, int], n_docs: int,
-                           df_threshold: float = 0.85, max_token_len: int = 2,
+                           df_threshold: float = 0.75, max_token_len: int = 3,
                            whitelist: set = None) -> set:
     """문서 빈도 기반 동적 불용어 도출
 
     Args:
         doc_freqs: 토큰별 문서 빈도
         n_docs: 전체 문서 수
-        df_threshold: 불용어로 간주할 문서 빈도 비율 (기본 0.85 = 85%)
-        max_token_len: 불용어 후보로 고려할 최대 토큰 길이
+        df_threshold: 불용어로 간주할 문서 빈도 비율 (기본 0.75 = 75%, 기존 0.85에서 강화)
+        max_token_len: 불용어 후보로 고려할 최대 토큰 길이 (기본 3, 기존 2에서 확장)
         whitelist: 절대 불용어로 지정하지 않을 키워드 세트
 
     Returns:
@@ -205,14 +214,33 @@ class BM25Store:
     DEFAULT_B = 0.75  # 문서 길이 정규화 매개변수
     DEFAULT_INDEX_PATH = "var/index/bm25_index.pkl"
 
+    # 클래스 속성 타입 선언
+    index_path: Path
+    k1: float
+    b: float
+    idf_mode: str
+    stopwords: Set[str]
+    logger: logging.Logger
+    tokenizer: KoreanTokenizer
+    documents: List[str]
+    metadata: List[Dict[str, Any]]
+    term_freqs: List[Dict[str, int]]
+    doc_freqs: DefaultDict[str, int]
+    doc_lens: List[int]
+    avg_doc_len: float
+    vocab: Set[str]
+    search_count: int
+    total_search_time: float
+    index_time: float
+
     def __init__(
         self,
-        index_path: str = None,
-        k1: float = None,
-        b: float = None,
+        index_path: Optional[str] = None,
+        k1: Optional[float] = None,
+        b: Optional[float] = None,
         idf_mode: str = "clipped",  # "rsj" | "log1p" | "clipped"
-        stopwords: set = None,
-    ):
+        stopwords: Optional[Set[str]] = None,
+    ) -> None:
         self.index_path = Path(index_path) if index_path else Path(self.DEFAULT_INDEX_PATH)
         self.k1 = k1 if k1 is not None else self.DEFAULT_K1
         self.b = b if b is not None else self.DEFAULT_B
@@ -252,6 +280,15 @@ class BM25Store:
         elif self.idf_mode == "log1p":
             # 항상 양수, 극단적 DF에 덜 민감
             return math.log(1.0 + (n_docs - df + 0.5) / (df + 0.5))
+        elif self.idf_mode == "adaptive":
+            # 적응형 IDF: 고빈도 토큰에 페널티 적용
+            df_ratio = df / n_docs
+            if df_ratio > 0.8:  # 80% 이상 문서 등장 → 불용어 (0점)
+                return 0.0
+            elif df_ratio > 0.5:  # 50-80% → 절반 페널티
+                return max(0.0, rsj) * 0.5
+            else:
+                return max(0.0, rsj)
         elif self.idf_mode == "clipped":
             # 음수 IDF는 0으로 클리핑 (불용어 효과)
             return max(0.0, rsj)
@@ -265,6 +302,50 @@ class BM25Store:
         if not self.stopwords:
             return tokens
         return [t for t in tokens if t not in self.stopwords]
+
+    def _get_token_weight(self, token: str) -> float:
+        """토큰 유형별 가중치 반환
+
+        Args:
+            token: 토큰 문자열
+
+        Returns:
+            1.0~3.0 범위의 가중치
+        """
+        import re
+
+        # 장비명/모델명 패턴: 3.0배 (예: PMW-500, HRD-1800)
+        if re.match(r"[A-Z]{2,}[-\d]+", token):
+            return 3.0
+
+        token_lower = token.lower()
+
+        # 핵심 키워드 (3.0배) - 특정 주제를 명확히 식별하는 단어
+        CORE_KEYWORDS = {
+            "재난방송", "재난", "dvr", "nvr", "spg", "헬리캠", "드론",
+            "disaster", "emergency", "긴급"
+        }
+        if token_lower in CORE_KEYWORDS:
+            return 3.0
+
+        # 전문 키워드 (2.0배) - 방송 장비 관련 특화 단어
+        SPECIALIZED_KEYWORDS = {
+            "카메라", "렌즈", "마이크", "음향", "영상", "촬영",
+            "스튜디오", "방송", "업그레이드", "중계차", "부조정실"
+        }
+        if token_lower in SPECIALIZED_KEYWORDS:
+            return 2.0
+
+        # 일반 키워드 (1.2배) - 너무 흔해서 낮은 가중치
+        COMMON_KEYWORDS = {
+            "시스템", "구매", "검토", "교체", "수리", "설치",
+            "장비", "소모품", "유지보수", "점검"
+        }
+        if token_lower in COMMON_KEYWORDS:
+            return 1.2
+
+        # 기본 키워드: 1.0배
+        return 1.0
 
     def _load_or_create_index(self):
         """기존 인덱스 로드 또는 새 인덱스 생성"""
@@ -367,8 +448,8 @@ class BM25Store:
                     # doc_id 정규화 (DB PK → 문자열)
                     # 원본 metadata를 변경하지 않고 복사본 생성
                     normalized_metadata = dict(metadata)
-                    if 'id' in normalized_metadata and not isinstance(normalized_metadata['id'], str):
-                        normalized_metadata['id'] = str(normalized_metadata['id'])
+                    if "id" in normalized_metadata and not isinstance(normalized_metadata["id"], str):
+                        normalized_metadata["id"] = str(normalized_metadata["id"])
 
                     # 문서 추가
                     self.documents.append(text)
@@ -456,7 +537,9 @@ class BM25Store:
                         avgdl = self.avg_doc_len if self.avg_doc_len > 0 else 1.0
                         denominator = tf + self.k1 * (1 - self.b + self.b * (doc_len / avgdl))
 
-                        score += idf * (numerator / denominator)
+                        # 토큰 가중치 적용 (중요 키워드 부스팅)
+                        token_weight = self._get_token_weight(token)
+                        score += idf * (numerator / denominator) * token_weight
 
                 scores.append((score, doc_idx))
 
@@ -515,11 +598,11 @@ class BM25Store:
             self.logger.error(f"BM25 검색 실패: {e}")
             return []
 
-    def generate_dynamic_stopwords(self, df_threshold: float = 0.85, max_token_len: int = 2) -> set:
+    def generate_dynamic_stopwords(self, df_threshold: float = 0.75, max_token_len: int = 3) -> set:
         """현재 인덱스에서 동적 불용어 생성
 
         Args:
-            df_threshold: 불용어로 간주할 문서 빈도 비율 (기본 0.85 = 85%)
+            df_threshold: 불용어로 간주할 문서 빈도 비율 (기본 0.75 = 75%, 기존 0.85에서 강화)
             max_token_len: 불용어 후보로 고려할 최대 토큰 길이
 
         Returns:

@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from app.config.settings import settings
 from app.core.errors import (
     ERROR_MESSAGES,
     ErrorCode,
@@ -22,39 +23,38 @@ from app.core.errors import (
     SearchError,
 )
 from app.core.logging import get_logger
+from app.rag.adapters import (
+    _DummyGenerator,
+    _DummyRetriever,
+    _LLMAdapter,
+    _NoOpCompressor,
+    _QuickFixGenerator,
+)
 from app.rag.cache_manager import (
     build_answer_cache_key,
     cache_query_result,
     get_cached_result,
 )
-from app.rag.persistent_cache import cache_query_result_persistent, get_cached_result_persistent
-from app.rag.query_router import QueryMode, QueryRouter
-from app.config.settings import settings
 
 # 분리된 모듈에서 import
 from app.rag.contracts import (
-    RAGResponse,
-    Retriever,
     Compressor,
     Generator,
+    RAGResponse,
+    Retriever,
 )
+from app.rag.persistent_cache import cache_query_result_persistent, get_cached_result_persistent
+from app.rag.query_router import QueryMode, QueryRouter
 from app.rag.query_routing import (
-    DIAG_RAG,
     DIAG_LOG_LEVEL,
-    clean_ui_metadata,
-    has_domain_keyword,
-    get_keyword_coverage,
-    force_chat_mode,
+    DIAG_RAG,
     _encode_file_ref,
+    clean_ui_metadata,
+    force_chat_mode,
+    get_keyword_coverage,
+    has_domain_keyword,
 )
 from app.rag.utils.text import get_query_token_count
-from app.rag.adapters import (
-    _DummyRetriever,
-    _NoOpCompressor,
-    _DummyGenerator,
-    _LLMAdapter,
-    _QuickFixGenerator,
-)
 
 logger = get_logger(__name__)
 
@@ -100,7 +100,7 @@ class RAGPipeline:
         self.known_drafters = self._load_known_drafters()
 
         # 🎯 Handler 초기화 (Strangler Fig 패턴)
-        from app.rag.handlers import SearchHandler, DocumentHandler, CostSumHandler
+        from app.rag.handlers import CostSumHandler, DocumentHandler, SearchHandler
         self._search_handler = SearchHandler(self)
         self._document_handler = DocumentHandler(self)
         self._cost_sum_handler = CostSumHandler(self)
@@ -886,7 +886,7 @@ class RAGPipeline:
             has_date_pattern = re.search(r"\d{4}[-_]\d{2}[-_]\d{2}", actual_query)  # 2025-06-10 형식
 
             if has_summary_intent and has_date_pattern and not selected_filename:
-                logger.info(f"🎯 요약 의도 + 날짜 패턴 감지 → DOCUMENT 모드로 강제")
+                logger.info("🎯 요약 의도 + 날짜 패턴 감지 → DOCUMENT 모드로 강제")
                 route_decision.mode = QueryMode.DOCUMENT
                 route_decision.reason = "summary_with_date_pattern"
 
@@ -1404,5 +1404,3 @@ class RAGPipeline:
         except Exception as e:
             logger.error(f"기안자 로드 실패: {e}")
             return set()
-
-

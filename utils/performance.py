@@ -237,9 +237,9 @@ class PerformanceMonitor:
                 def highlight_slow(val, column):
                     if column == "평균(s)" and val > cls.SLOW_THRESHOLD:
                         return "background-color: #ffcccc"
-                    elif column == "최대(s)" and val > cls.CRITICAL_THRESHOLD:
+                    if column == "최대(s)" and val > cls.CRITICAL_THRESHOLD:
                         return "background-color: #ff9999"
-                    elif column == "에러" and val > 0:
+                    if column == "에러" and val > 0:
                         return "background-color: #ffcc99"
                     return ""
 

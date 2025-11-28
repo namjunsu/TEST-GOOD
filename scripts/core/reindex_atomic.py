@@ -136,30 +136,15 @@ def reindex_bm25(source_dir: Path, output_path: Path) -> bool:
 
                 if text and len(text) >= 1000:  # 임계값: 1000자 이상
                     fulltext_count += 1
-                else:
-                    # 2순위: metadata.db에서 text_preview 로드 (임계값 상향: 1000자)
-                    if db_conn and (not text or len(text) < 100):
-                        preview_text = _load_text_from_metadata_db(filename, db_conn)
-                        # preview가 충분히 길면 사용 (1000자 이상), 아니면 pdfplumber 폴백
-                        if preview_text and len(preview_text) >= 1000:
-                            text = preview_text
-                            preview_count += 1
-                        else:
-                            # 3순위: pdfplumber로 추출 (폴백)
-                            if text:
-                                logger.warning(f"[short-text-fallback] {filename} - extracted={len(text)}자")
-
-                            text = ""
-                            if pdf_path.exists():
-                                with pdfplumber.open(pdf_path) as pdf:
-                                    for page in pdf.pages:  # 전체 페이지
-                                        page_text = page.extract_text() or ""
-                                        text += page_text + "\n"
-                                fallback_count += 1
-                            else:
-                                logger.warning(f"⚠️ 파일 없음: {filename}")
+                # 2순위: metadata.db에서 text_preview 로드 (임계값 상향: 1000자)
+                elif db_conn and (not text or len(text) < 100):
+                    preview_text = _load_text_from_metadata_db(filename, db_conn)
+                    # preview가 충분히 길면 사용 (1000자 이상), 아니면 pdfplumber 폴백
+                    if preview_text and len(preview_text) >= 1000:
+                        text = preview_text
+                        preview_count += 1
                     else:
-                        # text_preview도 없으면 pdfplumber 시도
+                        # 3순위: pdfplumber로 추출 (폴백)
                         if text:
                             logger.warning(f"[short-text-fallback] {filename} - extracted={len(text)}자")
 
@@ -172,6 +157,20 @@ def reindex_bm25(source_dir: Path, output_path: Path) -> bool:
                             fallback_count += 1
                         else:
                             logger.warning(f"⚠️ 파일 없음: {filename}")
+                else:
+                    # text_preview도 없으면 pdfplumber 시도
+                    if text:
+                        logger.warning(f"[short-text-fallback] {filename} - extracted={len(text)}자")
+
+                    text = ""
+                    if pdf_path.exists():
+                        with pdfplumber.open(pdf_path) as pdf:
+                            for page in pdf.pages:  # 전체 페이지
+                                page_text = page.extract_text() or ""
+                                text += page_text + "\n"
+                        fallback_count += 1
+                    else:
+                        logger.warning(f"⚠️ 파일 없음: {filename}")
 
                 # 텍스트 없어도 파일명으로라도 검색 가능하게 (근본 해결)
                 if not text.strip():

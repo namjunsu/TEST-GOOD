@@ -154,7 +154,7 @@ class EnhancedOCRProcessor:
         try:
             stat = p.stat()
             # 경로 + 수정 시각을 포함한 해시 (파일이 변경되면 새로 OCR 수행)
-            raw = f"{str(p.resolve())}|{stat.st_mtime_ns}"
+            raw = f"{p.resolve()!s}|{stat.st_mtime_ns}"
             return hashlib.md5(raw.encode("utf-8")).hexdigest()
         except Exception:
             # 파일 접근 실패 시 경로만으로 해시
@@ -291,7 +291,7 @@ class EnhancedOCRProcessor:
             return result
 
         except ImportError as e:
-            result["why"] = f"fail:missing_binary ({str(e)})"
+            result["why"] = f"fail:missing_binary ({e!s})"
             result["engine"] = "none"
             logger.error(f"[OCR] decision=fail, reason=missing_binary, detail={e}")
             return result

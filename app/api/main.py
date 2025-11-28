@@ -630,7 +630,7 @@ def get_metrics():
                         fs_names.add(f)
 
             for filename, path in rows:
-                exists = os.path.exists(path) if path and os.path.isabs(path) else (filename in fs_names)
+                exists = Path(path).exists() if path and os.path.isabs(path) else (filename in fs_names)
                 if not exists:
                     stale_count += 1
 

@@ -4,7 +4,6 @@ metadata.db Cleaner - Stale 레코드 정리 유틸리티
 물리적으로 존재하지 않는 파일의 메타데이터를 정리합니다.
 """
 
-import os
 import sqlite3
 from pathlib import Path
 
@@ -26,7 +25,7 @@ def purge_missing_files_from_metadata(
     Returns:
         (삭제된 레코드 수, 삭제된 파일명 리스트)
     """
-    if not os.path.exists(db_path):
+    if not Path(db_path).exists():
         logger.error(f"DB 파일이 존재하지 않습니다: {db_path}")
         return 0, []
 
@@ -73,24 +72,23 @@ def purge_missing_files_from_metadata(
                 logger.info(f"  - {filename}")
             if len(stale_filenames) > 10:
                 logger.info(f"  ... 외 {len(stale_filenames) - 10}개")
-        else:
-            # 실제 삭제 실행
-            if stale_ids:
-                # documents 테이블에서 삭제 (트리거로 documents_fts도 자동 삭제됨)
-                placeholders = ",".join(["?"] * len(stale_ids))
-                cursor.execute(f"""
+        # 실제 삭제 실행
+        elif stale_ids:
+            # documents 테이블에서 삭제 (트리거로 documents_fts도 자동 삭제됨)
+            placeholders = ",".join(["?"] * len(stale_ids))
+            cursor.execute(f"""
                     DELETE FROM documents
                     WHERE id IN ({placeholders})
                 """, stale_ids)
 
-                conn.commit()
-                logger.info(f"✅ {len(stale_ids)}개 stale 레코드 삭제 완료")
+            conn.commit()
+            logger.info(f"✅ {len(stale_ids)}개 stale 레코드 삭제 완료")
 
-                # 삭제된 파일명 로깅 (처음 10개만)
-                for filename in stale_filenames[:10]:
-                    logger.info(f"  - {filename}")
-                if len(stale_filenames) > 10:
-                    logger.info(f"  ... 외 {len(stale_filenames) - 10}개")
+            # 삭제된 파일명 로깅 (처음 10개만)
+            for filename in stale_filenames[:10]:
+                logger.info(f"  - {filename}")
+            if len(stale_filenames) > 10:
+                logger.info(f"  ... 외 {len(stale_filenames) - 10}개")
 
         conn.close()
         return len(stale_ids), stale_filenames
@@ -140,7 +138,7 @@ def verify_sync(metadata_db: str = "metadata.db", index_db: str = "everything_in
         metadata_conn.close()
 
         # everything_index.db 카운트
-        if os.path.exists(index_db):
+        if Path(index_db).exists():
             index_conn = sqlite3.connect(index_db)
             index_conn.row_factory = sqlite3.Row
             cursor = index_conn.execute("""

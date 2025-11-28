@@ -76,8 +76,7 @@ def ocr_extract_pdf(
         # 엔진별 OCR 수행
         if engine == "paddleocr":
             return _ocr_with_paddleocr(images, progress_callback)
-        else:
-            return _ocr_with_tesseract(images, lang, progress_callback)
+        return _ocr_with_tesseract(images, lang, progress_callback)
 
     except Exception as e:
         logger.error(f"OCR 실패: {pdf_path.name} - {e}")

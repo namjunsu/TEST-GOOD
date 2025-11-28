@@ -292,7 +292,7 @@ class SearchHandler(BaseHandler):
 
         except Exception as e:
             logger.error(f"❌ 문서 검색 실패: {e}", exc_info=True)
-            return self._make_error_response(f"문서 검색 중 오류가 발생했습니다: {str(e)}")
+            return self._make_error_response(f"문서 검색 중 오류가 발생했습니다: {e!s}")
 
     def _handle_content_only(self, query: str) -> dict[str, Any]:
         """정밀 내용 검색 처리 (본문에 키워드 포함된 문서만)"""
@@ -371,7 +371,7 @@ class SearchHandler(BaseHandler):
             logger.error(f"❌ 정밀 내용 검색 실패: {e}", exc_info=True)
             return {
                 "mode": "SEARCH_CONTENT_ONLY",
-                "text": f"검색 중 오류가 발생했습니다: {str(e)}",
+                "text": f"검색 중 오류가 발생했습니다: {e!s}",
                 "files": [],
                 "count": 0,
                 "citations": [],
@@ -755,7 +755,7 @@ class CostSumHandler(BaseHandler):
 
         except Exception as e:
             logger.error(f"❌ 비용 질의 처리 실패: {e}", exc_info=True)
-            return self._make_error_response(f"비용 정보 조회 중 오류가 발생했습니다: {str(e)}")
+            return self._make_error_response(f"비용 정보 조회 중 오류가 발생했습니다: {e!s}")
 
     def _build_cost_response(
         self,

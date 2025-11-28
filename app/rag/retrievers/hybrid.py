@@ -118,7 +118,7 @@ class HybridRetriever:
             self.bm25 = None
             if self.use_bm25:
                 index_path = os.getenv("BM25_INDEX_PATH", "var/index/bm25_index.pkl")
-                logger.info(f"🔍 DEBUG: BM25_INDEX_PATH={index_path} (exists={os.path.exists(index_path)})")
+                logger.info(f"🔍 DEBUG: BM25_INDEX_PATH={index_path} (exists={Path(index_path).exists()})")
                 self.bm25 = BM25Store(index_path=index_path)
                 logger.info(f"✅ HybridRetriever 초기화 완료 (BM25 백엔드, {len(self.bm25.documents)}개 문서, path={self.bm25.index_path})")
             else:
@@ -200,7 +200,7 @@ class HybridRetriever:
         if not self.use_bm25:
             return 0.0
         index_path = os.getenv("BM25_INDEX_PATH", "var/index/bm25_index.pkl")
-        return os.path.getmtime(index_path) if os.path.exists(index_path) else 0.0
+        return os.path.getmtime(index_path) if Path(index_path).exists() else 0.0
 
     def _reload_if_index_rotated(self) -> None:
         """인덱스 파일이 갱신되면 자동 리로드 (스레드 안전)"""
@@ -504,9 +504,8 @@ class HybridRetriever:
                     }
 
                     return ResultsWithStats(filtered_results, score_stats)
-                else:
-                    logger.warning("⚠️ BM25 비활성화 상태에서 STRICT CONTENT 모드 요청됨, 빈 결과 반환")
-                    return []
+                logger.warning("⚠️ BM25 비활성화 상태에서 STRICT CONTENT 모드 요청됨, 빈 결과 반환")
+                return []
 
             # Stage 0: ExactMatch (코드 정확일치 최우선 - v2.0 추가)
             if self.exact_match_enabled and self.exact_match:

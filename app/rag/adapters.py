@@ -94,7 +94,7 @@ class _LLMAdapter:
             return str(response)
         except Exception as e:
             logger.error(f"LLM 답변 생성 실패: {e}", exc_info=True)
-            return f"[E_GENERATE] {str(e)}"
+            return f"[E_GENERATE] {e!s}"
 
 
 class _QuickFixGenerator:
@@ -155,7 +155,7 @@ class _QuickFixGenerator:
             return self.rag.answer(query, use_llm_summary=True)
         except Exception as e:
             logger.error(f"Generation 실패: {e}", exc_info=True)
-            return f"[E_GENERATE] {str(e)}"
+            return f"[E_GENERATE] {e!s}"
 
 
 class _V2RetrieverAdapter:
@@ -279,12 +279,12 @@ class _V2RetrieverAdapter:
 
 
 __all__ = [
+    "_DummyGenerator",
     # 폴백
     "_DummyRetriever",
-    "_NoOpCompressor",
-    "_DummyGenerator",
     # 어댑터
     "_LLMAdapter",
+    "_NoOpCompressor",
     "_QuickFixGenerator",
     "_V2RetrieverAdapter",
 ]

@@ -429,9 +429,8 @@ class PDFViewer:
                                 key=f"text_full_{_hash_key(str(self.file_path))}",
                             )
                     return True
-                else:
-                    # OCR 시도
-                    return self._try_ocr(page_num)
+                # OCR 시도
+                return self._try_ocr(page_num)
 
         except Exception as e:
             st.error(f"🔴 텍스트 추출 실패: {e}")
@@ -478,17 +477,16 @@ class PDFViewer:
                             key=f"ocr_content_{_hash_key(str(self.file_path))}",
                         )
                 return True
+            # 실패 메시지
+            why = ocr_result.get("why", "unknown")
+            if "missing_binary" in why:
+                st.warning("⚠️ Tesseract OCR이 설치되지 않았거나 라이브러리가 없습니다")
+                st.info("💡 설치: pip install pytesseract pdf2image")
             else:
-                # 실패 메시지
-                why = ocr_result.get("why", "unknown")
-                if "missing_binary" in why:
-                    st.warning("⚠️ Tesseract OCR이 설치되지 않았거나 라이브러리가 없습니다")
-                    st.info("💡 설치: pip install pytesseract pdf2image")
-                else:
-                    st.warning(
-                        f"⚠️ OCR 처리 후에도 텍스트를 추출할 수 없습니다 (사유: {why})",
-                    )
-                return False
+                st.warning(
+                    f"⚠️ OCR 처리 후에도 텍스트를 추출할 수 없습니다 (사유: {why})",
+                )
+            return False
 
         except ImportError:
             st.warning(
@@ -540,10 +538,10 @@ class PDFViewer:
             if view_mode_str == ViewMode.ORIGINAL.value:
                 return self._render_original_pdf(self.info)
 
-            elif view_mode_str == ViewMode.IMAGES.value:
+            if view_mode_str == ViewMode.IMAGES.value:
                 return self._render_pdf_as_images(self.info)
 
-            elif view_mode_str == ViewMode.TEXT.value:
+            if view_mode_str == ViewMode.TEXT.value:
                 return self._render_pdf_text(self.info)
 
             return False

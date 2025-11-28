@@ -704,7 +704,7 @@ class RAGPipeline:
             return RAGResponse(
                 answer="",
                 success=False,
-                error=f"[E_UNKNOWN] {str(e)}",
+                error=f"[E_UNKNOWN] {e!s}",
                 latency=time.perf_counter() - start_time,
             )
 
@@ -998,26 +998,25 @@ class RAGPipeline:
             logger.info(f"📝 Cached result to memory + persistent storage for query: {query[:50]}...")
 
             return result
-        else:
-            # 에러 발생 시 (중립 톤, 사과 표현 금지)
-            error_msg = ERROR_MESSAGES.get(
-                ErrorCode.E_GENERATE, "답변 생성 중 오류가 발생했다.",
-            )
-            if response.error:
-                error_msg = f"{error_msg}\n\n상세: {response.error}"
+        # 에러 발생 시 (중립 톤, 사과 표현 금지)
+        error_msg = ERROR_MESSAGES.get(
+            ErrorCode.E_GENERATE, "답변 생성 중 오류가 발생했다.",
+        )
+        if response.error:
+            error_msg = f"{error_msg}\n\n상세: {response.error}"
 
-            # 운영 표준 로그 (에러 케이스)
-            logger.error(
-                f'[RAG] query="{query[:50]}..." | '
-                f'status=ERROR | error="{response.error}"',
-            )
+        # 운영 표준 로그 (에러 케이스)
+        logger.error(
+            f'[RAG] query="{query[:50]}..." | '
+            f'status=ERROR | error="{response.error}"',
+        )
 
-            return {
-                "text": error_msg,
-                "citations": [],  # 🔴 표준 키 (필수)
-                "evidence": [],  # 하위 호환성
-                "status": {"retrieved_count": 0, "selected_count": 0, "found": False},
-            }
+        return {
+            "text": error_msg,
+            "citations": [],  # 🔴 표준 키 (필수)
+            "evidence": [],  # 하위 호환성
+            "status": {"retrieved_count": 0, "selected_count": 0, "found": False},
+        }
 
     def answer_text(self, query: str) -> str:
         """답변 텍스트만 반환 (하위 호환성)

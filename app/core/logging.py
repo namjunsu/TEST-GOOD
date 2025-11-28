@@ -236,4 +236,4 @@ def reset_logger() -> None:
         _LOGGER = None
 
 
-__all__ = ["get_logger", "set_level", "reset_logger"]
+__all__ = ["get_logger", "reset_logger", "set_level"]

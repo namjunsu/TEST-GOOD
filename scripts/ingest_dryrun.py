@@ -156,14 +156,13 @@ class IngestDryrun:
         # text와 filename을 직접 사용 (한글 키워드는 대소문자 무관)
         if "구매" in text or "구매" in filename:
             return "구매기안서"
-        elif "수리" in text or "교체" in text or "수리" in filename:
+        if "수리" in text or "교체" in text or "수리" in filename:
             return "수리/교체"
-        elif "장애" in text or "장애" in filename:
+        if "장애" in text or "장애" in filename:
             return "장애보고서"
-        elif "검토" in text or "검토" in filename:
+        if "검토" in text or "검토" in filename:
             return "기술검토서"
-        else:
-            return "기타문서"
+        return "기타문서"
 
     def detect_language(self, text: str) -> dict[str, float]:
         """언어 비율 추정"""
@@ -355,7 +354,7 @@ class IngestDryrun:
         except Exception as e:
             trace["errors"].append(str(e))
             self.stats["failed"] += 1
-            logger.error(f"[INGEST] file={pdf_path.name}, stage=error, error={str(e)}")
+            logger.error(f"[INGEST] file={pdf_path.name}, stage=error, error={e!s}")
 
         return trace
 

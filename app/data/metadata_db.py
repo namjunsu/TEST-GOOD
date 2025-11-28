@@ -371,8 +371,7 @@ class MetadataDB:
             if "fts5" in str(e).lower() or "syntax" in str(e).lower():
                 logger.warning(f"FTS5 검색 syntax 오류 (keyword='{keyword}'): {e}")
                 return []
-            else:
-                raise  # 다른 OperationalError는 재발생
+            raise  # 다른 OperationalError는 재발생
 
     def search_by_date_range(
         self, start_date: str, end_date: str,
@@ -693,7 +692,6 @@ class MetadataDB:
         """
         try:
             import json
-            import os
 
             # config.indexing import 시도 (없으면 폴백)
             try:
@@ -703,7 +701,7 @@ class MetadataDB:
                 logger.warning("config.indexing 로드 실패, 기본 경로 사용")
                 file_index_path = "file_index.json"
 
-            if os.path.exists(file_index_path):
+            if Path(file_index_path).exists():
                 with Path(file_index_path).open("r", encoding="utf-8") as f:
                     file_data = json.load(f)
 
@@ -720,27 +718,26 @@ class MetadataDB:
                         counts["others"] += 1
 
                 return counts
-            else:
-                # file_index.json이 없으면 DB에서 카운트
-                counts = {"pdf": 0, "txt": 0, "others": 0}
+            # file_index.json이 없으면 DB에서 카운트
+            counts = {"pdf": 0, "txt": 0, "others": 0}
 
-                conn = self._get_conn()
-                cursor = conn.execute("""
+            conn = self._get_conn()
+            cursor = conn.execute("""
                     SELECT
                         LOWER(filename) as fname
                     FROM documents
                 """)
 
-                for row in cursor:
-                    fname = row["fname"]
-                    if fname.endswith(".pdf"):
-                        counts["pdf"] += 1
-                    elif fname.endswith(".txt"):
-                        counts["txt"] += 1
-                    else:
-                        counts["others"] += 1
+            for row in cursor:
+                fname = row["fname"]
+                if fname.endswith(".pdf"):
+                    counts["pdf"] += 1
+                elif fname.endswith(".txt"):
+                    counts["txt"] += 1
+                else:
+                    counts["others"] += 1
 
-                return counts
+            return counts
 
         except Exception as e:
             logger.error(f"확장자별 카운트 실패: {e}")
@@ -753,7 +750,6 @@ class MetadataDB:
             검색 가능한 고유 문서 수
         """
         try:
-            import os
             import sqlite3
 
             from config.indexing import DB_PATHS
@@ -761,7 +757,7 @@ class MetadataDB:
             # everything_index.db에서 검색 가능 문서 수 조회
             index_db_path = DB_PATHS.get("everything_index", "everything_index.db")
 
-            if os.path.exists(index_db_path):
+            if Path(index_db_path).exists():
                 index_conn = sqlite3.connect(index_db_path)
                 index_conn.row_factory = sqlite3.Row
 
@@ -775,9 +771,8 @@ class MetadataDB:
                 index_conn.close()
 
                 return result["count"] if result else 0
-            else:
-                # everything_index.db가 없으면 metadata.db 사용
-                return self.count_unique_documents()
+            # everything_index.db가 없으면 metadata.db 사용
+            return self.count_unique_documents()
 
         except Exception as e:
             logger.error(f"검색 인덱스 카운트 실패: {e}")

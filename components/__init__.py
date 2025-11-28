@@ -10,7 +10,7 @@ from .sidebar_library import render_sidebar_library
 
 __all__ = [
     "PDFViewer",
-    "render_sidebar_library",
     "render_chat_interface",
     "render_document_preview",
+    "render_sidebar_library",
 ]

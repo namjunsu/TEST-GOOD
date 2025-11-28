@@ -222,7 +222,7 @@ settings = Settings(
     API_KEY=_validate_api_key("API_KEY"),
 )
 
-__all__ = ["settings", "ensure_dirs"]
+__all__ = ["ensure_dirs", "settings"]
 
 
 # ---------- 부작용 없는 디렉터리 준비 함수 ----------

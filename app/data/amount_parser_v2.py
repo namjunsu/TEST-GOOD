@@ -203,9 +203,8 @@ def choose_total_by_line_items(line_items: list[tuple[int, int]]) -> Optional[in
     if 100_000 <= total <= 50_000_000:
         logger.info(f"Line items total: ₩{total:,} (validated)")
         return total
-    else:
-        logger.warning(f"Line items total ₩{total:,} out of range, rejected")
-        return None
+    logger.warning(f"Line items total ₩{total:,} out of range, rejected")
+    return None
 
 
 def select_document_amount(doc_id: str, text: str, item_hint: str = "") -> Optional[int]:

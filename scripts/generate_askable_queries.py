@@ -212,7 +212,7 @@ class QueryGenerator:
 
     def export_markdown(self, queries: list[dict[str, Any]], output_path: str):
         """Markdown 포맷 출력"""
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        pathlib.Path(os.path.dirname(output_path)).mkdir(exist_ok=True, parents=True)
 
         with pathlib.Path(output_path).open("w", encoding="utf-8") as f:
             f.write("# AI-CHAT 질문 가능 목록 (Askable Queries)\n\n")
@@ -252,7 +252,7 @@ class QueryGenerator:
     def export_csv(self, queries: list[dict[str, Any]], output_path: str):
         """CSV 포맷 출력"""
         import csv
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        pathlib.Path(os.path.dirname(output_path)).mkdir(exist_ok=True, parents=True)
 
         with pathlib.Path(output_path).open("w", encoding="utf-8-sig", newline="") as f:
             writer = csv.writer(f)
@@ -279,7 +279,7 @@ class QueryGenerator:
 
     def export_json(self, queries: list[dict[str, Any]], output_path: str):
         """JSON 포맷 출력 (UI 프리셋용)"""
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        pathlib.Path(os.path.dirname(output_path)).mkdir(exist_ok=True, parents=True)
 
         # UI용으로 간소화
         presets = {

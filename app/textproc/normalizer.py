@@ -295,8 +295,7 @@ def normalize_filename(filename: str) -> str:
     # 확장자는 소문자 유지 (관례)
     if ext:
         return f"{stem}.{ext.lower()}"
-    else:
-        return stem
+    return stem
 
 
 # 테스트 케이스 (doctest)

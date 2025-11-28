@@ -395,55 +395,54 @@ def _render_toolbar() -> None:
         else:
             st.button("📥 JSON 내보내기", use_container_width=True, disabled=True, help="대화 기록이 없습니다")
 
-    with col3:
-        with st.popover("⚙️ 옵션", use_container_width=True):
-            st.markdown("**검색 및 표시 옵션**")
+    with col3, st.popover("⚙️ 옵션", use_container_width=True):
+        st.markdown("**검색 및 표시 옵션**")
 
-            # top_k 설정
-            new_top_k = st.slider(
-                "검색 문서 수 (top_k)",
-                min_value=1,
-                max_value=20,
-                value=st.session_state.chat_options["top_k"],
-                help="RAG 검색 시 가져올 최대 문서 수",
-            )
-            if new_top_k != st.session_state.chat_options["top_k"]:
-                st.session_state.chat_options["top_k"] = new_top_k
-                logger.info(f"top_k changed to {new_top_k}")
+        # top_k 설정
+        new_top_k = st.slider(
+            "검색 문서 수 (top_k)",
+            min_value=1,
+            max_value=20,
+            value=st.session_state.chat_options["top_k"],
+            help="RAG 검색 시 가져올 최대 문서 수",
+        )
+        if new_top_k != st.session_state.chat_options["top_k"]:
+            st.session_state.chat_options["top_k"] = new_top_k
+            logger.info(f"top_k changed to {new_top_k}")
 
-            # 스트리밍 속도 설정
-            speed_options = {
-                "slow": "느리게 (가독성)",
-                "medium": "보통 (권장)",
-                "fast": "빠르게 (효율성)",
-            }
-            current_speed = st.session_state.chat_options["streaming_speed"]
-            new_speed = st.selectbox(
-                "스트리밍 속도",
-                options=list(speed_options.keys()),
-                index=list(speed_options.keys()).index(current_speed),
-                format_func=lambda x: speed_options[x],
-                help="응답을 표시하는 속도 조절",
-            )
-            if new_speed != current_speed:
-                st.session_state.chat_options["streaming_speed"] = new_speed
-                logger.info(f"Streaming speed changed to {new_speed}")
+        # 스트리밍 속도 설정
+        speed_options = {
+            "slow": "느리게 (가독성)",
+            "medium": "보통 (권장)",
+            "fast": "빠르게 (효율성)",
+        }
+        current_speed = st.session_state.chat_options["streaming_speed"]
+        new_speed = st.selectbox(
+            "스트리밍 속도",
+            options=list(speed_options.keys()),
+            index=list(speed_options.keys()).index(current_speed),
+            format_func=lambda x: speed_options[x],
+            help="응답을 표시하는 속도 조절",
+        )
+        if new_speed != current_speed:
+            st.session_state.chat_options["streaming_speed"] = new_speed
+            logger.info(f"Streaming speed changed to {new_speed}")
 
-            # 출처 표시 옵션
-            new_show_evidence = st.checkbox(
-                "출처 문서 표시",
-                value=st.session_state.chat_options["show_evidence"],
-                help="AI 응답의 근거가 된 문서를 표시합니다",
-            )
-            if new_show_evidence != st.session_state.chat_options["show_evidence"]:
-                st.session_state.chat_options["show_evidence"] = new_show_evidence
-                logger.info(f"Show evidence changed to {new_show_evidence}")
+        # 출처 표시 옵션
+        new_show_evidence = st.checkbox(
+            "출처 문서 표시",
+            value=st.session_state.chat_options["show_evidence"],
+            help="AI 응답의 근거가 된 문서를 표시합니다",
+        )
+        if new_show_evidence != st.session_state.chat_options["show_evidence"]:
+            st.session_state.chat_options["show_evidence"] = new_show_evidence
+            logger.info(f"Show evidence changed to {new_show_evidence}")
 
-            # 현재 설정 요약
-            st.markdown("---")
-            st.caption(f"현재 설정: top_k={st.session_state.chat_options['top_k']}, "
-                      f"속도={speed_options[st.session_state.chat_options['streaming_speed']]}, "
-                      f"출처={'표시' if st.session_state.chat_options['show_evidence'] else '숨김'}")
+        # 현재 설정 요약
+        st.markdown("---")
+        st.caption(f"현재 설정: top_k={st.session_state.chat_options['top_k']}, "
+                  f"속도={speed_options[st.session_state.chat_options['streaming_speed']]}, "
+                  f"출처={'표시' if st.session_state.chat_options['show_evidence'] else '숨김'}")
 
 
 def _display_evidence_section(evidence_list: list, msg_idx: int) -> None:
@@ -694,8 +693,7 @@ def _create_enhanced_query(context: str, prompt: str) -> str:
     # 컨텍스트와 프롬프트를 결합하여 enhanced query 생성
     if context:
         return f"{ChatConfig.CONTEXT_PREFIX}\n{context}\n\n{ChatConfig.CURRENT_QUERY_PREFIX} {prompt}"
-    else:
-        return prompt
+    return prompt
 
 
 def _handle_error(error: Exception) -> dict:
@@ -839,11 +837,10 @@ def _generate_ai_response(
         message_placeholder.error(error_info["message"])
 
         # 상세 정보는 expander로 제공
-        with message_placeholder.container():
-            with st.expander("🔍 오류 상세 정보", expanded=False):
-                st.caption(f"**오류 유형**: {error_info['error_type']}")
-                st.caption(f"**상세 설명**: {error_info['details']}")
-                st.info("💡 **해결 방법**: 위 설명을 참고하여 문제를 해결해주세요. 문제가 지속되면 관리자에게 문의하세요.")
+        with message_placeholder.container(), st.expander("🔍 오류 상세 정보", expanded=False):
+            st.caption(f"**오류 유형**: {error_info['error_type']}")
+            st.caption(f"**상세 설명**: {error_info['details']}")
+            st.info("💡 **해결 방법**: 위 설명을 참고하여 문제를 해결해주세요. 문제가 지속되면 관리자에게 문의하세요.")
 
         return {"text": error_info["message"], "evidence": []}  # 에러 메시지 반환
 

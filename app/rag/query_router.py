@@ -374,18 +374,17 @@ class QueryRouter:
                 year=params.get("year"),
                 drafter=params.get("drafter"),
             )
-        else:
-            logger.info("🎯 모드 결정: QA (존재 확인 질의)")
-            reason = "exists_check_query"
-            self._log_routing_decision(query, QueryMode.QA, confidence=0.9, reason=reason)
-            return RouteDecision(
-                mode=QueryMode.QA,
-                reason=reason,
-                confidence=0.9,
-                content_intent=True,
-                year=params.get("year"),
-                drafter=params.get("drafter"),
-            )
+        logger.info("🎯 모드 결정: QA (존재 확인 질의)")
+        reason = "exists_check_query"
+        self._log_routing_decision(query, QueryMode.QA, confidence=0.9, reason=reason)
+        return RouteDecision(
+            mode=QueryMode.QA,
+            reason=reason,
+            confidence=0.9,
+            content_intent=True,
+            year=params.get("year"),
+            drafter=params.get("drafter"),
+        )
 
     def _check_content_only(
         self,

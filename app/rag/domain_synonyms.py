@@ -132,11 +132,10 @@ def expand_for_strict_content(query: str) -> str:
                 if v not in seen:
                     expanded_tokens.append(v)
                     seen.add(v)
-        else:
-            # 사전에 없으면 원본 그대로
-            if token not in seen:
-                expanded_tokens.append(token)
-                seen.add(token)
+        # 사전에 없으면 원본 그대로
+        elif token not in seen:
+            expanded_tokens.append(token)
+            seen.add(token)
 
     return " ".join(expanded_tokens)
 

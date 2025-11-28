@@ -158,14 +158,13 @@ class KoreanTokenizer:
                     if pos[0] in self.VALID_POS_TAGS:
                         tokens.append(token.lower())
                 return tokens
-            else:
-                # 기본 토크나이저: 캐시된 함수 사용
-                tokens = list(_cached_basic_tokenize(
-                    text,
-                    self.TOKEN_PATTERN,
-                    self.MIN_TOKEN_LENGTH,
-                ))
-                return tokens
+            # 기본 토크나이저: 캐시된 함수 사용
+            tokens = list(_cached_basic_tokenize(
+                text,
+                self.TOKEN_PATTERN,
+                self.MIN_TOKEN_LENGTH,
+            ))
+            return tokens
 
         except Exception as e:
             self.logger.error(f"토큰화 실패: {e}")
@@ -277,25 +276,23 @@ class BM25Store:
 
         if self.idf_mode == "rsj":
             return rsj
-        elif self.idf_mode == "log1p":
+        if self.idf_mode == "log1p":
             # 항상 양수, 극단적 DF에 덜 민감
             return math.log(1.0 + (n_docs - df + 0.5) / (df + 0.5))
-        elif self.idf_mode == "adaptive":
+        if self.idf_mode == "adaptive":
             # 적응형 IDF: 고빈도 토큰에 페널티 적용
             df_ratio = df / n_docs
             if df_ratio > 0.8:  # 80% 이상 문서 등장 → 불용어 (0점)
                 return 0.0
-            elif df_ratio > 0.5:  # 50-80% → 절반 페널티
+            if df_ratio > 0.5:  # 50-80% → 절반 페널티
                 return max(0.0, rsj) * 0.5
-            else:
-                return max(0.0, rsj)
-        elif self.idf_mode == "clipped":
+            return max(0.0, rsj)
+        if self.idf_mode == "clipped":
             # 음수 IDF는 0으로 클리핑 (불용어 효과)
             return max(0.0, rsj)
-        else:
-            # 알 수 없는 모드는 기본값으로 클리핑
-            self.logger.warning(f"Unknown IDF mode: {self.idf_mode}, using clipped")
-            return max(0.0, rsj)
+        # 알 수 없는 모드는 기본값으로 클리핑
+        self.logger.warning(f"Unknown IDF mode: {self.idf_mode}, using clipped")
+        return max(0.0, rsj)
 
     def _filter_tokens(self, tokens: list[str]) -> list[str]:
         """불용어 필터링"""

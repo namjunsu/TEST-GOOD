@@ -12,6 +12,7 @@ busy_timeout, WAL 모드, 트랜잭션 컨텍스트를 갖춘 공용 메타DB �
 """
 import logging
 import os
+import pathlib
 import sqlite3
 import time
 from contextlib import contextmanager
@@ -154,7 +155,7 @@ def _cleanup_stale_wal(db_path: str, max_age_hours: int = 24) -> None:
     for suffix in ("-wal", "-shm"):
         wal_path = f"{db_path}{suffix}"
 
-        if not os.path.exists(wal_path):
+        if not pathlib.Path(wal_path).exists():
             continue
 
         size = os.path.getsize(wal_path)

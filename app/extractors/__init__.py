@@ -7,7 +7,7 @@ from .finance import (
 )
 
 __all__ = [
+    "extract_and_validate",
     "extract_financial_fields",
     "validate_financial_consistency",
-    "extract_and_validate",
 ]

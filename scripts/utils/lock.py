@@ -4,6 +4,7 @@ Reindexing Lock Utility
 재색인 동시 실행 방지를 위한 파일 기반 Mutex
 """
 import os
+import pathlib
 import time
 from contextlib import contextmanager
 
@@ -12,7 +13,7 @@ LOCK_FILE = "var/locks/reindexing.lock"
 
 def is_reindexing() -> bool:
     """재색인 중인지 확인"""
-    return os.path.exists(LOCK_FILE)
+    return pathlib.Path(LOCK_FILE).exists()
 
 
 @contextmanager
@@ -32,7 +33,7 @@ def reindexing_lock(timeout_sec: float = 1.5, poll_ms: int = 200):
             # 재색인 작업
             pass
     """
-    os.makedirs(os.path.dirname(LOCK_FILE), exist_ok=True)
+    pathlib.Path(os.path.dirname(LOCK_FILE)).mkdir(exist_ok=True, parents=True)
     start = time.time()
 
     while True:

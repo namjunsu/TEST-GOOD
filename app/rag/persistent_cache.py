@@ -293,7 +293,7 @@ class PersistentCache:
         Returns:
             파일 크기 (MB)
         """
-        if not os.path.exists(self.db_path):
+        if not Path(self.db_path).exists():
             return 0.0
         return os.path.getsize(self.db_path) / (1024 * 1024)
 

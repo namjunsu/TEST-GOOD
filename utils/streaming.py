@@ -371,15 +371,15 @@ def estimate_streaming_duration(
     if speed == "slow":
         return length * StreamingConfig["slow"]["delay"]
 
-    elif speed == "fast":
+    if speed == "fast":
         words = len(text.split())
         return words * StreamingConfig["fast"]["delay"]
 
-    else:  # medium
-        if length < TEXT_LENGTH_THRESHOLD:
-            config = StreamingConfig["medium_short"]
-        else:
-            config = StreamingConfig["medium_long"]
+    # medium
+    if length < TEXT_LENGTH_THRESHOLD:
+        config = StreamingConfig["medium_short"]
+    else:
+        config = StreamingConfig["medium_long"]
 
-        chunks = (length + config["chunk_size"] - 1) // config["chunk_size"]
-        return chunks * config["delay"]
+    chunks = (length + config["chunk_size"] - 1) // config["chunk_size"]
+    return chunks * config["delay"]

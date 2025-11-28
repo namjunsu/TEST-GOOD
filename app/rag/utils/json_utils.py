@@ -56,19 +56,18 @@ def _extract_balanced_json_blocks(s: str) -> list[str]:
                 esc = True
             elif ch == quote:
                 in_str = False
-        else:
-            if ch in ('"', "'"):
-                in_str = True
-                quote = ch
-            elif ch == "{":
-                if depth == 0:
-                    start = i
-                depth += 1
-            elif ch == "}":
-                if depth > 0:
-                    depth -= 1
-                    if depth == 0 and start is not None:
-                        blocks.append(s[start:i + 1])
+        elif ch in ('"', "'"):
+            in_str = True
+            quote = ch
+        elif ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            if depth > 0:
+                depth -= 1
+                if depth == 0 and start is not None:
+                    blocks.append(s[start:i + 1])
 
     return blocks
 

@@ -73,10 +73,9 @@ def process_missing_file(file_path: Path, use_ocr: bool = False) -> bool:
         if result.returncode == 0:
             logger.info(f"✓ 복구 성공: {file_path.name}")
             return True
-        else:
-            logger.error(f"✗ 복구 실패: {file_path.name}")
-            logger.error(result.stderr)
-            return False
+        logger.error(f"✗ 복구 실패: {file_path.name}")
+        logger.error(result.stderr)
+        return False
 
     except Exception as e:
         logger.error(f"✗ 처리 실패: {file_path.name} - {e}")

@@ -237,12 +237,11 @@ class HealthChecker:
         if self.issues:
             print("🔴 시스템 상태: 문제 있음 (즉시 조치 필요)")
             return 2
-        elif self.warnings:
+        if self.warnings:
             print("🟡 시스템 상태: 주의 필요")
             return 1
-        else:
-            print("🟢 시스템 상태: 정상")
-            return 0
+        print("🟢 시스템 상태: 정상")
+        return 0
 
 
 def main():

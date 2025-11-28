@@ -233,7 +233,6 @@ def resolve_auto_workers(
 
     if pool_type == "io":
         return min(8, 2 * cpu_count)
-    elif pool_type == "cpu":
+    if pool_type == "cpu":
         return max(1, cpu_count - 1)
-    else:
-        return 4  # fallback
+    return 4  # fallback

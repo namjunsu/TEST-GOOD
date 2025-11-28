@@ -62,7 +62,7 @@ class ImportTracker:
         ]
 
         for path in possibilities:
-            if os.path.exists(path):
+            if Path(path).exists():
                 resolved.append(path)
 
         # Also check if it's a directory with Python files
@@ -95,7 +95,7 @@ class ImportTracker:
         """Perform the full usage analysis."""
         # Trace from all entry points
         for entry in self.entry_points:
-            if os.path.exists(entry):
+            if Path(entry).exists():
                 print(f"Tracing from entry point: {entry}")
                 self.trace_dependencies(entry)
 

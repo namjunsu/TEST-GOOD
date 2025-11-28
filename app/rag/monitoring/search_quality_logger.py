@@ -94,12 +94,11 @@ class SearchQualityLogger:
             return "HIGH_CONFIDENCE"
 
         # 중신뢰도: top1 > 2.0
-        elif top1 > 2.0:
+        if top1 > 2.0:
             return "MEDIUM_CONFIDENCE"
 
         # 저신뢰도: 나머지
-        else:
-            return "LOW_CONFIDENCE"
+        return "LOW_CONFIDENCE"
 
     def get_recent_logs(self, n: int = 100) -> list[dict[str, Any]]:
         """최근 로그 조회

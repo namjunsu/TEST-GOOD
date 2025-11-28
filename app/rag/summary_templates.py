@@ -237,7 +237,7 @@ def build_prompt(
 """
 
     # 수리/장애 문서
-    elif kind == "repair":
+    if kind == "repair":
         return common_header + """
 **출력 JSON 스키마**:
 {
@@ -273,7 +273,7 @@ def build_prompt(
 """
 
     # 구매/교체 검토서
-    elif kind == "proc_eval":
+    if kind == "proc_eval":
         decision_hint = "본문에서 선정/결정 키워드 확인됨. 반드시 찾을 것." if has_decision else "선정 내용이 없으면 '없음'"
         return common_header + f"""
 **출력 JSON 스키마**:
@@ -297,7 +297,7 @@ def build_prompt(
 """
 
     # 폐기 문서
-    elif kind == "disposal":
+    if kind == "disposal":
         return common_header + """
 **출력 JSON 스키마**:
 {
@@ -316,7 +316,7 @@ def build_prompt(
 """
 
     # 회의록
-    elif kind == "minutes":
+    if kind == "minutes":
         return common_header + """
 **출력 JSON 스키마**:
 {
@@ -336,8 +336,7 @@ def build_prompt(
 """
 
     # 일반 문서
-    else:
-        return common_header + f"""
+    return common_header + f"""
 **출력 JSON 스키마**:
 {{
   "제목": "문서 제목 (한 문장)",

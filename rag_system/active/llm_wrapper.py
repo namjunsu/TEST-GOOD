@@ -354,9 +354,8 @@ class QwenLLM(BaseRAGLLM):
         if self.use_optimized_prompts:
             # 최적화된 프롬프트 - 73.9% 토큰 감소
             return """방송기술 전문가. 제공문서 기반 정확답변. 출처명시."""
-        else:
-            # 원본 프롬프트
-            return """당신은 한국어 방송기술 문서 전문 AI 어시스턴트입니다.
+        # 원본 프롬프트
+        return """당신은 한국어 방송기술 문서 전문 AI 어시스턴트입니다.
 
 필수 규칙:
 1. 반드시 한국어로만 답변하세요. 중국어나 영어로 답변하지 마세요.
@@ -507,9 +506,8 @@ class QwenLLM(BaseRAGLLM):
 4. 출처: [파일명.pdf]
 
 답변:"""
-        else:
-            # 일반 질문용 프롬프트
-            return f"""문서:
+        # 일반 질문용 프롬프트
+        return f"""문서:
 {context_text}
 
 Q: {question}
@@ -657,23 +655,22 @@ A:"""
                         length_adjustments=length_adjustments,
                         adaptive_length_used=self.config.enable_adaptive_length,
                     )
-                else:
-                    # 인용이 없지만 답변 품질 체크
-                    if self._is_meaningful_answer(answer):
-                        # 의미있는 답변이면 저장하고 재시도 계속
-                        best_answer = {
-                            "answer": answer,
-                            "generation_time": generation_time,
-                            "retry_count": retry_count,
-                        }
-                        self.logger.info(f"인용 없지만 의미있는 답변 저장 (시도 {attempt + 1})")
+                # 인용이 없지만 답변 품질 체크
+                if self._is_meaningful_answer(answer):
+                    # 의미있는 답변이면 저장하고 재시도 계속
+                    best_answer = {
+                        "answer": answer,
+                        "generation_time": generation_time,
+                        "retry_count": retry_count,
+                    }
+                    self.logger.info(f"인용 없지만 의미있는 답변 저장 (시도 {attempt + 1})")
 
-                    # 재시도 조건
-                    retry_count += 1
-                    if attempt < max_retries:
-                        self.logger.warning(f"인용 없는 응답, 재시도 {attempt + 1}/{max_retries}")
-                        # REMOVED: 실제 filename 있을 때만 인용하므로 placeholder 불필요
-                        continue
+                # 재시도 조건
+                retry_count += 1
+                if attempt < max_retries:
+                    self.logger.warning(f"인용 없는 응답, 재시도 {attempt + 1}/{max_retries}")
+                    # REMOVED: 실제 filename 있을 때만 인용하므로 placeholder 불필요
+                    continue
 
             except Exception as e:
                 self.logger.error(f"응답 생성 실패 (시도 {attempt + 1}): {e}")
@@ -764,9 +761,9 @@ A:"""
 
         if question_analysis.question_type == QuestionType.COMPARISON:
             return self._handle_comparison_question(question_analysis, context_chunks, quality_retries)
-        elif question_analysis.question_type == QuestionType.ANALYSIS:
+        if question_analysis.question_type == QuestionType.ANALYSIS:
             return self._handle_analysis_question(question_analysis, context_chunks, quality_retries)
-        elif question_analysis.question_type == QuestionType.COMPLEX_MULTI:
+        if question_analysis.question_type == QuestionType.COMPLEX_MULTI:
             return self._handle_complex_multi_question(question_analysis, context_chunks, quality_retries)
 
         # 일반적인 구조화된 처리
@@ -1065,7 +1062,7 @@ A:"""
                 self.logger.info(f"   ✓ {key}: {preview}...")
             else:
                 # Show the actual value (even if empty string)
-                self.logger.info(f"   ✗ {key}: {repr(value)}")
+                self.logger.info(f"   ✗ {key}: {value!r}")
 
         self.logger.info(f"우선 문서: {Path(best_source).name if best_source else '(unknown)'}")
 
@@ -1522,11 +1519,10 @@ A:"""
         if mode == "full_document":
             # 전체 문서 모드
             return self._generate_full_document_response(question, search_result, max_retries, start_time)
-        else:
-            # 청크 검색 모드 (기존 방식)
-            search_results = search_result.get("search_results", {})
-            context_chunks = search_results.get("fused_results", [])
-            return self.generate_response(question, context_chunks, max_retries)
+        # 청크 검색 모드 (기존 방식)
+        search_results = search_result.get("search_results", {})
+        context_chunks = search_results.get("fused_results", [])
+        return self.generate_response(question, context_chunks, max_retries)
 
     def _generate_full_document_response(self, question: str, search_result: dict[str, Any],
                                        max_retries: int, start_time: float) -> RAGResponse:
@@ -1612,21 +1608,20 @@ Remember: Use the document content to create a useful Korean summary."""
                         has_proper_citation=True,
                         retry_count=retry_count,
                     )
-                else:
-                    # 인용이 없지만 의미있는 답변이면 저장
-                    if self._is_meaningful_answer(answer):
-                        best_answer = {
-                            "answer": answer,
-                            "generation_time": generation_time,
-                            "retry_count": retry_count,
-                        }
-                        self.logger.info(f"인용 없지만 의미있는 답변 저장 (시도 {attempt + 1})")
+                # 인용이 없지만 의미있는 답변이면 저장
+                if self._is_meaningful_answer(answer):
+                    best_answer = {
+                        "answer": answer,
+                        "generation_time": generation_time,
+                        "retry_count": retry_count,
+                    }
+                    self.logger.info(f"인용 없지만 의미있는 답변 저장 (시도 {attempt + 1})")
 
-                    # 재시도
-                    retry_count += 1
-                    if attempt < max_retries:
-                        self.logger.warning(f"인용 없는 응답, 재시도 {attempt + 1}/{max_retries}")
-                        continue
+                # 재시도
+                retry_count += 1
+                if attempt < max_retries:
+                    self.logger.warning(f"인용 없는 응답, 재시도 {attempt + 1}/{max_retries}")
+                    continue
 
             except Exception as e:
                 self.logger.error(f"전체 문서 응답 생성 실패 (시도 {attempt + 1}): {e}")
@@ -1840,10 +1835,9 @@ def create_llm(model_type: str = "llama", **kwargs) -> Any:
     """LLM 팩토리 함수"""
     if model_type.lower() == "llama":
         return LlamaLLM(**kwargs)
-    elif model_type.lower() == "qwen":
+    if model_type.lower() == "qwen":
         return QwenLLM(**kwargs)
-    else:
-        raise ValueError(f"지원되지 않는 모델 타입: {model_type}")
+    raise ValueError(f"지원되지 않는 모델 타입: {model_type}")
 
 
 if __name__ == "__main__":

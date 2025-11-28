@@ -462,7 +462,7 @@ class AutoIndexer:
 
             # everything_index.db 경로
             index_db_path = DB_PATHS.get("everything_index", "everything_index.db")
-            if not os.path.exists(index_db_path):
+            if not Path(index_db_path).exists():
                 return 0
 
             # 현재 디스크의 모든 파일명 집합
@@ -492,7 +492,7 @@ class AutoIndexer:
                 if has_path:
                     rowid, filename, path = row
                     # path 존재 여부 확인
-                    exists = os.path.exists(path) if os.path.isabs(path) else os.path.exists(os.path.join(os.getcwd(), path))
+                    exists = Path(path).exists() if os.path.isabs(path) else Path(os.path.join(os.getcwd(), path)).exists()
                     if not exists and filename not in fs_names:
                         stale_ids.append(rowid)
                 else:
@@ -523,7 +523,7 @@ class AutoIndexer:
             import sqlite3
 
             db_path = "metadata.db"
-            if not os.path.exists(db_path):
+            if not Path(db_path).exists():
                 return 0
 
             conn = sqlite3.connect(db_path)

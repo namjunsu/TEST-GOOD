@@ -81,7 +81,7 @@ def norm_chunk_text(r: dict[str, Any]) -> str:
 
 __all__ = [
     "DOMAIN_KEYWORDS",
-    "get_query_token_count",
     "get_keyword_coverage",
+    "get_query_token_count",
     "norm_chunk_text",
 ]

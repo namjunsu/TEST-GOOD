@@ -538,9 +538,9 @@ def extract_and_validate(text: str) -> dict[str, Any]:
 
 
 __all__ = [
-    "extract_financial_fields",
-    "validate_financial_consistency",
     "extract_and_validate",
+    "extract_financial_fields",
     "normalize_currency",
     "normalize_mixed_currency",
+    "validate_financial_consistency",
 ]

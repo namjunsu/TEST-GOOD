@@ -164,7 +164,7 @@ class ScenarioTest:
 
         # 로그 파일 저장
         log_file = f"reports/scenario_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        os.makedirs("reports", exist_ok=True)
+        Path("reports").mkdir(exist_ok=True, parents=True)
 
         import json
         with Path(log_file).open("w", encoding="utf-8") as f:

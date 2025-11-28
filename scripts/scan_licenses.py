@@ -30,14 +30,13 @@ def classify_license(license_str):
     # Open source licenses
     if any(x in license_lower for x in ["mit", "bsd", "apache", "isc"]):
         return "Permissive"
-    elif any(x in license_lower for x in ["gpl", "lgpl", "agpl"]):
+    if any(x in license_lower for x in ["gpl", "lgpl", "agpl"]):
         return "Copyleft"
-    elif "python" in license_lower or "psf" in license_lower:
+    if "python" in license_lower or "psf" in license_lower:
         return "Python"
-    elif any(x in license_lower for x in ["proprietary", "commercial"]):
+    if any(x in license_lower for x in ["proprietary", "commercial"]):
         return "Proprietary"
-    else:
-        return "Other"
+    return "Other"
 
 
 def scan_licenses():

@@ -300,10 +300,9 @@ def _extract_pdf_tail(chunk: dict[str, Any], metrics: dict[str, Any], needed: in
                     combined = combined[:needed]
 
                 return combined
-            else:
-                # 텍스트 레이어 없음 (OCR 필요)
-                metrics["pdf_tail_status"] = "fail"
-                return ""
+            # 텍스트 레이어 없음 (OCR 필요)
+            metrics["pdf_tail_status"] = "fail"
+            return ""
 
     except Exception as e:
         logger.warning(f"⚠️ PDF extraction failed: {e}")

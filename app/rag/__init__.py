@@ -14,15 +14,15 @@ from app.rag.pipeline import RAGPipeline
 from app.rag.query_routing import force_chat_mode, route_query
 
 __all__ = [
+    "Compressor",
+    "Generator",
     # 핵심 클래스
     "RAGPipeline",
     "RAGRequest",
     "RAGResponse",
     # 프로토콜
     "Retriever",
-    "Compressor",
-    "Generator",
+    "force_chat_mode",
     # 라우팅
     "route_query",
-    "force_chat_mode",
 ]

@@ -108,7 +108,7 @@ class ErrorHandler:
         if show_details and cls._is_debug_mode():
             with st.expander("🔍 상세 오류 정보"):
                 st.text(f"오류 타입: {type(error).__name__}")
-                st.text(f"오류 메시지: {str(error)}")
+                st.text(f"오류 메시지: {error!s}")
                 st.text(f"컨텍스트: {context or 'N/A'}")
                 st.text("\n스택 트레이스:")
                 st.text(traceback.format_exc())
@@ -145,7 +145,7 @@ class ErrorHandler:
         if show_details:
             print("\n--- 상세 오류 정보 ---")
             print(f"오류 타입: {type(error).__name__}")
-            print(f"오류 메시지: {str(error)}")
+            print(f"오류 메시지: {error!s}")
             print(f"컨텍스트: {context or 'N/A'}")
             if cls._is_debug_mode(console_fallback=True):
                 print("\n스택 트레이스:")
@@ -159,25 +159,25 @@ class ErrorHandler:
         # 구체적인 Exception 타입 우선 체크
         if isinstance(error, FileNotFoundError):
             return ErrorType.FILE_NOT_FOUND
-        elif isinstance(error, PermissionError):
+        if isinstance(error, PermissionError):
             return ErrorType.PERMISSION_DENIED
-        elif isinstance(error, MemoryError):
+        if isinstance(error, MemoryError):
             return ErrorType.MEMORY_ERROR
-        elif isinstance(error, TimeoutError):
+        if isinstance(error, TimeoutError):
             return ErrorType.TIMEOUT_ERROR
-        elif isinstance(error, ImportError):
+        if isinstance(error, ImportError):
             return ErrorType.IMPORT_ERROR
 
         # 메시지 기반 분류
-        elif "database" in error_str or "sqlite" in error_str:
+        if "database" in error_str or "sqlite" in error_str:
             return ErrorType.DATABASE_ERROR
-        elif any(kw in error_str for kw in ["network", "connection", "requests.exceptions", "urllib"]):
+        if any(kw in error_str for kw in ["network", "connection", "requests.exceptions", "urllib"]):
             return ErrorType.NETWORK_ERROR
-        elif "ocr" in error_str or "tesseract" in error_str:
+        if "ocr" in error_str or "tesseract" in error_str:
             return ErrorType.OCR_ERROR
-        elif "pdf" in error_str or "pypdf" in error_str:
+        if "pdf" in error_str or "pypdf" in error_str:
             return ErrorType.PDF_ERROR
-        elif "index" in error_str or "faiss" in error_str or "bm25" in error_str:
+        if "index" in error_str or "faiss" in error_str or "bm25" in error_str:
             return ErrorType.INDEX_ERROR
 
         return ErrorType.UNKNOWN

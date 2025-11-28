@@ -313,25 +313,25 @@ def log_error(exc: AppError, level: int = logging.ERROR) -> None:
 
 
 __all__ = [
+    "ERROR_MESSAGES",
     # 기본 예외
     "AppError",
+    "CacheError",
+    "CacheExpiredError",
     "ConfigError",
+    "ContextHydrationError",
     "DatabaseError",
-    "ModelError",
-    "SearchError",
-    "ValidationError",
     # 확장 예외 (Phase 3)
     "DocumentNotFoundError",
-    "OCRProcessingError",
-    "CacheExpiredError",
+    # 유틸리티
+    "ErrorCode",
     "IndexError",
+    "ModelError",
+    "OCRProcessingError",
     "RateLimitError",
     # 확장 예외 (Phase 5 - RAG 파이프라인용)
     "RoutingError",
-    "ContextHydrationError",
-    "CacheError",
-    # 유틸리티
-    "ErrorCode",
-    "ERROR_MESSAGES",
+    "SearchError",
+    "ValidationError",
     "log_error",
 ]

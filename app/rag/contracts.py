@@ -139,9 +139,9 @@ class Generator(Protocol):
 
 
 __all__ = [
+    "Compressor",
+    "Generator",
     "RAGRequest",
     "RAGResponse",
     "Retriever",
-    "Compressor",
-    "Generator",
 ]

@@ -195,7 +195,7 @@ class QueryValidator:
 
     def export_json_report(self, report: dict[str, Any], output_path: str):
         """JSON 리포트 저장"""
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        Path(os.path.dirname(output_path)).mkdir(exist_ok=True, parents=True)
 
         with Path(output_path).open("w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, ensure_ascii=False)
@@ -204,7 +204,7 @@ class QueryValidator:
 
     def export_markdown_report(self, report: dict[str, Any], output_path: str):
         """Markdown 리포트 저장"""
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        Path(os.path.dirname(output_path)).mkdir(exist_ok=True, parents=True)
 
         with Path(output_path).open("w", encoding="utf-8") as f:
             f.write("# AI-CHAT 질문 프리셋 검증 리포트\n\n")

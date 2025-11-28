@@ -62,7 +62,7 @@ def preload_llm():
 
     except Exception as e:
         logger.error(f"❌ Failed to preload LLM model: {e}")
-        logger.error(f"Error details: {type(e).__name__}: {str(e)}")
+        logger.error(f"Error details: {type(e).__name__}: {e!s}")
         import traceback
         logger.error(traceback.format_exc())
         return None

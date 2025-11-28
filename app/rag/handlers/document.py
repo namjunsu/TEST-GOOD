@@ -213,7 +213,7 @@ class DocumentHandler(BaseHandler):
         except Exception as e:
             logger.error(f"❌ DOCUMENT 모드 처리 실패: {e}", exc_info=True)
             return self._make_error_response(
-                f"문서 내용 조회 중 오류가 발생했습니다: {str(e)}",
+                f"문서 내용 조회 중 오류가 발생했습니다: {e!s}",
             )
 
     # ========================================================================

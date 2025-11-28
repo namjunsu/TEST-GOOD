@@ -316,18 +316,18 @@ def _encode_file_ref(filename: str) -> Optional[str]:
 
 
 __all__ = [
+    "DIAG_LOG_LEVEL",
+    "DIAG_RAG",
+    "DOMAIN_KEYWORDS",
     # 상수
     "SMALLTALK_PATTERNS",
-    "DOMAIN_KEYWORDS",
-    "DIAG_RAG",
-    "DIAG_LOG_LEVEL",
+    "_encode_file_ref",
     # 함수
     "clean_ui_metadata",
-    "route_query",
-    "is_smalltalk",
-    "is_simple_math",
-    "has_domain_keyword",
-    "get_keyword_coverage",
     "force_chat_mode",
-    "_encode_file_ref",
+    "get_keyword_coverage",
+    "has_domain_keyword",
+    "is_simple_math",
+    "is_smalltalk",
+    "route_query",
 ]

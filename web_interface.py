@@ -379,7 +379,7 @@ def main():
 
     # OCR 캐시 업데이트 체크 (파일 수정 시간)
     ocr_cache_path = "docs/.ocr_cache.json"
-    if os.path.exists(ocr_cache_path):
+    if Path(ocr_cache_path).exists():
         ocr_mtime = os.path.getmtime(ocr_cache_path)
         prev_mtime = st.session_state.get("ocr_cache_mtime")
 

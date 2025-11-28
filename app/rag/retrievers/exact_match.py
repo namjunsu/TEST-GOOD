@@ -327,10 +327,9 @@ class ExactMatchRetriever:
         for doc_id, score, match_type in exact_matches:
             if doc_id not in doc_scores:
                 doc_scores[doc_id] = (score, match_type)
-            else:
-                # 더 높은 점수로 갱신 (동일 소스 중복시)
-                if score > doc_scores[doc_id][0]:
-                    doc_scores[doc_id] = (score, match_type)
+            # 더 높은 점수로 갱신 (동일 소스 중복시)
+            elif score > doc_scores[doc_id][0]:
+                doc_scores[doc_id] = (score, match_type)
 
         # filename 추가 (exact_code가 없는 경우만)
         for doc_id, score, match_type in filename_matches:

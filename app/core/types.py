@@ -7,7 +7,21 @@ IDE 자동완성 및 타입 체킹 지원.
     from app.core.types import DocumentDict, SearchResultDict, RAGResponseDict
 """
 
+from enum import Enum
 from typing import Any, Dict, List, Optional, TypedDict, Union
+
+# ============================================================================
+# 열거형 타입
+# ============================================================================
+
+
+class QuestionType(Enum):
+    """질문 유형 (LLM 응답 생성용)"""
+    SIMPLE = "simple"           # 단순 정보 조회
+    COMPARISON = "comparison"   # 비교 질문
+    ANALYSIS = "analysis"       # 분석 질문
+    COMPLEX_MULTI = "complex_multi"  # 복합 다중 질문
+
 
 from typing_extensions import NotRequired
 
@@ -138,6 +152,8 @@ Documents = List[DocumentDict]
 
 
 __all__ = [
+    # 열거형
+    "QuestionType",
     # 문서
     "DocumentMetadata",
     "DocumentDict",

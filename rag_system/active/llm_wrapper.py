@@ -15,6 +15,8 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
+from app.core.types import QuestionType
+
 # Generation 설정 상수 - L2 RAG 튜닝 (2025-10-25)
 # 일관성 향상: temperature 0.7 → 0.2
 # 효율성 향상: max_tokens 1200 → 512

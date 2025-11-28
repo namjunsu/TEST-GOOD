@@ -16,7 +16,7 @@ sys.path.insert(0, str(project_root))
 try:
     from dotenv import load_dotenv
     load_dotenv()
-except:
+except ImportError:
     pass
 
 from app.core.logging import get_logger

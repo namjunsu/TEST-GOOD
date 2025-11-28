@@ -57,7 +57,7 @@ def generate_test_cases(db_path: str = "metadata.db", top_n: int = 20) -> List[D
         """, (norm_code,))
 
         filename_row = cursor_filename.fetchone()
-        sample_filename = filename_row[0] if filename_row else ""
+        _sample_filename = filename_row[0] if filename_row else ""  # noqa: F841
 
         # 변형 1: 기본 (원본 + 수식어 "관련 문서")
         test_cases.append({

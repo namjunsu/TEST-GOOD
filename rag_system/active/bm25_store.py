@@ -440,7 +440,7 @@ class BM25Store:
                 batch_texts = texts[batch_start:batch_end]
                 batch_metadatas = metadatas[batch_start:batch_end]
 
-                for doc_idx, (text, metadata) in enumerate(zip(batch_texts, batch_metadatas), start=len(self.documents)):
+                for _doc_idx, (text, metadata) in enumerate(zip(batch_texts, batch_metadatas), start=len(self.documents)):
                     # 토큰화 및 불용어 필터링
                     tokens = self.tokenizer.tokenize(text)
                     tokens = self._filter_tokens(tokens)

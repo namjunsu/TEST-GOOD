@@ -461,7 +461,7 @@ class QwenLLM(BaseRAGLLM):
         # 품목/금액 질문인 경우 전체 컨텍스트 사용
         is_items_query = any(kw in question for kw in ["품목", "구매", "소모품", "장비", "물품", "금액", "가격", "얼마"])
 
-        for i, chunk in enumerate(context_chunks, 1):
+        for _i, chunk in enumerate(context_chunks, 1):
             if total_tokens >= self.max_context_tokens:
                 break
 
@@ -556,8 +556,8 @@ A:"""
         # 0단계: 같은 문서의 모든 청크 우선 선택 (중간 단계 접근법)
         context_chunks = self._prioritize_same_document_chunks(context_chunks, max_chunks=10)
 
-        # 1단계: 질문 분석
-        question_analysis = None
+        # 1단계: 질문 분석 (향후 적응형 응답용 예비 변수)
+        _question_analysis = None  # noqa: F841 - 향후 사용 예정
         length_recommendation = None
 
         # 4단계: 기본 처리 모드 (적응형 길이 적용)

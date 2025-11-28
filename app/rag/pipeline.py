@@ -1309,44 +1309,21 @@ class RAGPipeline:
     # ========================================================================
 
     def _create_default_retriever(self) -> Retriever:
-        """기본 검색 엔진 생성 (v2 또는 v1)
-
-        환경 변수 USE_V2_RETRIEVER로 제어:
-        - true: HybridRetrieverV2 사용 (신규 2-layer 아키텍처)
-        - false/없음: HybridRetriever 사용 (기존 레거시)
-        """
-        use_v2 = settings.USE_V2_RETRIEVER
-
-        if use_v2:
-            # V2 Retriever는 archive로 이동되었습니다 (20251026)
-            # 레거시 코드를 제거하고 v1으로 폴백합니다
+        """기본 검색 엔진 생성 (HybridRetriever v1)"""
+        if settings.USE_V2_RETRIEVER:
             logger.warning(
                 "⚠️ USE_V2_RETRIEVER는 더 이상 지원되지 않습니다. v1 Retriever를 사용합니다."
             )
-            use_v2 = False
-            # try:
-            #     from app.rag.retriever_v2 import HybridRetrieverV2
-            #     v2_retriever = HybridRetrieverV2()
-            #     logger.info("✅ HybridRetrieverV2 (v2 신규 시스템) 생성 완료")
-            #
-            #     # V2 adapter: fused_results → list 변환
-            #     return _V2RetrieverAdapter(v2_retriever)
-            # except Exception as e:
-            #     logger.error(f"V2 Retriever 생성 실패, v1으로 폴백: {e}")
-            #     # 폴백: v1 사용
-            #     use_v2 = False
 
-        if not use_v2:
-            try:
-                from app.rag.retrievers.hybrid import HybridRetriever
+        try:
+            from app.rag.retrievers.hybrid import HybridRetriever
 
-                retriever = HybridRetriever()
-                logger.info("Default HybridRetriever (v1 레거시) 생성 완료")
-                return retriever
-            except Exception as e:
-                logger.error(f"HybridRetriever 생성 실패: {e}")
-                # 폴백: 더미 구현
-                return _DummyRetriever()
+            retriever = HybridRetriever()
+            logger.info("Default HybridRetriever 생성 완료")
+            return retriever
+        except Exception as e:
+            logger.error(f"HybridRetriever 생성 실패: {e}")
+            return _DummyRetriever()
 
     def _create_default_compressor(self) -> Compressor:
         """기본 압축기 생성 (현재는 no-op)"""

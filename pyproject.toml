@@ -2,8 +2,6 @@
 line-length = 120
 preview = true
 target-version = "py312"
-select = ["E", "F", "I", "N", "W", "B", "Q"]
-ignore = ["E501", "B008", "B905"]
 exclude = [
     ".git",
     ".venv",
@@ -14,7 +12,11 @@ exclude = [
     ".eggs"
 ]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "B", "Q"]
+ignore = ["E501", "B008", "B905"]
+
+[tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 "tests/**" = ["F401", "F811"]
 

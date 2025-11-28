@@ -10,6 +10,8 @@ IDE 자동완성 및 타입 체킹 지원.
 from enum import Enum
 from typing import Any, Dict, List, Optional, TypedDict, Union
 
+from typing_extensions import NotRequired
+
 # ============================================================================
 # 열거형 타입
 # ============================================================================
@@ -21,9 +23,6 @@ class QuestionType(Enum):
     COMPARISON = "comparison"   # 비교 질문
     ANALYSIS = "analysis"       # 분석 질문
     COMPLEX_MULTI = "complex_multi"  # 복합 다중 질문
-
-
-from typing_extensions import NotRequired
 
 # ============================================================================
 # 문서 관련 타입

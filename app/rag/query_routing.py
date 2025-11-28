@@ -16,9 +16,10 @@ from typing import Any, Dict, Optional
 
 from app.config.settings import settings
 from app.core.logging import get_logger
+from app.rag.utils.text import get_query_token_count
+from app.rag.utils.text import norm_chunk_text as _norm_chunk_text
 from app.utils.sqlite_helpers import connect_metadata
 from app.utils.text_normalizer import detect_section, is_detailed_mode, normalize_query
-from app.rag.utils.text import get_query_token_count, norm_chunk_text as _norm_chunk_text
 
 logger = get_logger(__name__)
 

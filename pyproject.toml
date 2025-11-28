@@ -14,7 +14,13 @@ exclude = [
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "B", "Q"]
-ignore = ["E501", "B008", "B905"]
+ignore = [
+    "E501",  # line-too-long (120자 제한으로 충분)
+    "B008",  # function-call-in-default-argument
+    "B905",  # zip-without-explicit-strict
+    "N806",  # 함수 내 대문자 변수 (한글 도메인 상수명 허용)
+    "E402",  # module-import-not-at-top (sys.path 설정 후 import 필요)
+]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]

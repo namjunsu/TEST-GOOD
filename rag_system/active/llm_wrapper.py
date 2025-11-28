@@ -283,7 +283,7 @@ class QwenLLM(BaseRAGLLM):
                 f16_kv=F16_KV,        # config: True (GPU 메모리 최적화)
                 use_mlock=USE_MLOCK,  # config: False (GPU 사용시 비활성화)
                 use_mmap=USE_MMAP,    # config: True (메모리 매핑)
-                verbose=True,         # GPU 로딩 상태 확인
+                verbose=False,        # 터미널 출력 최소화
                 n_batch=N_BATCH,       # config: 1024 (배치 크기 증가)
             )
 
@@ -393,7 +393,12 @@ class QwenLLM(BaseRAGLLM):
             filename = Path(self._get_chunk_source(chunk)).name
             # 🔥 CRITICAL: Support both 'content' and 'snippet' fields
             content = chunk.get("content") or chunk.get("snippet", "")
-            score = chunk.get("score", 0.0)
+            score = chunk.get("score")
+
+            # 점수가 없거나 0.0인 경우 경고 및 기본값 처리 (관련도 0.000 방지)
+            if score is None or score == 0.0:
+                self.logger.warning(f"⚠️ 점수 미설정: {filename}, 기본값 1.0 사용")
+                score = 1.0
 
             context_text += f"\n--- 문서 {i}: {filename} (관련도: {score:.3f}) ---\n"
 
@@ -418,15 +423,20 @@ class QwenLLM(BaseRAGLLM):
 
         # 요청 유형별 특별한 지시문
         if is_summary_request:
-            instruction = """🎯 문서 요약 지침:
-위 문서를 철저히 읽고 다음 내용을 포함한 완전한 요약을 제공해주세요:
+            instruction = """📋 기술 문서 요약 (반드시 아래 순서대로 작성):
 
-1. **문서 기본 정보**: 날짜, 기안자, 문서 종류
-2. **주요 목적**: 무엇을 위한 문서인지
-3. **핵심 내용**: 구체적인 수치, 금액, 모델명, 수량 등 모든 세부사항
-4. **결론 및 계획**: 승인 사항, 향후 계획 등
+1. 【개요】 한 문장으로 문서 목적 설명
+2. 【장애/문제】 (있는 경우)
+   - 장비명: 정확한 모델명
+   - 증상: 구체적 장애 내용
+   - 원인: 파악된 원인
+3. 【조치 내용】
+   - 수리/교체 항목 (모델명, 수량, 단가 포함)
+4. 【총 비용】 금액 (VAT 제외/포함 명시)
+5. 【검토 의견】 핵심 결론 및 필요 사항
 
-💡 중요: 문서에 기록된 모든 정보를 적극 활용하여 완전하고 유용한 요약을 만들어주세요."""
+⚠️ 문서의 모든 수치, 금액, 모델명을 정확히 기재하세요.
+⚠️ 정보가 없는 항목은 "정보 없음"으로 표시하세요."""
 
         elif is_list_request:
             instruction = """🎯 전체 목록 추출 지침:
@@ -550,8 +560,8 @@ A:"""
         mode_token_budgets = {
             "chat": int(os.getenv("CHAT_MAX_TOKENS", "64")),
             "rag": int(os.getenv("RAG_MAX_TOKENS", "160")),
-            "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", "1200")),
-            "summary": int(os.getenv("SUMMARY_MAX_TOKENS", "1200")),  # summary 모드 추가
+            "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", "1500")),
+            "summary": int(os.getenv("SUMMARY_MAX_TOKENS", "1500")),  # 상세 요약용
         }
         mode_max_tokens = mode_token_budgets.get(mode.lower(), self.config.max_tokens)
         self.logger.info(f"🎯 Mode={mode}, max_tokens={mode_max_tokens} (budget: {mode_token_budgets.get(mode.lower(), 'N/A')})")

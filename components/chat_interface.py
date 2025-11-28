@@ -17,6 +17,7 @@ ChatGPT 스타일의 채팅 인터페이스 UI를 렌더링하는 컴포넌트
 
 import json
 import os
+import sys
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
@@ -31,6 +32,18 @@ from utils.streaming import stream_text_smart
 
 # ===== 로깅 설정 =====
 logger = get_logger(__name__)
+
+
+def _log_query_to_terminal(query: str, client_ip: str = "local") -> None:
+    """터미널에 질문 로그 출력 (간단한 형식)"""
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    query_short = query[:50] + "..." if len(query) > 50 else query
+    # stderr로 출력해서 streamlit 로그와 분리
+    print(
+        f"\033[0;90m[{timestamp}]\033[0m \033[0;36m{client_ip}\033[0m → \"{query_short}\"",
+        file=sys.stderr,
+        flush=True,
+    )
 
 # 진단 모드 설정
 DIAG_RAG = os.getenv("DIAG_RAG", "false").lower() == "true"
@@ -338,6 +351,7 @@ def _initialize_chat_state() -> None:
     """채팅 세션 상태 초기화
 
     세션 상태에 messages 리스트와 chat_options가 없으면 초기화합니다.
+    evidence_history는 세션 전체에서 검색된 문서 목록을 보존합니다.
     """
     if "messages" not in st.session_state:
         st.session_state.messages = []
@@ -350,6 +364,11 @@ def _initialize_chat_state() -> None:
             "show_evidence": ChatConfig.DEFAULT_SHOW_EVIDENCE,
         }
         logger.info("Chat options initialized")
+
+    # 세션 전체 검색 결과 히스토리 (문서 식별 정확도 향상용)
+    if "evidence_history" not in st.session_state:
+        st.session_state.evidence_history = []
+        logger.info("Evidence history initialized")
 
 
 def _export_history() -> str:
@@ -593,6 +612,108 @@ def _validate_input(prompt: str) -> tuple[bool, Optional[str]]:
     #     return False, "보안상 허용되지 않는 입력입니다."
 
     return True, None
+
+
+def _match_query_to_evidence(query: str, evidence_history: list) -> tuple[Optional[str], float]:
+    """쿼리에서 언급된 문서명과 evidence_history 매칭
+
+    사용자가 이전 검색 결과에서 특정 문서를 언급했을 때,
+    evidence_history에서 가장 유사한 문서를 찾습니다.
+
+    Args:
+        query: 사용자 쿼리
+        evidence_history: 이전 검색 결과 목록 (Evidence 딕셔너리 리스트)
+
+    Returns:
+        tuple[Optional[str], float]: (매칭된 파일명, 신뢰도 점수 0.0~1.0)
+    """
+    import re
+
+    if not evidence_history:
+        return None, 0.0
+
+    # 1. 후속 질문 패턴 감지 (문서명 매칭 전에 우선 처리)
+    follow_up_patterns = [
+        "뒤에", "나머지", "더 보여", "더 알려", "계속", "이어서",
+        "다음", "그 문서", "그거", "그 내용", "방금", "아까",
+        "짤린", "잘린", "끊긴", "안 보이", "안보이",
+    ]
+    query_lower = query.lower()
+    is_follow_up = any(p in query_lower for p in follow_up_patterns)
+
+    if is_follow_up:
+        # 가장 최근 문서 반환
+        latest = evidence_history[-1]
+        if isinstance(latest, dict) and latest.get("filename"):
+            logger.info(f"📎 후속 질문 감지, 최근 문서 사용: {latest['filename']}")
+            return latest["filename"], 0.8
+
+    # 2. 쿼리 정규화 (특수문자 제거, 소문자화)
+    query_clean = query.lower()
+    query_clean = re.sub(r"[&_\-\.]", " ", query_clean)
+    query_clean = re.sub(r"\s+", " ", query_clean).strip()
+    query_tokens = set(query_clean.split())
+
+    # 불용어 제거
+    stopwords = {"이", "그", "저", "문서", "파일", "좀", "요약", "내용", "보여줘", "알려줘", "해줘"}
+    query_tokens = query_tokens - stopwords
+
+    if not query_tokens:
+        return None, 0.0
+
+    best_match = None
+    best_score = 0.0
+
+    for ev in evidence_history:
+        if not isinstance(ev, dict):
+            continue
+
+        filename = ev.get("filename", "")
+        if not filename:
+            continue
+
+        # 파일명 정규화 (날짜, 확장자, 특수문자 제거)
+        filename_clean = filename.lower()
+        filename_clean = re.sub(r"^\d{4}-\d{2}-\d{2}_", "", filename_clean)  # 날짜 제거
+        filename_clean = re.sub(r"\.pdf$", "", filename_clean)  # 확장자 제거
+        filename_clean = re.sub(r"[_\-]", " ", filename_clean)  # 구분자 → 공백
+        filename_clean = re.sub(r"\s+", " ", filename_clean).strip()
+        filename_tokens = set(filename_clean.split())
+
+        # 토큰 매칭 점수 계산
+        common_tokens = query_tokens & filename_tokens
+        if not common_tokens:
+            continue
+
+        # Jaccard 유사도 기반 점수
+        union_tokens = query_tokens | filename_tokens
+        jaccard_score = len(common_tokens) / len(union_tokens) if union_tokens else 0.0
+
+        # 쿼리 토큰 커버리지 (쿼리의 몇 %가 파일명에 존재하는지)
+        coverage_score = len(common_tokens) / len(query_tokens) if query_tokens else 0.0
+
+        # 연속 토큰 보너스 (구문 매칭)
+        phrase_bonus = 0.0
+        query_words = query_clean.split()
+        for n in [3, 2]:  # 3-gram, 2-gram
+            for i in range(len(query_words) - n + 1):
+                phrase = " ".join(query_words[i:i + n])
+                if phrase in filename_clean:
+                    phrase_bonus += n * 0.1  # 3-gram이면 0.3, 2-gram이면 0.2
+
+        # 최종 점수 (가중 평균)
+        final_score = (jaccard_score * 0.3) + (coverage_score * 0.5) + min(phrase_bonus, 0.2)
+
+        if final_score > best_score:
+            best_score = final_score
+            best_match = filename
+
+    # 최소 임계값 (0.3 이상이어야 의미 있는 매칭)
+    if best_score < 0.3:
+        return None, best_score
+
+    logger.info(f"📎 Evidence 매칭: '{best_match}' (score={best_score:.2f})")
+    return best_match, best_score
 
 
 def _cleanup_old_messages(messages: list[ChatMessage]) -> list[ChatMessage]:
@@ -929,6 +1050,9 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
             st.error(error_msg)
             return
 
+        # 터미널에 질문 로그 출력 (원래 질문만)
+        _log_query_to_terminal(prompt)
+
         # 3-2. 사용자 메시지 추가
         _add_message(ChatConfig.ROLE_USER, prompt)
 
@@ -946,17 +1070,29 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
             # 향상된 쿼리 생성
             enhanced_query = _create_enhanced_query(context, prompt)
 
-            # 선택된 문서 확인 (사이드바에서 선택한 문서 우선 검색용)
+            # 선택된 문서 확인 (우선순위: 사이드바 선택 → evidence_history 매칭)
             selected_filename = None
+            match_confidence = 0.0
+
+            # 1. 사이드바에서 명시적으로 선택한 문서
             doc = st.session_state.get("selected_doc")
             if doc is not None:
                 try:
-                    # 딕셔너리 또는 pandas Series에서 filename 추출
                     selected_filename = doc.get("filename") if hasattr(doc, "get") else doc["filename"]
                     if selected_filename:
-                        logger.info(f"📌 선택된 문서 우선 검색: {selected_filename}")
+                        match_confidence = 1.0  # 명시적 선택은 최고 신뢰도
+                        logger.info(f"📌 사이드바 선택 문서: {selected_filename}")
                 except (KeyError, TypeError, AttributeError):
                     pass
+
+            # 2. 사이드바 선택이 없으면, evidence_history에서 쿼리와 매칭 시도
+            if not selected_filename:
+                evidence_history = st.session_state.get("evidence_history", [])
+                if evidence_history:
+                    matched_filename, match_confidence = _match_query_to_evidence(prompt, evidence_history)
+                    if matched_filename:
+                        selected_filename = matched_filename
+                        logger.info(f"📎 Evidence 히스토리에서 매칭: {selected_filename} (신뢰도={match_confidence:.2f})")
 
             # AI 응답 생성
             with st.spinner(ChatConfig.SPINNER_TEXT):
@@ -1033,6 +1169,16 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                             # Evidence 강제 주입 여부
                             injected = "Yes" if diag.get("evidence_injected") else "No"
                             st.caption(f"Evidence 강제 주입: {injected}")
+
+                    # evidence_history에 새 검색 결과 추가 (세션 전체 보존)
+                    if response.get("evidence"):
+                        for ev in response["evidence"]:
+                            if isinstance(ev, dict) and ev.get("filename"):
+                                # 중복 방지: 같은 파일명이 없으면 추가
+                                existing_filenames = {e.get("filename") for e in st.session_state.evidence_history if isinstance(e, dict)}
+                                if ev.get("filename") not in existing_filenames:
+                                    st.session_state.evidence_history.append(ev)
+                        logger.info(f"📚 Evidence 히스토리 업데이트: 총 {len(st.session_state.evidence_history)}건")
 
                     # 메시지 저장 (텍스트 + evidence)
                     _add_message(ChatConfig.ROLE_ASSISTANT, response["text"], evidence=response.get("evidence"))

@@ -289,15 +289,16 @@ class DocumentHandler(BaseHandler):
         if full_text:
             return full_text
 
-        # 2. 인덱스 청크 기반 폴백
+        # 2. 인덱스 청크 기반 폴백 (top_k 확대: 요약 품질 개선)
         logger.warning(f"⚠️ extracted txt 없음, 인덱스 청크 폴백 시도: {filename}")
         try:
-            chunks = self._make_chunks_for_doc(filename)
+            # 🔧 top_k를 5로 확대하여 더 많은 컨텍스트 확보
+            chunks = self._make_chunks_for_doc(filename, top_k=10)
             if chunks:
                 joined = "\n\n".join(
-                    [(ch.get("text") or ch.get("snippet") or ch.get("content") or "")[:2000]
+                    [(ch.get("text") or ch.get("snippet") or ch.get("content") or "")[:3000]
                      for ch in chunks],
-                )[:8000]
+                )[:12000]  # 기존 8000 → 12000 확대
                 logger.info(f"✅ 청크 {len(chunks)}개 결합 → {len(joined)}자 확보")
                 return joined
         except Exception as e:
@@ -305,8 +306,8 @@ class DocumentHandler(BaseHandler):
 
         return ""
 
-    def _make_chunks_for_doc(self, filename: str) -> list[dict[str, Any]]:
-        """특정 문서의 청크만 로드"""
+    def _make_chunks_for_doc(self, filename: str, top_k: int = 20) -> list[dict[str, Any]]:
+        """특정 문서의 청크만 로드 (top_k: 최대 청크 수)"""
         try:
             # BM25 인덱스에서 직접 접근
             if hasattr(self.retriever, "bm25") and self.retriever.bm25:
@@ -468,7 +469,8 @@ class DocumentHandler(BaseHandler):
         routing: dict[str, Any],
     ) -> tuple:
         """LLM 프롬프트 및 시스템 메시지 생성"""
-        context = full_text[:4000]
+        # 🔧 컨텍스트 윈도우 확대 (4000 → 8000): 요약 품질 개선
+        context = full_text[:8000]
         filename = metadata["filename"]
         drafter = metadata.get("drafter", "")
         date = metadata.get("display_date") or metadata.get("date", "")
@@ -531,9 +533,9 @@ class DocumentHandler(BaseHandler):
         detailed_mode = routing.get("detailed_mode", False)
         needs_summary = routing.get("needs_summary", False)
 
-        # 요약 모드: 최소 500 토큰 보장 (JSON 잘림 방지)
+        # 요약 모드: 최소 1000 토큰 보장 (불완전 요약 방지)
         if needs_summary:
-            return max(500, min(base_max_tokens, content_length // 3))
+            return max(1000, min(base_max_tokens, content_length // 2))
 
         if detailed_mode:
             return min(base_max_tokens, max(300, content_length // 3))

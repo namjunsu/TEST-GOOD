@@ -383,9 +383,28 @@ class HybridRetriever:
                 filename_exact_match_count += 1
                 filename_bonus += ScoringConfig.FILENAME_TOKEN_BONUS
 
-        # 파일명에서 연속된 구문 매칭 시 추가 보너스
+        # 파일명에서 연속된 구문 매칭 시 추가 보너스 (n-gram 기반 강화)
+        # 1. 전체 쿼리가 파일명에 있으면 최대 보너스
         if len(query_tokens) >= 2 and query.lower() in filename:
             filename_bonus += ScoringConfig.FILENAME_PHRASE_BONUS
+
+        # 2. n-gram 구문 매칭 (2-gram, 3-gram)
+        # 예: "광화문 스튜디오 모니터" → ["광화문 스튜디오", "스튜디오 모니터"] 매칭
+        query_words = list(query_tokens)  # set → list 변환하여 순서 유지용으로 재생성
+        query_words = re.findall(r"\w+", query.lower())  # 순서 유지된 단어 리스트
+        filename_clean = re.sub(r"[_\-\.]", " ", filename)  # 구분자 → 공백
+
+        ngram_bonus = 0.0
+        for n in [3, 2]:  # 3-gram 우선, 2-gram 다음
+            if len(query_words) >= n:
+                for i in range(len(query_words) - n + 1):
+                    ngram = " ".join(query_words[i:i + n])
+                    if ngram in filename_clean:
+                        # n이 클수록 높은 보너스 (3-gram: 0.6, 2-gram: 0.3)
+                        ngram_bonus += n * 0.2
+
+        # n-gram 보너스 상한 (최대 1.0)
+        filename_bonus += min(1.0, ngram_bonus)
 
         # 텍스트 길이 기반 페널티 (OCR 불량 문서 억제)
         text_len = len(doc.get("snippet") or "")
@@ -571,6 +590,11 @@ class HybridRetriever:
                 # 2. FTS 결과가 충분하면 FTS만 사용, 부족하면 BM25 보충
                 if len(fts_results) >= search_k * 0.5:  # FTS 결과가 목표의 50% 이상이면
                     logger.info(f"✅ FTS 결과 충분 ({len(fts_results)}개), BM25 생략")
+                    # 🔧 FTS 결과에 재스코어링 적용 (관련도 0.000 문제 해결)
+                    for result in fts_results:
+                        result["score"] = self._calculate_relevance_score(query, result)
+                    summary = [f"{r.get('filename', '?')[:20]}={r.get('score', 0):.2f}" for r in fts_results[:3]]
+                    logger.info(f"📊 FTS 재스코어링 완료: {summary}")
                     bm25_results = []  # BM25 생략
                     selected_doc = None
                 else:

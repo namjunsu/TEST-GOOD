@@ -12,10 +12,11 @@ Version: 2.0
 
 import logging
 import sqlite3
-import pandas as pd
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Optional
+
+import pandas as pd
 
 # 로깅 설정
 logger = logging.getLogger(__name__)
@@ -52,10 +53,10 @@ class DocumentLoader:
 
     # 기안자 이름 추출 시 제외할 키워드
     EXCLUDED_KEYWORDS = [
-        '영상', '카메라', '조명', '중계', 'DVR', '스튜디오', '송출',
-        '구매', '수리', '교체', '검토', '폐기',
-        '방송기술팀', '영상취재팀', '영상제작팀', '기술관리팀',
-        '그래픽디자인파트'  # '명상제작팀' 제거 (오타로 보임)
+        "영상", "카메라", "조명", "중계", "DVR", "스튜디오", "송출",
+        "구매", "수리", "교체", "검토", "폐기",
+        "방송기술팀", "영상취재팀", "영상제작팀", "기술관리팀",
+        "그래픽디자인파트"  # '명상제작팀' 제거 (오타로 보임)
     ]
 
     def __init__(self, metadata_db: str = "metadata.db"):
@@ -94,10 +95,10 @@ class DocumentLoader:
         Returns:
             추출된 기안자 이름 (없으면 None)
         """
-        if '_' not in filename:
+        if "_" not in filename:
             return None
 
-        parts = filename.split('_')
+        parts = filename.split("_")
 
         # 2번째, 3번째 위치에서 이름 찾기
         for idx in [1, 2]:
@@ -172,7 +173,7 @@ class DocumentLoader:
         Returns:
             True if likely a Korean person name
         """
-        if not name or name == '미확인':
+        if not name or name == "미확인":
             return False
 
         # 영문/숫자가 포함되면 장비명으로 간주
@@ -180,7 +181,7 @@ class DocumentLoader:
             return False
 
         # 한글만으로 구성되고 2-4글자면 이름으로 간주
-        if 2 <= len(name) <= 4 and all('\uac00' <= c <= '\ud7a3' for c in name):
+        if 2 <= len(name) <= 4 and all("\uac00" <= c <= "\ud7a3" for c in name):
             return True
 
         return False
@@ -203,18 +204,15 @@ class DocumentLoader:
                 return pd.DataFrame()
 
             # 2. DB 연결 및 전체 데이터 조회 (단일 쿼리)
-            conn = sqlite3.connect(str(self.metadata_db))
-            cursor = conn.cursor()
-
-            cursor.execute("""
-                SELECT filename, path, date, year, category, drafter, keywords,
-                       title, page_count, created_at, display_date, file_size
-                FROM documents
-                ORDER BY year DESC, filename ASC
-            """)
-
-            rows = cursor.fetchall()
-            conn.close()
+            with sqlite3.connect(str(self.metadata_db)) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT filename, path, date, year, category, drafter, keywords,
+                           title, page_count, created_at, display_date, file_size
+                    FROM documents
+                    ORDER BY year DESC, filename ASC
+                """)
+                rows = cursor.fetchall()
 
             logger.info(f"metadata.db에서 {len(rows)}개 문서 로드됨")
 
@@ -237,7 +235,7 @@ class DocumentLoader:
                 # title이 없으면 파일명에서 생성
                 if not title:
                     stem = Path(filename).stem  # 확장자 제거
-                    title = stem.replace('_', ' ')
+                    title = stem.replace("_", " ")
 
                 # 파일 크기를 읽기 쉬운 형식으로 변환
                 if file_size:
@@ -245,25 +243,25 @@ class DocumentLoader:
                         size_mb = int(file_size) / (1024 * 1024)
                         size_str = f"{size_mb:.1f} MB"
                     except (ValueError, TypeError):
-                        size_str = '알 수 없음'
+                        size_str = "알 수 없음"
                 else:
-                    size_str = '알 수 없음'
+                    size_str = "알 수 없음"
 
                 # 문서 정보 구성
                 documents.append({
-                    'filename': filename,
-                    'title': title,
-                    'date': date or '날짜없음',
-                    'year': year_int,  # 숫자형 또는 None
-                    'year_display': str(year_int) if year_int else '연도없음',  # UI 표시용
-                    'category': doc_category,
-                    'drafter': doc_drafter,
-                    'size': size_str,
-                    'path': path,
-                    'keywords': keywords or '',
-                    'page_count': page_count or 0,
-                    'created_at': created_at or '',
-                    'display_date': display_date or date or ''
+                    "filename": filename,
+                    "title": title,
+                    "date": date or "날짜없음",
+                    "year": year_int,  # 숫자형 또는 None
+                    "year_display": str(year_int) if year_int else "연도없음",  # UI 표시용
+                    "category": doc_category,
+                    "drafter": doc_drafter,
+                    "size": size_str,
+                    "path": path,
+                    "keywords": keywords or "",
+                    "page_count": page_count or 0,
+                    "created_at": created_at or "",
+                    "display_date": display_date or date or ""
                 })
 
             # 4. DataFrame 생성 및 정렬
@@ -271,9 +269,9 @@ class DocumentLoader:
             if not df.empty:
                 # year(숫자)로 정렬, None은 맨 뒤로
                 df = df.sort_values(
-                    ['year', 'filename'],
+                    ["year", "filename"],
                     ascending=[False, True],
-                    na_position='last'
+                    na_position="last"
                 )
 
             # 5. 통계 출력
@@ -297,15 +295,15 @@ class DocumentLoader:
 
         total_count = len(df)
         df_with_drafter = df[
-            df['drafter'].notna() &
-            (df['drafter'] != '미확인') &
-            (df['drafter'] != '')
+            df["drafter"].notna() &
+            (df["drafter"] != "미확인") &
+            (df["drafter"] != "")
         ]
         drafter_count = len(df_with_drafter)
         percentage = drafter_count * 100 // max(total_count, 1)
 
         # 전체 고유 기안자
-        all_unique_drafters = df_with_drafter['drafter'].unique() if drafter_count > 0 else []
+        all_unique_drafters = df_with_drafter["drafter"].unique() if drafter_count > 0 else []
         all_unique_count = len(all_unique_drafters)
 
         # 한글 이름만 필터링
@@ -323,7 +321,7 @@ class DocumentLoader:
 
         # 기안자 샘플
         if korean_count > 0:
-            sample = ', '.join(korean_drafters[:10])
+            sample = ", ".join(korean_drafters[:10])
             logger.info(f"  - 기안자 샘플: {sample}")
 
 

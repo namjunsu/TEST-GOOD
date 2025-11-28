@@ -1,4 +1,4 @@
-#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
+#!/usr/bin/env python3
 """
 DB 기반 질문 프리셋 자동 생성기
 
@@ -11,14 +11,13 @@ DB 기반 질문 프리셋 자동 생성기
 - ui/presets.json
 """
 
-import sqlite3
 import json
 import os
 import re
-from pathlib import Path
-from datetime import datetime
-from typing import List, Dict, Any
+import sqlite3
 from collections import defaultdict
+from datetime import datetime
+from typing import Any, Dict, List
 
 
 class QueryGenerator:
@@ -44,12 +43,12 @@ class QueryGenerator:
         equipment = defaultdict(int)
         for row in self.cursor.fetchall():
             try:
-                kw_list = json.loads(row['keywords'])
+                kw_list = json.loads(row["keywords"])
                 for kw in kw_list:
                     # 장비명으로 보이는 키워드만 (한글+영문 혼합, 최소 2자)
                     if len(kw) >= 2 and not kw.isdigit():
                         equipment[kw] += 1
-            except:
+            except (json.JSONDecodeError, TypeError):
                 pass
 
         # 빈도순 정렬
@@ -79,9 +78,9 @@ class QueryGenerator:
             doc = dict(row)
             # 키워드 파싱
             try:
-                doc['keywords'] = json.loads(doc['keywords'] or '[]')
-            except:
-                doc['keywords'] = []
+                doc["keywords"] = json.loads(doc["keywords"] or "[]")
+            except (json.JSONDecodeError, TypeError):
+                doc["keywords"] = []
             summaries.append(doc)
 
         return summaries
@@ -111,8 +110,8 @@ class QueryGenerator:
         # 2. 작성자별 문서 검색 (실제 작성자만)
         drafters = {}
         for doc in summaries:
-            if doc['drafter'] and doc['drafter'].strip():
-                drafters[doc['drafter']] = drafters.get(doc['drafter'], 0) + 1
+            if doc["drafter"] and doc["drafter"].strip():
+                drafters[doc["drafter"]] = drafters.get(doc["drafter"], 0) + 1
 
         top_drafters = sorted(drafters.items(), key=lambda x: x[1], reverse=True)[:3]
         for drafter, count in top_drafters:
@@ -128,8 +127,8 @@ class QueryGenerator:
         # 3. 연도별 문서 검색
         years = {}
         for doc in summaries:
-            if doc['year']:
-                years[doc['year']] = years.get(doc['year'], 0) + 1
+            if doc["year"]:
+                years[doc["year"]] = years.get(doc["year"], 0) + 1
 
         top_years = sorted(years.items(), key=lambda x: x[0], reverse=True)[:3]
         for year, count in top_years:
@@ -144,11 +143,11 @@ class QueryGenerator:
 
         # 4. 특정 문서 요약 (파일명 기반)
         for doc in summaries[:10]:  # 상위 10개
-            filename = doc['filename']
+            filename = doc["filename"]
             # 파일명에서 핵심 키워드 추출
-            match = re.search(r'\d{4}-\d{2}-\d{2}_(.+)\.pdf', filename)
+            match = re.search(r"\d{4}-\d{2}-\d{2}_(.+)\.pdf", filename)
             if match:
-                core_name = match.group(1).replace('_', ' ')
+                core_name = match.group(1).replace("_", " ")
                 queries.append({
                     "query": f"{core_name} 관련 문서 요약해줘",
                     "category": "문서 요약",
@@ -176,8 +175,8 @@ class QueryGenerator:
         # 6. 카테고리별 검색
         categories = {}
         for doc in summaries:
-            if doc['category'] and doc['category'].strip() and doc['category'] != ':':
-                categories[doc['category']] = categories.get(doc['category'], 0) + 1
+            if doc["category"] and doc["category"].strip() and doc["category"] != ":":
+                categories[doc["category"]] = categories.get(doc["category"], 0) + 1
 
         for category, count in categories.items():
             if count >= 5:  # 최소 5개 이상
@@ -214,10 +213,10 @@ class QueryGenerator:
         """Markdown 포맷 출력"""
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write("# AI-CHAT 질문 가능 목록 (Askable Queries)\n\n")
             f.write(f"**생성 일시**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"**DB 기준**: metadata.db (483개 문서)\n")
+            f.write("**DB 기준**: metadata.db (483개 문서)\n")
             f.write(f"**RAG_MIN_SCORE**: {self.rag_min_score}\n")
             f.write(f"**REQUIRE_CITATIONS**: {self.require_citations}\n\n")
             f.write("---\n\n")
@@ -231,18 +230,18 @@ class QueryGenerator:
             # 카테고리별 그룹화
             by_category = defaultdict(list)
             for q in queries:
-                by_category[q['category']].append(q)
+                by_category[q["category"]].append(q)
 
             for category, items in sorted(by_category.items()):
                 f.write(f"## {category}\n\n")
                 for i, q in enumerate(items, 1):
-                    mode_icon = "✅" if q['expected_mode'] == "rag" else "💬"
+                    mode_icon = "✅" if q["expected_mode"] == "rag" else "💬"
                     f.write(f"### {mode_icon} {i}. {q['query']}\n\n")
                     f.write(f"- **예상 모드**: {q['expected_mode']}\n")
                     f.write(f"- **출처 인용**: {'예' if q['expected_citations'] else '아니오'}\n")
                     f.write(f"- **난이도**: {q['difficulty']}\n")
 
-                    if 'metadata' in q:
+                    if "metadata" in q:
                         f.write(f"- **메타데이터**: {json.dumps(q['metadata'], ensure_ascii=False)}\n")
 
                     f.write("\n")
@@ -254,7 +253,7 @@ class QueryGenerator:
         import csv
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-        with open(output_path, 'w', encoding='utf-8-sig', newline='') as f:
+        with open(output_path, "w", encoding="utf-8-sig", newline="") as f:
             writer = csv.writer(f)
             writer.writerow([
                 "query",
@@ -267,12 +266,12 @@ class QueryGenerator:
 
             for q in queries:
                 writer.writerow([
-                    q['query'],
-                    q['category'],
-                    q['expected_mode'],
-                    q['expected_citations'],
-                    q['difficulty'],
-                    json.dumps(q.get('metadata', {}), ensure_ascii=False)
+                    q["query"],
+                    q["category"],
+                    q["expected_mode"],
+                    q["expected_citations"],
+                    q["difficulty"],
+                    json.dumps(q.get("metadata", {}), ensure_ascii=False)
                 ])
 
         print(f"✅ CSV 저장: {output_path}")
@@ -292,18 +291,18 @@ class QueryGenerator:
         for q in queries:
             preset = {
                 "id": f"q_{len(presets['presets']) + 1}",
-                "text": q['query'],
-                "category": q['category'],
-                "mode": q['expected_mode'],
-                "difficulty": q['difficulty']
+                "text": q["query"],
+                "category": q["category"],
+                "mode": q["expected_mode"],
+                "difficulty": q["difficulty"]
             }
 
-            if 'metadata' in q:
-                preset['metadata'] = q['metadata']
+            if "metadata" in q:
+                preset["metadata"] = q["metadata"]
 
-            presets['presets'].append(preset)
+            presets["presets"].append(preset)
 
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             json.dump(presets, f, indent=2, ensure_ascii=False)
 
         print(f"✅ JSON 저장: {output_path}")
@@ -336,14 +335,14 @@ def main():
     by_category = defaultdict(int)
     by_mode = defaultdict(int)
     for q in queries:
-        by_category[q['category']] += 1
-        by_mode[q['expected_mode']] += 1
+        by_category[q["category"]] += 1
+        by_mode[q["expected_mode"]] += 1
 
     print("\n📊 생성 통계:")
-    print(f"   카테고리별:")
+    print("   카테고리별:")
     for cat, cnt in sorted(by_category.items()):
         print(f"     - {cat}: {cnt}개")
-    print(f"   모드별:")
+    print("   모드별:")
     for mode, cnt in sorted(by_mode.items()):
         print(f"     - {mode}: {cnt}개")
 

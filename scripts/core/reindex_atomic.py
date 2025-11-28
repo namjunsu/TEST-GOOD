@@ -1,4 +1,4 @@
-#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
+#!/usr/bin/env python3
 """
 원자적 재색인 스크립트
 
@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 logging.basicConfig(
     level=logging.INFO,
-    format='[%(levelname)s] %(message)s'
+    format="[%(levelname)s] %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -79,9 +79,10 @@ def _load_text_from_metadata_db(filename: str, db_conn) -> str | None:
 def reindex_bm25(source_dir: Path, output_path: Path) -> bool:
     """BM25 인덱스 재구축 (metadata.db 기반)"""
     try:
-        from rag_system.active.bm25_store import BM25Store
-        from app.data.metadata_db import MetadataDB
         import pdfplumber
+
+        from app.data.metadata_db import MetadataDB
+        from rag_system.active.bm25_store import BM25Store
 
         logger.info("BM25 인덱스 재구축 시작...")
 
@@ -90,23 +91,22 @@ def reindex_bm25(source_dir: Path, output_path: Path) -> bool:
         all_docs = []
         db_conn = None  # text_preview 조회용 연결 유지
         try:
-            import sqlite3
             db_conn = db._get_conn()
             cursor = db_conn.cursor()
             cursor.execute("SELECT id, filename, date, drafter, category FROM documents")
             for row in cursor.fetchall():
                 all_docs.append({
-                    'id': row[0],           # DB PK 추가
-                    'filename': row[1],
-                    'date': row[2],
-                    'drafter': row[3],
-                    'category': row[4]
+                    "id": row[0],           # DB PK 추가
+                    "filename": row[1],
+                    "date": row[2],
+                    "drafter": row[3],
+                    "category": row[4]
                 })
         except Exception as e:
             logger.error(f"metadata.db 읽기 실패: {e}")
             # 폴백: 파일 시스템 스캔
             pdf_files = list(source_dir.rglob("*.pdf"))
-            all_docs = [{'filename': p.name, 'date': '', 'drafter': '', 'category': 'pdf'} for p in pdf_files]
+            all_docs = [{"filename": p.name, "date": "", "drafter": "", "category": "pdf"} for p in pdf_files]
 
         logger.info(f"대상 문서: {len(all_docs)}개 (metadata.db 기준)")
 
@@ -121,7 +121,7 @@ def reindex_bm25(source_dir: Path, output_path: Path) -> bool:
             if i % 50 == 0:
                 logger.info(f"진행: {i}/{len(all_docs)} (전체: {fulltext_count}, preview: {preview_count}, 폴백: {fallback_count}, 누락: {missing_count})")
 
-            filename = doc_meta['filename']
+            filename = doc_meta["filename"]
             # 파일을 재귀적으로 검색 (서브디렉토리 포함)
             pdf_path = source_dir / filename
             if not pdf_path.exists():
@@ -180,37 +180,37 @@ def reindex_bm25(source_dir: Path, output_path: Path) -> bool:
 
                 texts.append(text)
                 # doc_id를 문자열로 변환 (정합성 확보)
-                doc_id = doc_meta.get('id')
-                doc_id_str = str(doc_id) if doc_id is not None else f'doc_{i}'
+                doc_id = doc_meta.get("id")
+                doc_id_str = str(doc_id) if doc_id is not None else f"doc_{i}"
                 metadatas.append({
-                    'filename': filename,
-                    'path': str(pdf_path),
-                    'id': doc_id_str,  # DB PK를 문자열로 변환
-                    'date': doc_meta.get('date', ''),
-                    'drafter': doc_meta.get('drafter', ''),
-                    'category': doc_meta.get('category', 'pdf')
+                    "filename": filename,
+                    "path": str(pdf_path),
+                    "id": doc_id_str,  # DB PK를 문자열로 변환
+                    "date": doc_meta.get("date", ""),
+                    "drafter": doc_meta.get("drafter", ""),
+                    "category": doc_meta.get("category", "pdf")
                 })
             except Exception as e:
                 logger.warning(f"처리 실패: {filename} - {e}")
                 # 실패해도 파일명으로 인덱싱
                 texts.append(f"[파일명: {filename}] (처리 실패: {e})")
-                doc_id = doc_meta.get('id')
-                doc_id_str = str(doc_id) if doc_id is not None else f'doc_{i}'
+                doc_id = doc_meta.get("id")
+                doc_id_str = str(doc_id) if doc_id is not None else f"doc_{i}"
                 metadatas.append({
-                    'filename': filename,
-                    'path': str(pdf_path),
-                    'id': doc_id_str  # DB PK를 문자열로 변환
+                    "filename": filename,
+                    "path": str(pdf_path),
+                    "id": doc_id_str  # DB PK를 문자열로 변환
                 })
                 missing_count += 1
 
         logger.info(f"텍스트 추출 완료: {len(texts)}개")
-        logger.info(f"  전체 텍스트 사용: {fulltext_count}개 ({fulltext_count*100//max(len(texts),1)}%)")
-        logger.info(f"  metadata.db preview: {preview_count}개 ({preview_count*100//max(len(texts),1)}%)")
-        logger.info(f"  폴백 (pdfplumber): {fallback_count}개 ({fallback_count*100//max(len(texts),1)}%)")
-        logger.info(f"  텍스트 누락 (파일명만): {missing_count}개 ({missing_count*100//max(len(texts),1)}%)")
+        logger.info(f"  전체 텍스트 사용: {fulltext_count}개 ({fulltext_count * 100 // max(len(texts), 1)}%)")
+        logger.info(f"  metadata.db preview: {preview_count}개 ({preview_count * 100 // max(len(texts), 1)}%)")
+        logger.info(f"  폴백 (pdfplumber): {fallback_count}개 ({fallback_count * 100 // max(len(texts), 1)}%)")
+        logger.info(f"  텍스트 누락 (파일명만): {missing_count}개 ({missing_count * 100 // max(len(texts), 1)}%)")
 
         if fallback_count > len(texts) * 0.05:  # 5% 초과
-            logger.warning(f"⚠️ 폴백 비율 높음: {fallback_count*100//max(len(texts),1)}% (권장: ≤5%)")
+            logger.warning(f"⚠️ 폴백 비율 높음: {fallback_count * 100 // max(len(texts), 1)}% (권장: ≤5%)")
 
         if missing_count > 0:
             logger.warning(f"⚠️ {missing_count}개 문서는 텍스트 추출 실패 (파일명으로만 검색 가능)")

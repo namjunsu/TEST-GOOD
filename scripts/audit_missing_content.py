@@ -1,4 +1,4 @@
-#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
+#!/usr/bin/env python3
 """
 결손 문서 점검 스크립트
 content가 비어있거나 짧은 문서를 찾아서 재인덱싱 큐에 등록
@@ -19,8 +19,8 @@ try:
 except:
     pass
 
-from app.data.metadata_db import MetadataDB
 from app.core.logging import get_logger
+from app.data.metadata_db import MetadataDB
 
 logger = get_logger(__name__)
 
@@ -117,7 +117,7 @@ def main():
         return
 
     print("-" * 80)
-    print(f"\n점검 완료:")
+    print("\n점검 완료:")
     print(f"  총 문서 수: {total}개")
 
     # ZeroDivision 방지
@@ -139,23 +139,24 @@ def main():
             for doc in missing:
                 f.write(f"{doc['doc_id']}\t{doc['filename']}\t{doc['content_len']}\n")
 
-        print(f"\n재인덱싱 큐 저장:")
+        print("\n재인덱싱 큐 저장:")
         print(f"  파일: {queue_file}")
         print(f"  개수: {len(missing)}개")
 
         # 상위 10개만 출력
-        print(f"\n결손 문서 샘플 (상위 10개):")
+        print("\n결손 문서 샘플 (상위 10개):")
         for i, doc in enumerate(missing[:10], 1):
             print(f"  {i}. {doc['doc_id']}: {doc['filename']} ({doc['content_len']}자)")
 
-        print(f"\n다음 단계:")
-        print(f"  python3 scripts/rebuild_rag_indexes.py")
-        print(f"  또는 특정 문서만:")
+        print("\n다음 단계:")
+        print("  python3 scripts/rebuild_rag_indexes.py")
+        print("  또는 특정 문서만:")
         print(f"  python3 scripts/rebuild_rag_indexes.py --doc-ids {missing[0]['doc_id']}")
     else:
         print("\n✅ 결손 문서 없음")
 
     print("=" * 80)
+
 
 if __name__ == "__main__":
     main()

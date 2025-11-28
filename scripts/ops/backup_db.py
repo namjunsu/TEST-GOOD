@@ -1,4 +1,4 @@
-#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
+#!/usr/bin/env python3
 """
 SQLite 메타데이터 DB 백업 스크립트
 
@@ -8,8 +8,8 @@ SQLite 메타데이터 DB 백업 스크립트
 """
 
 import sqlite3
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 # === 설정 영역 ===
 PROJECT_ROOT = Path(__file__).resolve().parents[2]  # /home/wnstn4647/AI-CHAT
@@ -17,8 +17,10 @@ DB_PATH = PROJECT_ROOT / "metadata.db"              # DB 위치
 BACKUP_DIR = PROJECT_ROOT / "backups" / "db"        # 백업 저장 위치
 RETENTION_COUNT = 7                                 # 보존 개수
 
+
 def ensure_dirs() -> None:
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+
 
 def backup_db() -> Path:
     if not DB_PATH.exists():
@@ -40,6 +42,7 @@ def backup_db() -> Path:
 
     return backup_path
 
+
 def cleanup_old_backups() -> None:
     backups = sorted(BACKUP_DIR.glob("metadata.db.*.bak"))
     if len(backups) <= RETENTION_COUNT:
@@ -54,11 +57,13 @@ def cleanup_old_backups() -> None:
         except Exception as e:
             print(f"[WARN] 백업 삭제 실패: {path} ({e})")
 
+
 def main() -> None:
     ensure_dirs()
     backup_path = backup_db()
     print(f"[INFO] DB 백업 완료: {backup_path}")
     cleanup_old_backups()
+
 
 if __name__ == "__main__":
     main()

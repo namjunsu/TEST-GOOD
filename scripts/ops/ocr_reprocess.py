@@ -1,4 +1,4 @@
-#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
+#!/usr/bin/env python3
 """
 OCR 재처리 통합 스크립트 (v1.0)
 
@@ -37,10 +37,10 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from app.core.logging import get_logger
 from app.rag.ocr.pipeline import ocr_extract_pdf, update_document_text
 from app.rag.ocr.selectors import (
-    select_by_text_length,
     select_by_avg_per_page,
-    select_zero_text,
+    select_by_text_length,
     select_from_file_list,
+    select_zero_text,
 )
 
 logger = get_logger(__name__)
@@ -153,7 +153,7 @@ def main():
                 logger.info(f"  ✅ 성공: {len(full_text):,}자 추출")
             else:
                 fail_count += 1
-                logger.error(f"  ❌ DB 업데이트 실패")
+                logger.error("  ❌ DB 업데이트 실패")
 
         except Exception as e:
             logger.error(f"  ❌ 처리 실패: {e}")
@@ -165,7 +165,7 @@ def main():
 
     # 3. 최종 결과
     logger.info("=" * 80)
-    logger.info(f"OCR 재처리 완료")
+    logger.info("OCR 재처리 완료")
     logger.info(f"  총 대상: {len(candidates)}개")
     logger.info(f"  성공: {success_count}개")
     logger.info(f"  실패: {fail_count}개")

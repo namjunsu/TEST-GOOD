@@ -9,15 +9,16 @@ Streamlit 세션 상태를 중앙에서 관리
 - 세션 백업/복원 기능
 """
 
-import streamlit as st
-from typing import Any, Dict, Optional, List
 import json
-from pathlib import Path
-import pickle
 import logging
 import os
+import pickle
 from copy import deepcopy
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 import pandas as pd
+import streamlit as st
 
 logger = logging.getLogger(__name__)
 
@@ -27,16 +28,16 @@ class SessionManager:
 
     # 기본 세션 값 (가변 객체는 init_session에서 복사됨)
     DEFAULT_VALUES = {
-        'messages': [],
-        'selected_doc': None,
-        'show_doc_preview': False,
-        'pdf_preview_shown': False,
-        'unified_rag': None,
-        'documents_df': None,
-        'auto_indexer': None,
-        'ocr_processor': None,
-        'performance_metrics': {},
-        'debug_mode': False  # 환경 변수로 초기화됨
+        "messages": [],
+        "selected_doc": None,
+        "show_doc_preview": False,
+        "pdf_preview_shown": False,
+        "unified_rag": None,
+        "documents_df": None,
+        "auto_indexer": None,
+        "ocr_processor": None,
+        "performance_metrics": {},
+        "debug_mode": False  # 환경 변수로 초기화됨
     }
 
     @classmethod
@@ -54,12 +55,12 @@ class SessionManager:
                     st.session_state[key] = default_value
 
         # debug_mode는 환경 변수에서 초기값 결정
-        if 'debug_mode' not in st.session_state:
-            env_debug = os.getenv('DEBUG_MODE', '').lower() in ('true', '1', 'yes', 'on')
-            st.session_state['debug_mode'] = env_debug
+        if "debug_mode" not in st.session_state:
+            env_debug = os.getenv("DEBUG_MODE", "").lower() in ("true", "1", "yes", "on")
+            st.session_state["debug_mode"] = env_debug
 
         # 초기화 플래그
-        if 'session_initialized' not in st.session_state:
+        if "session_initialized" not in st.session_state:
             st.session_state.session_initialized = True
             cls._log_session_init()
 
@@ -163,9 +164,9 @@ class SessionManager:
     def clear_doc_preview(cls) -> None:
         """문서 미리보기 관련 세션 클리어"""
         cls.update({
-            'show_doc_preview': False,
-            'selected_doc': None,
-            'pdf_preview_shown': False
+            "show_doc_preview": False,
+            "selected_doc": None,
+            "pdf_preview_shown": False
         })
 
     @classmethod
@@ -227,7 +228,7 @@ class SessionManager:
             safe_path.parent.mkdir(parents=True, exist_ok=True)
 
             # 파일로 저장
-            with open(safe_path, 'w', encoding='utf-8') as f:
+            with open(safe_path, "w", encoding="utf-8") as f:
                 json.dump(exportable, f, indent=2, ensure_ascii=False)
 
             if show_message:
@@ -275,7 +276,7 @@ class SessionManager:
                 return False
 
             # 파일에서 로드
-            with open(safe_path, 'r', encoding='utf-8') as f:
+            with open(safe_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
             # 세션 상태 업데이트
@@ -335,14 +336,14 @@ class SessionManager:
                 )
 
                 # 디버그 모드 토글
-                current_debug = cls.get('debug_mode', False)
+                current_debug = cls.get("debug_mode", False)
                 new_debug = st.toggle(
                     "🐛 디버그 모드 활성화",
                     value=current_debug,
                     help="성능 타이머 및 상세 로그 표시"
                 )
                 if new_debug != current_debug:
-                    cls.set('debug_mode', new_debug)
+                    cls.set("debug_mode", new_debug)
                     st.rerun()
 
             else:
@@ -357,11 +358,11 @@ class SessionManager:
             디버그 모드 활성화 여부
         """
         # 세션 state 우선
-        if cls.exists('debug_mode'):
-            return bool(cls.get('debug_mode'))
+        if cls.exists("debug_mode"):
+            return bool(cls.get("debug_mode"))
 
         # 환경 변수 대체
-        return os.getenv('DEBUG_MODE', '').lower() in ('true', '1', 'yes', 'on')
+        return os.getenv("DEBUG_MODE", "").lower() in ("true", "1", "yes", "on")
 
     @classmethod
     def _log_session_init(cls):

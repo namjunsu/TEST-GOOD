@@ -9,12 +9,12 @@ Version: 2.0
 - safe_execute에 show_details 인자 추가
 """
 
+import functools
 import logging
 import traceback
-import functools
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Any, Callable
+from typing import Any, Callable, Optional
 
 # Streamlit 선택적 임포트
 try:
@@ -142,7 +142,7 @@ class ErrorHandler:
 
         # 상세 정보 (디버그 모드)
         if show_details:
-            print(f"\n--- 상세 오류 정보 ---")
+            print("\n--- 상세 오류 정보 ---")
             print(f"오류 타입: {type(error).__name__}")
             print(f"오류 메시지: {str(error)}")
             print(f"컨텍스트: {context or 'N/A'}")
@@ -204,7 +204,7 @@ class ErrorHandler:
         patterns = [
             r"'([^']+\.(pdf|docx|pptx|txt|csv))'",
             r'"([^"]+\.(pdf|docx|pptx|txt|csv))"',
-            r'([^\s]+\.(pdf|docx|pptx|txt|csv))',
+            r"([^\s]+\.(pdf|docx|pptx|txt|csv))",
         ]
 
         for pattern in patterns:
@@ -257,7 +257,7 @@ class ErrorHandler:
             try:
                 if "debug_mode" in st.session_state:
                     return st.session_state.debug_mode
-            except:
+            except (AttributeError, RuntimeError):
                 pass
 
         # 환경 변수 확인 (백엔드/CLI 호환)

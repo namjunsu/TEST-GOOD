@@ -1,13 +1,14 @@
-#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
+#!/usr/bin/env python3
 """
 Security and License Scanner for Repository Hygiene.
 Generates comprehensive license report for all dependencies.
 """
 
-import subprocess
 import json
+import subprocess
 from collections import Counter
 from pathlib import Path
+
 
 def get_installed_packages():
     """Get list of installed packages with versions."""
@@ -18,6 +19,7 @@ def get_installed_packages():
     )
     return json.loads(result.stdout)
 
+
 def classify_license(license_str):
     """Classify license into categories."""
     if not license_str:
@@ -26,16 +28,17 @@ def classify_license(license_str):
     license_lower = license_str.lower()
 
     # Open source licenses
-    if any(x in license_lower for x in ['mit', 'bsd', 'apache', 'isc']):
+    if any(x in license_lower for x in ["mit", "bsd", "apache", "isc"]):
         return "Permissive"
-    elif any(x in license_lower for x in ['gpl', 'lgpl', 'agpl']):
+    elif any(x in license_lower for x in ["gpl", "lgpl", "agpl"]):
         return "Copyleft"
-    elif 'python' in license_lower or 'psf' in license_lower:
+    elif "python" in license_lower or "psf" in license_lower:
         return "Python"
-    elif any(x in license_lower for x in ['proprietary', 'commercial']):
+    elif any(x in license_lower for x in ["proprietary", "commercial"]):
         return "Proprietary"
     else:
         return "Other"
+
 
 def scan_licenses():
     """Scan all dependencies for licenses."""
@@ -43,74 +46,74 @@ def scan_licenses():
 
     # Common packages and their licenses (fallback for when pip show fails)
     known_licenses = {
-        'numpy': 'BSD',
-        'pandas': 'BSD',
-        'scikit-learn': 'BSD',
-        'streamlit': 'Apache 2.0',
-        'fastapi': 'MIT',
-        'uvicorn': 'BSD',
-        'pydantic': 'MIT',
-        'langchain': 'MIT',
-        'langchain-community': 'MIT',
-        'langchain-openai': 'MIT',
-        'openai': 'MIT',
-        'faiss-cpu': 'MIT',
-        'sentence-transformers': 'Apache 2.0',
-        'torch': 'BSD',
-        'transformers': 'Apache 2.0',
-        'click': 'BSD',
-        'requests': 'Apache 2.0',
-        'urllib3': 'MIT',
-        'certifi': 'MPL-2.0',
-        'jinja2': 'BSD',
-        'markupsafe': 'BSD',
-        'pytest': 'MIT',
-        'black': 'MIT',
-        'ruff': 'MIT',
-        'mypy': 'MIT',
-        'pre-commit': 'MIT',
-        'python-dotenv': 'BSD',
-        'pyyaml': 'MIT',
-        'sqlalchemy': 'MIT',
-        'alembic': 'MIT',
-        'psutil': 'BSD',
-        'tqdm': 'MIT/Apache 2.0',
-        'rich': 'MIT',
-        'httpx': 'BSD',
-        'aiohttp': 'Apache 2.0',
-        'boto3': 'Apache 2.0',
-        'redis': 'MIT',
-        'celery': 'BSD',
-        'pillow': 'HPND',
-        'matplotlib': 'PSF',
-        'seaborn': 'BSD',
-        'plotly': 'MIT',
-        'opencv-python': 'MIT',
-        'scipy': 'BSD',
-        'sympy': 'BSD',
-        'networkx': 'BSD',
-        'beautifulsoup4': 'MIT',
-        'lxml': 'BSD',
-        'openpyxl': 'MIT',
-        'xlrd': 'BSD',
-        'cryptography': 'Apache 2.0/BSD',
-        'pycryptodome': 'BSD/Public Domain',
-        'jwt': 'MIT',
-        'passlib': 'BSD',
-        'flask': 'BSD',
-        'django': 'BSD',
-        'gunicorn': 'MIT',
-        'nginx': 'BSD',
-        'docker': 'Apache 2.0',
-        'kubernetes': 'Apache 2.0',
+        "numpy": "BSD",
+        "pandas": "BSD",
+        "scikit-learn": "BSD",
+        "streamlit": "Apache 2.0",
+        "fastapi": "MIT",
+        "uvicorn": "BSD",
+        "pydantic": "MIT",
+        "langchain": "MIT",
+        "langchain-community": "MIT",
+        "langchain-openai": "MIT",
+        "openai": "MIT",
+        "faiss-cpu": "MIT",
+        "sentence-transformers": "Apache 2.0",
+        "torch": "BSD",
+        "transformers": "Apache 2.0",
+        "click": "BSD",
+        "requests": "Apache 2.0",
+        "urllib3": "MIT",
+        "certifi": "MPL-2.0",
+        "jinja2": "BSD",
+        "markupsafe": "BSD",
+        "pytest": "MIT",
+        "black": "MIT",
+        "ruff": "MIT",
+        "mypy": "MIT",
+        "pre-commit": "MIT",
+        "python-dotenv": "BSD",
+        "pyyaml": "MIT",
+        "sqlalchemy": "MIT",
+        "alembic": "MIT",
+        "psutil": "BSD",
+        "tqdm": "MIT/Apache 2.0",
+        "rich": "MIT",
+        "httpx": "BSD",
+        "aiohttp": "Apache 2.0",
+        "boto3": "Apache 2.0",
+        "redis": "MIT",
+        "celery": "BSD",
+        "pillow": "HPND",
+        "matplotlib": "PSF",
+        "seaborn": "BSD",
+        "plotly": "MIT",
+        "opencv-python": "MIT",
+        "scipy": "BSD",
+        "sympy": "BSD",
+        "networkx": "BSD",
+        "beautifulsoup4": "MIT",
+        "lxml": "BSD",
+        "openpyxl": "MIT",
+        "xlrd": "BSD",
+        "cryptography": "Apache 2.0/BSD",
+        "pycryptodome": "BSD/Public Domain",
+        "jwt": "MIT",
+        "passlib": "BSD",
+        "flask": "BSD",
+        "django": "BSD",
+        "gunicorn": "MIT",
+        "nginx": "BSD",
+        "docker": "Apache 2.0",
+        "kubernetes": "Apache 2.0",
     }
 
     licenses = []
     security_concerns = []
 
     for pkg in packages:
-        name = pkg['name']
-        version = pkg['version']
+        name = pkg["name"]
+        version = pkg["version"]
 
         # Try to get license info from pip show
         try:
@@ -122,9 +125,9 @@ def scan_licenses():
             )
 
             license_info = "Unknown"
-            for line in result.stdout.split('\n'):
-                if line.startswith('License:'):
-                    license_info = line.replace('License:', '').strip()
+            for line in result.stdout.split("\n"):
+                if line.startswith("License:"):
+                    license_info = line.replace("License:", "").strip()
                     break
 
             # Fallback to known licenses
@@ -135,10 +138,10 @@ def scan_licenses():
             license_info = known_licenses.get(name, "Unknown")
 
         licenses.append({
-            'name': name,
-            'version': version,
-            'license': license_info,
-            'category': classify_license(license_info)
+            "name": name,
+            "version": version,
+            "license": license_info,
+            "category": classify_license(license_info)
         })
 
         # Security checks
@@ -146,21 +149,22 @@ def scan_licenses():
         security_issues = []
 
         # Example checks (would need real CVE database in production)
-        if name == 'urllib3' and version < '2.0.0':
+        if name == "urllib3" and version < "2.0.0":
             security_issues.append("Older version - consider upgrading")
-        elif name == 'requests' and version < '2.31.0':
+        elif name == "requests" and version < "2.31.0":
             security_issues.append("Older version - consider upgrading")
-        elif name == 'cryptography' and version < '41.0.0':
+        elif name == "cryptography" and version < "41.0.0":
             security_issues.append("Older version - security updates available")
 
         if security_issues:
             security_concerns.append({
-                'package': name,
-                'version': version,
-                'issues': security_issues
+                "package": name,
+                "version": version,
+                "issues": security_issues
             })
 
     return licenses, security_concerns
+
 
 def generate_report():
     """Generate comprehensive license and security report."""
@@ -169,7 +173,7 @@ def generate_report():
     licenses, security_concerns = scan_licenses()
 
     # Count license categories
-    license_counts = Counter(lic['category'] for lic in licenses)
+    license_counts = Counter(lic["category"] for lic in licenses)
 
     # Generate report
     report_lines = [
@@ -193,11 +197,11 @@ def generate_report():
     ])
 
     # Group by category
-    for category in ['Permissive', 'Copyleft', 'Python', 'Other', 'Unknown']:
-        packages_in_category = [p for p in licenses if p['category'] == category]
+    for category in ["Permissive", "Copyleft", "Python", "Other", "Unknown"]:
+        packages_in_category = [p for p in licenses if p["category"] == category]
         if packages_in_category:
             report_lines.append(f"\n{category} Licenses:")
-            for pkg in sorted(packages_in_category, key=lambda x: x['name'])[:20]:  # First 20
+            for pkg in sorted(packages_in_category, key=lambda x: x["name"])[:20]:  # First 20
                 report_lines.append(f"  • {pkg['name']:30s} {pkg['version']:15s} {pkg['license']}")
             if len(packages_in_category) > 20:
                 report_lines.append(f"  ... and {len(packages_in_category) - 20} more")
@@ -213,7 +217,7 @@ def generate_report():
         report_lines.append("⚠️ Packages with potential issues:")
         for concern in security_concerns:
             report_lines.append(f"  • {concern['package']} ({concern['version']})")
-            for issue in concern['issues']:
+            for issue in concern["issues"]:
                 report_lines.append(f"    - {issue}")
     else:
         report_lines.append("✅ No immediate security concerns identified")
@@ -230,8 +234,8 @@ def generate_report():
     ])
 
     # Risk assessment
-    copyleft_count = license_counts.get('Copyleft', 0)
-    unknown_count = license_counts.get('Unknown', 0)
+    copyleft_count = license_counts.get("Copyleft", 0)
+    unknown_count = license_counts.get("Unknown", 0)
 
     if copyleft_count == 0 and unknown_count < 5:
         risk = "LOW"
@@ -274,25 +278,26 @@ def generate_report():
 
     # Also save JSON for programmatic access
     json_report = {
-        'total_packages': len(licenses),
-        'license_distribution': dict(license_counts),
-        'packages': licenses,
-        'security_concerns': security_concerns,
-        'risk_level': risk,
-        'timestamp': subprocess.check_output(['date']).decode().strip()
+        "total_packages": len(licenses),
+        "license_distribution": dict(license_counts),
+        "packages": licenses,
+        "security_concerns": security_concerns,
+        "risk_level": risk,
+        "timestamp": subprocess.check_output(["date"]).decode().strip()
     }
 
     json_file = Path("reports/licenses_detail.json")
-    with open(json_file, 'w') as f:
+    with open(json_file, "w") as f:
         json.dump(json_report, f, indent=2)
 
     print(report_text)
     print("")
-    print(f"📄 Reports saved:")
+    print("📄 Reports saved:")
     print(f"   - {output_file}")
     print(f"   - {json_file}")
 
     return risk == "LOW" or risk == "MEDIUM"
+
 
 if __name__ == "__main__":
     import sys

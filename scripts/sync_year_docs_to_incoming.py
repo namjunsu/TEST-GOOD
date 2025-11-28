@@ -1,4 +1,4 @@
-#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
+#!/usr/bin/env python3
 """
 연도 폴더(year_YYYY)에 넣어둔 신규 PDF를
 docs/incoming/으로 복사해 주는 동기화 스크립트.
@@ -14,9 +14,9 @@ docs/incoming/으로 복사해 주는 동기화 스크립트.
 즉, "아직 한 번도 처리되지 않은 신규 연도 폴더 문서"만 incoming 으로 들어간다.
 """
 
-from pathlib import Path
 import shutil
 import sqlite3
+from pathlib import Path
 
 BASE_DIR = Path("docs")
 YEAR_GLOB = "year_20*"  # year_2020, year_2021, ...
@@ -112,7 +112,7 @@ def main() -> None:
             shutil.copy2(src, dst)
             moved += 1
 
-    print(f"\n[결과 요약]")
+    print("\n[결과 요약]")
     print(f"  스캔한 연도 폴더 내 PDF: {scanned}개")
     print(f"  신규 동기화된 문서: {moved}개")
     print(f"  Skip - DB 등록됨: {skipped_db}개")

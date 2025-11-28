@@ -1,4 +1,4 @@
-#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
+#!/usr/bin/env python3
 """
 RAG 회귀 벤치마크
 
@@ -13,13 +13,13 @@ Usage:
     python scripts/bench_rag.py --golden-set data/golden_set.json
 """
 
+import argparse
+import json
 import sys
 import time
-import json
-from pathlib import Path
-from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
-import argparse
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 # 프로젝트 루트 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -113,7 +113,7 @@ def load_golden_set(filepath: Optional[Path] = None) -> List[Dict[str, Any]]:
         List of queries with expected docs
     """
     if filepath and filepath.exists():
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(filepath, "r", encoding="utf-8") as f:
             return json.load(f)
     else:
         print(f"⚠️  골든 셋 파일 없음, 기본값 사용: {len(DEFAULT_GOLDEN_SET)}개")
@@ -198,8 +198,9 @@ def run_benchmark(golden_set_path: Optional[Path] = None, top_k: int = 5) -> Ben
 
     try:
         # 새 구조 (app/rag/pipeline.py)
-        from app.rag.pipeline import RagPipeline
         from app.core.config import Config
+
+        from app.rag.pipeline import RagPipeline
 
         cfg = Config.get_instance()
         pipeline = RagPipeline(cfg)
@@ -265,7 +266,7 @@ def run_benchmark(golden_set_path: Optional[Path] = None, top_k: int = 5) -> Ben
     output_path = Path("var/log/bench_metrics.json")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(output_path, 'w', encoding='utf-8') as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=2, ensure_ascii=False)
 
     print(f"\n✅ 결과 저장: {output_path}")

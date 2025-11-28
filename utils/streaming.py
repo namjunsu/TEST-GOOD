@@ -10,10 +10,10 @@ Simulates ChatGPT-style incremental text rendering
 - 빈 문자열 안전 처리
 """
 
-import time
 import asyncio
-from typing import Generator, AsyncGenerator, Callable, Optional, Literal
 import logging
+import time
+from typing import AsyncGenerator, Generator, Literal
 
 logger = logging.getLogger(__name__)
 

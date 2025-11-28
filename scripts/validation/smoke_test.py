@@ -1,14 +1,14 @@
-#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
+#!/usr/bin/env python3
 """
 기능 스모크 테스트 (실사용 시나리오 6건)
 실제 RAG 시스템을 호출하여 기능 검증
 """
 
+import json
 import sys
 import time
-import json
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Any, Dict
 
 # 프로젝트 루트 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -234,13 +234,13 @@ class SmokeTestRunner:
         # 지연 시간 통계
         latencies = [r["latency"] for r in self.results if "latency" in r]
         if latencies:
-            logger.info(f"\n⏱️  지연 시간 통계:")
+            logger.info("\n⏱️  지연 시간 통계:")
             logger.info(f"  평균: {sum(latencies) / len(latencies):.3f}s")
             logger.info(f"  최소: {min(latencies):.3f}s")
             logger.info(f"  최대: {max(latencies):.3f}s")
 
         # 상세 결과
-        logger.info(f"\n📋 상세 결과:")
+        logger.info("\n📋 상세 결과:")
         for i, result in enumerate(self.results, 1):
             status = "✅" if result["passed"] else "❌"
             latency = result.get("latency", 0)

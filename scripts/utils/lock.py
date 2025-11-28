@@ -1,4 +1,4 @@
-#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
+#!/usr/bin/env python3
 """
 Reindexing Lock Utility
 재색인 동시 실행 방지를 위한 파일 기반 Mutex
@@ -6,7 +6,6 @@ Reindexing Lock Utility
 import os
 import time
 from contextlib import contextmanager
-
 
 LOCK_FILE = "var/locks/reindexing.lock"
 

@@ -1,4 +1,4 @@
-#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
+#!/usr/bin/env python3
 """기존 documents에서 model_codes 백필
 
 data/extracted/*.txt에서 텍스트를 읽어 model_codes 테이블을 채웁니다.
@@ -98,7 +98,7 @@ def backfill_model_codes(limit: int | None = None, dry_run: bool = False):
                 for raw, norm in code_pairs[:3]:
                     print(f"     {raw} → {norm}")
                 if len(code_pairs) > 3:
-                    print(f"     ... 외 {len(code_pairs)-3}개")
+                    print(f"     ... 외 {len(code_pairs) - 3}개")
 
             if not dry_run:
                 # model_codes 테이블에 삽입 (executemany로 배치 처리)
@@ -146,7 +146,7 @@ def backfill_model_codes(limit: int | None = None, dry_run: bool = False):
         cursor = conn.execute("SELECT COUNT(*) FROM model_codes")
         total_rows = cursor.fetchone()[0]
 
-        print(f"\n📊 DB 상태:")
+        print("\n📊 DB 상태:")
         print(f"   - model_codes 총 레코드: {total_rows}개")
         print(f"   - 고유 문서: {unique_docs}개")
 
@@ -156,7 +156,7 @@ def backfill_model_codes(limit: int | None = None, dry_run: bool = False):
                 "SELECT raw_code, norm_code, padded_norm FROM model_codes LIMIT 10"
             )
             samples = cursor.fetchall()
-            print(f"\n   샘플 (10개):")
+            print("\n   샘플 (10개):")
             for raw, norm, padded in samples:
                 print(f"     {raw:20s} → {norm:20s} → [{padded}]")
         except Exception as e:
@@ -168,7 +168,7 @@ def backfill_model_codes(limit: int | None = None, dry_run: bool = False):
                 "SELECT raw_code, norm_code FROM model_codes LIMIT 10"
             )
             samples = cursor.fetchall()
-            print(f"\n   샘플 (10개, raw → norm):")
+            print("\n   샘플 (10개, raw → norm):")
             for raw, norm in samples:
                 print(f"     {raw:20s} → {norm}")
 

@@ -25,7 +25,8 @@ cat > "${PROJECT_DIR}/scripts/cron_wrapper.sh" << 'EOF'
 #!/bin/bash
 # 크론잡 실행 래퍼
 
-PROJECT_DIR="/home/wnstn4647/AI-CHAT"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 VENV_PATH="${PROJECT_DIR}/.venv"
 LOG_DIR="${PROJECT_DIR}/logs/cron"
 

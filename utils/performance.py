@@ -9,13 +9,14 @@
 - 디버그 모드 통합 관리
 """
 
-import time
-import streamlit as st
-from functools import wraps
-from typing import Dict, Any, Optional
 import logging
 import os
+import time
+from functools import wraps
+from typing import Any, Dict
+
 import pandas as pd
+import streamlit as st
 
 
 class PerformanceMonitor:
@@ -99,27 +100,27 @@ class PerformanceMonitor:
     @classmethod
     def _store_metric(cls, func_name: str, duration: float, error: bool = False):
         """메트릭 저장"""
-        if 'performance_metrics' not in st.session_state:
+        if "performance_metrics" not in st.session_state:
             st.session_state.performance_metrics = {}
 
         # setdefault로 코드 단순화
         metrics = st.session_state.performance_metrics.setdefault(
             func_name,
             {
-                'count': 0,
-                'total_time': 0.0,
-                'min_time': float('inf'),
-                'max_time': 0.0,
-                'errors': 0
+                "count": 0,
+                "total_time": 0.0,
+                "min_time": float("inf"),
+                "max_time": 0.0,
+                "errors": 0
             }
         )
 
-        metrics['count'] += 1
-        metrics['total_time'] += duration
-        metrics['min_time'] = min(metrics['min_time'], duration)
-        metrics['max_time'] = max(metrics['max_time'], duration)
+        metrics["count"] += 1
+        metrics["total_time"] += duration
+        metrics["min_time"] = min(metrics["min_time"], duration)
+        metrics["max_time"] = max(metrics["max_time"], duration)
         if error:
-            metrics['errors'] += 1
+            metrics["errors"] += 1
 
     @classmethod
     def _display_timing(cls, func_name: str, duration: float):
@@ -135,7 +136,7 @@ class PerformanceMonitor:
     @classmethod
     def get_metrics(cls) -> Dict[str, Any]:
         """수집된 메트릭 반환"""
-        return st.session_state.get('performance_metrics', {})
+        return st.session_state.get("performance_metrics", {})
 
     @classmethod
     def get_summary(cls) -> Dict[str, Any]:
@@ -144,40 +145,40 @@ class PerformanceMonitor:
         if not metrics:
             return {}
 
-        total_calls = sum(m['count'] for m in metrics.values())
-        total_time = sum(m['total_time'] for m in metrics.values())
+        total_calls = sum(m["count"] for m in metrics.values())
+        total_time = sum(m["total_time"] for m in metrics.values())
 
         summary = {
-            'total_functions': len(metrics),
-            'total_calls': total_calls,
-            'total_time': total_time,
-            'avg_time': total_time / total_calls if total_calls > 0 else 0.0,
-            'total_errors': sum(m['errors'] for m in metrics.values()),
-            'slowest_function': None,
-            'fastest_function': None,
-            'most_called': None
+            "total_functions": len(metrics),
+            "total_calls": total_calls,
+            "total_time": total_time,
+            "avg_time": total_time / total_calls if total_calls > 0 else 0.0,
+            "total_errors": sum(m["errors"] for m in metrics.values()),
+            "slowest_function": None,
+            "fastest_function": None,
+            "most_called": None
         }
 
         # 가장 느린 함수
         if metrics:
-            slowest = max(metrics.items(), key=lambda x: x[1]['max_time'])
-            summary['slowest_function'] = {
-                'name': slowest[0],
-                'time': slowest[1]['max_time']
+            slowest = max(metrics.items(), key=lambda x: x[1]["max_time"])
+            summary["slowest_function"] = {
+                "name": slowest[0],
+                "time": slowest[1]["max_time"]
             }
 
             # 가장 빠른 함수
-            fastest = min(metrics.items(), key=lambda x: x[1]['min_time'])
-            summary['fastest_function'] = {
-                'name': fastest[0],
-                'time': fastest[1]['min_time']
+            fastest = min(metrics.items(), key=lambda x: x[1]["min_time"])
+            summary["fastest_function"] = {
+                "name": fastest[0],
+                "time": fastest[1]["min_time"]
             }
 
             # 가장 많이 호출된 함수
-            most_called = max(metrics.items(), key=lambda x: x[1]['count'])
-            summary['most_called'] = {
-                'name': most_called[0],
-                'count': most_called[1]['count']
+            most_called = max(metrics.items(), key=lambda x: x[1]["count"])
+            summary["most_called"] = {
+                "name": most_called[0],
+                "count": most_called[1]["count"]
             }
 
         return summary
@@ -196,10 +197,10 @@ class PerformanceMonitor:
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
-            st.metric("총 함수", summary['total_functions'])
+            st.metric("총 함수", summary["total_functions"])
 
         with col2:
-            st.metric("총 호출", summary['total_calls'])
+            st.metric("총 호출", summary["total_calls"])
 
         with col3:
             st.metric("총 시간", f"{summary['total_time']:.2f}s")
@@ -208,7 +209,7 @@ class PerformanceMonitor:
             st.metric("평균", f"{summary['avg_time']:.3f}s")
 
         # 에러가 있을 경우 추가 표시
-        if summary['total_errors'] > 0:
+        if summary["total_errors"] > 0:
             st.error(f"⚠️ 총 {summary['total_errors']}개의 에러가 발생했습니다")
 
         # 상세 메트릭 (DataFrame 표시)
@@ -218,29 +219,29 @@ class PerformanceMonitor:
                 # DataFrame 생성
                 rows = []
                 for func_name, data in metrics.items():
-                    avg_time = data['total_time'] / data['count'] if data['count'] > 0 else 0.0
+                    avg_time = data["total_time"] / data["count"] if data["count"] > 0 else 0.0
                     rows.append({
-                        '함수': func_name.split('.')[-1],  # 짧은 이름 표시
-                        '모듈': func_name.rsplit('.', 1)[0] if '.' in func_name else '-',
-                        '호출 횟수': data['count'],
-                        '평균(s)': round(avg_time, 3),
-                        '최소(s)': round(data['min_time'], 3) if data['min_time'] != float('inf') else 0,
-                        '최대(s)': round(data['max_time'], 3),
-                        '총 시간(s)': round(data['total_time'], 3),
-                        '에러': data['errors']
+                        "함수": func_name.split(".")[-1],  # 짧은 이름 표시
+                        "모듈": func_name.rsplit(".", 1)[0] if "." in func_name else "-",
+                        "호출 횟수": data["count"],
+                        "평균(s)": round(avg_time, 3),
+                        "최소(s)": round(data["min_time"], 3) if data["min_time"] != float("inf") else 0,
+                        "최대(s)": round(data["max_time"], 3),
+                        "총 시간(s)": round(data["total_time"], 3),
+                        "에러": data["errors"]
                     })
 
                 df = pd.DataFrame(rows)
 
                 # 성능 기준으로 색상 적용 (조건부 서식)
                 def highlight_slow(val, column):
-                    if column == '평균(s)' and val > cls.SLOW_THRESHOLD:
-                        return 'background-color: #ffcccc'
-                    elif column == '최대(s)' and val > cls.CRITICAL_THRESHOLD:
-                        return 'background-color: #ff9999'
-                    elif column == '에러' and val > 0:
-                        return 'background-color: #ffcc99'
-                    return ''
+                    if column == "평균(s)" and val > cls.SLOW_THRESHOLD:
+                        return "background-color: #ffcccc"
+                    elif column == "최대(s)" and val > cls.CRITICAL_THRESHOLD:
+                        return "background-color: #ff9999"
+                    elif column == "에러" and val > 0:
+                        return "background-color: #ffcc99"
+                    return ""
 
                 # DataFrame 표시
                 st.dataframe(
@@ -248,23 +249,23 @@ class PerformanceMonitor:
                     use_container_width=True,
                     hide_index=True,
                     column_config={
-                        '호출 횟수': st.column_config.NumberColumn(format="%d"),
-                        '평균(s)': st.column_config.NumberColumn(format="%.3f"),
-                        '최소(s)': st.column_config.NumberColumn(format="%.3f"),
-                        '최대(s)': st.column_config.NumberColumn(format="%.3f"),
-                        '총 시간(s)': st.column_config.NumberColumn(format="%.3f"),
-                        '에러': st.column_config.NumberColumn(format="%d"),
+                        "호출 횟수": st.column_config.NumberColumn(format="%d"),
+                        "평균(s)": st.column_config.NumberColumn(format="%.3f"),
+                        "최소(s)": st.column_config.NumberColumn(format="%.3f"),
+                        "최대(s)": st.column_config.NumberColumn(format="%.3f"),
+                        "총 시간(s)": st.column_config.NumberColumn(format="%.3f"),
+                        "에러": st.column_config.NumberColumn(format="%d"),
                     }
                 )
 
                 # 성능 인사이트
                 st.markdown("#### 🔍 성능 인사이트")
-                if summary['slowest_function']:
+                if summary["slowest_function"]:
                     st.warning(
                         f"가장 느린 실행: **{summary['slowest_function']['name']}** "
                         f"({summary['slowest_function']['time']:.2f}s)"
                     )
-                if summary['most_called']:
+                if summary["most_called"]:
                     st.info(
                         f"가장 많이 호출: **{summary['most_called']['name']}** "
                         f"({summary['most_called']['count']}회)"
@@ -275,7 +276,7 @@ class PerformanceMonitor:
     @classmethod
     def reset_metrics(cls, show_message: bool = True):
         """메트릭 초기화 (UI 메시지 선택적)"""
-        if 'performance_metrics' in st.session_state:
+        if "performance_metrics" in st.session_state:
             del st.session_state.performance_metrics
 
         if show_message:
@@ -290,7 +291,7 @@ class PerformanceMonitor:
             return SessionManager.is_debug_mode()
         except ImportError:
             # SessionManager 없으면 환경 변수 사용
-            return os.getenv('DEBUG_MODE', '').lower() in ['true', '1', 'yes', 'on']
+            return os.getenv("DEBUG_MODE", "").lower() in ["true", "1", "yes", "on"]
 
 
 class Timer:
@@ -362,9 +363,9 @@ def benchmark(iterations: int = 100):
             # 결과 로깅
             PerformanceMonitor.logger.info(
                 f"Benchmark {func.__name__}: "
-                f"avg={avg_time*1000:.3f}ms, "
-                f"min={min_time*1000:.3f}ms, "
-                f"max={max_time*1000:.3f}ms "
+                f"avg={avg_time * 1000:.3f}ms, "
+                f"min={min_time * 1000:.3f}ms, "
+                f"max={max_time * 1000:.3f}ms "
                 f"({iterations} iterations)"
             )
 

@@ -1,4 +1,4 @@
-#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
+#!/usr/bin/env python3
 """
 문서 목록 조회 스크립트
 metadata.db에 인덱싱된 문서 정보를 깔끔하게 출력합니다.
@@ -7,7 +7,6 @@ metadata.db에 인덱싱된 문서 정보를 깔끔하게 출력합니다.
 import sqlite3
 import sys
 from pathlib import Path
-from datetime import datetime
 
 
 def format_size(size_bytes):
@@ -15,7 +14,7 @@ def format_size(size_bytes):
     if size_bytes is None:
         return "N/A"
 
-    for unit in ['B', 'KB', 'MB', 'GB']:
+    for unit in ["B", "KB", "MB", "GB"]:
         if size_bytes < 1024.0:
             return f"{size_bytes:.1f}{unit}"
         size_bytes /= 1024.0
@@ -41,7 +40,7 @@ def list_documents(db_path="metadata.db", limit=None, show_details=False):
 
         # 문서 통계
         cursor.execute("SELECT COUNT(*) as total FROM documents")
-        total = cursor.fetchone()['total']
+        total = cursor.fetchone()["total"]
 
         print("=" * 80)
         print(f"📚 문서 라이브러리 (총 {total}개 문서)")
@@ -81,17 +80,17 @@ def list_documents(db_path="metadata.db", limit=None, show_details=False):
         if show_details:
             # 상세 출력
             for i, row in enumerate(rows, 1):
-                doc_id = row['id']
-                filename = row['filename']
-                title = row['title'] or "(제목 없음)"
-                date = row['date'] or "날짜 없음"
-                year = row['year'] or "연도 없음"
-                category = row['category'] or "분류 없음"
-                drafter = row['drafter'] or "기안자 없음"
-                page_count = row['page_count'] or 0
-                file_size = format_size(row['file_size'])
-                keywords = row['keywords'] or "[]"
-                created_at = row['created_at']
+                doc_id = row["id"]
+                filename = row["filename"]
+                title = row["title"] or "(제목 없음)"
+                date = row["date"] or "날짜 없음"
+                year = row["year"] or "연도 없음"
+                category = row["category"] or "분류 없음"
+                drafter = row["drafter"] or "기안자 없음"
+                page_count = row["page_count"] or 0
+                file_size = format_size(row["file_size"])
+                keywords = row["keywords"] or "[]"
+                created_at = row["created_at"]
 
                 print(f"\n[{i}] 문서 ID: {doc_id}")
                 print(f"    파일명: {filename}")
@@ -106,15 +105,15 @@ def list_documents(db_path="metadata.db", limit=None, show_details=False):
                 print("-" * 80)
 
                 documents.append({
-                    'id': doc_id,
-                    'filename': filename,
-                    'title': title,
-                    'date': date,
-                    'year': year,
-                    'category': category,
-                    'drafter': drafter,
-                    'page_count': page_count,
-                    'keywords': keywords
+                    "id": doc_id,
+                    "filename": filename,
+                    "title": title,
+                    "date": date,
+                    "year": year,
+                    "category": category,
+                    "drafter": drafter,
+                    "page_count": page_count,
+                    "keywords": keywords
                 })
         else:
             # 간단한 테이블 형태
@@ -122,24 +121,24 @@ def list_documents(db_path="metadata.db", limit=None, show_details=False):
             print("-" * 80)
 
             for row in rows:
-                doc_id = row['id']
-                filename = row['filename'][:28] + ".." if len(row['filename']) > 30 else row['filename']
-                title = (row['title'] or "(제목 없음)")[:38] + ".." if row['title'] and len(row['title']) > 40 else (row['title'] or "(제목 없음)")
-                page_count = row['page_count'] or 0
-                year = row['year'] or "N/A"
+                doc_id = row["id"]
+                filename = row["filename"][:28] + ".." if len(row["filename"]) > 30 else row["filename"]
+                title = (row["title"] or "(제목 없음)")[:38] + ".." if row["title"] and len(row["title"]) > 40 else (row["title"] or "(제목 없음)")
+                page_count = row["page_count"] or 0
+                year = row["year"] or "N/A"
 
                 print(f"{doc_id:<5} {filename:<30} {title:<40} {page_count:<8} {year:<6}")
 
                 documents.append({
-                    'id': doc_id,
-                    'filename': row['filename'],
-                    'title': row['title'],
-                    'date': row['date'],
-                    'year': row['year'],
-                    'category': row['category'],
-                    'drafter': row['drafter'],
-                    'page_count': row['page_count'],
-                    'keywords': row['keywords']
+                    "id": doc_id,
+                    "filename": row["filename"],
+                    "title": row["title"],
+                    "date": row["date"],
+                    "year": row["year"],
+                    "category": row["category"],
+                    "drafter": row["drafter"],
+                    "page_count": row["page_count"],
+                    "keywords": row["keywords"]
                 })
 
         print("\n" + "=" * 80)
@@ -157,8 +156,8 @@ def list_documents(db_path="metadata.db", limit=None, show_details=False):
         if year_stats:
             print("\n📊 연도별 분포:")
             for stat in year_stats:
-                year = stat['year']
-                count = stat['count']
+                year = stat["year"]
+                count = stat["count"]
                 print(f"   {year}년: {count}개")
 
         # 분류별 통계
@@ -175,8 +174,8 @@ def list_documents(db_path="metadata.db", limit=None, show_details=False):
         if category_stats:
             print("\n📂 주요 분류 (상위 5개):")
             for stat in category_stats:
-                category = stat['category']
-                count = stat['count']
+                category = stat["category"]
+                count = stat["count"]
                 print(f"   {category}: {count}개")
 
         print()

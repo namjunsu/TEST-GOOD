@@ -1,4 +1,4 @@
-#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
+#!/usr/bin/env python3
 """
 시스템 헬스체크 스크립트
 
@@ -19,6 +19,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+
 
 class HealthChecker:
     def __init__(self):

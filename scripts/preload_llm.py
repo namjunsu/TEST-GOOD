@@ -1,18 +1,17 @@
-#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
+#!/usr/bin/env python3
 """
 LLM Preload Script
 Preloads the LLM model at server startup to reduce first-query latency
 """
+import logging
 import os
 import sys
 import time
-import logging
 from pathlib import Path
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import logging
 from rag_system.active.llm_singleton import LLMSingleton
 
 logger = logging.getLogger(__name__)
@@ -30,7 +29,7 @@ def preload_llm():
     try:
         # Initialize LLM via singleton
         logger.info("📥 Loading LLM model into memory...")
-        model_path = os.getenv('MODEL_PATH') or os.getenv('LLM_MODEL_PATH')
+        model_path = os.getenv("MODEL_PATH") or os.getenv("LLM_MODEL_PATH")
 
         if not model_path:
             raise ValueError("MODEL_PATH or LLM_MODEL_PATH not set in environment")
@@ -46,11 +45,11 @@ def preload_llm():
         load_time = time.time() - start_time
 
         logger.info(f"✅ LLM model preloaded successfully in {load_time:.2f} seconds")
-        logger.info(f"📊 Model info:")
+        logger.info("📊 Model info:")
         logger.info(f"   - Model path: {model_path}")
 
         # test_response is a RAGResponse object
-        response_text = test_response.answer if hasattr(test_response, 'answer') else str(test_response)
+        response_text = test_response.answer if hasattr(test_response, "answer") else str(test_response)
         logger.info(f"   - Test response length: {len(response_text)} chars")
 
         # Print singleton stats
@@ -80,7 +79,7 @@ def keep_alive(generator):
         try:
             # Do a quick test query to keep model in GPU memory
             test_response = generator.generate_response("테스트", context_chunks=[])
-            response_text = test_response.answer if hasattr(test_response, 'answer') else str(test_response)
+            response_text = test_response.answer if hasattr(test_response, "answer") else str(test_response)
             logger.debug(f"Keep-alive ping successful: {len(response_text)} chars")
         except Exception as e:
             logger.warning(f"Keep-alive ping failed: {e}")

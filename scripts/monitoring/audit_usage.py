@@ -1,4 +1,4 @@
-#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
+#!/usr/bin/env python3
 """
 Usage Audit Script
 코드 및 스크립트 사용/미사용 판정 (휴리스틱 기반)

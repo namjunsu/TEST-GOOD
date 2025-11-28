@@ -11,19 +11,18 @@
 - 테스트 가능한 구조
 """
 
-import sys
-import os
-import shutil
-import platform
-import time
-import hashlib
-from pathlib import Path
-from typing import Dict, List, Tuple, Any, Optional, Callable
-from dataclasses import dataclass, field
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from enum import Enum
 import json
+import os
 import pickle
+import platform
+import shutil
+import sys
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
+from enum import Enum
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # 외부 의존성 (조건부)
 try:
@@ -80,11 +79,11 @@ class CheckItem:
     def to_dict(self) -> Dict[str, Any]:
         """JSON 직렬화 가능한 딕셔너리로 변환"""
         return {
-            'name': self.name,
-            'status': self.status.name,  # Enum을 문자열로 변환
-            'message': self.message,
-            'details': self.details,
-            'action': self.action
+            "name": self.name,
+            "status": self.status.name,  # Enum을 문자열로 변환
+            "message": self.message,
+            "details": self.details,
+            "action": self.action
         }
 
 
@@ -130,14 +129,14 @@ class CheckResult:
     def to_dict(self) -> Dict[str, Any]:
         """딕셔너리로 변환 (JSON 직렬화 가능)"""
         return {
-            'success': self.is_success(),
-            'has_warnings': self.has_warnings(),
-            'errors': [item.to_dict() for item in self.errors],
-            'warnings': [item.to_dict() for item in self.warnings],
-            'passed': [item.to_dict() for item in self.passed],
-            'metrics': self.metrics,
-            'timestamp': self.timestamp,
-            'duration': self.duration
+            "success": self.is_success(),
+            "has_warnings": self.has_warnings(),
+            "errors": [item.to_dict() for item in self.errors],
+            "warnings": [item.to_dict() for item in self.warnings],
+            "passed": [item.to_dict() for item in self.passed],
+            "metrics": self.metrics,
+            "timestamp": self.timestamp,
+            "duration": self.duration
         }
 
 
@@ -146,20 +145,20 @@ class SystemChecker:
 
     # 필수 패키지 및 최소 버전
     REQUIRED_PACKAGES: Dict[str, Tuple[str, str]] = {
-        'streamlit': ('1.20.0', 'Streamlit'),
-        'pandas': ('1.3.0', 'Pandas'),
-        'numpy': ('1.20.0', 'NumPy'),
-        'torch': ('2.0.0', 'PyTorch'),
-        'sentence_transformers': ('2.0.0', 'Sentence Transformers'),
-        'pdfplumber': ('0.7.0', 'PDFPlumber'),
+        "streamlit": ("1.20.0", "Streamlit"),
+        "pandas": ("1.3.0", "Pandas"),
+        "numpy": ("1.20.0", "NumPy"),
+        "torch": ("2.0.0", "PyTorch"),
+        "sentence_transformers": ("2.0.0", "Sentence Transformers"),
+        "pdfplumber": ("0.7.0", "PDFPlumber"),
     }
 
     # 선택적 패키지
     OPTIONAL_PACKAGES: Dict[str, str] = {
-        'faiss': 'FAISS (CPU)',
+        "faiss": "FAISS (CPU)",
         # 'faiss-gpu': 'FAISS (GPU)',  # Python 3.12+는 faiss-cpu 사용 (AVX2 지원)
-        'psutil': 'psutil (시스템 모니터링)',
-        'packaging': 'packaging (버전 비교)',
+        "psutil": "psutil (시스템 모니터링)",
+        "packaging": "packaging (버전 비교)",
     }
 
     # 최소 시스템 요구사항
@@ -169,7 +168,7 @@ class SystemChecker:
     RECOMMENDED_MEMORY_GB: float = 4.0
 
     # 캐시 설정
-    CACHE_FILE: Path = project_root / '.system_check_cache.pkl'
+    CACHE_FILE: Path = project_root / ".system_check_cache.pkl"
     CACHE_TTL: int = 3600  # 1시간
     CACHE_VERSION: int = 2  # 캐시 구조 변경 시 증가
 
@@ -275,7 +274,7 @@ class SystemChecker:
                         name=name,
                         status=CheckStatus.FAIL,
                         message=f"{name} 검사 실패",
-                        details={'error': str(e)},
+                        details={"error": str(e)},
                         action="로그를 확인하세요"
                     ))
                     if LOGGING_AVAILABLE and logger:
@@ -297,7 +296,7 @@ class SystemChecker:
                     name=name,
                     status=CheckStatus.FAIL,
                     message=f"{name} 검사 실패",
-                    details={'error': str(e)},
+                    details={"error": str(e)},
                     action="로그를 확인하세요"
                 ))
                 if LOGGING_AVAILABLE and logger:
@@ -308,9 +307,9 @@ class SystemChecker:
         percent = (current / total) * 100
         bar_length = 30
         filled = int(bar_length * current / total)
-        bar = '█' * filled + '░' * (bar_length - filled)
+        bar = "█" * filled + "░" * (bar_length - filled)
 
-        print(f"\r[{bar}] {percent:.0f}% - {name}...", end='', flush=True)
+        print(f"\r[{bar}] {percent:.0f}% - {name}...", end="", flush=True)
 
         if current == total:
             print()  # 줄바꿈
@@ -320,8 +319,8 @@ class SystemChecker:
         required_version: Tuple[int, int] = (3, 8)
         current_version: Tuple[int, int] = sys.version_info[:2]
 
-        self.result.metrics['python_version'] = f"{current_version[0]}.{current_version[1]}"
-        self.result.metrics['python_impl'] = platform.python_implementation()
+        self.result.metrics["python_version"] = f"{current_version[0]}.{current_version[1]}"
+        self.result.metrics["python_impl"] = platform.python_implementation()
 
         if current_version >= required_version:
             self.result.add_item(CheckItem(
@@ -329,8 +328,8 @@ class SystemChecker:
                 status=CheckStatus.PASS,
                 message=f"Python {sys.version.split()[0]} ({platform.python_implementation()})",
                 details={
-                    'version': self.result.metrics['python_version'],
-                    'implementation': platform.python_implementation()
+                    "version": self.result.metrics["python_version"],
+                    "implementation": platform.python_implementation()
                 }
             ))
         else:
@@ -339,8 +338,8 @@ class SystemChecker:
                 status=CheckStatus.FAIL,
                 message=f"Python 버전 부족: {current_version[0]}.{current_version[1]}",
                 details={
-                    'required': f"{required_version[0]}.{required_version[1]}",
-                    'current': f"{current_version[0]}.{current_version[1]}"
+                    "required": f"{required_version[0]}.{required_version[1]}",
+                    "current": f"{current_version[0]}.{current_version[1]}"
                 },
                 action=f"Python {required_version[0]}.{required_version[1]} 이상으로 업그레이드하세요"
             ))
@@ -362,8 +361,8 @@ class SystemChecker:
         required: bool
     ) -> None:
         """개별 패키지 체크"""
-        import importlib.util
         import importlib.metadata
+        import importlib.util
 
         spec = importlib.util.find_spec(pkg_name)
 
@@ -389,7 +388,7 @@ class SystemChecker:
                             name=f"package_{pkg_name}",
                             status=CheckStatus.PASS,
                             message=f"{display_name} {installed_version}",
-                            details={'version': installed_version}
+                            details={"version": installed_version}
                         ))
                     else:
                         self.result.add_item(CheckItem(
@@ -404,7 +403,7 @@ class SystemChecker:
                         name=f"package_{pkg_name}",
                         status=CheckStatus.PASS,
                         message=f"{display_name} {installed_version}",
-                        details={'version': installed_version, 'version_check': 'skipped'}
+                        details={"version": installed_version, "version_check": "skipped"}
                     ))
 
             except importlib.metadata.PackageNotFoundError:
@@ -413,7 +412,7 @@ class SystemChecker:
                     name=f"package_{pkg_name}",
                     status=CheckStatus.PASS,
                     message=f"{display_name} (버전 확인 불가)",
-                    details={'version_check': 'unavailable'}
+                    details={"version_check": "unavailable"}
                 ))
         else:
             # 버전 체크 불필요
@@ -426,12 +425,12 @@ class SystemChecker:
     def check_directories(self) -> None:
         """필수 디렉토리 체크"""
         required_dirs: Dict[str, str] = {
-            'docs': '문서 디렉토리',
-            'models': '모델 디렉토리',
-            'logs': '로그 디렉토리',
-            'rag_system/cache': '캐시 디렉토리',
-            'rag_system/db': 'DB 디렉토리',
-            'utils': '유틸리티 디렉토리',
+            "docs": "문서 디렉토리",
+            "models": "모델 디렉토리",
+            "logs": "로그 디렉토리",
+            "rag_system/cache": "캐시 디렉토리",
+            "rag_system/db": "DB 디렉토리",
+            "utils": "유틸리티 디렉토리",
         }
 
         for dir_path, description in required_dirs.items():
@@ -446,7 +445,7 @@ class SystemChecker:
                     name=f"dir_{dir_path}",
                     status=status,
                     message=f"{description}: {dir_path}/{'(읽기전용)' if not writable else ''}",
-                    details={'path': str(full_path), 'writable': writable}
+                    details={"path": str(full_path), "writable": writable}
                 ))
             else:
                 try:
@@ -455,14 +454,14 @@ class SystemChecker:
                         name=f"dir_{dir_path}",
                         status=CheckStatus.WARN,
                         message=f"{description} 자동 생성됨: {dir_path}/",
-                        details={'path': str(full_path), 'created': True}
+                        details={"path": str(full_path), "created": True}
                     ))
                 except OSError as e:
                     self.result.add_item(CheckItem(
                         name=f"dir_{dir_path}",
                         status=CheckStatus.FAIL,
                         message=f"{description} 생성 실패",
-                        details={'path': str(full_path), 'error': str(e)},
+                        details={"path": str(full_path), "error": str(e)},
                         action=f"수동으로 생성하세요: mkdir -p {dir_path}"
                     ))
 
@@ -475,16 +474,16 @@ class SystemChecker:
             total_gb = disk.total / (1024 ** 3)
             usage_percent = (disk.used / disk.total) * 100
 
-            self.result.metrics['disk_free_gb'] = round(free_gb, 2)
-            self.result.metrics['disk_total_gb'] = round(total_gb, 2)
-            self.result.metrics['disk_usage_percent'] = round(usage_percent, 2)
+            self.result.metrics["disk_free_gb"] = round(free_gb, 2)
+            self.result.metrics["disk_total_gb"] = round(total_gb, 2)
+            self.result.metrics["disk_usage_percent"] = round(usage_percent, 2)
 
             if free_gb < self.MIN_DISK_GB:
                 self.result.add_item(CheckItem(
                     name="disk_space",
                     status=CheckStatus.FAIL,
                     message=f"디스크 공간 부족: {free_gb:.1f}GB",
-                    details={'free': free_gb, 'total': total_gb},
+                    details={"free": free_gb, "total": total_gb},
                     action=f"최소 {self.MIN_DISK_GB}GB 확보 필요"
                 ))
             elif free_gb < self.RECOMMENDED_DISK_GB:
@@ -492,15 +491,15 @@ class SystemChecker:
                     name="disk_space",
                     status=CheckStatus.WARN,
                     message=f"디스크 공간 여유 부족: {free_gb:.1f}GB / {total_gb:.1f}GB",
-                    details={'free': free_gb, 'total': total_gb},
+                    details={"free": free_gb, "total": total_gb},
                     action=f"권장: {self.RECOMMENDED_DISK_GB}GB 이상"
                 ))
             else:
                 self.result.add_item(CheckItem(
                     name="disk_space",
                     status=CheckStatus.PASS,
-                    message=f"디스크: {free_gb:.1f}GB / {total_gb:.1f}GB ({100-usage_percent:.1f}% 여유)",
-                    details={'free': free_gb, 'total': total_gb, 'usage': usage_percent}
+                    message=f"디스크: {free_gb:.1f}GB / {total_gb:.1f}GB ({100 - usage_percent:.1f}% 여유)",
+                    details={"free": free_gb, "total": total_gb, "usage": usage_percent}
                 ))
 
         except Exception as e:
@@ -508,7 +507,7 @@ class SystemChecker:
                 name="disk_space",
                 status=CheckStatus.WARN,
                 message="디스크 공간 체크 실패",
-                details={'error': str(e)}
+                details={"error": str(e)}
             ))
 
         # 메모리 (psutil 필요)
@@ -518,16 +517,16 @@ class SystemChecker:
                 available_gb = mem.available / (1024 ** 3)
                 total_gb = mem.total / (1024 ** 3)
 
-                self.result.metrics['memory_available_gb'] = round(available_gb, 2)
-                self.result.metrics['memory_total_gb'] = round(total_gb, 2)
-                self.result.metrics['memory_usage_percent'] = mem.percent
+                self.result.metrics["memory_available_gb"] = round(available_gb, 2)
+                self.result.metrics["memory_total_gb"] = round(total_gb, 2)
+                self.result.metrics["memory_usage_percent"] = mem.percent
 
                 if available_gb < self.MIN_MEMORY_GB:
                     self.result.add_item(CheckItem(
                         name="memory",
                         status=CheckStatus.WARN,
                         message=f"메모리 부족: {available_gb:.1f}GB / {total_gb:.1f}GB",
-                        details={'available': available_gb, 'total': total_gb},
+                        details={"available": available_gb, "total": total_gb},
                         action="다른 프로그램을 종료하세요"
                     ))
                 else:
@@ -535,7 +534,7 @@ class SystemChecker:
                         name="memory",
                         status=CheckStatus.PASS,
                         message=f"메모리: {available_gb:.1f}GB / {total_gb:.1f}GB 사용 가능",
-                        details={'available': available_gb, 'total': total_gb, 'usage': mem.percent}
+                        details={"available": available_gb, "total": total_gb, "usage": mem.percent}
                     ))
 
             except Exception as e:
@@ -543,7 +542,7 @@ class SystemChecker:
                     name="memory",
                     status=CheckStatus.WARN,
                     message="메모리 체크 실패",
-                    details={'error': str(e)}
+                    details={"error": str(e)}
                 ))
         else:
             self.result.add_item(CheckItem(
@@ -565,19 +564,19 @@ class SystemChecker:
                 gpu_name = torch.cuda.get_device_name(0)
                 gpu_memory = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
 
-                self.result.metrics['gpu_available'] = True
-                self.result.metrics['gpu_count'] = gpu_count
-                self.result.metrics['gpu_memory_gb'] = round(gpu_memory, 2)
-                self.result.metrics['gpu_name'] = gpu_name
+                self.result.metrics["gpu_available"] = True
+                self.result.metrics["gpu_count"] = gpu_count
+                self.result.metrics["gpu_memory_gb"] = round(gpu_memory, 2)
+                self.result.metrics["gpu_name"] = gpu_name
 
                 self.result.add_item(CheckItem(
                     name="gpu",
                     status=CheckStatus.PASS,
                     message=f"NVIDIA GPU: {gpu_name} ({gpu_memory:.1f}GB)",
                     details={
-                        'count': gpu_count,
-                        'name': gpu_name,
-                        'memory': gpu_memory
+                        "count": gpu_count,
+                        "name": gpu_name,
+                        "memory": gpu_memory
                     }
                 ))
                 gpu_found = True
@@ -589,23 +588,23 @@ class SystemChecker:
                 name="gpu",
                 status=CheckStatus.WARN,
                 message="GPU 체크 실패",
-                details={'error': str(e)}
+                details={"error": str(e)}
             ))
 
         if not gpu_found:
-            self.result.metrics['gpu_available'] = False
+            self.result.metrics["gpu_available"] = False
             self.result.add_item(CheckItem(
                 name="gpu",
                 status=CheckStatus.INFO,
                 message="GPU 없음 (CPU 모드로 실행)",
-                details={'mode': 'CPU'}
+                details={"mode": "CPU"}
             ))
 
     def check_database_files(self) -> None:
         """데이터베이스 파일 체크"""
         db_files: Dict[str, str] = {
-            'everything_index.db': '문서 인덱스 DB',
-            'metadata.db': '메타데이터 DB'
+            "everything_index.db": "문서 인덱스 DB",
+            "metadata.db": "메타데이터 DB"
         }
 
         total_size = 0.0
@@ -621,30 +620,30 @@ class SystemChecker:
                     name=f"db_{db_file}",
                     status=CheckStatus.PASS,
                     message=f"{description}: {size_mb:.1f}MB",
-                    details={'path': str(db_path), 'size_mb': size_mb}
+                    details={"path": str(db_path), "size_mb": size_mb}
                 ))
             else:
                 self.result.add_item(CheckItem(
                     name=f"db_{db_file}",
                     status=CheckStatus.WARN,
                     message=f"{description} 없음",
-                    details={'path': str(db_path)},
+                    details={"path": str(db_path)},
                     action="자동 인덱싱으로 생성됩니다"
                 ))
 
         if total_size > 0:
-            self.result.metrics['db_total_size_mb'] = round(total_size, 2)
+            self.result.metrics["db_total_size_mb"] = round(total_size, 2)
 
     def check_config_files(self) -> None:
         """설정 파일 체크"""
-        config_file: Path = project_root / 'config.py'
+        config_file: Path = project_root / "config.py"
 
         if not config_file.exists():
             self.result.add_item(CheckItem(
                 name="config_file",
                 status=CheckStatus.WARN,
                 message="config.py 파일 없음 (app.config.settings 사용 가능)",
-                details={'path': str(config_file)},
+                details={"path": str(config_file)},
                 action="필요시 config.py 파일을 생성하세요"
             ))
             # config.py가 없어도 app.config.settings로 동작 가능하므로 계속 진행
@@ -652,8 +651,8 @@ class SystemChecker:
         try:
             # 필수 설정 체크 (app.config.settings 모듈 사용)
             required_settings: List[str] = [
-                'DOCS_DIR',
-                'PROJECT_ROOT'
+                "DOCS_DIR",
+                "PROJECT_ROOT"
             ]
 
             # app.config.settings 모듈 검증
@@ -661,16 +660,16 @@ class SystemChecker:
 
             # 필수 설정이 정의되어 있는지 확인
             settings_dict = {
-                'DOCS_DIR': settings.DOCS_DIR,
-                'PROJECT_ROOT': settings.PROJECT_ROOT
+                "DOCS_DIR": settings.DOCS_DIR,
+                "PROJECT_ROOT": settings.PROJECT_ROOT
             }
 
             # 모든 설정이 정의되어 있으면 PASS
             self.result.add_item(CheckItem(
                 name="config_settings",
                 status=CheckStatus.PASS,
-                message=f"설정 파일 검증 완료 (app.config.settings)",
-                details={'settings': list(settings_dict.keys())}
+                message="설정 파일 검증 완료 (app.config.settings)",
+                details={"settings": list(settings_dict.keys())}
             ))
 
             # DOCS_DIR 디렉토리 존재 확인
@@ -679,14 +678,14 @@ class SystemChecker:
                     name="docs_dir",
                     status=CheckStatus.PASS,
                     message=f"문서 디렉토리 확인: {settings.DOCS_DIR}",
-                    details={'path': str(settings.DOCS_DIR)}
+                    details={"path": str(settings.DOCS_DIR)}
                 ))
             else:
                 self.result.add_item(CheckItem(
                     name="docs_dir",
                     status=CheckStatus.WARN,
                     message=f"문서 디렉토리 없음: {settings.DOCS_DIR}",
-                    details={'path': str(settings.DOCS_DIR)},
+                    details={"path": str(settings.DOCS_DIR)},
                     action="문서 디렉토리를 생성하세요"
                 ))
 
@@ -695,7 +694,7 @@ class SystemChecker:
                 name="config_import",
                 status=CheckStatus.FAIL,
                 message="config.py 임포트 실패",
-                details={'error': str(e)},
+                details={"error": str(e)},
                 action="config.py 문법 오류를 수정하세요"
             ))
         except Exception as e:
@@ -703,7 +702,7 @@ class SystemChecker:
                 name="config_check",
                 status=CheckStatus.WARN,
                 message="설정 검증 중 오류",
-                details={'error': str(e)}
+                details={"error": str(e)}
             ))
 
     def _load_cache(self) -> Optional[CheckResult]:
@@ -717,7 +716,7 @@ class SystemChecker:
             if cache_age > self.CACHE_TTL:
                 return None
 
-            with open(self.CACHE_FILE, 'rb') as f:
+            with open(self.CACHE_FILE, "rb") as f:
                 payload = pickle.load(f)
 
             # 버전 확인
@@ -747,7 +746,7 @@ class SystemChecker:
                 "version": self.CACHE_VERSION,
                 "result": result
             }
-            with open(self.CACHE_FILE, 'wb') as f:
+            with open(self.CACHE_FILE, "wb") as f:
                 pickle.dump(payload, f)
 
             if LOGGING_AVAILABLE and logger:
@@ -796,11 +795,11 @@ class SystemChecker:
         if self.result.metrics:
             print("\n📊 시스템 정보:")
             interesting_metrics = {
-                'python_version': 'Python',
-                'disk_free_gb': '디스크 여유 (GB)',
-                'memory_available_gb': '메모리 여유 (GB)',
-                'gpu_available': 'GPU',
-                'db_total_size_mb': 'DB 크기 (MB)',
+                "python_version": "Python",
+                "disk_free_gb": "디스크 여유 (GB)",
+                "memory_available_gb": "메모리 여유 (GB)",
+                "gpu_available": "GPU",
+                "db_total_size_mb": "DB 크기 (MB)",
             }
             for key, label in interesting_metrics.items():
                 if key in self.result.metrics:
@@ -828,7 +827,7 @@ class SystemChecker:
         json_str = json.dumps(self.result.to_dict(), indent=2, ensure_ascii=False)
 
         if file_path:
-            with open(file_path, 'w', encoding='utf-8') as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 f.write(json_str)
 
         return json_str
@@ -848,7 +847,7 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='AI-CHAT 시스템 검증 (완벽 버전)',
+        description="AI-CHAT 시스템 검증 (완벽 버전)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 예제:
@@ -859,11 +858,11 @@ def main() -> None:
         """
     )
 
-    parser.add_argument('--json', type=str, help='결과를 JSON 파일로 저장')
-    parser.add_argument('--quiet', action='store_true', help='간단한 출력')
-    parser.add_argument('--no-parallel', action='store_true', help='병렬 처리 비활성화')
-    parser.add_argument('--no-cache', action='store_true', help='캐시 사용 안 함')
-    parser.add_argument('--no-progress', action='store_true', help='진행바 숨기기')
+    parser.add_argument("--json", type=str, help="결과를 JSON 파일로 저장")
+    parser.add_argument("--quiet", action="store_true", help="간단한 출력")
+    parser.add_argument("--no-parallel", action="store_true", help="병렬 처리 비활성화")
+    parser.add_argument("--no-cache", action="store_true", help="캐시 사용 안 함")
+    parser.add_argument("--no-progress", action="store_true", help="진행바 숨기기")
 
     args = parser.parse_args()
 

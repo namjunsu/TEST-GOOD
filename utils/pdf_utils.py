@@ -10,10 +10,11 @@ PDF 유틸리티 함수
 - 심볼릭 링크 우회 차단
 """
 
-import streamlit as st
+import logging
 from pathlib import Path
 from typing import Optional
-import logging
+
+import streamlit as st
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,6 @@ try:
     DOCS_ROOT = settings.DOCS_DIR
 except Exception:
     # Fallback: 프로젝트 루트 기준
-    import sys
     PROJECT_ROOT = Path(__file__).resolve().parent.parent
     DOCS_ROOT = PROJECT_ROOT / "docs"
 
@@ -63,7 +63,7 @@ def safe_path(path_str: str, *, must_exist: bool = True) -> Path:
     # DOCS_ROOT 하위인지 검증 (디렉터리 트래버설 방지)
     try:
         resolved_path.relative_to(DOCS_ROOT)
-    except ValueError as e:
+    except ValueError:
         logger.error(f"[safe_path] Path outside DOCS_ROOT: {path_str} -> {resolved_path}, DOCS_ROOT: {DOCS_ROOT}")
         raise ValueError(f"허용 범위 밖 문서 경로: {path_str}")
 
@@ -150,7 +150,7 @@ def download_pdf_button(
 
     except Exception as e:
         logger.error(f"Unexpected error in download_pdf_button: {e}")
-        st.error(f"❌ 다운로드 처리 중 예기치 못한 오류가 발생했습니다.")
+        st.error("❌ 다운로드 처리 중 예기치 못한 오류가 발생했습니다.")
         return False
 
 
@@ -200,7 +200,7 @@ def render_pdf_preview(
     except Exception as e:
         # 예상치 못한 오류 - 이 경우 파일은 존재할 수 있으므로 fallback 제공
         logger.error(f"Unexpected error in render_pdf_preview: {e}")
-        st.error(f"❌ 미리보기 렌더링 중 예기치 못한 오류가 발생했습니다.")
+        st.error("❌ 미리보기 렌더링 중 예기치 못한 오류가 발생했습니다.")
 
         if show_download_fallback:
             st.info("💡 미리보기 대신 파일을 직접 다운로드할 수 있습니다.")
@@ -224,7 +224,7 @@ def validate_year_folder(year: str) -> bool:
     # year_YYYY 또는 YYYY 형태 허용
     import re
 
-    if re.match(r'^(year_)?\d{4}$', year):
+    if re.match(r"^(year_)?\d{4}$", year):
         year_path = DOCS_ROOT / year
         return year_path.exists() and year_path.is_dir()
 

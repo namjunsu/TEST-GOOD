@@ -4,7 +4,7 @@ Year field utility functions
 """
 
 import re
-from typing import Any, List, Union, Optional
+from typing import Any, List, Optional, Union
 
 YEAR_PATTERN = re.compile(r"(\d{4})")  # 4자리 숫자만 추출
 

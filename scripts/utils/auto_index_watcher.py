@@ -1,4 +1,4 @@
-#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
+#!/usr/bin/env python3
 """
 자동 인덱싱 감시 시스템
 docs/ 폴더에 신규 PDF가 추가되면 자동으로 인덱싱
@@ -7,20 +7,20 @@ docs/ 폴더에 신규 PDF가 추가되면 자동으로 인덱싱
     python3 auto_index_watcher.py  # 계속 실행 (백그라운드 권장)
 """
 
+import hashlib
+import logging
 import sys
 import time
-import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Set
-from datetime import datetime
-import hashlib
 
 # 로깅 설정
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler('logs/auto_indexer.log'),
+        logging.FileHandler("logs/auto_indexer.log"),
         logging.StreamHandler()
     ]
 )
@@ -30,9 +30,10 @@ logger = logging.getLogger(__name__)
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from rag_system.active.bm25_store import BM25Store
-from rag_system.korean_vector_store import KoreanVectorStore
 import pdfplumber
+from rag_system.korean_vector_store import KoreanVectorStore
+
+from rag_system.active.bm25_store import BM25Store
 
 
 class AutoIndexWatcher:
@@ -73,7 +74,7 @@ class AutoIndexWatcher:
     def _get_file_hash(self, file_path: Path) -> str:
         """파일 해시 계산 (변경 감지용)"""
         try:
-            with open(file_path, 'rb') as f:
+            with open(file_path, "rb") as f:
                 return hashlib.md5(f.read()).hexdigest()
         except Exception as e:
             logger.warning(f"해시 계산 실패 {file_path.name}: {e}")
@@ -113,9 +114,9 @@ class AutoIndexWatcher:
                 doc_id=doc_id,
                 content=text,
                 metadata={
-                    'filename': pdf_path.name,
-                    'path': str(pdf_path),
-                    'indexed_at': datetime.now().isoformat()
+                    "filename": pdf_path.name,
+                    "path": str(pdf_path),
+                    "indexed_at": datetime.now().isoformat()
                 }
             )
 
@@ -125,9 +126,9 @@ class AutoIndexWatcher:
                 doc_id=doc_id,
                 content=content_chunk,
                 metadata={
-                    'filename': pdf_path.name,
-                    'path': str(pdf_path),
-                    'indexed_at': datetime.now().isoformat()
+                    "filename": pdf_path.name,
+                    "path": str(pdf_path),
+                    "indexed_at": datetime.now().isoformat()
                 }
             )
 

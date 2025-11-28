@@ -1,11 +1,10 @@
-#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
+#!/usr/bin/env python3
 """
 E2E 스모크 테스트: Evidence 출력 및 검색 정확도 검증
 """
 
 import sys
 import time
-from pathlib import Path
 
 # 테스트 질의 정의
 TEST_QUERIES = [
@@ -191,10 +190,10 @@ def main():
                 print(f"  - Response Text: {r['response_text'][:200]}...")
 
                 # 원인 가설
-                if r['evidence_count'] == 0:
-                    print(f"  → 원인 가설: 검색 결과 없음 (인덱스 미구축 또는 쿼리 불일치)")
-                elif not r['has_keyword']:
-                    print(f"  → 원인 가설: Evidence는 있으나 응답에 키워드 누락 (LLM 생성 문제)")
+                if r["evidence_count"] == 0:
+                    print("  → 원인 가설: 검색 결과 없음 (인덱스 미구축 또는 쿼리 불일치)")
+                elif not r["has_keyword"]:
+                    print("  → 원인 가설: Evidence는 있으나 응답에 키워드 누락 (LLM 생성 문제)")
 
     # 개선 포인트
     print("\n" + "=" * 140)

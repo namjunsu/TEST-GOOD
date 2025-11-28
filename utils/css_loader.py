@@ -10,9 +10,9 @@ Version: 2.0
 """
 
 import logging
-import streamlit as st
 from pathlib import Path
-from typing import Optional
+
+import streamlit as st
 
 # 로깅 설정
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ def _is_debug_mode() -> bool:
         # secrets가 있으면 확인
         if hasattr(st, "secrets"):
             return st.secrets.get("debug", False)
-    except:
+    except (AttributeError, KeyError):
         pass
     return False
 
@@ -52,11 +52,11 @@ def load_css(css_filename: str = "main.css", fallback: bool = True) -> bool:
 
     if css_path.exists() and css_path.is_file():
         try:
-            with open(css_path, 'r', encoding='utf-8') as f:
+            with open(css_path, "r", encoding="utf-8") as f:
                 css_content = f.read()
                 # key 기반 중복 삽입 방지
                 st.markdown(
-                    f'<style>{css_content}</style>',
+                    f"<style>{css_content}</style>",
                     unsafe_allow_html=True
                 )
                 logger.info(f"CSS 로드 성공: {css_filename}")

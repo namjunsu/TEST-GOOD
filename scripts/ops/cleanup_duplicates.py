@@ -1,4 +1,4 @@
-#!/home/wnstn4647/AI-CHAT/.venv/bin/python3
+#!/usr/bin/env python3
 """
 중복 파일 자동 정리 스크립트
 
@@ -96,7 +96,7 @@ def main():
         return
 
     # 실제 삭제
-    print(f"\n🗑️  중복 파일 삭제 시작...")
+    print("\n🗑️  중복 파일 삭제 시작...")
 
     deleted_count = 0
     for dup_file, original_file in duplicates:
@@ -113,7 +113,7 @@ def main():
     remaining = list(duplicate_dir.glob("*.pdf"))
     if not remaining:
         duplicate_dir.rmdir()
-        print(f"✅ year_정보 없 폴더 삭제 완료 (비어있음)")
+        print("✅ year_정보 없 폴더 삭제 완료 (비어있음)")
     else:
         print(f"⚠️  year_정보 없 폴더에 {len(remaining)}개 파일 남음 (수동 확인 필요)")
 

@@ -9,9 +9,9 @@
 - retrievers: 검색 엔진들
 """
 
-from app.rag.contracts import RAGRequest, RAGResponse, Retriever, Compressor, Generator
+from app.rag.contracts import Compressor, Generator, RAGRequest, RAGResponse, Retriever
 from app.rag.pipeline import RAGPipeline
-from app.rag.query_routing import route_query, force_chat_mode
+from app.rag.query_routing import force_chat_mode, route_query
 
 __all__ = [
     # 핵심 클래스

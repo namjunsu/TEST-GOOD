@@ -65,7 +65,7 @@ def safe_path(path_str: str, *, must_exist: bool = True) -> Path:
         resolved_path.relative_to(DOCS_ROOT)
     except ValueError:
         logger.error(f"[safe_path] Path outside DOCS_ROOT: {path_str} -> {resolved_path}, DOCS_ROOT: {DOCS_ROOT}")
-        raise ValueError(f"허용 범위 밖 문서 경로: {path_str}")
+        raise ValueError(f"허용 범위 밖 문서 경로: {path_str}") from None
 
     # PDF 파일만 허용
     if resolved_path.suffix.lower() != ".pdf":

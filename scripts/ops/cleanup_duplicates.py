@@ -99,7 +99,7 @@ def main():
     print("\n🗑️  중복 파일 삭제 시작...")
 
     deleted_count = 0
-    for dup_file, original_file in duplicates:
+    for dup_file, _original_file in duplicates:
         try:
             dup_file.unlink()
             logger.info(f"삭제: {dup_file.name}")

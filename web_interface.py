@@ -307,7 +307,6 @@ def main():
     st.markdown("<hr style='border: 1px solid rgba(255,255,255,0.3); margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.2);'>", unsafe_allow_html=True)
 
     # 문서 개수 동적 계산 (하드코딩 제거)
-    docs_path = Path(settings.DOCS_DIR)
     pdf_count, txt_count = count_docs_recursive(settings.DOCS_DIR)
 
     # 현황 표시

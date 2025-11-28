@@ -53,5 +53,5 @@ def reindexing_lock(timeout_sec: float = 1.5, poll_ms: int = 200):
 
         except FileExistsError:
             if time.time() - start > timeout_sec:
-                raise RuntimeError("reindexing.lock held by another process")
+                raise RuntimeError("reindexing.lock held by another process") from None
             time.sleep(poll_ms / 1000.0)

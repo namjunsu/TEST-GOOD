@@ -154,9 +154,7 @@ class IngestDryrun:
 
     def classify_doctype(self, text: str, filename: str) -> str:
         """문서 유형 분류 (간이 버전)"""
-        text_lower = text.lower()
-        filename_lower = filename.lower()
-
+        # text와 filename을 직접 사용 (한글 키워드는 대소문자 무관)
         if "구매" in text or "구매" in filename:
             return "구매기안서"
         elif "수리" in text or "교체" in text or "수리" in filename:

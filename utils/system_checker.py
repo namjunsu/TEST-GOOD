@@ -650,11 +650,6 @@ class SystemChecker:
 
         try:
             # 필수 설정 체크 (app.config.settings 모듈 사용)
-            required_settings: List[str] = [
-                "DOCS_DIR",
-                "PROJECT_ROOT"
-            ]
-
             # app.config.settings 모듈 검증
             import app.config.settings as settings
 

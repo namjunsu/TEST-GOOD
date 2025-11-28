@@ -1,5 +1,5 @@
 """
-Multi-LLM Support System 
+Multi-LLM Support System
 Qwen GGUF + Llama Safetensors 모델 지원
 한국어 특화 프롬프트 템플릿 최적화
 """
@@ -346,7 +346,7 @@ class QwenLLM(BaseRAGLLM):
             self.logger.error(f"모델 로드 실패: {e}")
             raise
 
-    @lru_cache(maxsize=32)
+    @lru_cache(maxsize=32)  # noqa: B019 - 의도적 메서드 캐싱 (성능 최적화)
     def create_system_prompt(self) -> str:
         """최적화된 시스템 프롬프트 (캐시됨)"""
         if self.use_optimized_prompts:
@@ -405,9 +405,12 @@ class QwenLLM(BaseRAGLLM):
 
                 if author or doc_date or doc_type:
                     meta_info = []
-                    if author: meta_info.append(f"기안자: {author}")
-                    if doc_date: meta_info.append(f"날짜: {doc_date}")
-                    if doc_type: meta_info.append(f"문서유형: {doc_type}")
+                    if author:
+                        meta_info.append(f"기안자: {author}")
+                    if doc_date:
+                        meta_info.append(f"날짜: {doc_date}")
+                    if doc_type:
+                        meta_info.append(f"문서유형: {doc_type}")
                     context_text += f"[메타데이터: {', '.join(meta_info)}]\n"
 
             context_text += content + "\n"
@@ -523,14 +526,14 @@ A:"""
 🎯 문서 기반 답변 생성 (보수적 답변 금지):
 1. **문서에 있는 정보는 반드시 활용**: 제공된 문서의 모든 관련 정보를 적극 활용
 2. **구체적 정보 우선 추출**: 금액, 날짜, 기안자, 품목명, 수량 등 모든 구체적 정보
-3. **완전한 요약 제공**: 문서의 목적, 주요 내용, 금액, 품목을 체계적으로 정리  
+3. **완전한 요약 제공**: 문서의 목적, 주요 내용, 금액, 품목을 체계적으로 정리
 4. **사용자에게 도움이 되는 답변**: "확인되지 않음"이 아닌 실제 정보 제공
 5. **출처 인용**: [{filename}] 형식으로 반드시 인용
 
 💪 적극적 정보 활용 원칙:
 - 기안서에서 기안자, 날짜, 금액 정보 추출 필수
 - 품목 목록이 있으면 주요 품목들 나열
-- 총 금액과 세부 카테고리별 금액 제시  
+- 총 금액과 세부 카테고리별 금액 제시
 - 문서의 배경과 목적 설명
 - 파일명의 날짜와 제목 정보도 활용
 
@@ -867,7 +870,7 @@ A:"""
 
 ⚠️ 환각 방지 규칙:
 - 문서에 없는 숫자 절대 생성 금지
-- 대략적인 계산이나 추정 금지  
+- 대략적인 계산이나 추정 금지
 - 의심스러우면 "문서에서 확인된 정보만 제공"
 
 참고 문서 (단일 문서 모드):"""
@@ -888,7 +891,7 @@ A:"""
 
 🔍 답변 작성 단계:
 1. 문서에서 첫 번째 항목의 정확한 숫자 찾기
-2. 문서에서 두 번째 항목의 정확한 숫자 찾기  
+2. 문서에서 두 번째 항목의 정확한 숫자 찾기
 3. 찾은 숫자를 정확히 복사하여 비교문 작성
 4. 숫자를 찾을 수 없으면 해당 항목은 "문서에서 확인되지 않음" 명시
 
@@ -1558,7 +1561,7 @@ A:"""
 RULES:
 1. Extract ALL information from the document: names, dates, amounts, items
 2. Create a comprehensive Korean summary using the extracted information
-3. Never say "information not found" or "cannot confirm" 
+3. Never say "information not found" or "cannot confirm"
 4. Always include document citation in [filename.pdf] format
 5. Respond ONLY in Korean language
 
@@ -1781,7 +1784,7 @@ class LlamaLLM(BaseRAGLLM):
 
 답변 지침:
 - 문서에 있는 구체적인 정보를 우선적으로 사용하세요
-- "확인되지 않음"이나 "알 수 없습니다" 같은 애매한 답변은 피하세요  
+- "확인되지 않음"이나 "알 수 없습니다" 같은 애매한 답변은 피하세요
 - 날짜, 이름, 금액, 부서 등 구체적 정보가 있으면 반드시 포함하세요
 - 출처 파일명을 답변 마지막에 명시하세요
 

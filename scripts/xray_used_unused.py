@@ -324,7 +324,7 @@ class XRayAnalyzer:
             with open(metadata_path) as f:
                 raw_metadata = json.load(f)
                 # Convert module paths to file paths
-                for module_name, info in raw_metadata.items():
+                for _module_name, info in raw_metadata.items():
                     if "path" in info:
                         metadata[info["path"]] = info
 

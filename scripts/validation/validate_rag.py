@@ -145,7 +145,7 @@ class RAGValidator:
 
         # Validate each result
         validated_results = []
-        for i, result in enumerate(test_results, 1):
+        for _i, result in enumerate(test_results, 1):
             validation = self.validate_result(result)
             result["validation"] = validation
             validated_results.append(result)

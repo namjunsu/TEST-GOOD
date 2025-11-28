@@ -24,9 +24,10 @@ FastAPI 연동:
 """
 
 from __future__ import annotations
+
+import logging
 from enum import Enum
 from typing import Any, Dict
-import logging
 
 # 표준 로거
 logger = logging.getLogger("app.core.errors")
@@ -205,6 +206,87 @@ class ValidationError(AppError):
         super().__init__(message, details, code, status_code=400)
 
 
+class DocumentNotFoundError(SearchError):
+    """문서를 찾을 수 없음
+
+    Example:
+        raise DocumentNotFoundError("문서 없음", details="filename=test.pdf")
+    """
+    def __init__(self, message: str = "요청한 문서를 찾을 수 없습니다", details: str | None = None):
+        super().__init__(message, details, code=ErrorCode.E_RETRIEVE)
+        self.status_code = 404
+
+
+class OCRProcessingError(AppError):
+    """OCR 처리 실패
+
+    Example:
+        raise OCRProcessingError("OCR 실패", details="PaddleOCR timeout")
+    """
+    def __init__(self, message: str = "OCR 처리 중 오류가 발생했습니다", details: str | None = None):
+        super().__init__(message, details, code=None, status_code=500)
+
+
+class CacheExpiredError(AppError):
+    """캐시 만료
+
+    Example:
+        raise CacheExpiredError("캐시 만료", details="key=query_hash_123")
+    """
+    def __init__(self, message: str = "캐시가 만료되었습니다", details: str | None = None):
+        super().__init__(message, details, code=None, status_code=410)
+
+
+class IndexError(SearchError):
+    """인덱스 오류 (로드/빌드 실패)
+
+    Example:
+        raise IndexError("인덱스 로드 실패", details="faiss index corrupted")
+    """
+    def __init__(self, message: str = "인덱스 오류", details: str | None = None, code: ErrorCode | None = None):
+        super().__init__(message, details, code or ErrorCode.E_INDEX_LOAD)
+
+
+class RateLimitError(AppError):
+    """요청 제한 초과
+
+    Example:
+        raise RateLimitError("요청 초과", details="limit=100/min")
+    """
+    def __init__(self, message: str = "요청 제한을 초과했습니다", details: str | None = None):
+        super().__init__(message, details, code=None, status_code=429)
+
+
+class RoutingError(AppError):
+    """쿼리 라우팅 실패
+
+    Example:
+        raise RoutingError("모드 결정 실패", details="ambiguous query pattern")
+    """
+    def __init__(self, message: str = "쿼리 라우팅 오류", details: str | None = None):
+        super().__init__(message, details, code=None, status_code=500)
+
+
+class ContextHydrationError(AppError):
+    """컨텍스트 수화 실패
+
+    Example:
+        raise ContextHydrationError("컨텍스트 구성 실패", details="no valid chunks")
+    """
+    def __init__(self, message: str = "컨텍스트 구성 오류", details: str | None = None):
+        super().__init__(message, details, code=ErrorCode.E_COMPRESS, status_code=500)
+
+
+class CacheError(AppError):
+    """캐시 처리 실패 (일반)
+
+    Example:
+        raise CacheError("캐시 저장 실패", details="disk full")
+    """
+    def __init__(self, message: str = "캐시 오류", details: str | None = None):
+        super().__init__(message, details, code=None, status_code=500)
+
+
 # ============================================================================
 # 로깅 유틸리티
 # ============================================================================
@@ -231,12 +313,24 @@ def log_error(exc: AppError, level: int = logging.ERROR) -> None:
 
 
 __all__ = [
+    # 기본 예외
     "AppError",
     "ConfigError",
     "DatabaseError",
     "ModelError",
     "SearchError",
     "ValidationError",
+    # 확장 예외 (Phase 3)
+    "DocumentNotFoundError",
+    "OCRProcessingError",
+    "CacheExpiredError",
+    "IndexError",
+    "RateLimitError",
+    # 확장 예외 (Phase 5 - RAG 파이프라인용)
+    "RoutingError",
+    "ContextHydrationError",
+    "CacheError",
+    # 유틸리티
     "ErrorCode",
     "ERROR_MESSAGES",
     "log_error",

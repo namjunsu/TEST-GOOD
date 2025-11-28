@@ -9,29 +9,34 @@ v2.0 변경사항:
 """
 
 import logging
+import threading
 from pathlib import Path
-from typing import Optional, Callable, Literal
-import numpy as np
+from typing import Callable, Literal, Optional
 
+import numpy as np
 import pytesseract
 from pdf2image import convert_from_path
 
 logger = logging.getLogger(__name__)
 
-# PaddleOCR 전역 인스턴스 (lazy loading)
+# PaddleOCR 전역 인스턴스 (thread-safe lazy loading)
 _paddle_ocr_instance = None
+_paddle_ocr_lock = threading.Lock()
 
 
 def _get_paddleocr():
-    """PaddleOCR 인스턴스 반환 (싱글톤)"""
+    """PaddleOCR 인스턴스 반환 (thread-safe 싱글톤)"""
     global _paddle_ocr_instance
     if _paddle_ocr_instance is None:
-        from paddleocr import PaddleOCR
-        logger.info("PaddleOCR 초기화 중...")
-        _paddle_ocr_instance = PaddleOCR(
-            use_textline_orientation=True,
-            lang='korean'
-        )
+        with _paddle_ocr_lock:
+            # Double-check locking pattern
+            if _paddle_ocr_instance is None:
+                from paddleocr import PaddleOCR
+                logger.info("PaddleOCR 초기화 중...")
+                _paddle_ocr_instance = PaddleOCR(
+                    use_textline_orientation=True,
+                    lang="korean"
+                )
     return _paddle_ocr_instance
 
 
@@ -122,7 +127,7 @@ def _ocr_with_paddleocr(
 
         # rec_texts에서 텍스트 추출
         if result and len(result) > 0:
-            rec_texts = result[0]['rec_texts']
+            rec_texts = result[0]["rec_texts"]
             if rec_texts:
                 page_text = "\n".join(rec_texts)
                 text_pages.append(f"[OCR 페이지 {i}]\n{page_text}")
@@ -183,7 +188,7 @@ def update_document_text(
         if conn and use_transaction:
             try:
                 conn.rollback()
-            except:
+            except Exception:
                 pass
         return False
     finally:

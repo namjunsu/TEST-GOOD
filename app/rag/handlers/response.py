@@ -15,8 +15,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from app.core.logging import get_logger
-from app.utils.sqlite_helpers import connect_metadata
 from app.rag.utils.text import get_query_token_count
+from app.utils.sqlite_helpers import connect_metadata
 
 logger = get_logger(__name__)
 
@@ -27,30 +27,30 @@ logger = get_logger(__name__)
 
 # 스몰토크 패턴
 SMALLTALK_PATTERNS = {
-    'hi', 'hello', 'hey',
-    '안녕', '안녕하세요', '안녕하십니까',
-    '감사', '고마워', '감사합니다', '고마워요',
-    'thanks', 'thank you',
-    'bye', 'goodbye', '잘가', '안녕히',
+    "hi", "hello", "hey",
+    "안녕", "안녕하세요", "안녕하십니까",
+    "감사", "고마워", "감사합니다", "고마워요",
+    "thanks", "thank you",
+    "bye", "goodbye", "잘가", "안녕히",
 }
 
 # 도메인 키워드
 DOMAIN_KEYWORDS = {
     # 장비
-    'nvr', 'sync', 'eco8000', 'lvm-180a', 'odin', 'vmix', 'faiss',
-    'tri-level', 'sdi', 'lut', 'intercom', 'di box', 'dibox',
-    '무선마이크', '마이크', '카메라', '렌즈', '삼각대', '케이블',
-    '건전지', '배터리', '소모품', '장비', '중계차',
+    "nvr", "sync", "eco8000", "lvm-180a", "odin", "vmix", "faiss",
+    "tri-level", "sdi", "lut", "intercom", "di box", "dibox",
+    "무선마이크", "마이크", "카메라", "렌즈", "삼각대", "케이블",
+    "건전지", "배터리", "소모품", "장비", "중계차",
     # 프로젝트/프로그램
-    '돌직구쇼', '뉴스', '스튜디오', '광화문', '오픈스튜디오',
-    '중계', '방송', '채널에이',
+    "돌직구쇼", "뉴스", "스튜디오", "광화문", "오픈스튜디오",
+    "중계", "방송", "채널에이",
     # 기술/문서
-    '기안서', '구매', '수리', '교체', '검토', '기술검토',
-    '오버홀', '도입', '노후화', '단종',
-    '작성', '작성된', '문서', '리스트', '목록',
+    "기안서", "구매", "수리", "교체", "검토", "기술검토",
+    "오버홀", "도입", "노후화", "단종",
+    "작성", "작성된", "문서", "리스트", "목록",
     # 작성자 (실제 기안자 이름)
-    '최새름', '유인혁', '남준수', '박준서', '이원구',
-    '최정은', '한건희', '김경현', '김수연', '김창수', '송경원',
+    "최새름", "유인혁", "남준수", "박준서", "이원구",
+    "최정은", "한건희", "김경현", "김수연", "김창수", "송경원",
 }
 
 
@@ -68,8 +68,8 @@ def is_smalltalk(query: str) -> bool:
 
     # 2. 정규식 패턴
     smalltalk_regex = (
-        r'^(안녕|안녕하세요|안녕하십니까|감사합니다?|고마워요?|'
-        r'thanks|thank you|hi|hello|hey|bye|goodbye|잘가|안녕히)[.!?\s]*$'
+        r"^(안녕|안녕하세요|안녕하십니까|감사합니다?|고마워요?|"
+        r"thanks|thank you|hi|hello|hey|bye|goodbye|잘가|안녕히)[.!?\s]*$"
     )
     if re.fullmatch(smalltalk_regex, s):
         return True
@@ -80,7 +80,7 @@ def is_smalltalk(query: str) -> bool:
 def is_simple_math(query: str) -> bool:
     """단순 산술 질의 감지"""
     q_stripped = query.strip()
-    math_pattern = r'^\s*\d+\s*[\+\-\*/]\s*\d+\s*(=\s*\d+)?\s*[은?]*\s*$'
+    math_pattern = r"^\s*\d+\s*[\+\-\*/]\s*\d+\s*(=\s*\d+)?\s*[은?]*\s*$"
     return bool(re.match(math_pattern, q_stripped))
 
 
@@ -127,11 +127,11 @@ def clean_ui_metadata(query: str) -> str:
     original = query
 
     # 패턴들 제거
-    query = re.sub(r'🏷[^·]+·\s*', '', query)
-    query = re.sub(r'📅[^·]+·\s*', '', query)
-    query = re.sub(r'✍[^·]+', '', query)
-    query = re.sub(r'\s+pdf\s+', ' ', query)
-    query = re.sub(r'\s+', ' ', query).strip()
+    query = re.sub(r"🏷[^·]+·\s*", "", query)
+    query = re.sub(r"📅[^·]+·\s*", "", query)
+    query = re.sub(r"✍[^·]+", "", query)
+    query = re.sub(r"\s+pdf\s+", " ", query)
+    query = re.sub(r"\s+", " ", query).strip()
 
     if query != original:
         logger.info(
@@ -153,9 +153,9 @@ def normalize_chunk_text(result: Dict[str, Any]) -> str:
 
 def clean_text_preview(text: str) -> str:
     """텍스트 미리보기에서 노이즈 제거"""
-    clean = re.sub(r'\[페이지\s*\d+\]', '', text)
-    clean = re.sub(r'\[OCR[^\]]*\]', '', clean)
-    clean = re.sub(r'\s+', ' ', clean).strip()
+    clean = re.sub(r"\[페이지\s*\d+\]", "", text)
+    clean = re.sub(r"\[OCR[^\]]*\]", "", clean)
+    clean = re.sub(r"\s+", " ", clean).strip()
     return clean
 
 
@@ -165,14 +165,14 @@ def clean_text_preview(text: str) -> str:
 
 def format_title_from_filename(filename: str) -> str:
     """파일명에서 제목 추출"""
-    title = re.sub(r'^\d{4}-\d{2}-\d{2}_', '', filename)
-    title = re.sub(r'\.pdf$', '', title, flags=re.IGNORECASE)
-    return title.replace('_', ' ')
+    title = re.sub(r"^\d{4}-\d{2}-\d{2}_", "", filename)
+    title = re.sub(r"\.pdf$", "", title, flags=re.IGNORECASE)
+    return title.replace("_", " ")
 
 
 def build_file_path(filename: str) -> str:
     """파일명에서 경로 생성"""
-    year_match = re.search(r'(\d{4})-', filename)
+    year_match = re.search(r"(\d{4})-", filename)
     if year_match:
         year = year_match.group(1)
         return f"docs/year_{year}/{filename}"
@@ -206,7 +206,7 @@ def encode_file_ref(filename: str) -> Optional[str]:
             return f"doc:{token}"
 
         # 2. Fallback: docs 폴더 검색
-        year_match = re.search(r'(\d{4})-', filename)
+        year_match = re.search(r"(\d{4})-", filename)
         if year_match:
             year = year_match.group(1)
             file_path = Path(f"docs/year_{year}") / filename

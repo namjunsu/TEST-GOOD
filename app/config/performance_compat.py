@@ -10,7 +10,8 @@ v0 → v1 자동 매핑:
 """
 
 import os
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)

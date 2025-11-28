@@ -17,6 +17,7 @@ BM25Store를 사용하여 전체 텍스트 기반 검색 수행
 
 import os
 import re
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
@@ -35,6 +36,18 @@ if TYPE_CHECKING:
     from app.rag.query_expander import QueryExpander
 
 logger = get_logger(__name__)
+
+
+class ResultsWithStats(list):
+    """검색 결과 리스트 + 점수 통계 (duck typing용)
+
+    list를 상속하여 일반 리스트처럼 사용 가능하면서,
+    score_stats 속성을 통해 점수 통계 정보도 제공합니다.
+    """
+
+    def __init__(self, items: List[Dict[str, Any]], stats: Dict[str, float]):
+        super().__init__(items)
+        self.score_stats = stats
 
 
 class HybridRetriever:
@@ -61,6 +74,7 @@ class HybridRetriever:
     device_pattern: Optional[str]
     deny_pattern: Optional[str]
     _last_index_mtime: float
+    _reload_lock: threading.RLock  # race condition 방지용 락
 
     def __init__(self) -> None:
         """초기화 - BM25Store 및 MetadataDB 로드"""
@@ -112,6 +126,7 @@ class HybridRetriever:
 
             # 인덱스 파일 mtime 추적 (자동 재로드용)
             self._last_index_mtime = self._get_index_mtime()
+            self._reload_lock = threading.RLock()  # race condition 방지
 
             # DOC_ANCHORED 키워드 로드 (YAML 외부화)
             self._load_router_keywords()
@@ -188,17 +203,22 @@ class HybridRetriever:
         return os.path.getmtime(index_path) if os.path.exists(index_path) else 0.0
 
     def _reload_if_index_rotated(self) -> None:
-        """인덱스 파일이 갱신되면 자동 리로드"""
+        """인덱스 파일이 갱신되면 자동 리로드 (스레드 안전)"""
         if not self.use_bm25:
             return
 
         current_mtime = self._get_index_mtime()
         if current_mtime > self._last_index_mtime:
-            logger.info("🔄 인덱스 파일 갱신 감지, 재로드 중...")
-            index_path = os.getenv("BM25_INDEX_PATH", "var/index/bm25_index.pkl")
-            self.bm25 = BM25Store(index_path=index_path)
-            self._last_index_mtime = current_mtime
-            logger.info(f"✅ 인덱스 재로드 완료 ({len(self.bm25.documents)}개 문서)")
+            # Double-checked locking: 락 획득 전 빠른 체크로 불필요한 락 방지
+            with self._reload_lock:
+                # 락 획득 후 재확인 (다른 스레드가 이미 갱신했을 수 있음)
+                current_mtime = self._get_index_mtime()
+                if current_mtime > self._last_index_mtime:
+                    logger.info("🔄 인덱스 파일 갱신 감지, 재로드 중...")
+                    index_path = os.getenv("BM25_INDEX_PATH", "var/index/bm25_index.pkl")
+                    self.bm25 = BM25Store(index_path=index_path)
+                    self._last_index_mtime = current_mtime
+                    logger.info(f"✅ 인덱스 재로드 완료 ({len(self.bm25.documents)}개 문서)")
 
     def _find_selected_document(self, selected_filename: str) -> Optional[Dict[str, Any]]:
         """
@@ -483,11 +503,6 @@ class HybridRetriever:
                         "delta13": max(0.0, top1 - top3)
                     }
 
-                    class ResultsWithStats(list):
-                        def __init__(self, items, stats):
-                            super().__init__(items)
-                            self.score_stats = stats
-
                     return ResultsWithStats(filtered_results, score_stats)
                 else:
                     logger.warning("⚠️ BM25 비활성화 상태에서 STRICT CONTENT 모드 요청됨, 빈 결과 반환")
@@ -740,12 +755,6 @@ class HybridRetriever:
                 "delta12": max(0.0, top1 - top2),
                 "delta13": max(0.0, top1 - top3)
             }
-
-            # 결과 리스트에 score_stats 속성 추가 (duck typing)
-            class ResultsWithStats(list):
-                def __init__(self, items, stats):
-                    super().__init__(items)
-                    self.score_stats = stats
 
             results_with_stats = ResultsWithStats(normalized, score_stats)
 

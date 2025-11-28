@@ -3,32 +3,33 @@
 Health check 및 기타 API 엔드포인트 제공
 """
 
-import sys
-import os
-import time
-import subprocess
 import base64
-import json
-import ipaddress
 import binascii
+import ipaddress
+import json
 import mimetypes
+import os
+import subprocess
+import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
-from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import FileResponse
+
 load_dotenv(override=True)  # .env 파일이 환경 변수를 override하도록 설정
 
 # 중앙 설정 임포트
 from app.config.settings import settings
 
 # 로깅 설정 임포트
-from app.logging.config import setup_logging, get_logger, RequestContext
+from app.logging.config import RequestContext, get_logger, setup_logging
 
 # 로깅 초기화 (환경변수 기반)
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
@@ -118,7 +119,7 @@ async def request_logging_middleware(request: Request, call_next):
 
             return response
 
-        except Exception as e:
+        except Exception:
             latency_ms = int((time.time() - start) * 1000)
             log.error(
                 "Request failed",
@@ -328,7 +329,7 @@ def health():
                 cwd=os.path.dirname(__file__),
                 stderr=subprocess.DEVNULL
             ).decode().strip()
-        except:
+        except (subprocess.CalledProcessError, FileNotFoundError, OSError):
             pass
 
     # LLM 상태 체크
@@ -346,12 +347,13 @@ def health():
         llm_status["llama_cpp_version"] = llama_cpp.__version__
 
         try:
-            from config import QWEN_MODEL_PATH
             from pathlib import Path
+
+            from config import QWEN_MODEL_PATH
             llm_status["model"] = Path(QWEN_MODEL_PATH).name
-        except:
+        except (ImportError, AttributeError):
             pass
-    except:
+    except ImportError:
         pass
 
     return {
@@ -476,9 +478,9 @@ def get_metrics():
     """
     log.debug("Metrics requested")
 
-    import sqlite3
-    import pickle
     import hashlib
+    import pickle
+    import sqlite3
 
     metrics = {
         "docstore_count": 0,
@@ -516,13 +518,13 @@ def get_metrics():
     try:
         bm25_path = _first_existing(BM25_CANDIDATES)
         if bm25_path:
-            with open(bm25_path, 'rb') as f:
+            with open(bm25_path, "rb") as f:
                 bm25_data = pickle.load(f)
 
             if isinstance(bm25_data, dict):
-                metadata = bm25_data.get('metadata', [])
+                metadata = bm25_data.get("metadata", [])
             else:
-                metadata = getattr(bm25_data, 'metadata', [])
+                metadata = getattr(bm25_data, "metadata", [])
 
             metrics["bm25_count"] = len(metadata)
     except Exception as e:
@@ -603,8 +605,8 @@ def get_metrics():
         fs_count = 0
         docs_path = settings.DOCS_DIR
         if docs_path.exists():
-            for root, _, files in os.walk(docs_path):
-                fs_count += sum(1 for f in files if f.lower().endswith(('.pdf', '.txt')))
+            for _root, _, files in os.walk(docs_path):
+                fs_count += sum(1 for f in files if f.lower().endswith((".pdf", ".txt")))
 
         metrics["fs_file_count"] = fs_count
 
@@ -622,9 +624,9 @@ def get_metrics():
             cursor.execute("SELECT filename, path FROM files")
             rows = cursor.fetchall()
             fs_names = set()
-            for root, _, files in os.walk(docs_path):
+            for _root, _, files in os.walk(docs_path):
                 for f in files:
-                    if f.lower().endswith(('.pdf', '.txt')):
+                    if f.lower().endswith((".pdf", ".txt")):
                         fs_names.add(f)
 
             for filename, path in rows:
@@ -693,10 +695,9 @@ def get_metrics():
     # 10. Retriever 실시간 메트릭 (v2.0 추가)
     try:
         # rag_pipeline이 글로벌 변수로 있는지 확인
-        import sys
-        if 'rag_pipeline' in globals():
-            pipeline = globals()['rag_pipeline']
-            if hasattr(pipeline, 'retriever') and hasattr(pipeline.retriever, 'get_metrics'):
+        if "rag_pipeline" in globals():
+            pipeline = globals()["rag_pipeline"]
+            if hasattr(pipeline, "retriever") and hasattr(pipeline.retriever, "get_metrics"):
                 retriever_metrics = pipeline.retriever.get_metrics()
                 metrics["retriever_runtime"] = retriever_metrics
                 log.debug(f"Retriever metrics added: {retriever_metrics}")
@@ -738,7 +739,6 @@ def debug_llm():
 
     # 2. QwenLLM 임포트 테스트
     try:
-        from rag_system.qwen_llm import QwenLLM
         result["qwen_llm_import"] = "SUCCESS"
     except Exception as e:
         result["qwen_llm_import"] = "FAILED"

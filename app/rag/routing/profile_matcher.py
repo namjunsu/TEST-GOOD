@@ -7,9 +7,10 @@
 
 import re
 import threading
+from typing import Any, Dict, List
+
 import yaml
-from pathlib import Path
-from typing import Dict, List, Set, Any, Optional
+
 from app.core.logging import get_logger
 from app.textproc.normalizer import normalize_text
 

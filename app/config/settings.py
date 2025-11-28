@@ -4,10 +4,11 @@
 """
 
 from __future__ import annotations
+
+import os
 from dataclasses import dataclass
 from pathlib import Path
-import os
-from typing import Set, Dict, List
+from typing import Dict, List, Set
 
 # .env 로드 (선택)
 try:
@@ -67,6 +68,34 @@ def _parse_exts(env_key: str, default: str = ".pdf,.txt") -> Set[str]:
     return out
 
 
+def _validate_api_key(env_key: str = "API_KEY", default: str = "") -> str:
+    """API 키 검증 (보안 강화).
+
+    Returns:
+        검증된 API 키 문자열
+
+    Warning:
+        - 32자 미만이면 경고 로그 출력
+        - 기본값('CHANGE-ME' 포함)이면 경고 로그 출력
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    key = os.getenv(env_key, default)
+
+    if not key:
+        logger.warning(f"[SECURITY] {env_key} 환경변수가 설정되지 않았습니다.")
+        return key
+
+    if "CHANGE-ME" in key or key == "broadcast-tech-rag-2025":
+        logger.warning(f"[SECURITY] {env_key}가 기본값입니다. 프로덕션에서는 강력한 키로 변경하세요.")
+
+    if len(key) < 32:
+        logger.warning(f"[SECURITY] {env_key} 길이가 {len(key)}자입니다. 32자 이상을 권장합니다.")
+
+    return key
+
+
 # ---------- 설정 데이터클래스 ----------
 @dataclass(frozen=True)
 class Settings:
@@ -89,6 +118,35 @@ class Settings:
     # RAG 인덱스 경로 (다중 후보)
     BM25_CANDIDATES: List[Path]
     FAISS_CANDIDATES: List[Path]
+
+    # RAG 검색/스코어 설정
+    RAG_MIN_SCORE: float
+    RAG_MIN_SCORE_POLICY: str  # "normalized" or "absolute"
+    BM25_MIN_ABS: float
+    VEC_MIN_ABS: float
+    MIN_KEYWORD_COVERAGE: int
+
+    # LLM 토큰 설정
+    LLM_MAX_TOKENS_DETAILED: int
+    LLM_MAX_TOKENS_SECTION: int
+    LLM_MAX_TOKENS_SUMMARY: int
+    LLM_MAX_TOKENS_QA: int
+
+    # 문서 처리 설정
+    EXTRACTED_DIR: Path
+    DOC_ANCHOR_MIN_SNIPPET: int
+
+    # 디버그/진단
+    DIAG_RAG: bool
+    DIAG_LOG_LEVEL: str
+
+    # 런타임 모드 설정
+    MODE: str  # "AUTO", "SEARCH", "DOCUMENT" 등
+    USE_V2_RETRIEVER: bool
+    MODEL_PATH: str
+
+    # 보안 설정
+    API_KEY: str
 
     def is_allowed_file(self, path: Path) -> bool:
         """허용 확장자 정책 검사 (대소문자 무시)."""
@@ -140,6 +198,29 @@ settings = Settings(
     EMBEDDING_MODEL=os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"),
     BM25_CANDIDATES=_BM25_CANDIDATES,
     FAISS_CANDIDATES=_FAISS_CANDIDATES,
+    # RAG 검색/스코어 설정
+    RAG_MIN_SCORE=float(os.getenv("RAG_MIN_SCORE", "0.35")),
+    RAG_MIN_SCORE_POLICY=os.getenv("RAG_MIN_SCORE_POLICY", "normalized"),
+    BM25_MIN_ABS=float(os.getenv("BM25_MIN_ABS", "5.0")),
+    VEC_MIN_ABS=float(os.getenv("VEC_MIN_ABS", "0.25")),
+    MIN_KEYWORD_COVERAGE=int(os.getenv("MIN_KEYWORD_COVERAGE", "2")),
+    # LLM 토큰 설정
+    LLM_MAX_TOKENS_DETAILED=int(os.getenv("LLM_MAX_TOKENS_DETAILED", "1500")),
+    LLM_MAX_TOKENS_SECTION=int(os.getenv("LLM_MAX_TOKENS_SECTION", "900")),
+    LLM_MAX_TOKENS_SUMMARY=int(os.getenv("LLM_MAX_TOKENS_SUMMARY", "600")),
+    LLM_MAX_TOKENS_QA=int(os.getenv("LLM_MAX_TOKENS_QA", "800")),
+    # 문서 처리 설정
+    EXTRACTED_DIR=_as_path("EXTRACTED_DIR", _DATA_DIR / "extracted"),
+    DOC_ANCHOR_MIN_SNIPPET=int(os.getenv("DOC_ANCHOR_MIN_SNIPPET", "1200")),
+    # 디버그/진단
+    DIAG_RAG=os.getenv("DIAG_RAG", "false").lower() == "true",
+    DIAG_LOG_LEVEL=os.getenv("DIAG_LOG_LEVEL", "INFO").upper(),
+    # 런타임 모드 설정
+    MODE=os.getenv("MODE", "AUTO").upper(),
+    USE_V2_RETRIEVER=os.getenv("USE_V2_RETRIEVER", "false").lower() == "true",
+    MODEL_PATH=os.getenv("MODEL_PATH", "./models/ggml-model-Q4_K_M.gguf"),
+    # 보안 설정
+    API_KEY=_validate_api_key("API_KEY"),
 )
 
 __all__ = ["settings", "ensure_dirs"]

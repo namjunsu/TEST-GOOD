@@ -15,7 +15,6 @@ import os
 import sqlite3
 import time
 from contextlib import contextmanager
-from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)

@@ -12,9 +12,9 @@ LLM 추출 결과와 병합하여 정확도를 보장합니다.
 """
 
 from __future__ import annotations
-import re
-from typing import Optional, Dict, Any, List, Tuple
 
+import re
+from typing import Any, Dict, List, Optional, Tuple
 
 # ============================================================================
 # 정규식 패턴
@@ -27,7 +27,7 @@ IP_RE = re.compile(r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|
 MODEL_PATTERNS = [
     r"HRD-?\d{3,4}",                    # Hanwha DVR (예: HRD-442)
     r"XRN-?\d{3,4}[A-Z0-9]*",           # Hanwha NVR (예: XRN-1620B2)
-    r"NR-?\d{3,4}[A-Z0-9]*(?:-[A-Z])?", # IDIS NVR (예: NR-3516P-A)
+    r"NR-?\d{3,4}[A-Z0-9]*(?:-[A-Z])?",  # IDIS NVR (예: NR-3516P-A)
     r"LVM-?\d{3}[A-Z0-9]*",             # TVLogic Monitor (예: LVM-180A)
     r"RMK-?\d{3}[A-Z0-9]*",             # TVLogic Rack (예: RMK-182)
     r"DeckLink\s?[A-Za-z0-9\-\s]+",     # Blackmagic DeckLink (Studio 4K 등)

@@ -1,0 +1,161 @@
+"""공용 타입 정의
+
+프로젝트 전반에서 재사용되는 타입 앨리어스 및 TypedDict 정의.
+IDE 자동완성 및 타입 체킹 지원.
+
+사용법:
+    from app.core.types import DocumentDict, SearchResultDict, RAGResponseDict
+"""
+
+from typing import Any, Dict, List, Optional, TypedDict, Union
+
+from typing_extensions import NotRequired
+
+# ============================================================================
+# 문서 관련 타입
+# ============================================================================
+
+
+class DocumentMetadata(TypedDict):
+    """문서 메타데이터"""
+    filename: str
+    title: NotRequired[str]
+    date: NotRequired[str]
+    year: NotRequired[int]
+    category: NotRequired[str]
+    drafter: NotRequired[str]
+    keywords: NotRequired[str]
+    path: NotRequired[str]
+    page_count: NotRequired[int]
+    file_size: NotRequired[int]
+
+
+class DocumentDict(TypedDict):
+    """문서 전체 정보"""
+    id: NotRequired[int]
+    filename: str
+    content: str
+    metadata: DocumentMetadata
+    score: NotRequired[float]
+
+
+# ============================================================================
+# 검색 관련 타입
+# ============================================================================
+
+class SearchResultDict(TypedDict):
+    """검색 결과 단일 항목"""
+    filename: str
+    content: str
+    score: float
+    metadata: DocumentMetadata
+    source: NotRequired[str]  # "bm25" | "vector" | "hybrid"
+
+
+class SearchResponseDict(TypedDict):
+    """검색 응답 전체"""
+    results: List[SearchResultDict]
+    total_count: int
+    query: str
+    took_ms: NotRequired[float]
+
+
+# ============================================================================
+# RAG 파이프라인 타입
+# ============================================================================
+
+class RAGResponseDict(TypedDict):
+    """RAG 응답"""
+    mode: str  # "QA" | "SEARCH" | "DOCUMENT" | "COST_SUM" | "CHAT"
+    text: str
+    files: List[str]
+    count: int
+    citations: NotRequired[List[Dict[str, Any]]]
+    evidence: NotRequired[List[Dict[str, Any]]]
+    status: NotRequired[Dict[str, Any]]
+    latency_ms: NotRequired[float]
+
+
+class QueryRoutingDict(TypedDict):
+    """쿼리 라우팅 결과"""
+    mode: str
+    prompt_type: str
+    max_tokens: int
+    retriever_params: Dict[str, Any]
+    detailed_mode: bool
+    detected_section: Optional[str]
+    needs_summary: bool
+
+
+# ============================================================================
+# 캐시 관련 타입
+# ============================================================================
+
+class CacheStatsDict(TypedDict):
+    """캐시 통계"""
+    hits: int
+    misses: int
+    size: int
+    max_size: int
+    hit_rate: float
+
+
+# ============================================================================
+# 메트릭 관련 타입
+# ============================================================================
+
+class LatencyMetrics(TypedDict):
+    """지연 시간 메트릭"""
+    retrieve_ms: float
+    compress_ms: NotRequired[float]
+    generate_ms: NotRequired[float]
+    total_ms: float
+
+
+class SearchMetrics(TypedDict):
+    """검색 메트릭"""
+    query: str
+    top_k: int
+    result_count: int
+    top_score: float
+    latency: LatencyMetrics
+
+
+# ============================================================================
+# 타입 앨리어스
+# ============================================================================
+
+# JSON 호환 타입
+JSONValue = Union[str, int, float, bool, None, Dict[str, Any], List[Any]]
+JSONDict = Dict[str, JSONValue]
+
+# 콜백 타입
+ProgressCallback = Optional[callable]  # (current: int, total: int) -> None
+
+# 검색 결과 리스트
+SearchResults = List[SearchResultDict]
+Documents = List[DocumentDict]
+
+
+__all__ = [
+    # 문서
+    "DocumentMetadata",
+    "DocumentDict",
+    # 검색
+    "SearchResultDict",
+    "SearchResponseDict",
+    "SearchResults",
+    # RAG
+    "RAGResponseDict",
+    "QueryRoutingDict",
+    # 캐시
+    "CacheStatsDict",
+    # 메트릭
+    "LatencyMetrics",
+    "SearchMetrics",
+    # 앨리어스
+    "JSONValue",
+    "JSONDict",
+    "ProgressCallback",
+    "Documents",
+]

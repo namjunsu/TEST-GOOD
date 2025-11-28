@@ -3,16 +3,15 @@ Centralized Logging Configuration
 표준 로그 스키마 및 회전 정책 적용
 contextvars 기반 동시성 안전 컨텍스트 전파
 """
+import contextvars
+import json
 import logging
 import sys
-from pathlib import Path
-from logging.handlers import TimedRotatingFileHandler
-from typing import Optional
-import json
-from datetime import datetime, timezone
 import uuid
-import contextvars
-
+from datetime import datetime, timezone
+from logging.handlers import TimedRotatingFileHandler
+from pathlib import Path
+from typing import Optional
 
 # --- 안전한 컨텍스트 전파 (contextvars + Filter) ---
 _req_id_var = contextvars.ContextVar("req_id", default=None)
@@ -63,9 +62,9 @@ class StructuredFormatter(logging.Formatter):
         }
 
         # Add context IDs if present
-        if hasattr(record, 'trace_id'):
+        if hasattr(record, "trace_id"):
             log_data["trace_id"] = record.trace_id
-        if hasattr(record, 'req_id'):
+        if hasattr(record, "req_id"):
             log_data["req_id"] = record.req_id
 
         # Add RAG-specific fields if present
@@ -125,12 +124,12 @@ def setup_logging(
         file_formatter = StructuredFormatter()
     else:
         console_formatter = logging.Formatter(
-            '[%(asctime)s] %(levelname)-8s %(name)s: %(message)s',
-            datefmt='%H:%M:%S'
+            "[%(asctime)s] %(levelname)-8s %(name)s: %(message)s",
+            datefmt="%H:%M:%S"
         )
         file_formatter = logging.Formatter(
-            '[%(asctime)s] %(levelname)-8s [%(name)s:%(lineno)d] %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
+            "[%(asctime)s] %(levelname)-8s [%(name)s:%(lineno)d] %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S"
         )
 
     # Console handler
@@ -143,10 +142,10 @@ def setup_logging(
     # File handler with rotation (UTC 기준 회전)
     file_handler = TimedRotatingFileHandler(
         filename=str(log_path / "ai-chat.log"),
-        when='midnight',
+        when="midnight",
         interval=rotation_days,
         backupCount=retention_files,
-        encoding='utf-8',
+        encoding="utf-8",
         utc=True  # UTC 기준 회전
     )
     file_handler.setLevel(logging.DEBUG)
@@ -157,10 +156,10 @@ def setup_logging(
     # Error log (separate file)
     error_handler = TimedRotatingFileHandler(
         filename=str(log_path / "ai-chat-error.log"),
-        when='midnight',
+        when="midnight",
         interval=rotation_days,
         backupCount=retention_files,
-        encoding='utf-8',
+        encoding="utf-8",
         utc=True
     )
     error_handler.setLevel(logging.ERROR)

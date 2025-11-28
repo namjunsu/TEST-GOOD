@@ -17,11 +17,13 @@ v2.0 주요 개선사항:
 """
 
 import re
-import unicodedata
+import threading
 import time
-from typing import Dict, Any, List, Tuple, Optional
-import yaml
+import unicodedata
 from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
+import yaml
 
 
 class DocumentTypeClassifier:
@@ -396,13 +398,16 @@ class DocumentTypeClassifier:
 
 # 싱글톤 인스턴스
 _classifier = None
+_classifier_lock = threading.Lock()
 
 
 def get_classifier() -> DocumentTypeClassifier:
-    """분류기 싱글톤 반환"""
+    """분류기 싱글톤 반환 (thread-safe)"""
     global _classifier
     if _classifier is None:
-        _classifier = DocumentTypeClassifier()
+        with _classifier_lock:
+            if _classifier is None:  # Double-check locking
+                _classifier = DocumentTypeClassifier()
     return _classifier
 
 

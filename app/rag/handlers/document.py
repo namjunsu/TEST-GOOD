@@ -12,15 +12,16 @@ Strangler Fig 패턴:
 import re
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+from app.core.errors import DocumentNotFoundError
 from app.core.logging import get_logger
-from app.core.errors import DocumentNotFoundError, SearchError
 from app.data.metadata_db import connect_metadata
+
 from .base import BaseHandler
 
 if TYPE_CHECKING:
-    from app.rag.pipeline import RAGPipeline
+    pass
 
 logger = get_logger(__name__)
 
@@ -37,13 +38,13 @@ DOCUMENT_STOP_WORDS = [
 
 # 섹션 키워드 매핑
 SECTION_KEYWORDS = {
-    '검토': ['검토', '검토내용', '검토 내용', '검토 세부', '리뷰', '검토의견', '검토 의견'],
-    '배경': ['배경', '목적', '배경/목적', '추진배경', '추진 배경', '사유'],
-    '개요': ['개요 부분', '개요만', '개요 세부'],
-    '비교': ['비교', '대안', '비교대안', '비교 대안', '방안', '옵션'],
-    '선정': ['선정', '권고', '추천', '제안', '선정사유'],
-    '내역': ['내역', '세부내역', '세부 내역', '상세내역', '상세'],
-    '예산': ['예산', '비용', '금액', '합계', '총액']
+    "검토": ["검토", "검토내용", "검토 내용", "검토 세부", "리뷰", "검토의견", "검토 의견"],
+    "배경": ["배경", "목적", "배경/목적", "추진배경", "추진 배경", "사유"],
+    "개요": ["개요 부분", "개요만", "개요 세부"],
+    "비교": ["비교", "대안", "비교대안", "비교 대안", "방안", "옵션"],
+    "선정": ["선정", "권고", "추천", "제안", "선정사유"],
+    "내역": ["내역", "세부내역", "세부 내역", "상세내역", "상세"],
+    "예산": ["예산", "비용", "금액", "합계", "총액"]
 }
 
 # 데이터 디렉토리
@@ -96,11 +97,11 @@ def safe_filename(meta: dict = None, doc_path: str = None) -> str:
 
 def load_document_text(filename: str) -> str:
     """문서 텍스트 로드 (extracted 디렉토리에서)"""
-    txt_filename = filename.replace('.pdf', '.txt')
+    txt_filename = filename.replace(".pdf", ".txt")
     txt_path = EXTRACTED_DIR / txt_filename
 
     if txt_path.exists():
-        with open(txt_path, 'r', encoding='utf-8') as f:
+        with open(txt_path, "r", encoding="utf-8") as f:
             return f.read()
     return ""
 
@@ -155,7 +156,7 @@ class DocumentHandler(BaseHandler):
                 )
 
             # 3. 문서 텍스트 로드
-            full_text = self._load_full_text(metadata['filename'])
+            full_text = self._load_full_text(metadata["filename"])
 
             if not full_text or len(full_text.strip()) < 10:
                 return self._make_empty_response(
@@ -178,7 +179,7 @@ class DocumentHandler(BaseHandler):
 
             logger.info({
                 "mode": "DOCUMENT",
-                "filename": metadata['filename'],
+                "filename": metadata["filename"],
                 "text_length": len(full_text),
                 "routing": routing
             })
@@ -186,7 +187,7 @@ class DocumentHandler(BaseHandler):
             return {
                 "mode": self.mode,
                 "text": answer_text,
-                "files": [metadata['filename']],
+                "files": [metadata["filename"]],
                 "count": 1,
                 "citations": evidence,
                 "evidence": evidence,
@@ -267,12 +268,12 @@ class DocumentHandler(BaseHandler):
 
             if result:
                 return {
-                    'filename': result[0],
-                    'drafter': result[1],
-                    'date': result[2],
-                    'display_date': result[3],
-                    'category': result[4],
-                    'doctype': result[5]
+                    "filename": result[0],
+                    "drafter": result[1],
+                    "date": result[2],
+                    "display_date": result[3],
+                    "category": result[4],
+                    "doctype": result[5]
                 }
             return None
 
@@ -308,20 +309,20 @@ class DocumentHandler(BaseHandler):
         """특정 문서의 청크만 로드"""
         try:
             # BM25 인덱스에서 직접 접근
-            if hasattr(self.retriever, 'bm25') and self.retriever.bm25:
+            if hasattr(self.retriever, "bm25") and self.retriever.bm25:
                 bm25_store = self.retriever.bm25
                 chunks = []
 
                 for i, meta in enumerate(bm25_store.metadata):
-                    if meta.get('filename') == filename:
+                    if meta.get("filename") == filename:
                         content = bm25_store.documents[i]
                         if content and len(content.strip()) > 0:
                             chunks.append({
-                                'doc_id': filename,
-                                'page': 1,
-                                'text': content,
-                                'score': 1.0,
-                                'filename': filename
+                                "doc_id": filename,
+                                "page": 1,
+                                "text": content,
+                                "score": 1.0,
+                                "filename": filename
                             })
 
                 if chunks:
@@ -330,21 +331,21 @@ class DocumentHandler(BaseHandler):
 
             # BM25 사용 불가 시 검색 폴백
             logger.warning("⚠️ BM25 직접 접근 불가, 검색으로 폴백")
-            search_query = filename.replace('.pdf', '').replace('_', ' ')
+            search_query = filename.replace(".pdf", "").replace("_", " ")
             results = self.retriever.search(search_query, top_k=20)
 
             chunks = []
             for result in results:
-                doc_id = result.get('doc_id', '')
-                meta_filename = result.get('meta', {}).get('filename', '')
+                doc_id = result.get("doc_id", "")
+                meta_filename = result.get("meta", {}).get("filename", "")
 
                 if filename in doc_id or filename in meta_filename:
                     chunks.append({
-                        'doc_id': result.get('doc_id', filename),
-                        'page': result.get('page', 1),
-                        'text': result.get('snippet', result.get('text', '')),
-                        'score': result.get('score', 0.0),
-                        'filename': filename
+                        "doc_id": result.get("doc_id", filename),
+                        "page": result.get("page", 1),
+                        "text": result.get("snippet", result.get("text", "")),
+                        "score": result.get("score", 0.0),
+                        "filename": filename
                     })
 
             return chunks
@@ -359,18 +360,18 @@ class DocumentHandler(BaseHandler):
             from app.rag.pipeline import route_query
             routing = route_query(query)
             return {
-                'detailed_mode': routing.get('detailed_mode', False),
-                'detected_section': routing.get('detected_section'),
-                'needs_summary': routing.get('needs_summary', False),
-                'max_tokens': routing.get('max_tokens', 800)
+                "detailed_mode": routing.get("detailed_mode", False),
+                "detected_section": routing.get("detected_section"),
+                "needs_summary": routing.get("needs_summary", False),
+                "max_tokens": routing.get("max_tokens", 800)
             }
         except ImportError:
             # 폴백: 기본 라우팅
             return {
-                'detailed_mode': '자세' in query or '상세' in query,
-                'detected_section': detect_section(query),
-                'needs_summary': '요약' in query or '정리' in query,
-                'max_tokens': 800
+                "detailed_mode": "자세" in query or "상세" in query,
+                "detected_section": detect_section(query),
+                "needs_summary": "요약" in query or "정리" in query,
+                "max_tokens": 800
             }
 
     def _generate_answer(
@@ -394,8 +395,21 @@ class DocumentHandler(BaseHandler):
                 routing=routing
             )
         except Exception as e:
-            logger.warning(f"⚠️ LLM 응답 생성 실패: {e}")
-            return f"[요약 실패] 원본 문서 내용:\n\n{full_text[:1500]}..."
+            logger.warning(f"⚠️ LLM 응답 생성 실패: {e}", exc_info=True)
+            # 요약 실패 시 원본 내용의 앞부분을 보여줌
+            preview = full_text[:2000].strip()
+            filename = metadata.get("filename", "알 수 없음")
+            drafter = metadata.get("drafter") or "정보 없음"
+            date = metadata.get("display_date") or metadata.get("date") or "정보 없음"
+
+            return (
+                f"**문서 요약을 생성하지 못했습니다.**\n\n"
+                f"**문서명**: {filename}\n"
+                f"**기안자**: {drafter}\n"
+                f"**날짜**: {date}\n\n"
+                f"---\n\n"
+                f"**원본 내용 미리보기**:\n\n{preview}..."
+            )
 
     def _generate_llm_answer(
         self,
@@ -406,7 +420,7 @@ class DocumentHandler(BaseHandler):
     ) -> str:
         """LLM을 통한 응답 생성"""
         # LLM 접근 시도
-        if not (hasattr(self.generator, 'rag') and hasattr(self.generator.rag, 'llm')):
+        if not (hasattr(self.generator, "rag") and hasattr(self.generator.rag, "llm")):
             raise RuntimeError("LLM 접근 실패")
 
         llm = self.generator.rag.llm
@@ -436,10 +450,10 @@ class DocumentHandler(BaseHandler):
                 max_tokens=max_tokens,
                 temperature=0.3
             )
-            raw_result = output['choices'][0]['message']['content']
+            raw_result = output["choices"][0]["message"]["content"]
 
             # 요약 모드 후처리
-            if routing.get('needs_summary'):
+            if routing.get("needs_summary"):
                 return self._format_summary_output(raw_result, metadata)
 
             return raw_result.strip()
@@ -455,21 +469,17 @@ class DocumentHandler(BaseHandler):
     ) -> tuple:
         """LLM 프롬프트 및 시스템 메시지 생성"""
         context = full_text[:4000]
-        filename = metadata['filename']
-        drafter = metadata.get('drafter', '')
-        date = metadata.get('display_date') or metadata.get('date', '')
+        filename = metadata["filename"]
+        drafter = metadata.get("drafter", "")
+        date = metadata.get("display_date") or metadata.get("date", "")
 
-        detailed_mode = routing.get('detailed_mode', False)
-        needs_summary = routing.get('needs_summary', False)
-        detected_section = routing.get('detected_section')
+        detailed_mode = routing.get("detailed_mode", False)
+        needs_summary = routing.get("needs_summary", False)
+        detected_section = routing.get("detected_section")
 
         # 프롬프트 빌더 import 시도
         try:
-            from app.prompts.document_prompts import (
-                build_detailed_prompt,
-                build_section_prompt,
-                build_qa_prompt
-            )
+            from app.prompts.document_prompts import build_detailed_prompt, build_qa_prompt, build_section_prompt
         except ImportError:
             # 폴백 프롬프트
             return (
@@ -517,8 +527,13 @@ class DocumentHandler(BaseHandler):
         routing: Dict[str, Any]
     ) -> int:
         """토큰 제한 계산"""
-        base_max_tokens = routing.get('max_tokens', 800)
-        detailed_mode = routing.get('detailed_mode', False)
+        base_max_tokens = routing.get("max_tokens", 800)
+        detailed_mode = routing.get("detailed_mode", False)
+        needs_summary = routing.get("needs_summary", False)
+
+        # 요약 모드: 최소 500 토큰 보장 (JSON 잘림 방지)
+        if needs_summary:
+            return max(500, min(base_max_tokens, content_length // 3))
 
         if detailed_mode:
             return min(base_max_tokens, max(300, content_length // 3))
@@ -531,21 +546,23 @@ class DocumentHandler(BaseHandler):
     ) -> str:
         """요약 결과 포맷팅"""
         try:
-            from app.rag.summary_templates import (
-                parse_summary_json,
-                format_summary_output,
-                detect_doc_kind
-            )
+            from app.rag.summary_templates import detect_doc_kind, format_summary_output, parse_summary_json
 
             parsed = parse_summary_json(raw_result)
-            kind = detect_doc_kind(metadata['filename'], "")
+
+            # JSON 파싱 실패 시 원본 LLM 응답 반환
+            if not parsed:
+                logger.warning(f"⚠️ JSON 파싱 실패, 원본 응답 사용: {raw_result[:100]}...")
+                return raw_result.strip()
+
+            kind = detect_doc_kind(metadata["filename"], "")
 
             return format_summary_output(
                 parsed_json=parsed,
                 kind=kind,
-                filename=metadata['filename'],
-                drafter=metadata.get('drafter'),
-                display_date=metadata.get('display_date'),
+                filename=metadata["filename"],
+                drafter=metadata.get("drafter"),
+                display_date=metadata.get("display_date"),
                 claimed_total=None
             )
         except Exception as e:
@@ -558,10 +575,10 @@ class DocumentHandler(BaseHandler):
         full_text: str
     ) -> List[Dict[str, Any]]:
         """Evidence 구성"""
-        filename = metadata['filename']
+        filename = metadata["filename"]
 
         # 파일 경로 생성
-        year_match = re.search(r'(\d{4})-', filename)
+        year_match = re.search(r"(\d{4})-", filename)
         if year_match:
             file_path = f"docs/year_{year_match.group(1)}/{filename}"
         else:
@@ -576,9 +593,9 @@ class DocumentHandler(BaseHandler):
             "ref": None,
             "meta": {
                 "filename": filename,
-                "drafter": metadata.get('drafter'),
-                "date": metadata.get('display_date') or metadata.get('date'),
-                "category": metadata.get('category'),
-                "doctype": metadata.get('doctype')
+                "drafter": metadata.get("drafter"),
+                "date": metadata.get("display_date") or metadata.get("date"),
+                "category": metadata.get("category"),
+                "doctype": metadata.get("doctype")
             }
         }]

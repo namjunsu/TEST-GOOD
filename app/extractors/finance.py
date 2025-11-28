@@ -13,7 +13,8 @@ LLM은 구조 재구성 및 인용만 담당, 계산은 하지 않음
 """
 
 import re
-from typing import Dict, Optional, Tuple, Any, List
+from typing import Any, Dict, List, Optional, Tuple
+
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -445,7 +446,7 @@ def validate_financial_consistency(fields: Dict[str, Optional[int]]) -> Dict[str
                 errors.append(
                     f"총액-공급가액 불일치(포함/면세): "
                     f"total={total:,}, amount={amount:,}, "
-                    f"diff={diff*100:.2f}%"
+                    f"diff={diff * 100:.2f}%"
                 )
 
         elif vat_mode in ("excluded", "unknown"):
@@ -455,8 +456,8 @@ def validate_financial_consistency(fields: Dict[str, Optional[int]]) -> Dict[str
                 if diff > 0.015:
                     errors.append(
                         f"금액+부가세 ≠ 총액: "
-                        f"{amount:,}+{vat:,}={amount+vat:,} vs {total:,} "
-                        f"(diff {diff*100:.2f}%)"
+                        f"{amount:,}+{vat:,}={amount + vat:,} vs {total:,} "
+                        f"(diff {diff * 100:.2f}%)"
                     )
             else:
                 warnings.append(
@@ -471,7 +472,7 @@ def validate_financial_consistency(fields: Dict[str, Optional[int]]) -> Dict[str
             errors.append(
                 f"단가×수량 불일치: "
                 f"{unit_price:,}×{qty}={calc:,} vs amount={amount:,} "
-                f"(diff {diff*100:.1f}%)"
+                f"(diff {diff * 100:.1f}%)"
             )
 
     # VAT 10% 규칙 (면세/포함 제외, ±2% 허용)
@@ -482,7 +483,7 @@ def validate_financial_consistency(fields: Dict[str, Optional[int]]) -> Dict[str
             warnings.append(
                 f"부가세 10% 규칙 벗어남: "
                 f"expected={exp_vat:,}, actual={vat:,} "
-                f"(diff {diff*100:.1f}%)"
+                f"(diff {diff * 100:.1f}%)"
             )
 
     # 최종 검증 결과

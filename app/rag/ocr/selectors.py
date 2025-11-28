@@ -6,7 +6,7 @@ OCR 대상 문서 선택기
 import logging
 import sqlite3
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +26,6 @@ def select_by_text_length(
     Returns:
         선택된 문서 목록
     """
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-
     query = """
         SELECT
             id,
@@ -44,9 +41,10 @@ def select_by_text_length(
     if limit:
         query += f" LIMIT {limit}"
 
-    cursor = conn.execute(query, (threshold,))
-    results = [dict(row) for row in cursor.fetchall()]
-    conn.close()
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute(query, (threshold,))
+        results = [dict(row) for row in cursor.fetchall()]
 
     logger.info(f"선택 (text_length < {threshold}): {len(results)}개 문서")
     return results
@@ -67,9 +65,6 @@ def select_by_avg_per_page(
     Returns:
         선택된 문서 목록
     """
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-
     query = """
         SELECT
             id,
@@ -89,9 +84,10 @@ def select_by_avg_per_page(
     if limit:
         query += f" LIMIT {limit}"
 
-    cursor = conn.execute(query, (threshold,))
-    results = [dict(row) for row in cursor.fetchall()]
-    conn.close()
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute(query, (threshold,))
+        results = [dict(row) for row in cursor.fetchall()]
 
     logger.info(f"선택 (avg_per_page < {threshold}): {len(results)}개 문서")
     return results
@@ -110,9 +106,6 @@ def select_zero_text(
     Returns:
         선택된 문서 목록
     """
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-
     query = """
         SELECT
             id,
@@ -128,9 +121,10 @@ def select_zero_text(
     if limit:
         query += f" LIMIT {limit}"
 
-    cursor = conn.execute(query)
-    results = [dict(row) for row in cursor.fetchall()]
-    conn.close()
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute(query)
+        results = [dict(row) for row in cursor.fetchall()]
 
     logger.info(f"선택 (zero_text): {len(results)}개 문서")
     return results
@@ -152,21 +146,19 @@ def select_from_file_list(
     file_list = Path(file_list_path).read_text().strip().split("\n")
     file_list = [f.strip() for f in file_list if f.strip()]
 
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-
     results = []
-    for filename in file_list:
-        cursor = conn.execute(
-            "SELECT id, path, filename, page_count FROM documents WHERE filename = ?",
-            (filename,)
-        )
-        row = cursor.fetchone()
-        if row:
-            results.append(dict(row))
-        else:
-            logger.warning(f"DB에 없는 파일: {filename}")
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        for filename in file_list:
+            cursor = conn.execute(
+                "SELECT id, path, filename, page_count FROM documents WHERE filename = ?",
+                (filename,)
+            )
+            row = cursor.fetchone()
+            if row:
+                results.append(dict(row))
+            else:
+                logger.warning(f"DB에 없는 파일: {filename}")
 
-    conn.close()
     logger.info(f"선택 (file_list): {len(results)}개 문서")
     return results

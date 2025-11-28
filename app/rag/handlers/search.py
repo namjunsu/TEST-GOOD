@@ -11,13 +11,19 @@ Strangler Fig 패턴:
 
 import re
 import sqlite3
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+from app.core.errors import SearchError
 from app.core.logging import get_logger
-from app.core.errors import SearchError, DatabaseError
 from app.data.metadata_db import MetadataDB
 from config.constants import HandlerConfig
-from .base import BaseHandler, HandlerResponse
+
+from .base import BaseHandler
+from .response import (
+    build_file_path,
+    clean_text_preview,
+    format_title_from_filename,
+)
 
 if TYPE_CHECKING:
     from app.rag.pipeline import RAGPipeline
@@ -112,7 +118,7 @@ def extract_year_filter(query: str) -> Optional[str]:
     Returns:
         추출된 연도 문자열 (예: "2024"). 없으면 None
     """
-    year_match = re.search(r'(20\d{2})년?', query)
+    year_match = re.search(r"(20\d{2})년?", query)
     if year_match:
         year = year_match.group(1)
         logger.info(f"📅 연도 필터 적용: {year}")
@@ -189,49 +195,8 @@ def calculate_max_docs(query: str, drafter_filter: Optional[str]) -> int:
     return HandlerConfig.BULK_SEARCH_TOP_K if wants_list or drafter_filter else HandlerConfig.NORMAL_SEARCH_TOP_K
 
 
-def format_title_from_filename(filename: str) -> str:
-    """파일명에서 제목 추출
-
-    Args:
-        filename: 원본 파일명 (예: "2024-01-15_문서제목.pdf")
-
-    Returns:
-        날짜 접두사와 확장자가 제거된 제목
-    """
-    title = re.sub(r'^\d{4}-\d{2}-\d{2}_', '', filename)
-    title = re.sub(r'\.pdf$', '', title, flags=re.IGNORECASE)
-    return title.replace('_', ' ')
-
-
-def build_file_path(filename: str) -> str:
-    """파일명에서 경로 생성
-
-    Args:
-        filename: 파일명
-
-    Returns:
-        연도별 폴더 경로 (예: "docs/year_2024/파일.pdf")
-    """
-    year_match = re.search(r'(\d{4})-', filename)
-    if year_match:
-        year = year_match.group(1)
-        return f"docs/year_{year}/{filename}"
-    return f"docs/{filename}"
-
-
-def clean_text_preview(text: str) -> str:
-    """텍스트 미리보기에서 노이즈 제거
-
-    Args:
-        text: 원본 미리보기 텍스트
-
-    Returns:
-        [페이지 N], [OCR ...] 등이 제거된 정제된 텍스트
-    """
-    clean = re.sub(r'\[페이지\s*\d+\]', '', text)
-    clean = re.sub(r'\[OCR[^\]]*\]', '', clean)
-    clean = re.sub(r'\s+', ' ', clean).strip()
-    return clean
+# NOTE: format_title_from_filename, build_file_path, clean_text_preview 함수는
+# response.py에서 import하여 사용 (코드 중복 제거)
 
 
 # ============================================================================
@@ -290,7 +255,7 @@ class SearchHandler(BaseHandler):
             logger.info(f"🔍 검색 top_k: {search_top_k}")
 
             # 3. 검색 실행
-            if not hasattr(self.retriever, 'search'):
+            if not hasattr(self.retriever, "search"):
                 logger.error("❌ Retriever에 search 메서드가 없습니다")
                 return self._make_error_response("검색 기능을 사용할 수 없습니다.")
 
@@ -373,7 +338,7 @@ class SearchHandler(BaseHandler):
             logger.info(f"🎯 정밀 내용 검색: raw='{keywords}', expanded='{expanded_query}'")
 
             # 3. strict_content=True로 검색
-            if not hasattr(self.retriever, 'search'):
+            if not hasattr(self.retriever, "search"):
                 return self._make_error_response("검색 기능을 사용할 수 없습니다.")
 
             search_results = self.retriever.search(
@@ -453,7 +418,7 @@ class SearchHandler(BaseHandler):
             params.extend([f"{year_filter}%", f"{year_filter}%"])
 
         cursor = conn.execute(sql, params)
-        total_count = cursor.fetchone()['cnt']
+        total_count = cursor.fetchone()["cnt"]
 
         drafter_text = f"{drafter_filter} " if drafter_filter else ""
         year_text = f"{year_filter}년 " if year_filter else ""
@@ -566,11 +531,11 @@ class SearchHandler(BaseHandler):
                 f"   📋 {doc['doctype']} | 📅 {doc['date']} | ✍ {doc['drafter']}"
             )
 
-            if doc['claimed_total']:
+            if doc["claimed_total"]:
                 card_lines.append(f"   💰 {doc['claimed_total']:,}원")
 
-            if doc['text_preview']:
-                clean_text = clean_text_preview(doc['text_preview'])
+            if doc["text_preview"]:
+                clean_text = clean_text_preview(doc["text_preview"])
                 if clean_text:
                     preview = clean_text[:80]
                     card_lines.append(f"   📝 {preview}...")
@@ -759,7 +724,7 @@ class CostSumHandler(BaseHandler):
                     cost_docs.append((doc["claimed_total"], doc, filename))
 
             if not cost_docs:
-                logger.warning(f"검색된 문서에 비용 정보 없음")
+                logger.warning("검색된 문서에 비용 정보 없음")
                 return {
                     "mode": self.mode,
                     "text": "검색된 문서에 비용 합계 정보가 없습니다.",

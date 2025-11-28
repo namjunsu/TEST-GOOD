@@ -53,7 +53,7 @@ def normalize_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
         ing.pop("ocr_fallback", None)
 
     # ===== 2. Doctype 기본값 보정 =====
-    for name, rule in cfg.get("doctype", {}).items():
+    for _name, rule in cfg.get("doctype", {}).items():
         if isinstance(rule, dict):
             rule.setdefault("weight", 1.0)
             rule.setdefault("negative_keywords", [])

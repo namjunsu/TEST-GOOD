@@ -16,23 +16,23 @@ from typing import Any, Optional
 _KW = {
     "minutes": re.compile(
         r"(회의록|회의\s*결과|회의\s*일시|회의\s*장소|참석자|안건|결정\s*사항)",
-        re.IGNORECASE
+        re.IGNORECASE,
     ),
     "proc_eval": re.compile(
         r"(기술\s*검토서|구매\s*검토서|검토의\s*건|견적\s*비교|도입\s*검토|교체\s*검토|선정|권고|proposal)",
-        re.IGNORECASE
+        re.IGNORECASE,
     ),
     "consumables": re.compile(
         r"(소모품|consumable|구매\s*의\s*건|납품|발주)",
-        re.IGNORECASE
+        re.IGNORECASE,
     ),
     "repair": re.compile(
         r"(수리(?:\s*내역)?|불량|고장|장애|\bAS\b|A/S)",
-        re.IGNORECASE
+        re.IGNORECASE,
     ),
     "disposal": re.compile(
         r"(폐기|불용|SCRAP|disposal|폐기의\s*건)",
-        re.IGNORECASE
+        re.IGNORECASE,
     ),
 }
 
@@ -172,7 +172,7 @@ def build_prompt(
     drafter: str,
     display_date: str,
     context_text: str,
-    claimed_total: Optional[int]
+    claimed_total: Optional[int],
 ) -> str:
     """문서 종류별 맞춤 프롬프트 생성
 
@@ -531,7 +531,7 @@ def format_summary_output(
     filename: str,
     drafter: str,
     display_date: str,
-    claimed_total: Optional[int]
+    claimed_total: Optional[int],
 ) -> str:
     """JSON 결과를 마크다운으로 동적 렌더링 (존재하는 섹션만 표시)
 

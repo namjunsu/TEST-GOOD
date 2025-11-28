@@ -36,7 +36,7 @@ st.set_page_config(
     page_title="Channel A MEDIATECH RAG",
     page_icon="🌐",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
 # CSS 스타일 적용 (외부 파일에서 로드: main.css + sidebar.css)
@@ -157,7 +157,7 @@ def render_document_card(title, info):
                         "🔍 미리보기" if not current_state else "📖 미리보는중",
                         key=preview_key,
                         width="stretch",
-                        type="secondary" if not current_state else "primary"
+                        type="secondary" if not current_state else "primary",
                     ):
                         st.session_state[f"show_preview_{preview_key}"] = not current_state
                         st.rerun()
@@ -173,7 +173,7 @@ def render_document_card(title, info):
 
                 if file_path.exists():
                     try:
-                        with open(file_path, "rb") as f:
+                        with Path(file_path).open("rb") as f:
                             pdf_bytes = f.read()
 
                         # 파일 크기 확인
@@ -191,7 +191,7 @@ def render_document_card(title, info):
                             mime="application/pdf",
                             key=f"dl_{hashlib.md5(unique_id.encode()).hexdigest()}",
                             width="stretch",
-                            help=f"클릭하여 {info['filename']} 파일을 다운로드합니다"
+                            help=f"클릭하여 {info['filename']} 파일을 다운로드합니다",
                         )
                     except MemoryError:
                         st.error("💾 파일이 너무 커서 메모리가 부족합니다")
@@ -271,14 +271,14 @@ def generate_statistics_report(df, year=None, month=None):
             if len(month_df) > 0:
                 monthly_stats[month_str] = {
                     "total": len(month_df),
-                    "categories": month_df["category"].value_counts().to_dict()
+                    "categories": month_df["category"].value_counts().to_dict(),
                 }
 
     return {
         "total_docs": total_docs,
         "category_counts": category_counts,
         "drafter_counts": drafter_counts,
-        "monthly_stats": monthly_stats
+        "monthly_stats": monthly_stats,
     }
 
 

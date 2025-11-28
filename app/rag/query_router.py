@@ -200,7 +200,7 @@ class QueryRouter:
     def __init__(
         self,
         config_path: str = "config/document_processing.yaml",
-        query_parser: Optional[Any] = None
+        query_parser: Optional[Any] = None,
     ):
         """초기화
 
@@ -210,13 +210,13 @@ class QueryRouter:
         """
         self.config = self._load_config(config_path)
         self.qa_keywords = self.config.get("mode_routing", {}).get(
-            "qa_intent_keywords", []
+            "qa_intent_keywords", [],
         )
         self.preview_keywords = self.config.get("mode_routing", {}).get(
-            "preview_only_keywords", []
+            "preview_only_keywords", [],
         )
         filename_pattern_str = self.config.get("mode_routing", {}).get(
-            "filename_pattern", r"\S+\.pdf"
+            "filename_pattern", r"\S+\.pdf",
         )
 
         # 정규식 사전 컴파일 (Phase 1: 성능 개선)
@@ -235,7 +235,7 @@ class QueryRouter:
         logger.info(
             f"📋 모드 라우터 초기화: QA 키워드 {len(self.qa_keywords)}개, 미리보기 키워드 {len(self.preview_keywords)}개, "
             f"Low-conf delta={self.low_conf_delta}, min_hits={self.low_conf_min_hits}, "
-            f"QueryParser={'enabled' if query_parser else 'disabled'}"
+            f"QueryParser={'enabled' if query_parser else 'disabled'}",
         )
 
     def _load_config(self, config_path: str) -> dict[str, Any]:
@@ -253,7 +253,7 @@ class QueryRouter:
                 logger.warning(f"⚠️ 설정 파일 없음: {config_path}, 기본값 사용")
                 return {}
 
-            with open(config_file, "r", encoding="utf-8") as f:
+            with Path(config_file).open("r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
 
             # 하위 호환: v0 스키마를 v1로 정규화
@@ -286,7 +286,7 @@ class QueryRouter:
         if hits >= self.low_conf_min_hits and delta12 < self.low_conf_delta:
             logger.warning(
                 f"⚠️ Low-confidence 감지: delta12={delta12:.3f} < {self.low_conf_delta}, "
-                f"hits={hits} → LIST_FIRST 모드 활성화"
+                f"hits={hits} → LIST_FIRST 모드 활성화",
             )
             return True
 
@@ -306,7 +306,7 @@ class QueryRouter:
                 query=query,
                 mode=mode.value,
                 reason=reason,
-                confidence=confidence
+                confidence=confidence,
             )
         except Exception as e:
             # 모니터링 실패가 라우팅을 막으면 안 됨
@@ -352,7 +352,7 @@ class QueryRouter:
         query: str,
         params: dict[str, Any],
         has_filename: bool,
-        has_doc_reference: bool
+        has_doc_reference: bool,
     ) -> Optional[RouteDecision]:
         """존재 확인 질의 체크 ("문서에 X가 있는지", "YES/NO만 알려줘")
 
@@ -372,7 +372,7 @@ class QueryRouter:
                 confidence=0.95,
                 content_intent=True,
                 year=params.get("year"),
-                drafter=params.get("drafter")
+                drafter=params.get("drafter"),
             )
         else:
             logger.info("🎯 모드 결정: QA (존재 확인 질의)")
@@ -384,13 +384,13 @@ class QueryRouter:
                 confidence=0.9,
                 content_intent=True,
                 year=params.get("year"),
-                drafter=params.get("drafter")
+                drafter=params.get("drafter"),
             )
 
     def _check_content_only(
         self,
         query: str,
-        params: dict[str, Any]
+        params: dict[str, Any],
     ) -> Optional[RouteDecision]:
         """정밀 내용 검색 체크 ("내용에 X 들어간 문서만")
 
@@ -409,14 +409,14 @@ class QueryRouter:
             confidence=0.98,
             list_intent=True,
             year=params.get("year"),
-            drafter=params.get("drafter")
+            drafter=params.get("drafter"),
         )
 
     def _check_cost_intent(
         self,
         query: str,
         params: dict[str, Any],
-        intents: dict[str, bool]
+        intents: dict[str, bool],
     ) -> Optional[RouteDecision]:
         """비용 질의 체크 ("합계", "총액", "금액")
 
@@ -435,7 +435,7 @@ class QueryRouter:
             confidence=0.95,
             cost_intent=True,
             year=params.get("year"),
-            drafter=params.get("drafter")
+            drafter=params.get("drafter"),
         )
 
     def _check_document_mode(
@@ -445,7 +445,7 @@ class QueryRouter:
         intents: dict[str, bool],
         has_filename: bool,
         has_doc_reference: bool,
-        has_doc_type_keyword: bool
+        has_doc_type_keyword: bool,
     ) -> Optional[RouteDecision]:
         """DOCUMENT 모드 체크 (문서 참조 + 내용 요청)
 
@@ -491,7 +491,7 @@ class QueryRouter:
         params: dict[str, Any],
         intents: dict[str, bool],
         has_filename: bool,
-        has_doc_reference: bool
+        has_doc_reference: bool,
     ) -> Optional[RouteDecision]:
         """SEARCH 모드 체크 (목록/검색 의도)
 
@@ -532,7 +532,7 @@ class QueryRouter:
         self,
         query: str,
         params: dict[str, Any],
-        has_qa_intent: bool
+        has_qa_intent: bool,
     ) -> Optional[RouteDecision]:
         """QA 의도 키워드 체크
 
@@ -550,7 +550,7 @@ class QueryRouter:
             reason=reason,
             confidence=0.8,
             year=params.get("year"),
-            drafter=params.get("drafter")
+            drafter=params.get("drafter"),
         )
 
     def _default_qa_mode(self, query: str, params: dict[str, Any]) -> RouteDecision:
@@ -563,7 +563,7 @@ class QueryRouter:
             reason=reason,
             confidence=0.5,
             year=params.get("year"),
-            drafter=params.get("drafter")
+            drafter=params.get("drafter"),
         )
 
     # ============================================================================
@@ -643,7 +643,7 @@ class QueryRouter:
         has_doc_reference = self.DOC_REFERENCE_PATTERN.search(query) is not None
         has_doc_type_keyword = bool(re.search(
             r"(검토서|기안서|견적서|제안서|보고서|계획서|공문|발주서|납품서|영수증|검토의\s*건|구매\s*건|수리\s*건|교체\s*건)",
-            query, re.IGNORECASE
+            query, re.IGNORECASE,
         ))
         has_qa_intent = any(kw in query_lower for kw in self.qa_keywords)
 
@@ -708,7 +708,7 @@ class QueryRouter:
 
         if has_preview_intent:
             reason_parts.append(
-                f"preview_keywords({','.join(detected_preview_keywords)})"
+                f"preview_keywords({','.join(detected_preview_keywords)})",
             )
 
         if not reason_parts:
@@ -781,7 +781,7 @@ class QueryRouter:
         return decision
 
     def classify_mode_with_retrieval(
-        self, query: str, retrieval_results: Any = None
+        self, query: str, retrieval_results: Any = None,
     ) -> RouteDecision:
         """검색 결과를 고려한 모드 분류 (Phase 1: 검색 신뢰도 연동)
 
@@ -803,7 +803,7 @@ class QueryRouter:
             # DOCUMENT 또는 QA → SEARCH로 하향 조정 (안전한 목록 반환)
             if decision.mode in (QueryMode.DOCUMENT, QueryMode.QA):
                 logger.warning(
-                    f"⚠️ 낮은 검색 신뢰도 감지 → {decision.mode.value} → SEARCH(list_intent=True) 하향 조정"
+                    f"⚠️ 낮은 검색 신뢰도 감지 → {decision.mode.value} → SEARCH(list_intent=True) 하향 조정",
                 )
                 return RouteDecision(
                     mode=QueryMode.SEARCH,
@@ -819,7 +819,7 @@ class QueryRouter:
     def classify_mode_with_hits(
         self,
         query: str,
-        hits: Optional[list[dict[str, Any]]] = None
+        hits: Optional[list[dict[str, Any]]] = None,
     ) -> tuple[RouteDecision, Optional[list[dict[str, Any]]]]:
         """검색 결과(hits)를 고려한 모드 분류 + 단일 후보 확정 (2025-11-10: RouteDecision 반환)
 
@@ -843,7 +843,7 @@ class QueryRouter:
             ranked = sorted(
                 hits,
                 key=lambda h: _score(qn, _norm(h.get("title") or h.get("filename", ""))),
-                reverse=True
+                reverse=True,
             )[:2]  # 상위 2개만
 
             if ranked:
@@ -858,7 +858,7 @@ class QueryRouter:
                         mode=QueryMode.DOCUMENT,
                         reason="content_intent_single_candidate",
                         confidence=top_score,
-                        content_intent=True
+                        content_intent=True,
                     )
                     return decision, [top]
 

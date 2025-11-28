@@ -22,7 +22,7 @@ logger = get_logger(__name__)
 def get_file_hash(file_path: Path) -> str:
     """파일 해시 계산"""
     hasher = hashlib.md5()
-    with open(file_path, "rb") as f:
+    with Path(file_path).open("rb") as f:
         for chunk in iter(lambda: f.read(8192), b""):
             hasher.update(chunk)
     return hasher.hexdigest()[:8]
@@ -50,7 +50,7 @@ def find_year_from_filename(filename: str) -> str:
 def main():
     parser = argparse.ArgumentParser(description="중복 파일 자동 정리")
     parser.add_argument(
-        "--dry-run", action="store_true", help="실제 삭제 없이 목록만 출력"
+        "--dry-run", action="store_true", help="실제 삭제 없이 목록만 출력",
     )
     args = parser.parse_args()
 

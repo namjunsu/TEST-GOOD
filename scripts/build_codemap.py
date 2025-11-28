@@ -47,7 +47,7 @@ class PythonModuleAnalyzer:
     def _analyze_file(self, filepath: Path):
         """Analyze a single Python file."""
         try:
-            with open(filepath, "r", encoding="utf-8") as f:
+            with Path(filepath).open("r", encoding="utf-8") as f:
                 content = f.read()
 
             tree = ast.parse(content, str(filepath))
@@ -61,7 +61,7 @@ class PythonModuleAnalyzer:
                 "functions": [],
                 "classes": [],
                 "entry_point": False,
-                "docstring": ast.get_docstring(tree)
+                "docstring": ast.get_docstring(tree),
             }
 
             # Visit all nodes
@@ -84,7 +84,7 @@ class PythonModuleAnalyzer:
                         "line": node.lineno,
                         "docstring": ast.get_docstring(node),
                         "args": [arg.arg for arg in node.args.args],
-                        "is_async": False
+                        "is_async": False,
                     }
                     module_info["functions"].append(func_info)
 
@@ -94,7 +94,7 @@ class PythonModuleAnalyzer:
                         "line": node.lineno,
                         "docstring": ast.get_docstring(node),
                         "args": [arg.arg for arg in node.args.args],
-                        "is_async": True
+                        "is_async": True,
                     }
                     module_info["functions"].append(func_info)
 
@@ -104,7 +104,7 @@ class PythonModuleAnalyzer:
                         "line": node.lineno,
                         "docstring": ast.get_docstring(node),
                         "methods": [],
-                        "bases": []
+                        "bases": [],
                     }
 
                     # Get base classes
@@ -180,7 +180,7 @@ class PythonModuleAnalyzer:
 
 def generate_dot_graph(graph: nx.DiGraph, output_path: str):
     """Generate DOT format graph file."""
-    with open(output_path, "w") as f:
+    with Path(output_path).open("w") as f:
         f.write("digraph dependencies {\n")
         f.write('  rankdir="LR";\n')
         f.write("  node [shape=box, style=filled, fillcolor=lightblue];\n")
@@ -228,7 +228,7 @@ def main():
     # Save module metadata
     metadata_path = Path(args.out_dir) / "modules_metadata.json"
     print(f"Saving module metadata: {metadata_path}")
-    with open(metadata_path, "w") as f:
+    with Path(metadata_path).open("w") as f:
         json.dump(modules, f, indent=2, default=str)
 
     # Generate statistics
@@ -239,11 +239,11 @@ def main():
         "total_functions": sum(len(m["functions"]) for m in modules.values()),
         "total_classes": sum(len(m["classes"]) for m in modules.values()),
         "total_lines": sum(m["lines_of_code"] for m in modules.values()),
-        "isolated_modules": len([n for n in graph.nodes() if graph.degree(n) == 0])
+        "isolated_modules": len([n for n in graph.nodes() if graph.degree(n) == 0]),
     }
 
     stats_path = Path(args.out_dir) / "analysis_stats.json"
-    with open(stats_path, "w") as f:
+    with Path(stats_path).open("w") as f:
         json.dump(stats, f, indent=2)
 
     print("\nAnalysis Summary:")

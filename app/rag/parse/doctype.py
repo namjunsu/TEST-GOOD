@@ -65,7 +65,7 @@ class DocumentTypeClassifier:
             return self._get_default_config()
 
         try:
-            with open(cfg_file, "r", encoding="utf-8") as f:
+            with Path(cfg_file).open("r", encoding="utf-8") as f:
                 cfg = yaml.safe_load(f) or {}
 
             # 하위 호환: v0 스키마를 v1로 정규화
@@ -238,7 +238,7 @@ class DocumentTypeClassifier:
 
     # ---------- 매칭 유틸 ----------
     def _match_all(
-        self, patterns: list[re.Pattern], text: str
+        self, patterns: list[re.Pattern], text: str,
     ) -> list[tuple[int, int, str]]:
         """
         모든 패턴 매칭 수행
@@ -328,10 +328,10 @@ class DocumentTypeClassifier:
                     "priority": pri,
                     "filename_hits": len(name_hits),
                     "unique_kw": len(
-                        {r["pattern"] for r in reasons if r["source"] != "deny"}
+                        {r["pattern"] for r in reasons if r["source"] != "deny"},
                     ),
                     "reasons": reasons,
-                }
+                },
             )
 
         if not scored:
@@ -344,7 +344,7 @@ class DocumentTypeClassifier:
                 x["priority"],
                 -x["filename_hits"],
                 -x["unique_kw"],
-            )
+            ),
         )
         top = scored[0]
 

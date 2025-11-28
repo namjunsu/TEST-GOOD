@@ -56,7 +56,7 @@ class LLMSingleton:
                 # 설정 저장
                 cls._model_config = {
                     "model_path": model_path,
-                    "kwargs": kwargs.copy() if kwargs else {}
+                    "kwargs": kwargs.copy() if kwargs else {},
                 }
 
                 cls._instance = QwenLLM(model_path=model_path, **kwargs)
@@ -115,7 +115,7 @@ class LLMSingleton:
                 "idle_seconds": idle_time,
                 "avg_processing_time": cls._total_processing_time / cls._usage_count if cls._usage_count > 0 else 0.0,
                 "total_processing_time": cls._total_processing_time,
-                "model_config": cls._model_config.copy()
+                "model_config": cls._model_config.copy(),
             }
 
     @classmethod

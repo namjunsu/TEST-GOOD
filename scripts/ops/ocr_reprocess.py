@@ -52,45 +52,45 @@ def main():
         "--mode",
         choices=["poor", "average", "zero", "list"],
         required=True,
-        help="선택 모드 (poor: text<threshold, average: avg/page<threshold, zero: 0자, list: 파일목록)"
+        help="선택 모드 (poor: text<threshold, average: avg/page<threshold, zero: 0자, list: 파일목록)",
     )
     parser.add_argument(
         "--threshold",
         type=int,
         default=100,
-        help="임계값 (poor: 100, average: 300)"
+        help="임계값 (poor: 100, average: 300)",
     )
     parser.add_argument(
         "--file-list",
         type=str,
-        help="파일 목록 경로 (mode=list 필수)"
+        help="파일 목록 경로 (mode=list 필수)",
     )
     parser.add_argument(
         "--limit",
         type=int,
-        help="최대 처리 개수"
+        help="최대 처리 개수",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="시뮬레이션만 (실제 OCR/DB 업데이트 안 함)"
+        help="시뮬레이션만 (실제 OCR/DB 업데이트 안 함)",
     )
     parser.add_argument(
         "--db-path",
         default="metadata.db",
-        help="DB 파일 경로 (기본: metadata.db)"
+        help="DB 파일 경로 (기본: metadata.db)",
     )
     parser.add_argument(
         "--dpi",
         type=int,
         default=300,
-        help="OCR DPI (기본: 300)"
+        help="OCR DPI (기본: 300)",
     )
     parser.add_argument(
         "--engine",
         choices=["tesseract", "paddleocr"],
         default="paddleocr",
-        help="OCR 엔진 선택 (기본: paddleocr)"
+        help="OCR 엔진 선택 (기본: paddleocr)",
     )
 
     args = parser.parse_args()
@@ -144,7 +144,7 @@ def main():
                 pdf_path,
                 dpi=args.dpi,
                 engine=args.engine,
-                progress_callback=lambda page, total: logger.debug(f"    페이지 {page}/{total}")
+                progress_callback=lambda page, total: logger.debug(f"    페이지 {page}/{total}"),
             )
 
             # DB 업데이트

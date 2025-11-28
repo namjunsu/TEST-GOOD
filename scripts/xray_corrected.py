@@ -35,7 +35,7 @@ def load_coverage(coverage_xml):
                     coverage_data[filename] = {
                         "covered_lines": lines_covered,
                         "total_lines": lines_total,
-                        "coverage_percent": coverage_pct
+                        "coverage_percent": coverage_pct,
                     }
     except Exception as e:
         print(f"Error loading coverage: {e}")
@@ -148,13 +148,13 @@ def generate_report(classifications, coverage_data):
         "total": total,
         "used": used,
         "reachable": reachable,
-        "unused": unused
+        "unused": unused,
     }
 
 
 def save_csv(classifications, coverage_data, output_file):
     """Save classifications to CSV."""
-    with open(output_file, "w", newline="") as f:
+    with Path(output_file).open("w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["File", "Classification", "Coverage%", "Covered Lines", "Total Lines"])
 
@@ -173,7 +173,7 @@ def save_csv(classifications, coverage_data, output_file):
                     classification,
                     f"{cov_info['coverage_percent']:.1f}",
                     cov_info["covered_lines"],
-                    cov_info["total_lines"]
+                    cov_info["total_lines"],
                 ])
             else:
                 writer.writerow([filepath, classification, "0.0", 0, 0])
@@ -204,13 +204,13 @@ def main():
 
     # Save reachable files
     reachable = [f for f, c in classifications.items() if c in ["USED", "REACHABLE"]]
-    with open("reports/xray/reachable_modules_corrected.txt", "w") as f:
+    with Path("reports/xray/reachable_modules_corrected.txt").open("w") as f:
         f.write("\n".join(sorted(reachable)))
     print("Saved reachable list: reports/xray/reachable_modules_corrected.txt")
 
     # Save unused files (archive candidates)
     unused = [f for f, c in classifications.items() if c == "UNUSED"]
-    with open("reports/xray/archive_candidates.txt", "w") as f:
+    with Path("reports/xray/archive_candidates.txt").open("w") as f:
         f.write("\n".join(sorted(unused)))
     print("Saved archive candidates: reports/xray/archive_candidates.txt")
 

@@ -82,7 +82,7 @@ def connect_metadata(
     # Get current journal mode
     journal_mode = conn.execute("PRAGMA journal_mode;").fetchone()[0]
     logger.info(
-        f"SQLite connected: {path}, journal_mode={journal_mode}, sync={sync_mode}, cache={cache_size}KB"
+        f"SQLite connected: {path}, journal_mode={journal_mode}, sync={sync_mode}, cache={cache_size}KB",
     )
 
     return conn
@@ -169,5 +169,5 @@ def _cleanup_stale_wal(db_path: str, max_age_hours: int = 24) -> None:
         age_hours = (time.time() - os.path.getmtime(wal_path)) / 3600
         logger.warning(
             f"Non-empty WAL/SHM detected: {wal_path} "
-            f"(size={size} bytes, age={age_hours:.1f}h) - manual review recommended"
+            f"(size={size} bytes, age={age_hours:.1f}h) - manual review recommended",
         )

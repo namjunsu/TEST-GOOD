@@ -61,13 +61,13 @@ class SearchQualityLogger:
             log_entry["top3"] = [
                 {
                     "filename": r.get("filename", "Unknown")[:50],
-                    "score": round(r.get("score", 0.0), 2)
+                    "score": round(r.get("score", 0.0), 2),
                 }
                 for r in results[:3]
             ]
 
         # JSONL 파일에 추가
-        with open(self.log_file, "a", encoding="utf-8") as f:
+        with Path(self.log_file).open("a", encoding="utf-8") as f:
             f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
 
     def _assess_quality(self, score_stats: dict[str, Any],
@@ -114,7 +114,7 @@ class SearchQualityLogger:
             return []
 
         logs = []
-        with open(self.log_file, "r", encoding="utf-8") as f:
+        with Path(self.log_file).open("r", encoding="utf-8") as f:
             for line in f:
                 try:
                     logs.append(json.loads(line))
@@ -155,5 +155,5 @@ class SearchQualityLogger:
             "quality_distribution": quality_counts,
             "avg_hits": round(avg_hits, 2),
             "avg_top1_score": round(avg_top1, 2),
-            "low_confidence_ratio": quality_counts.get("LOW_CONFIDENCE", 0) / len(logs)
+            "low_confidence_ratio": quality_counts.get("LOW_CONFIDENCE", 0) / len(logs),
         }

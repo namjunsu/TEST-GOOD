@@ -47,7 +47,7 @@ class RoutingMonitor:
         query: str,
         mode: str,
         reason: str,
-        confidence: float = 1.0
+        confidence: float = 1.0,
     ) -> None:
         """라우팅 결정 기록
 
@@ -62,12 +62,12 @@ class RoutingMonitor:
             query=query[:200],  # 길이 제한
             mode=mode,
             reason=reason,
-            confidence=confidence
+            confidence=confidence,
         )
 
         # JSONL 형식으로 저장 (한 줄에 하나씩)
         try:
-            with open(self.log_file, "a", encoding="utf-8") as f:
+            with Path(self.log_file).open("a", encoding="utf-8") as f:
                 f.write(json.dumps(asdict(decision), ensure_ascii=False) + "\n")
         except Exception as e:
             logger.error(f"라우팅 로그 기록 실패: {e}")
@@ -76,7 +76,7 @@ class RoutingMonitor:
         if confidence < 0.5:
             logger.warning(
                 f"⚠️ 낮은 신뢰도 라우팅: confidence={confidence:.2f}, "
-                f"mode={mode}, query='{query[:50]}...'"
+                f"mode={mode}, query='{query[:50]}...'",
             )
 
     def get_daily_stats(self) -> dict[str, Any]:
@@ -86,7 +86,7 @@ class RoutingMonitor:
 
         try:
             decisions = []
-            with open(self.log_file, "r", encoding="utf-8") as f:
+            with Path(self.log_file).open("r", encoding="utf-8") as f:
                 for line in f:
                     decisions.append(json.loads(line))
 
@@ -104,7 +104,7 @@ class RoutingMonitor:
                 {
                     "query": d["query"],
                     "mode": d["mode"],
-                    "confidence": d["confidence"]
+                    "confidence": d["confidence"],
                 }
                 for d in decisions
                 if d["confidence"] < 0.7
@@ -115,7 +115,7 @@ class RoutingMonitor:
                 "mode_distribution": dict(mode_counts),
                 "avg_confidence": round(avg_confidence, 3),
                 "low_confidence_count": len(low_conf_queries),
-                "low_confidence_queries": low_conf_queries[:10]  # 최대 10개
+                "low_confidence_queries": low_conf_queries[:10],  # 최대 10개
             }
 
         except Exception as e:
@@ -142,7 +142,7 @@ class RoutingMonitor:
                 log_file = self.log_dir / f"routing_{date}.jsonl"
 
                 if log_file.exists():
-                    with open(log_file, "r", encoding="utf-8") as f:
+                    with Path(log_file).open("r", encoding="utf-8") as f:
                         for line in f:
                             all_queries.append(json.loads(line))
 
@@ -160,7 +160,7 @@ class RoutingMonitor:
                         "query": query,
                         "count": count,
                         "current_mode": "qa",
-                        "suggestion": "검색 패턴에 추가 검토 필요"
+                        "suggestion": "검색 패턴에 추가 검토 필요",
                     })
 
             return suggestions

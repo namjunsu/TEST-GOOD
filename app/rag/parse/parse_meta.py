@@ -55,7 +55,7 @@ class MetaParser:
         logger.info(
             f"📋 메타 파서 초기화: date_priority={len(self.date_priority)}, "
             f"author_fields={len(self.author_fields)}, stoplist={len(self.author_stoplist_values)}, "
-            f"category_rules={len(self.category_rules)}"
+            f"category_rules={len(self.category_rules)}",
         )
 
     def _update_config_attrs(self):
@@ -71,12 +71,12 @@ class MetaParser:
 
         # 작성자 필드 우선순위
         self.author_fields = metadata_config.get(
-            "author_fields", ["기안자", "작성자", "보고자", "검토자"]
+            "author_fields", ["기안자", "작성자", "보고자", "검토자"],
         )
 
         # 부서 필드 우선순위
         self.department_fields = metadata_config.get(
-            "department_fields", ["기안부서", "소속", "부서"]
+            "department_fields", ["기안부서", "소속", "부서"],
         )
 
         # 작성자 Stoplist (기안자 오검출 방지)
@@ -213,7 +213,7 @@ class MetaParser:
                 self._last_load_ts = time.time()
                 return {}
 
-            with open(config_path, "r", encoding="utf-8") as f:
+            with Path(config_path).open("r", encoding="utf-8") as f:
                 cfg = yaml.safe_load(f) or {}
 
             # 하위 호환: v0 스키마를 v1로 정규화
@@ -389,7 +389,7 @@ class MetaParser:
             return date_str
 
     def classify_category(
-        self, title: str = "", content: str = "", filename: str = ""
+        self, title: str = "", content: str = "", filename: str = "",
     ) -> tuple[str, str]:
         """카테고리 분류 (근거 포함)
 
@@ -454,7 +454,7 @@ class MetaParser:
         return self.default_category, "default"
 
     def parse(
-        self, metadata: dict[str, Any], title: str = "", content: str = ""
+        self, metadata: dict[str, Any], title: str = "", content: str = "",
     ) -> dict[str, Any]:
         """메타데이터 파싱 및 표준화 (v1.5)
 
@@ -536,7 +536,7 @@ class MetaParser:
         """
         lines = []
         lines.append(
-            f"**기안자/부서:** {parsed_meta['drafter']} / {parsed_meta['department']}"
+            f"**기안자/부서:** {parsed_meta['drafter']} / {parsed_meta['department']}",
         )
         lines.append(f"**기안일자 / 시행일자:** {parsed_meta['date_detail']}")
         lines.append(f"**유형/카테고리:** {parsed_meta['category']}")

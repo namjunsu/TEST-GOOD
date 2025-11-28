@@ -205,7 +205,7 @@ section[data-testid="stSidebar"] div[data-testid="stAlert"] {{
 
 
 def display_document_list(
-    filtered_df: pd.DataFrame, df: pd.DataFrame, prefix: str = "doc"
+    filtered_df: pd.DataFrame, df: pd.DataFrame, prefix: str = "doc",
 ) -> pd.DataFrame:
     """문서 리스트를 표시하는 헬퍼 함수 (위젯 최소화)
 
@@ -232,7 +232,7 @@ def display_document_list(
 
     # 연도별 그룹화 (정수형 year_norm 기준)
     years = sorted(
-        [y for y in filtered_df["year_norm"].unique() if pd.notna(y)], reverse=True
+        [y for y in filtered_df["year_norm"].unique() if pd.notna(y)], reverse=True,
     )
     if len(years) == 0 and filtered_df["year_norm"].isna().any():
         years = [0]  # 미상 전용 그룹
@@ -385,7 +385,7 @@ def render_sidebar_library(rag_instance) -> None:
                         with reindexing_lock(timeout_sec=3.0):
                             with st.spinner(
                                 "전체 재인덱싱 중..."
-                                + (" (Drop & Rebuild)" if drop_rebuild else "")
+                                + (" (Drop & Rebuild)" if drop_rebuild else ""),
                             ):
                                 st.info("🔒 락 획득, 안전 재색인 시작")
 
@@ -406,7 +406,7 @@ def render_sidebar_library(rag_instance) -> None:
                                                 path TEXT,
                                                 PRIMARY KEY (filename)
                                             )
-                                        """
+                                        """,
                                         )
                                         conn.commit()
                                         conn.close()
@@ -422,7 +422,7 @@ def render_sidebar_library(rag_instance) -> None:
 
                                 Path("var").mkdir(exist_ok=True)
                                 Path("var/last_full_reindex.txt").write_text(
-                                    datetime.now().isoformat()
+                                    datetime.now().isoformat(),
                                 )
 
                                 if "rag" in st.session_state:
@@ -446,7 +446,7 @@ def render_sidebar_library(rag_instance) -> None:
                     FROM documents
                     ORDER BY created_at DESC
                     LIMIT 10
-                """
+                """,
                 ).fetchall()
                 conn.close()
 
@@ -610,7 +610,7 @@ def render_sidebar_library(rag_instance) -> None:
             if not df.empty and "year_norm" in df.columns:
                 # year_norm 기반으로 연도 목록 추출 (성능 개선)
                 years = sorted(
-                    [y for y in df["year_norm"].unique() if pd.notna(y)], reverse=True
+                    [y for y in df["year_norm"].unique() if pd.notna(y)], reverse=True,
                 )
                 if len(years) == 0 and df["year_norm"].isna().any():
                     years = [0]  # 미상 전용
@@ -681,5 +681,5 @@ def render_sidebar_library(rag_instance) -> None:
     **모델**: {settings.RAG_MODEL}
     **문서**: {len(df)}개
     **기간**: {year_range}
-    """
+    """,
     )

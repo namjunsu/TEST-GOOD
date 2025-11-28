@@ -12,5 +12,5 @@ __all__ = [
     "PDFViewer",
     "render_sidebar_library",
     "render_chat_interface",
-    "render_document_preview"
+    "render_document_preview",
 ]

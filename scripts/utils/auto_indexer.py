@@ -52,19 +52,19 @@ class AutoIndexer:
         """기존 인덱스 로드"""
         if self.index_file.exists():
             try:
-                with open(self.index_file, "r", encoding="utf-8") as f:
+                with Path(self.index_file).open("r", encoding="utf-8") as f:
                     return json.load(f)
             except Exception:
                 pass
         return {
             "files": {},
-            "last_update": None
+            "last_update": None,
         }
 
     def _save_index(self):
         """인덱스 저장"""
         self.file_index["last_update"] = datetime.now().isoformat()
-        with open(self.index_file, "w", encoding="utf-8") as f:
+        with Path(self.index_file).open("w", encoding="utf-8") as f:
             json.dump(self.file_index, f, indent=2, ensure_ascii=False)
 
     def _get_file_hash(self, file_path: Path) -> str:
@@ -83,7 +83,7 @@ class AutoIndexer:
         file_size = file_path.stat().st_size
         hasher = hashlib.md5()
 
-        with open(file_path, "rb") as f:
+        with Path(file_path).open("rb") as f:
             if file_size > 10 * 1024 * 1024:  # 10MB 이상
                 # 처음, 중간, 끝 부분만 샘플링
                 f.seek(0)
@@ -211,7 +211,7 @@ class AutoIndexer:
                                 "hash": file_hash,
                                 "size": stat.st_size,
                                 "modified": stat.st_mtime,
-                                "added": old_info.get("added", datetime.now().isoformat())
+                                "added": old_info.get("added", datetime.now().isoformat()),
                             }
                             file_count += 1
 
@@ -252,7 +252,7 @@ class AutoIndexer:
             "new": new_files,
             "modified": modified_files,
             "deleted": deleted_files,
-            "total": len(current_files)
+            "total": len(current_files),
         }
 
     def _trigger_indexing(self, files: list):
@@ -293,7 +293,7 @@ class AutoIndexer:
             "total_files": len(pdf_files) + len(txt_files),
             "pdf_count": len(pdf_files),
             "txt_count": len(txt_files),
-            "last_update": self.file_index.get("last_update", "Never")
+            "last_update": self.file_index.get("last_update", "Never"),
         }
 
     def start_monitoring(self):
@@ -352,7 +352,7 @@ class AutoIndexer:
             "timestamp": datetime.now().isoformat(),
             "file": file_path,
             "error": str(error),
-            "retry_count": self.failed_files[file_path][0]
+            "retry_count": self.failed_files[file_path][0],
         })
 
         # 이력 크기 제한
@@ -372,7 +372,7 @@ class AutoIndexer:
             "timestamp": datetime.now().isoformat(),
             "type": "indexing_error",
             "files_count": len(files),
-            "error": str(error)
+            "error": str(error),
         })
 
         # 복구 전략
@@ -414,7 +414,7 @@ class AutoIndexer:
                 "hash": file_hash,
                 "size": stat.st_size,
                 "modified": stat.st_mtime,
-                "added": datetime.now().isoformat()
+                "added": datetime.now().isoformat(),
             }
 
     def _retry_failed_files(self):
@@ -446,7 +446,7 @@ class AutoIndexer:
             "failed_files_count": len(self.failed_files),
             "failed_files": list(self.failed_files.keys())[:10],  # 처음 10개만
             "recent_errors": self.error_history[-5:] if self.error_history else [],
-            "total_errors": len(self.error_history)
+            "total_errors": len(self.error_history),
         }
 
     def _purge_missing_files_from_index(self) -> int:

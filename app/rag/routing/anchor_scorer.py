@@ -9,6 +9,7 @@
 - proximity 보너스 (키워드 간 거리)
 """
 
+import pathlib
 import re
 import threading
 from typing import Any, Optional
@@ -50,7 +51,7 @@ class AnchorScorer:
     def _load_config(self) -> dict[str, Any]:
         """설정 파일 로드"""
         try:
-            with open(self.config_path, "r", encoding="utf-8") as f:
+            with pathlib.Path(self.config_path).open("r", encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}
         except Exception as e:
             logger.warning(f"⚠️ 설정 로드 실패: {e}, 기본값 사용")
@@ -81,16 +82,16 @@ class AnchorScorer:
                 "allow": self._compile_patterns(profile_config.get("allow", [])),
                 "deny": self._compile_patterns(profile_config.get("deny", [])),
                 "boost_high": self._compile_patterns(
-                    profile_config.get("boost", {}).get("high", [])
+                    profile_config.get("boost", {}).get("high", []),
                 ),
                 "boost_medium": self._compile_patterns(
-                    profile_config.get("boost", {}).get("medium", [])
+                    profile_config.get("boost", {}).get("medium", []),
                 ),
                 "boost_vendor": self._compile_patterns(
-                    profile_config.get("boost", {}).get("vendor", [])
+                    profile_config.get("boost", {}).get("vendor", []),
                 ),
                 "weights": profile_config.get(
-                    "weights", {"high": 3.0, "medium": 1.5, "vendor": 1.0}
+                    "weights", {"high": 3.0, "medium": 1.5, "vendor": 1.0},
                 ),
                 "deny_penalty": profile_config.get("deny_penalty", -4.0),
                 "pass_threshold": profile_config.get("pass_threshold", 1.0),
@@ -111,7 +112,7 @@ class AnchorScorer:
         return compiled
 
     def _check_allow(
-        self, text: str, patterns: list[re.Pattern]
+        self, text: str, patterns: list[re.Pattern],
     ) -> tuple[bool, list[str]]:
         """
         allow 패턴 체크 (하나라도 매칭 필수)
@@ -131,7 +132,7 @@ class AnchorScorer:
         return (len(matched) > 0, matched)
 
     def _check_deny(
-        self, text: str, patterns: list[re.Pattern]
+        self, text: str, patterns: list[re.Pattern],
     ) -> tuple[bool, list[str]]:
         """
         deny 패턴 체크
@@ -188,7 +189,7 @@ class AnchorScorer:
         return score
 
     def _calculate_proximity(
-        self, text: str, pairs: list[dict[str, Any]]
+        self, text: str, pairs: list[dict[str, Any]],
     ) -> float:
         """
         proximity 보너스 계산 (키워드 간 거리)
@@ -223,7 +224,7 @@ class AnchorScorer:
         return bonus
 
     def score_document(
-        self, text: str, profile_name: str
+        self, text: str, profile_name: str,
     ) -> Optional[dict[str, Any]]:
         """
         문서에 대해 프로파일별 앵커 점수 계산
@@ -284,7 +285,7 @@ class AnchorScorer:
 
         # 4. proximity 보너스
         proximity_bonus = self._calculate_proximity(
-            text_norm, profile["proximity_pairs"]
+            text_norm, profile["proximity_pairs"],
         )
 
         # 5. 최종 점수

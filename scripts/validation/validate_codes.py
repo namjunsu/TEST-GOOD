@@ -52,7 +52,7 @@ def validate_test_case(
     retriever: HybridRetriever,
     test_case: dict[str, Any],
     db_conn,
-    top_k: int = 10
+    top_k: int = 10,
 ) -> dict[str, Any]:
     """단일 테스트 케이스 검증 (norm_code 기준)
 
@@ -119,7 +119,7 @@ def validate_test_case(
         "latency_ms": latency_ms,
         "passed": passed,
         "results_count": len(results),
-        "top3_docs": [r.get("doc_id", "")[:60] for r in top3]
+        "top3_docs": [r.get("doc_id", "")[:60] for r in top3],
     }
 
 
@@ -142,7 +142,7 @@ def run_validation_suite(suite_path: str = "suites/model_codes.yaml") -> dict[st
         print(f"❌ 테스트 스위트 파일 없음: {suite_path}")
         return {"error": "Suite file not found"}
 
-    with open(suite_file, "r", encoding="utf-8") as f:
+    with Path(suite_file).open("r", encoding="utf-8") as f:
         suite = yaml.safe_load(f)
 
     test_cases = suite.get("test_cases", [])
@@ -194,7 +194,7 @@ def run_validation_suite(suite_path: str = "suites/model_codes.yaml") -> dict[st
         "hit_at_3": hit_at_3_rate >= criteria.get("hit_at_3_min", 0.9),
         "mrr_at_10": mrr_at_10 >= criteria.get("mrr_at_10_min", 0.8),
         "citation_rate": citation_rate >= criteria.get("citation_rate_min", 1.0),
-        "p95_latency": p95_latency < criteria.get("p95_latency_max_ms", 5000)
+        "p95_latency": p95_latency < criteria.get("p95_latency_max_ms", 5000),
     }
 
     # 결과 요약 출력
@@ -237,7 +237,7 @@ def run_validation_suite(suite_path: str = "suites/model_codes.yaml") -> dict[st
         "p95_latency_ms": p95_latency,
         "criteria_passed": criteria_passed,
         "all_passed": all_passed,
-        "test_results": results
+        "test_results": results,
     }
 
 

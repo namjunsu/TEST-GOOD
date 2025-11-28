@@ -56,7 +56,7 @@ class DocumentLoader:
         "영상", "카메라", "조명", "중계", "DVR", "스튜디오", "송출",
         "구매", "수리", "교체", "검토", "폐기",
         "방송기술팀", "영상취재팀", "영상제작팀", "기술관리팀",
-        "그래픽디자인파트"  # '명상제작팀' 제거 (오타로 보임)
+        "그래픽디자인파트",  # '명상제작팀' 제거 (오타로 보임)
     ]
 
     def __init__(self, metadata_db: str = "metadata.db"):
@@ -129,7 +129,7 @@ class DocumentLoader:
         self,
         filename: str,
         db_drafter: Optional[str],
-        department: Optional[str] = None
+        department: Optional[str] = None,
     ) -> str:
         """기안자 결정 (우선순위 적용)
 
@@ -261,7 +261,7 @@ class DocumentLoader:
                     "keywords": keywords or "",
                     "page_count": page_count or 0,
                     "created_at": created_at or "",
-                    "display_date": display_date or date or ""
+                    "display_date": display_date or date or "",
                 })
 
             # 4. DataFrame 생성 및 정렬
@@ -271,7 +271,7 @@ class DocumentLoader:
                 df = df.sort_values(
                     ["year", "filename"],
                     ascending=[False, True],
-                    na_position="last"
+                    na_position="last",
                 )
 
             # 5. 통계 출력

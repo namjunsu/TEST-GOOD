@@ -27,7 +27,7 @@ except Exception as e:
     DB_PATHS = {
         "metadata": "metadata.db",
         "everything_index": "everything_index.db",
-        "file_index": "file_index.json"
+        "file_index": "file_index.json",
     }
     PROJECT_ROOT = Path(__file__).resolve().parents[1]
     logger.info(f"[IndexConfig] 폴백 설정 사용 - PROJECT_ROOT: {PROJECT_ROOT}")

@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 logging.basicConfig(
     level=logging.INFO,
-    format="[%(levelname)s] %(message)s"
+    format="[%(levelname)s] %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ def _load_text_from_metadata_db(filename: str, db_conn) -> str | None:
         cursor = db_conn.cursor()
         cursor.execute(
             "SELECT text_preview FROM documents WHERE filename = ?",
-            (filename,)
+            (filename,),
         )
         result = cursor.fetchone()
         if result and result[0]:
@@ -100,7 +100,7 @@ def reindex_bm25(source_dir: Path, output_path: Path) -> bool:
                     "filename": row[1],
                     "date": row[2],
                     "drafter": row[3],
-                    "category": row[4]
+                    "category": row[4],
                 })
         except Exception as e:
             logger.error(f"metadata.db 읽기 실패: {e}")
@@ -188,7 +188,7 @@ def reindex_bm25(source_dir: Path, output_path: Path) -> bool:
                     "id": doc_id_str,  # DB PK를 문자열로 변환
                     "date": doc_meta.get("date", ""),
                     "drafter": doc_meta.get("drafter", ""),
-                    "category": doc_meta.get("category", "pdf")
+                    "category": doc_meta.get("category", "pdf"),
                 })
             except Exception as e:
                 logger.warning(f"처리 실패: {filename} - {e}")
@@ -199,7 +199,7 @@ def reindex_bm25(source_dir: Path, output_path: Path) -> bool:
                 metadatas.append({
                     "filename": filename,
                     "path": str(pdf_path),
-                    "id": doc_id_str  # DB PK를 문자열로 변환
+                    "id": doc_id_str,  # DB PK를 문자열로 변환
                 })
                 missing_count += 1
 
@@ -348,7 +348,7 @@ def main():
     result = subprocess.run([
         sys.executable,
         "scripts/check_index_consistency.py",
-        "--report", args.report
+        "--report", args.report,
     ])
 
     if result.returncode == 0:

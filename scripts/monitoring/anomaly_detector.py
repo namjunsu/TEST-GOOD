@@ -30,7 +30,7 @@ class AnomalyDetector:
     def _load_config(self) -> dict:
         """알림 설정 로드"""
         if self.config_path.exists():
-            with open(self.config_path, "r") as f:
+            with Path(self.config_path).open("r") as f:
                 return json.load(f)
         else:
             # 기본 설정
@@ -39,23 +39,23 @@ class AnomalyDetector:
                     "drafter_missing_rate": 0.2,  # 20% 이상
                     "category_missing_rate": 0.5,  # 50% 이상
                     "sync_diff_count": 10,  # 10개 이상 불일치
-                    "health_score": 60  # 60점 이하
+                    "health_score": 60,  # 60점 이하
                 },
                 "cooldown_hours": 24,  # 동일 알림 재발송 방지 (24시간)
-                "enabled": True
+                "enabled": True,
             }
 
     def _load_alert_history(self) -> dict:
         """이전 알림 기록 로드"""
         if self.last_alert_file.exists():
-            with open(self.last_alert_file, "r") as f:
+            with Path(self.last_alert_file).open("r") as f:
                 return json.load(f)
         return {}
 
     def _save_alert_history(self):
         """알림 기록 저장"""
         self.last_alert_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.last_alert_file, "w") as f:
+        with Path(self.last_alert_file).open("w") as f:
             json.dump(self.alert_history, f, indent=2)
 
     def detect_anomalies(self) -> list[dict]:
@@ -86,7 +86,7 @@ class AnomalyDetector:
                 "message": f"기안자 누락률: {drafter_missing_rate * 100:.1f}% ({missing_drafters}/{total_docs})",
                 "value": drafter_missing_rate,
                 "threshold": self.thresholds["drafter_missing_rate"],
-                "action": "scripts/fix_missing_drafters.py 실행 필요"
+                "action": "scripts/fix_missing_drafters.py 실행 필요",
             })
 
         # 카테고리 누락
@@ -105,7 +105,7 @@ class AnomalyDetector:
                 "message": f"카테고리 누락률: {category_missing_rate * 100:.1f}% ({missing_category}/{total_docs})",
                 "value": category_missing_rate,
                 "threshold": self.thresholds["category_missing_rate"],
-                "action": "scripts/auto_categorize_documents.py 실행 필요"
+                "action": "scripts/auto_categorize_documents.py 실행 필요",
             })
 
         conn.close()
@@ -117,7 +117,7 @@ class AnomalyDetector:
 
         # 3. 건강도 점수 확인
         health_score = self._calculate_health_score(
-            total_docs, missing_drafters, missing_category
+            total_docs, missing_drafters, missing_category,
         )
 
         if health_score < self.thresholds["health_score"]:
@@ -128,7 +128,7 @@ class AnomalyDetector:
                 "message": f"메타데이터 건강도: {health_score:.1f}/100",
                 "value": health_score,
                 "threshold": self.thresholds["health_score"],
-                "action": "전체 메타데이터 점검 필요"
+                "action": "전체 메타데이터 점검 필요",
             })
 
         # 4. 급격한 변화 감지
@@ -148,7 +148,7 @@ class AnomalyDetector:
         # 인덱스 문서 수
         index_count = 0
         try:
-            with open("var/index/bm25_index.pkl", "rb") as f:
+            with Path("var/index/bm25_index.pkl").open("rb") as f:
                 idx = pickle.load(f)
                 if "metadata" in idx:
                     index_count = len(idx["metadata"])
@@ -164,7 +164,7 @@ class AnomalyDetector:
                 "message": f"DB: {db_count}개, Index: {index_count}개 (차이: {diff}개)",
                 "value": diff,
                 "threshold": self.thresholds["sync_diff_count"],
-                "action": "scripts/reindex_atomic.py 즉시 실행 필요"
+                "action": "scripts/reindex_atomic.py 즉시 실행 필요",
             }
         return None
 
@@ -183,14 +183,14 @@ class AnomalyDetector:
         try:
             current_report_path = Path("reports/metadata/latest.json")
             if current_report_path.exists():
-                with open(current_report_path, "r") as f:
+                with Path(current_report_path).open("r") as f:
                     current = json.load(f)
 
                 # 이전 보고서 찾기
                 reports_dir = Path("reports/metadata")
                 report_files = sorted(reports_dir.glob("metadata_validation_*.json"))
                 if len(report_files) >= 2:
-                    with open(report_files[-2], "r") as f:
+                    with Path(report_files[-2]).open("r") as f:
                         previous = json.load(f)
 
                     # 기안자 누락 급증
@@ -205,7 +205,7 @@ class AnomalyDetector:
                             "message": f"기안자 누락: {prev_missing} → {curr_missing} (+{curr_missing - prev_missing})",
                             "value": curr_missing - prev_missing,
                             "threshold": prev_missing * 1.5,
-                            "action": "최근 변경사항 확인 필요"
+                            "action": "최근 변경사항 확인 필요",
                         })
         except Exception as e:
             print(f"급격한 변화 감지 실패: {e}")
@@ -304,9 +304,9 @@ class AnomalyDetector:
                     "type": "header",
                     "text": {
                         "type": "plain_text",
-                        "text": "🚨 메타데이터 이상 감지"
-                    }
-                }
+                        "text": "🚨 메타데이터 이상 감지",
+                    },
+                },
             ]
 
             for anomaly in anomalies:
@@ -315,8 +315,8 @@ class AnomalyDetector:
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"{emoji} *{anomaly['title']}*\n{anomaly['message']}\n_조치: {anomaly['action']}_"
-                    }
+                        "text": f"{emoji} *{anomaly['title']}*\n{anomaly['message']}\n_조치: {anomaly['action']}_",
+                    },
                 })
 
             payload = {"blocks": blocks}
@@ -410,12 +410,12 @@ def main():
     status = {
         "last_check": datetime.now().isoformat(),
         "anomalies_found": len(anomalies),
-        "anomalies": anomalies
+        "anomalies": anomalies,
     }
 
     status_file = Path("var/anomaly_status.json")
     status_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(status_file, "w") as f:
+    with Path(status_file).open("w") as f:
         json.dump(status, f, indent=2)
 
 

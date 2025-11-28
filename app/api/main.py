@@ -37,14 +37,14 @@ LOG_JSON = os.getenv("LOG_JSON", "false").lower() == "true"
 setup_logging(
     log_dir=str(settings.LOG_DIR),
     log_level=LOG_LEVEL,
-    structured=LOG_JSON
+    structured=LOG_JSON,
 )
 log = get_logger("app.api")
 
 app = FastAPI(
     title="AI-CHAT API",
     description="RAG 시스템 백엔드 API",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 # CORS 설정 (Streamlit과 통신)
@@ -74,7 +74,7 @@ async def startup_event():
             "log_level": LOG_LEVEL,
             "structured_logging": LOG_JSON,
             "docs_dir": str(settings.DOCS_DIR),
-        }
+        },
     )
 
 
@@ -96,7 +96,7 @@ async def request_logging_middleware(request: Request, call_next):
                 "method": request.method,
                 "path": request.url.path,
                 "client": request.client.host if request.client else "unknown",
-            }
+            },
         )
 
         try:
@@ -110,7 +110,7 @@ async def request_logging_middleware(request: Request, call_next):
                     "path": request.url.path,
                     "status": response.status_code,
                     "latency_ms": latency_ms,
-                }
+                },
             )
 
             # 응답 헤더에 req_id/trace_id 추가 (프론트엔드 디버깅용)
@@ -128,7 +128,7 @@ async def request_logging_middleware(request: Request, call_next):
                     "path": request.url.path,
                     "latency_ms": latency_ms,
                 },
-                exc_info=True
+                exc_info=True,
             )
             raise
 
@@ -302,10 +302,10 @@ def log_file_access(filename: str, action: str, query: str = ""):
             "timestamp": datetime.now().isoformat(),
             "filename": filename,
             "action": action,
-            "query": query
+            "query": query,
         }
 
-        with open(log_file, "a", encoding="utf-8") as f:
+        with Path(log_file).open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except Exception as e:
         print(f"로깅 실패: {e}")
@@ -327,7 +327,7 @@ def health():
             commit = subprocess.check_output(
                 ["git", "rev-parse", "--short", "HEAD"],
                 cwd=os.path.dirname(__file__),
-                stderr=subprocess.DEVNULL
+                stderr=subprocess.DEVNULL,
             ).decode().strip()
         except (subprocess.CalledProcessError, FileNotFoundError, OSError):
             pass
@@ -337,7 +337,7 @@ def health():
         "llm_loaded": False,
         "llm_backend": None,
         "model": None,
-        "import_ok": False
+        "import_ok": False,
     }
 
     try:
@@ -363,7 +363,7 @@ def health():
         "commit": commit,
         "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "timestamp": int(time.time()),
-        **llm_status
+        **llm_status,
     }
 
 
@@ -393,7 +393,7 @@ def preview_file(ref: str = Query(..., description="base64 encoded file path")):
     return FileResponse(
         path=str(file_path),
         media_type=mime_type,
-        headers={"Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}"}
+        headers={"Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}"},
     )
 
 
@@ -423,7 +423,7 @@ def download_file(ref: str = Query(..., description="base64 encoded file path"))
     return FileResponse(
         path=str(file_path),
         media_type=mime_type,
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"}
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"},
     )
 
 
@@ -437,8 +437,8 @@ def root():
         "endpoints": {
             "preview": "/files/preview?ref=<base64>",
             "download": "/files/download?ref=<base64>",
-            "config": "/api/config"
-        }
+            "config": "/api/config",
+        },
     }
 
 
@@ -457,7 +457,7 @@ def get_api_config(request: Request):
     return {
         "base_url": base_url,
         "preview_endpoint": f"{base_url}/files/preview",
-        "download_endpoint": f"{base_url}/files/download"
+        "download_endpoint": f"{base_url}/files/download",
     }
 
 
@@ -489,7 +489,7 @@ def get_metrics():
         "unindexed_count": 0,
         "index_version": "unknown",
         "last_reindex_at": "unknown",
-        "ingest_status": "idle"
+        "ingest_status": "idle",
     }
 
     # 1. DocStore 카운트 (metadata.db)
@@ -518,7 +518,7 @@ def get_metrics():
     try:
         bm25_path = _first_existing(BM25_CANDIDATES)
         if bm25_path:
-            with open(bm25_path, "rb") as f:
+            with Path(bm25_path).open("rb") as f:
                 bm25_data = pickle.load(f)
 
             if isinstance(bm25_data, dict):
@@ -668,7 +668,7 @@ def get_metrics():
                 "fs_file_count": fs_count,
                 "index_file_count": idx_count,
                 "stale_index_entries": stale,
-                "threshold_gap": threshold_gap
+                "threshold_gap": threshold_gap,
             })
     except Exception as e:
         print(f"알림 전송 실패: {e}")
@@ -722,7 +722,7 @@ def debug_llm():
         "qwen_llm_import": None,
         "qwen_init": None,
         "error": None,
-        "traceback": None
+        "traceback": None,
     }
 
     # 1. llama_cpp 임포트 테스트

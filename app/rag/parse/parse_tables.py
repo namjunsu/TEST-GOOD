@@ -92,7 +92,7 @@ class TableParser:
         """
         self.config = self._load_config(config_path)
         self.header_patterns = self.config.get("table_parsing", {}).get(
-            "header_patterns", []
+            "header_patterns", [],
         )
         self.remove_chars = (
             self.config.get("table_parsing", {})
@@ -122,7 +122,7 @@ class TableParser:
                 logger.warning(f"⚠️ 설정 파일 없음: {config_path}, 기본값 사용")
                 return {}
 
-            with open(config_file, "r", encoding="utf-8") as f:
+            with Path(config_file).open("r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
 
             # 하위 호환: v0 스키마를 v1로 정규화
@@ -323,7 +323,7 @@ class TableParser:
         return amount
 
     def _parse_rows(
-        self, lines: list[str], start_idx: int, header_cells: list[str]
+        self, lines: list[str], start_idx: int, header_cells: list[str],
     ) -> list[dict[str, Any]]:
         """헤더 아래 행들을 파싱하여 아이템 리스트 생성
 
@@ -372,7 +372,7 @@ class TableParser:
             # 단가
             if "unit_price" in mapping and mapping["unit_price"] < len(cells):
                 rec["unit_price"] = self.normalize_number(
-                    cells[mapping["unit_price"]]
+                    cells[mapping["unit_price"]],
                 )
 
             # 금액
@@ -380,7 +380,7 @@ class TableParser:
                 rec["amount"] = self.normalize_number(cells[mapping["amount"]])
 
             rec["amount"] = self._infer_amount(
-                rec["quantity"], rec["unit_price"], rec["amount"]
+                rec["quantity"], rec["unit_price"], rec["amount"],
             )
 
             # 행 유효성(이름 또는 금액 존재)
@@ -394,7 +394,7 @@ class TableParser:
         return out
 
     def extract_cost_table(
-        self, text: str
+        self, text: str,
     ) -> tuple[list[dict[str, Any]], bool, str]:
         """비용 표 추출 (v2.0 행 단위 파싱)
 
@@ -481,7 +481,7 @@ class TableParser:
 
             if not ok:
                 logger.warning(
-                    f"⚠️ 합계 불일치: 계산={calc:,}원, 문서={claimed_total:,}원, 차이={diff:,}원"
+                    f"⚠️ 합계 불일치: 계산={calc:,}원, 문서={claimed_total:,}원, 차이={diff:,}원",
                 )
 
         # 2) VAT 교차 검증 (amount + vat = total)
@@ -489,13 +489,13 @@ class TableParser:
             total_with_vat = calc + vat
             diff_with_vat = abs(total_with_vat - claimed_total)
             vat_ok = diff_with_vat <= max(
-                self.sum_tolerance, int(claimed_total * rel_tol)
+                self.sum_tolerance, int(claimed_total * rel_tol),
             )
             ok = ok and vat_ok
 
             if not vat_ok:
                 logger.warning(
-                    f"⚠️ VAT 포함 합계 불일치: 계산+VAT={total_with_vat:,}원, 문서={claimed_total:,}원"
+                    f"⚠️ VAT 포함 합계 불일치: 계산+VAT={total_with_vat:,}원, 문서={claimed_total:,}원",
                 )
 
         if ok:
@@ -557,7 +557,7 @@ class TableParser:
 
             # 3. 합계 검증
             match, calc_total, _ = self.validate_sum(
-                items, res["claimed_total"], res["vat"]
+                items, res["claimed_total"], res["vat"],
             )
             res["total"] = calc_total
             res["sum_match"] = match
@@ -640,7 +640,7 @@ class TableParser:
 
             if qty and unit_price:
                 lines.append(
-                    f"- {name}: ₩{unit_price:,} × {qty} = ₩{amount:,}"
+                    f"- {name}: ₩{unit_price:,} × {qty} = ₩{amount:,}",
                 )
             else:
                 lines.append(f"- {name}: ₩{amount:,}")
@@ -660,7 +660,7 @@ class TableParser:
         if sum_match is False:
             claimed_total = parsed_table.get("claimed_total", 0)
             lines.append(
-                f"\n⚠️ **검증:** 문서 합계 ₩{claimed_total:,}와 차이 있음"
+                f"\n⚠️ **검증:** 문서 합계 ₩{claimed_total:,}와 차이 있음",
             )
 
         return "\n".join(lines)

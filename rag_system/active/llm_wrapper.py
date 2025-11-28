@@ -211,7 +211,7 @@ class QwenLLM(BaseRAGLLM):
         # YAML 설정 파일 로드
         elif config_path.exists():
             try:
-                with open(config_path, "r", encoding="utf-8") as f:
+                with Path(config_path).open("r", encoding="utf-8") as f:
                     opt_config = yaml.safe_load(f)
                     if opt_config and "prompts" in opt_config:
                         self.use_optimized_prompts = opt_config["prompts"].get("use_optimized", False)
@@ -284,7 +284,7 @@ class QwenLLM(BaseRAGLLM):
                 use_mlock=USE_MLOCK,  # config: False (GPU 사용시 비활성화)
                 use_mmap=USE_MMAP,    # config: True (메모리 매핑)
                 verbose=True,         # GPU 로딩 상태 확인
-                n_batch=N_BATCH       # config: 1024 (배치 크기 증가)
+                n_batch=N_BATCH,       # config: 1024 (배치 크기 증가)
             )
 
             # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -296,10 +296,10 @@ class QwenLLM(BaseRAGLLM):
             # Effective config logging
             self.logger.info(
                 f"🔧 [LLM Config] requested: n_ctx={requested_n_ctx}, n_batch={N_BATCH}, "
-                f"n_gpu_layers={N_GPU_LAYERS}, n_threads={N_THREADS}"
+                f"n_gpu_layers={N_GPU_LAYERS}, n_threads={N_THREADS}",
             )
             self.logger.info(
-                f"🔧 [LLM Config] effective: n_ctx={effective_n_ctx}"
+                f"🔧 [LLM Config] effective: n_ctx={effective_n_ctx}",
             )
 
             # Mismatch guard
@@ -309,7 +309,7 @@ class QwenLLM(BaseRAGLLM):
                     f"   Requested: {requested_n_ctx}\n"
                     f"   Effective: {effective_n_ctx}\n"
                     f"   This indicates stale LLM instance or environment variable loading failure.\n"
-                    f"   Please restart the process with clean environment."
+                    f"   Please restart the process with clean environment.",
                 )
 
             # 로드된 모델 메타데이터 로그
@@ -582,7 +582,7 @@ A:"""
                 # 대화 메시지 구성
                 messages = [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": user_prompt},
                 ]
 
                 # 적응형 max_tokens 계산 (모드별 예산 우선)
@@ -604,7 +604,7 @@ A:"""
                 if final_max_tokens != expected_budget and not (self.config.enable_adaptive_length and length_recommendation):
                     self.logger.warning(
                         f"⚠️ Token budget mismatch! mode={mode}, expected={expected_budget}, "
-                        f"got={final_max_tokens}. Using {final_max_tokens}."
+                        f"got={final_max_tokens}. Using {final_max_tokens}.",
                     )
 
                 # 생성
@@ -615,7 +615,7 @@ A:"""
                     top_p=self.config.top_p,
                     top_k=self.config.top_k,
                     repeat_penalty=self.config.repeat_penalty,
-                    stop=self.stop_tokens
+                    stop=self.stop_tokens,
                 )
 
                 answer = response["choices"][0]["message"]["content"].strip()
@@ -628,7 +628,7 @@ A:"""
                     best_answer = {
                         "answer": answer,
                         "generation_time": generation_time,
-                        "retry_count": retry_count
+                        "retry_count": retry_count,
                     }
 
                 # 인용 검증
@@ -655,7 +655,7 @@ A:"""
                         length_recommendation=length_recommendation,
                         original_length=original_length,
                         length_adjustments=length_adjustments,
-                        adaptive_length_used=self.config.enable_adaptive_length
+                        adaptive_length_used=self.config.enable_adaptive_length,
                     )
                 else:
                     # 인용이 없지만 답변 품질 체크
@@ -664,7 +664,7 @@ A:"""
                         best_answer = {
                             "answer": answer,
                             "generation_time": generation_time,
-                            "retry_count": retry_count
+                            "retry_count": retry_count,
                         }
                         self.logger.info(f"인용 없지만 의미있는 답변 저장 (시도 {attempt + 1})")
 
@@ -706,7 +706,7 @@ A:"""
                 confidence=self._calculate_confidence(answer_with_sources, context_chunks) * 0.8,  # 신뢰도 약간 감소
                 generation_time=best_answer["generation_time"],
                 has_proper_citation=True,  # 강제 추가했으므로 True
-                retry_count=best_answer["retry_count"]
+                retry_count=best_answer["retry_count"],
             )
 
         # 완전 실패 - 하지만 context_chunks가 있으면 기본 요약 제공
@@ -738,7 +738,7 @@ A:"""
                 confidence=0.3,  # 낮은 신뢰도지만 검색 결과는 있음
                 generation_time=generation_time,
                 has_proper_citation=bool(top_sources),
-                retry_count=retry_count
+                retry_count=retry_count,
             )
 
         # 정말로 context_chunks가 없는 경우에만 "없음" 메시지
@@ -748,7 +748,7 @@ A:"""
             confidence=0.0,
             generation_time=generation_time,
             has_proper_citation=False,
-            retry_count=retry_count
+            retry_count=retry_count,
         )
 
     def _generate_structured_response(self, question_analysis: dict[str, Any],
@@ -787,7 +787,7 @@ A:"""
 
                 messages = [
                     {"role": "system", "content": enhanced_system_prompt},
-                    {"role": "user", "content": structured_prompt}
+                    {"role": "user", "content": structured_prompt},
                 ]
 
                 response = self.llm.create_chat_completion(
@@ -797,7 +797,7 @@ A:"""
                     top_p=self.config.top_p,
                     top_k=self.config.top_k,
                     repeat_penalty=self.config.repeat_penalty,
-                    stop=self.stop_tokens
+                    stop=self.stop_tokens,
                 )
 
                 raw_answer = response["choices"][0]["message"]["content"].strip()
@@ -826,7 +826,7 @@ A:"""
                     confidence=confidence,
                     generation_time=generation_time,
                     has_proper_citation=citation_check["has_citations"],
-                    retry_count=retry_count
+                    retry_count=retry_count,
                 )
 
             except Exception as e:
@@ -999,7 +999,7 @@ A:"""
             try:
                 messages = [
                     {"role": "system", "content": quality_focused_system_prompt},
-                    {"role": "user", "content": enhanced_prompt}
+                    {"role": "user", "content": enhanced_prompt},
                 ]
 
                 response = self.llm.create_chat_completion(
@@ -1009,7 +1009,7 @@ A:"""
                     top_p=self.config.top_p,               # 기본 설정값 사용 (0.9)
                     top_k=self.config.top_k,               # 기본 설정값 사용 (40)
                     repeat_penalty=self.config.repeat_penalty,
-                    stop=self.stop_tokens
+                    stop=self.stop_tokens,
                 )
 
                 answer = response["choices"][0]["message"]["content"].strip()
@@ -1028,7 +1028,7 @@ A:"""
                     confidence=self._calculate_confidence(answer, context_chunks),
                     generation_time=generation_time,
                     has_proper_citation=citation_check["has_citations"],
-                    retry_count=attempt
+                    retry_count=attempt,
                 )
 
             except Exception as e:
@@ -1043,7 +1043,7 @@ A:"""
             confidence=0.0,
             generation_time=time.time() - start_time,
             has_proper_citation=False,
-            retry_count=max_retries
+            retry_count=max_retries,
         )
 
     def _prioritize_same_document_chunks(self, context_chunks: list[dict[str, Any]], max_chunks: int = 10) -> list[dict[str, Any]]:
@@ -1160,7 +1160,7 @@ A:"""
             "has_citations": len(valid_citations) > 0,
             "cited_files": valid_citations,
             "invalid_citations": [f for f in cited_files if f not in valid_citations],
-            "citation_count": len(cited_files)
+            "citation_count": len(cited_files),
         }
 
     def _is_meaningful_answer(self, answer: str) -> bool:
@@ -1174,7 +1174,7 @@ A:"""
         rejection_phrases = [
             "답변을 드릴 수 없습니다",
             "전혀 찾을 수 없습니다",
-            "완전히 알 수 없습니다"
+            "완전히 알 수 없습니다",
         ]
 
         answer_lower = answer.lower()
@@ -1222,7 +1222,7 @@ A:"""
         length_multipliers = {
             "concise": 0.7,     # 30% 짧게
             "balanced": 1.0,    # 기본값
-            "detailed": 1.4     # 40% 길게
+            "detailed": 1.4,     # 40% 길게
         }
 
         multiplier = length_multipliers.get(self.config.length_preference, 1.0)
@@ -1247,7 +1247,7 @@ A:"""
             max_length=adjusted_max,
             reasoning=recommendation.reasoning + f" | 선호도 조정: {self.config.length_preference} (x{multiplier})",
             content_density=recommendation.content_density,
-            adjustment_factors=recommendation.adjustment_factors + [f"길이선호도_{self.config.length_preference}"]
+            adjustment_factors=recommendation.adjustment_factors + [f"길이선호도_{self.config.length_preference}"],
         )
 
     def _calculate_adaptive_max_tokens(self, recommendation: dict[str, Any]) -> int:
@@ -1334,7 +1334,7 @@ A:"""
             length_recommendation=length_recommendation,
             original_length=original_length,
             length_adjustments=length_adjustments,
-            adaptive_length_used=True
+            adaptive_length_used=True,
         )
 
     def _calculate_confidence(self, answer: str, context_chunks: list[dict[str, Any]]) -> float:
@@ -1437,7 +1437,7 @@ A:"""
             try:
                 messages = [
                     {"role": "system", "content": conversational_system},
-                    {"role": "user", "content": conversational_prompt}
+                    {"role": "user", "content": conversational_prompt},
                 ]
 
                 response = self.llm.create_chat_completion(
@@ -1447,7 +1447,7 @@ A:"""
                     top_p=0.9,
                     top_k=40,
                     repeat_penalty=1.1,
-                    stop=self.stop_tokens
+                    stop=self.stop_tokens,
                 )
 
                 answer = response["choices"][0]["message"]["content"]
@@ -1473,7 +1473,7 @@ A:"""
                     confidence=0.85,
                     generation_time=generation_time,
                     has_proper_citation=len(sources_cited) > 0,
-                    retry_count=retry_count
+                    retry_count=retry_count,
                 )
 
             except Exception as e:
@@ -1490,7 +1490,7 @@ A:"""
                 confidence=0.5,
                 generation_time=time.time() - start_time,
                 has_proper_citation=False,
-                retry_count=retry_count
+                retry_count=retry_count,
             )
 
         return RAGResponse(
@@ -1499,7 +1499,7 @@ A:"""
             confidence=0.0,
             generation_time=time.time() - start_time,
             has_proper_citation=False,
-            retry_count=retry_count
+            retry_count=retry_count,
         )
 
     def generate_smart_response(self, question: str, search_result: dict[str, Any], max_retries: int = 2) -> RAGResponse:
@@ -1513,7 +1513,7 @@ A:"""
                 confidence=0.0,
                 generation_time=0.0,
                 has_proper_citation=False,
-                retry_count=0
+                retry_count=0,
             )
 
         mode = search_result.get("mode", "chunk_search")
@@ -1544,7 +1544,7 @@ A:"""
                 confidence=0.0,
                 generation_time=generation_time,
                 has_proper_citation=False,
-                retry_count=0
+                retry_count=0,
             )
 
         # 전체 문서 전용 프롬프트 생성
@@ -1575,7 +1575,7 @@ Remember: Use the document content to create a useful Korean summary."""
 
                 messages = [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": full_doc_prompt}
+                    {"role": "user", "content": full_doc_prompt},
                 ]
 
                 response = self.llm.create_chat_completion(
@@ -1585,7 +1585,7 @@ Remember: Use the document content to create a useful Korean summary."""
                     top_p=self.config.top_p,
                     top_k=self.config.top_k,
                     repeat_penalty=self.config.repeat_penalty,
-                    stop=self.stop_tokens
+                    stop=self.stop_tokens,
                 )
 
                 answer = response["choices"][0]["message"]["content"].strip()
@@ -1596,7 +1596,7 @@ Remember: Use the document content to create a useful Korean summary."""
                     best_answer = {
                         "answer": answer,
                         "generation_time": generation_time,
-                        "retry_count": retry_count
+                        "retry_count": retry_count,
                     }
 
                 # 인용 검증
@@ -1610,7 +1610,7 @@ Remember: Use the document content to create a useful Korean summary."""
                         confidence=self._calculate_confidence(answer, [full_doc_chunk]),
                         generation_time=generation_time,
                         has_proper_citation=True,
-                        retry_count=retry_count
+                        retry_count=retry_count,
                     )
                 else:
                     # 인용이 없지만 의미있는 답변이면 저장
@@ -1618,7 +1618,7 @@ Remember: Use the document content to create a useful Korean summary."""
                         best_answer = {
                             "answer": answer,
                             "generation_time": generation_time,
-                            "retry_count": retry_count
+                            "retry_count": retry_count,
                         }
                         self.logger.info(f"인용 없지만 의미있는 답변 저장 (시도 {attempt + 1})")
 
@@ -1642,7 +1642,7 @@ Remember: Use the document content to create a useful Korean summary."""
                 confidence=self._calculate_confidence(best_answer["answer"], [full_doc_chunk]) * 0.7,
                 generation_time=best_answer["generation_time"],
                 has_proper_citation=False,
-                retry_count=best_answer["retry_count"]
+                retry_count=best_answer["retry_count"],
             )
 
         # 완전 실패
@@ -1653,7 +1653,7 @@ Remember: Use the document content to create a useful Korean summary."""
             confidence=0.0,
             generation_time=generation_time,
             has_proper_citation=False,
-            retry_count=retry_count
+            retry_count=retry_count,
         )
 
     def test_model(self) -> bool:
@@ -1661,13 +1661,13 @@ Remember: Use the document content to create a useful Korean summary."""
         try:
             test_messages = [
                 {"role": "system", "content": "간단한 인사를 해주세요."},
-                {"role": "user", "content": "안녕하세요?"}
+                {"role": "user", "content": "안녕하세요?"},
             ]
 
             response = self.llm.create_chat_completion(
                 messages=test_messages,
                 max_tokens=50,
-                temperature=0.1
+                temperature=0.1,
             )
 
             answer = response["choices"][0]["message"]["content"].strip()
@@ -1690,7 +1690,7 @@ def test_qwen_llm():
     except ImportError:
         model_files = [
             "./models/qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf",
-            "./models/qwen2.5-7b-instruct-q4_k_m-00002-of-00002.gguf"
+            "./models/qwen2.5-7b-instruct-q4_k_m-00002-of-00002.gguf",
         ]
 
     # 첫 번째 파일만 사용 (테스트용)
@@ -1707,13 +1707,13 @@ def test_qwen_llm():
                 {
                     "source": "2025-01-09_광화문스튜디오모니터교체검토서.pdf",
                     "content": "총 검토 금액은 9,760,000원입니다. 모니터 3대와 On-Air Tally 시스템을 포함합니다.",
-                    "score": 0.85
-                }
+                    "score": 0.85,
+                },
             ]
 
             response = qwen.generate_response(
                 "검토 금액이 얼마인가요?",
-                test_context
+                test_context,
             )
 
             print("\n=== RAG 테스트 결과 ===")
@@ -1757,7 +1757,7 @@ class LlamaLLM(BaseRAGLLM):
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_path)
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_path,
-                torch_dtype=torch.float32
+                torch_dtype=torch.float32,
             )
 
             if self.tokenizer.pad_token is None:
@@ -1807,8 +1807,8 @@ class LlamaLLM(BaseRAGLLM):
                         top_p=0.95,
                         do_sample=True,
                         eos_token_id=self.tokenizer.eos_token_id,
-                        pad_token_id=self.tokenizer.pad_token_id
-                    )
+                        pad_token_id=self.tokenizer.pad_token_id,
+                    ),
                 )
 
             response_text = self.tokenizer.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
@@ -1821,7 +1821,7 @@ class LlamaLLM(BaseRAGLLM):
                 confidence=0.9,
                 generation_time=generation_time,
                 has_proper_citation=True,
-                retry_count=0
+                retry_count=0,
             )
 
         except Exception as e:
@@ -1832,7 +1832,7 @@ class LlamaLLM(BaseRAGLLM):
                 confidence=0.0,
                 generation_time=time.time() - start_time,
                 has_proper_citation=False,
-                retry_count=0
+                retry_count=0,
             )
 
 

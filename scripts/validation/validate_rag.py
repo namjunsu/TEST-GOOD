@@ -4,6 +4,7 @@ RAG Pipeline Quality Assurance Validator
 파싱 커버리지, 스키마 적합도, 인용률 검증
 """
 import json
+import pathlib
 import statistics
 from collections import defaultdict
 from datetime import datetime
@@ -14,7 +15,7 @@ import yaml
 
 class RAGValidator:
     def __init__(self, suite_path: str = "suites/rag_pipeline.yaml"):
-        with open(suite_path, "r", encoding="utf-8") as f:
+        with pathlib.Path(suite_path).open("r", encoding="utf-8") as f:
             self.suite = yaml.safe_load(f)
 
         self.thresholds = self.suite["thresholds"]
@@ -35,7 +36,7 @@ class RAGValidator:
             "chunks_used": chunks_used,
             "sources_count": sources_count,
             "meets_threshold": chunks_used >= min_chunks,
-            "coverage_ratio": min(1.0, chunks_used / max(1, min_chunks))
+            "coverage_ratio": min(1.0, chunks_used / max(1, min_chunks)),
         }
 
         return coverage
@@ -71,7 +72,7 @@ class RAGValidator:
             "schema_score": schema_score,
             "missing_required": missing_required,
             "present_optional": present_optional,
-            "missing_rate": missing_rate
+            "missing_rate": missing_rate,
         }
 
     def calculate_citation_rate(self, results: list[dict]) -> float:
@@ -124,7 +125,7 @@ class RAGValidator:
             "coverage": coverage,
             "schema": schema,
             "latency_ok": latency_ms <= p95_threshold,
-            "latency_ms": latency_ms
+            "latency_ms": latency_ms,
         }
 
         return validation
@@ -137,7 +138,7 @@ class RAGValidator:
         print()
 
         # Load results
-        with open(results_file, "r", encoding="utf-8") as f:
+        with pathlib.Path(results_file).open("r", encoding="utf-8") as f:
             test_results = json.load(f)
 
         print(f"📊 Loaded {len(test_results)} test results")
@@ -183,7 +184,7 @@ class RAGValidator:
             mrr_at_10 >= self.thresholds["mrr_at_10"],
             citation_rate >= self.thresholds["citation_rate"],
             schema_failure_rate <= self.thresholds["schema_failure_rate"],
-            coverage_pass_rate >= self.thresholds["parsing_coverage"]
+            coverage_pass_rate >= self.thresholds["parsing_coverage"],
         ])
 
         report = {
@@ -198,10 +199,10 @@ class RAGValidator:
                 "coverage_pass_rate": coverage_pass_rate,
                 "p50_latency_ms": p50_latency,
                 "p95_latency_ms": p95_latency,
-                "avg_chunks_used": statistics.mean(self.metrics["chunks_used"]) if self.metrics["chunks_used"] else 0
+                "avg_chunks_used": statistics.mean(self.metrics["chunks_used"]) if self.metrics["chunks_used"] else 0,
             },
             "passed": passed_all,
-            "results": validated_results
+            "results": validated_results,
         }
 
         # Print summary
@@ -295,7 +296,7 @@ class RAGValidator:
 **Generated**: {timestamp}
 """
 
-        with open(output_path, "w", encoding="utf-8") as f:
+        with pathlib.Path(output_path).open("w", encoding="utf-8") as f:
             f.write(content)
 
         print(f"\n📝 Report saved: {output_path}")
@@ -336,13 +337,13 @@ def main():
                 "title": f"Test {i}",
                 "drafter": "Test Drafter",
                 "date": "2025-10-31",
-                "main_content": "Test content"
-            } if i < 19 else {}  # 19/20 have valid schema
+                "main_content": "Test content",
+            } if i < 19 else {},  # 19/20 have valid schema
         })
 
     # Save mock results
     mock_results_path = "/tmp/mock_rag_results.json"
-    with open(mock_results_path, "w", encoding="utf-8") as f:
+    with pathlib.Path(mock_results_path).open("w", encoding="utf-8") as f:
         json.dump(mock_results, f, indent=2, ensure_ascii=False)
 
     report = validator.run_validation(mock_results_path)
@@ -350,7 +351,7 @@ def main():
 
     # Save JSON report
     json_output = args.output.replace(".md", ".json")
-    with open(json_output, "w", encoding="utf-8") as f:
+    with pathlib.Path(json_output).open("w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, ensure_ascii=False)
 
     print(f"📄 JSON report saved: {json_output}")

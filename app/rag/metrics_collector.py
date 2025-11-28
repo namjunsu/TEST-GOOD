@@ -92,7 +92,7 @@ class CodeSearchMetrics:
         self._last_tick = now
 
     def record_code_query(
-        self, has_exact_match: bool, stage0_count: int, stage1_count: int
+        self, has_exact_match: bool, stage0_count: int, stage1_count: int,
     ) -> None:
         """코드 쿼리 기록
 

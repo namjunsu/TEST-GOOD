@@ -85,7 +85,7 @@ def setup_logging(
     log_level: str = "INFO",
     rotation_days: int = 1,
     retention_files: int = 7,  # backupCount = 파일 개수 (일 1회 회전 기준)
-    structured: bool = False
+    structured: bool = False,
 ) -> logging.Logger:
     """
     중앙화된 로깅 설정 (app 네임스페이스 격리)
@@ -125,11 +125,11 @@ def setup_logging(
     else:
         console_formatter = logging.Formatter(
             "[%(asctime)s] %(levelname)-8s %(name)s: %(message)s",
-            datefmt="%H:%M:%S"
+            datefmt="%H:%M:%S",
         )
         file_formatter = logging.Formatter(
             "[%(asctime)s] %(levelname)-8s [%(name)s:%(lineno)d] %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
+            datefmt="%Y-%m-%d %H:%M:%S",
         )
 
     # Console handler
@@ -146,7 +146,7 @@ def setup_logging(
         interval=rotation_days,
         backupCount=retention_files,
         encoding="utf-8",
-        utc=True  # UTC 기준 회전
+        utc=True,  # UTC 기준 회전
     )
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(file_formatter)
@@ -160,7 +160,7 @@ def setup_logging(
         interval=rotation_days,
         backupCount=retention_files,
         encoding="utf-8",
-        utc=True
+        utc=True,
     )
     error_handler.setLevel(logging.ERROR)
     error_handler.setFormatter(file_formatter)
@@ -178,7 +178,7 @@ def setup_logging(
         log_level.upper(),
         structured,
         log_dir,
-        extra={"coverage": "global", "latency_ms": 0}
+        extra={"coverage": "global", "latency_ms": 0},
     )
 
     return logger

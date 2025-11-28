@@ -119,17 +119,17 @@ class MetadataDB:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
-            """
+            """,
             )
 
             # 인덱스 생성 (검색 성능 향상)
             cur.execute("CREATE INDEX IF NOT EXISTS idx_year ON documents(year)")
             cur.execute(
-                "CREATE INDEX IF NOT EXISTS idx_category ON documents(category)"
+                "CREATE INDEX IF NOT EXISTS idx_category ON documents(category)",
             )
             cur.execute("CREATE INDEX IF NOT EXISTS idx_date ON documents(date)")
             cur.execute(
-                "CREATE INDEX IF NOT EXISTS idx_filename ON documents(filename)"
+                "CREATE INDEX IF NOT EXISTS idx_filename ON documents(filename)",
             )
 
             # 전문 검색을 위한 FTS 테이블 (Full-Text Search)
@@ -144,7 +144,7 @@ class MetadataDB:
                     content=documents,
                     content_rowid=id
                 )
-            """
+            """,
             )
 
             # FTS 트리거 설정 (자동 동기화)
@@ -156,7 +156,7 @@ class MetadataDB:
                     INSERT INTO documents_fts(rowid, path, title, text_preview, keywords)
                     VALUES (new.id, new.path, new.title, new.text_preview, new.keywords);
                 END
-            """
+            """,
             )
 
             # FTS5 external content 모드에서는 UPDATE 대신 DELETE+INSERT 패턴 권장
@@ -170,7 +170,7 @@ class MetadataDB:
                     INSERT INTO documents_fts(rowid, path, title, text_preview, keywords)
                     VALUES (new.id, new.path, new.title, new.text_preview, new.keywords);
                 END
-            """
+            """,
             )
 
             cur.execute(
@@ -180,7 +180,7 @@ class MetadataDB:
                 BEGIN
                     DELETE FROM documents_fts WHERE rowid = old.id;
                 END
-            """
+            """,
             )
 
         # 스키마 마이그레이션: doctype, display_date, claimed_total, sum_match 컬럼 추가
@@ -204,7 +204,7 @@ class MetadataDB:
 
                 if "doctype" not in columns:
                     cur.execute(
-                        'ALTER TABLE documents ADD COLUMN doctype TEXT DEFAULT "proposal"'
+                        'ALTER TABLE documents ADD COLUMN doctype TEXT DEFAULT "proposal"',
                     )
                     logger.info("✓ doctype 컬럼 추가")
 
@@ -214,7 +214,7 @@ class MetadataDB:
 
                 if "claimed_total" not in columns:
                     cur.execute(
-                        "ALTER TABLE documents ADD COLUMN claimed_total INTEGER"
+                        "ALTER TABLE documents ADD COLUMN claimed_total INTEGER",
                     )
                     logger.info("✓ claimed_total 컬럼 추가")
 
@@ -272,12 +272,12 @@ class MetadataDB:
         """연도별 검색"""
         conn = self._get_conn()
         cursor = conn.execute(
-            "SELECT * FROM documents WHERE year = ? ORDER BY COALESCE(display_date, date) DESC", (year,)
+            "SELECT * FROM documents WHERE year = ? ORDER BY COALESCE(display_date, date) DESC", (year,),
         )
         return [dict(row) for row in cursor.fetchall()]
 
     def search_documents(
-        self, drafter: Optional[str] = None, year: Optional[str] = None, limit: int = 20
+        self, drafter: Optional[str] = None, year: Optional[str] = None, limit: int = 20,
     ) -> list[dict[str, Any]]:
         """다중 필터 검색 (drafter, year 조합 지원)
 
@@ -312,7 +312,7 @@ class MetadataDB:
         return [dict(row) for row in cursor.fetchall()]
 
     def count_documents(
-        self, drafter: Optional[str] = None, year: Optional[str] = None
+        self, drafter: Optional[str] = None, year: Optional[str] = None,
     ) -> int:
         """문서 개수 조회 (필터 적용)
 
@@ -375,7 +375,7 @@ class MetadataDB:
                 raise  # 다른 OperationalError는 재발생
 
     def search_by_date_range(
-        self, start_date: str, end_date: str
+        self, start_date: str, end_date: str,
     ) -> list[dict[str, Any]]:
         """날짜 범위 검색"""
         conn = self._get_conn()
@@ -390,7 +390,7 @@ class MetadataDB:
         norm = self._normalize_path(str(path))
         conn = self._get_conn()
         cursor = conn.execute(
-            "SELECT * FROM documents WHERE path = ?", (norm,)
+            "SELECT * FROM documents WHERE path = ?", (norm,),
         )
         row = cursor.fetchone()
         return dict(row) if row else None
@@ -400,7 +400,7 @@ class MetadataDB:
         # 파일명만으로 검색
         conn = self._get_conn()
         cursor = conn.execute(
-            "SELECT * FROM documents WHERE filename = ? LIMIT 1", (filename,)
+            "SELECT * FROM documents WHERE filename = ? LIMIT 1", (filename,),
         )
         row = cursor.fetchone()
         return dict(row) if row else None
@@ -417,7 +417,7 @@ class MetadataDB:
         conn = self._get_conn()
         cursor = conn.execute(
             "SELECT * FROM documents WHERE filename = ? COLLATE NOCASE LIMIT 1",
-            (filename,)
+            (filename,),
         )
         row = cursor.fetchone()
         return dict(row) if row else None
@@ -477,7 +477,7 @@ class MetadataDB:
         conn = self._get_conn()
         cursor = conn.execute(
             "SELECT text_preview FROM documents WHERE filename = ? COLLATE NOCASE LIMIT 1",
-            (filename,)
+            (filename,),
         )
         row = cursor.fetchone()
         return row["text_preview"] if row and row["text_preview"] else None
@@ -497,7 +497,7 @@ class MetadataDB:
             conn = self._get_conn()
             cursor = conn.execute(
                 "SELECT path FROM documents WHERE filename = ? OR path = ? LIMIT 1",
-                (doc_id, self._normalize_path(doc_id))
+                (doc_id, self._normalize_path(doc_id)),
             )
             row = cursor.fetchone()
 
@@ -597,7 +597,7 @@ class MetadataDB:
             FROM documents
             GROUP BY year
             ORDER BY year DESC
-        """
+        """,
         )
         by_year = {row["year"]: row["count"] for row in cursor.fetchall()}
 
@@ -607,7 +607,7 @@ class MetadataDB:
             FROM documents
             GROUP BY category
             ORDER BY count DESC
-        """
+        """,
         )
         by_category = {row["category"]: row["count"] for row in cursor.fetchall()}
 
@@ -704,7 +704,7 @@ class MetadataDB:
                 file_index_path = "file_index.json"
 
             if os.path.exists(file_index_path):
-                with open(file_index_path, "r", encoding="utf-8") as f:
+                with Path(file_index_path).open("r", encoding="utf-8") as f:
                     file_data = json.load(f)
 
                 counts = {"pdf": 0, "txt": 0, "others": 0}

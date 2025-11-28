@@ -115,7 +115,7 @@ class ScenarioTest:
                 "expected_has_citations": expected_has_citations,
                 "top_score": top_score,
                 "latency": elapsed,
-                "answer_length": len(response.answer)
+                "answer_length": len(response.answer),
             }
 
             self.results.append(result)
@@ -131,7 +131,7 @@ class ScenarioTest:
                 "title": title,
                 "query": query,
                 "status": "ERROR",
-                "error": str(e)
+                "error": str(e),
             }
             self.results.append(result)
             return result
@@ -167,16 +167,16 @@ class ScenarioTest:
         os.makedirs("reports", exist_ok=True)
 
         import json
-        with open(log_file, "w", encoding="utf-8") as f:
+        with Path(log_file).open("w", encoding="utf-8") as f:
             json.dump({
                 "timestamp": datetime.now().isoformat(),
                 "summary": {
                     "total": total,
                     "passed": passed,
                     "failed": failed,
-                    "errors": errors
+                    "errors": errors,
                 },
-                "results": self.results
+                "results": self.results,
             }, f, indent=2, ensure_ascii=False)
 
         print(f"\n📝 상세 결과 저장: {log_file}")
@@ -206,7 +206,7 @@ def main():
             "title": "일반 대화 (문서 인용 없음)",
             "query": "1+1은?",
             "expected_mode": "chat",
-            "expected_has_citations": False
+            "expected_has_citations": False,
         },
 
         # 2. 회사 문서 검색: 문서 인용 포함
@@ -215,7 +215,7 @@ def main():
             "title": "회사 문서 검색 (문서 인용 포함)",
             "query": "2024-08-14 기술관리팀 방송시스템 소모품 구매 검토서 요약해줘",
             "expected_mode": "rag",
-            "expected_has_citations": True
+            "expected_has_citations": True,
         },
 
         # 3. 정책 질의: 관련 문서 인용
@@ -224,7 +224,7 @@ def main():
             "title": "정책 질의 (관련 문서 인용)",
             "query": "NVR 저장용량 산정 기준과 HDD 교체 주기는?",
             "expected_mode": "rag",
-            "expected_has_citations": True
+            "expected_has_citations": True,
         },
 
         # 4. 인프라 구성: 다이어그램 섹션 인용
@@ -233,7 +233,7 @@ def main():
             "title": "인프라 구성 (다이어그램 섹션 인용)",
             "query": "Tri-Level Sync/Black Burst 신호 분배 구성 요약",
             "expected_mode": "rag",
-            "expected_has_citations": True
+            "expected_has_citations": True,
         },
 
         # 5. 사례 비교: 해당 보고서 인용
@@ -242,7 +242,7 @@ def main():
             "title": "사례 비교 (해당 보고서 인용)",
             "query": "뉴스 스튜디오 지미집 Control Box 수리 건 핵심 원인/조치",
             "expected_mode": "rag",
-            "expected_has_citations": True
+            "expected_has_citations": True,
         },
 
         # 6. 필터 검색: 메타필터 동작
@@ -251,7 +251,7 @@ def main():
             "title": "필터 검색 (메타필터 동작)",
             "query": "기안자=남준수, 2024년 문서만 요약 리스트",
             "expected_mode": "rag",
-            "expected_has_citations": True
+            "expected_has_citations": True,
         },
 
         # 7. 무근거 방지: 근거 없으면 '근거 없음'
@@ -260,7 +260,7 @@ def main():
             "title": "무근거 방지 (근거 없음 처리)",
             "query": "APEX 중계 동시통역 라우팅 정확한 연결 도면?",
             "expected_mode": "chat",  # 근거 없으면 chat 모드로 폴백
-            "expected_has_citations": False
+            "expected_has_citations": False,
         },
 
         # 8. 긴 문서 요약: TL;DR
@@ -269,8 +269,8 @@ def main():
             "title": "긴 문서 요약 (TL;DR)",
             "query": "방송시스템 소모품 구매 검토서 3문장 TL;DR",
             "expected_mode": "rag",
-            "expected_has_citations": True
-        }
+            "expected_has_citations": True,
+        },
     ]
 
     # 특정 시나리오만 실행할지 확인
@@ -290,7 +290,7 @@ def main():
             scenario["title"],
             scenario["query"],
             scenario["expected_mode"],
-            scenario["expected_has_citations"]
+            scenario["expected_has_citations"],
         )
 
         # 시나리오 간 간격

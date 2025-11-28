@@ -38,7 +38,7 @@ def _resolve_doc_id(metadata: dict, doc_idx: int) -> str:
     if db_id is None:
         raise ValueError(
             f"metadata['id'] 누락 (doc_idx={doc_idx}). "
-            f"DocStore 기반 시스템에서 id는 필수입니다. meta={metadata}"
+            f"DocStore 기반 시스템에서 id는 필수입니다. meta={metadata}",
         )
     return str(db_id)
 
@@ -81,7 +81,7 @@ BUSINESS_KEYWORDS_WHITELIST = {
     "영상취재팀", "기술관리팀", "영상편집팀",
 
     # 문서 형식 (의미있는)
-    "검토서", "계약서", "견적서", "사양서", "내역서"
+    "검토서", "계약서", "견적서", "사양서", "내역서",
 }
 
 # kiwipiepy 토크나이저 (한국어 특화)
@@ -163,7 +163,7 @@ class KoreanTokenizer:
                 tokens = list(_cached_basic_tokenize(
                     text,
                     self.TOKEN_PATTERN,
-                    self.MIN_TOKEN_LENGTH
+                    self.MIN_TOKEN_LENGTH,
                 ))
                 return tokens
 
@@ -323,7 +323,7 @@ class BM25Store:
         # 핵심 키워드 (3.0배) - 특정 주제를 명확히 식별하는 단어
         CORE_KEYWORDS = {
             "재난방송", "재난", "dvr", "nvr", "spg", "헬리캠", "드론",
-            "disaster", "emergency", "긴급"
+            "disaster", "emergency", "긴급",
         }
         if token_lower in CORE_KEYWORDS:
             return 3.0
@@ -331,7 +331,7 @@ class BM25Store:
         # 전문 키워드 (2.0배) - 방송 장비 관련 특화 단어
         SPECIALIZED_KEYWORDS = {
             "카메라", "렌즈", "마이크", "음향", "영상", "촬영",
-            "스튜디오", "방송", "업그레이드", "중계차", "부조정실"
+            "스튜디오", "방송", "업그레이드", "중계차", "부조정실",
         }
         if token_lower in SPECIALIZED_KEYWORDS:
             return 2.0
@@ -339,7 +339,7 @@ class BM25Store:
         # 일반 키워드 (1.2배) - 너무 흔해서 낮은 가중치
         COMMON_KEYWORDS = {
             "시스템", "구매", "검토", "교체", "수리", "설치",
-            "장비", "소모품", "유지보수", "점검"
+            "장비", "소모품", "유지보수", "점검",
         }
         if token_lower in COMMON_KEYWORDS:
             return 1.2
@@ -384,10 +384,10 @@ class BM25Store:
                 "avg_doc_len": self.avg_doc_len,
                 "vocab": list(self.vocab),
                 "k1": self.k1,
-                "b": self.b
+                "b": self.b,
             }
 
-            with open(self.index_path, "wb") as f:
+            with Path(self.index_path).open("wb") as f:
                 pickle.dump(index_data, f)
 
             self.logger.info(f"BM25 인덱스 저장 완료: {self.index_path}")
@@ -399,7 +399,7 @@ class BM25Store:
     def load_index(self):
         """저장된 인덱스 로드"""
         try:
-            with open(self.index_path, "rb") as f:
+            with Path(self.index_path).open("rb") as f:
                 index_data = pickle.load(f)
 
             self.documents = index_data["documents"]
@@ -581,7 +581,7 @@ class BM25Store:
                     "score": float(score),
                     "content": snippet,
                     "query_tokens": query_tokens,
-                    **metadata
+                    **metadata,
                 }
                 results.append(result)
 
@@ -614,12 +614,12 @@ class BM25Store:
 
         dynamic_stopwords = build_dynamic_stopwords(
             self.doc_freqs, n_docs, df_threshold, max_token_len,
-            whitelist=BUSINESS_KEYWORDS_WHITELIST
+            whitelist=BUSINESS_KEYWORDS_WHITELIST,
         )
 
         self.logger.info(
             f"동적 불용어 {len(dynamic_stopwords)}개 생성 "
-            f"(DF threshold: {df_threshold}, max len: {max_token_len})"
+            f"(DF threshold: {df_threshold}, max len: {max_token_len})",
         )
 
         # 로그에 상위 20개 출력
@@ -635,7 +635,7 @@ class BM25Store:
             "type": "kiwipiepy" if self.tokenizer.use_kiwi else "basic",
             "tokenize_count": self.tokenizer.tokenize_count,
             "cache_hits": self.tokenizer.cache_hits,
-            "cache_hit_rate": self.tokenizer.cache_hits / self.tokenizer.tokenize_count * 100 if self.tokenizer.tokenize_count > 0 else 0
+            "cache_hit_rate": self.tokenizer.cache_hits / self.tokenizer.tokenize_count * 100 if self.tokenizer.tokenize_count > 0 else 0,
         }
 
         return {
@@ -650,15 +650,15 @@ class BM25Store:
             "has_df": bool(self.doc_freqs),
             "parameters": {
                 "k1": self.k1,
-                "b": self.b
+                "b": self.b,
             },
             "tokenizer": tokenizer_stats,
             "performance": {
                 "total_index_time": self.index_time,
                 "search_count": self.search_count,
                 "total_search_time": self.total_search_time,
-                "avg_search_time": self.total_search_time / self.search_count if self.search_count > 0 else 0
-            }
+                "avg_search_time": self.total_search_time / self.search_count if self.search_count > 0 else 0,
+            },
         }
 
 
@@ -673,7 +673,7 @@ def test_bm25_store():
         "영상편집팀 워크스테이션 교체 비용은 179,300,000원입니다. HP Z8 모델입니다.",
         "광화문 스튜디오 모니터 교체 총액은 9,760,000원입니다. LG 모니터 3대입니다.",
         "카메라 장비 구매를 위한 예산 검토서입니다. 총 예산은 50,000,000원입니다.",
-        "스튜디오 조명 시설 교체에 대한 기안서입니다. 필립스 LED 조명 20대를 구매합니다."
+        "스튜디오 조명 시설 교체에 대한 기안서입니다. 필립스 LED 조명 20대를 구매합니다.",
     ]
 
     test_metadatas = [
@@ -682,36 +682,36 @@ def test_bm25_store():
             "chunk_id": "chunk1_1",
             "filename": "2021-05-13_핀마이크_구매검토.pdf",
             "content": test_texts[0],
-            "metadata": {"doc_type": "기안서", "amount": 336000}
+            "metadata": {"doc_type": "기안서", "amount": 336000},
         },
         {
             "doc_id": "doc2",
             "chunk_id": "chunk2_1",
             "filename": "2022-02-03_워크스테이션_교체검토.pdf",
             "content": test_texts[1],
-            "metadata": {"doc_type": "검토서", "amount": 179300000}
+            "metadata": {"doc_type": "검토서", "amount": 179300000},
         },
         {
             "doc_id": "doc3",
             "chunk_id": "chunk3_1",
             "filename": "2025-01-09_모니터_교체검토.pdf",
             "content": test_texts[2],
-            "metadata": {"doc_type": "기안서", "amount": 9760000}
+            "metadata": {"doc_type": "기안서", "amount": 9760000},
         },
         {
             "doc_id": "doc4",
             "chunk_id": "chunk4_1",
             "filename": "2023-07-15_카메라장비_예산검토.pdf",
             "content": test_texts[3],
-            "metadata": {"doc_type": "예산서", "amount": 50000000}
+            "metadata": {"doc_type": "예산서", "amount": 50000000},
         },
         {
             "doc_id": "doc5",
             "chunk_id": "chunk5_1",
             "filename": "2024-03-20_조명시설_교체기안.pdf",
             "content": test_texts[4],
-            "metadata": {"doc_type": "기안서", "amount": 0}  # 금액 미상
-        }
+            "metadata": {"doc_type": "기안서", "amount": 0},  # 금액 미상
+        },
     ]
 
     try:
@@ -731,7 +731,7 @@ def test_bm25_store():
             "워크스테이션 모델명은?",
             "모니터 개수는 몇 개인가요?",
             "카메라 예산",
-            "조명 교체"
+            "조명 교체",
         ]
 
         for query in test_queries:

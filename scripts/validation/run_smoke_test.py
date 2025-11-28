@@ -32,7 +32,7 @@ TEST_QUERIES = [
         "query": "LED조명 수리 관련 문서 검색",
         "target_doc_id": "2019-05-10_영상취재팀_LED조명_수리_건.pdf",
         "expected_keywords": ["LED", "조명"],
-    }
+    },
 ]
 
 

@@ -279,7 +279,7 @@ def _valid(v: Optional[Any]) -> bool:
 # ============================================================================
 
 def _validate_model_manufacturer(
-    model: Optional[str], manufacturer: Optional[str]
+    model: Optional[str], manufacturer: Optional[str],
 ) -> list[str]:
     """모델명과 제조사 간 상관 검증
 
@@ -304,7 +304,7 @@ def _validate_model_manufacturer(
         if manufacturer != "Hanwha Vision":
             warnings.append(
                 f"모델-제조사 불일치: {model}은 Hanwha Vision 제품인데 "
-                f"제조사가 '{manufacturer}'로 기록됨"
+                f"제조사가 '{manufacturer}'로 기록됨",
             )
 
     # IDIS 제품 패턴: NR-xxxx
@@ -312,7 +312,7 @@ def _validate_model_manufacturer(
         if manufacturer != "IDIS":
             warnings.append(
                 f"모델-제조사 불일치: {model}은 IDIS 제품인데 "
-                f"제조사가 '{manufacturer}'로 기록됨"
+                f"제조사가 '{manufacturer}'로 기록됨",
             )
 
     # TVLogic 제품 패턴: LVM, RMK
@@ -320,7 +320,7 @@ def _validate_model_manufacturer(
         if manufacturer != "TVLogic":
             warnings.append(
                 f"모델-제조사 불일치: {model}은 TVLogic 제품인데 "
-                f"제조사가 '{manufacturer}'로 기록됨"
+                f"제조사가 '{manufacturer}'로 기록됨",
             )
 
     # Blackmagic 제품 패턴: DeckLink, ATEM
@@ -328,7 +328,7 @@ def _validate_model_manufacturer(
         if manufacturer != "Blackmagic Design":
             warnings.append(
                 f"모델-제조사 불일치: {model}은 Blackmagic Design 제품인데 "
-                f"제조사가 '{manufacturer}'로 기록됨"
+                f"제조사가 '{manufacturer}'로 기록됨",
             )
 
     return warnings
@@ -422,12 +422,12 @@ def merge_device_fields(rule: dict[str, Any], llm: dict[str, Any]) -> dict[str, 
             if l_private and not r_private:
                 warnings.append(
                     f"IP 우선순위: rule={r_ip} (공인), llm={l_ip} (사설망) → "
-                    f"사설망 우선으로 '{l_ip}' 선택"
+                    f"사설망 우선으로 '{l_ip}' 선택",
                 )
             elif r_private and not l_private:
                 warnings.append(
                     f"IP 우선순위: rule={r_ip} (사설망), llm={l_ip} (공인) → "
-                    f"사설망 우선으로 '{r_ip}' 선택"
+                    f"사설망 우선으로 '{r_ip}' 선택",
                 )
 
     # 4) reason 병합 + 길이 필터
@@ -458,7 +458,7 @@ def merge_device_fields(rule: dict[str, Any], llm: dict[str, Any]) -> dict[str, 
 
     # 6) 모델-제조사 상관 검증
     correlation_warnings = _validate_model_manufacturer(
-        out["model"], out["manufacturer"]
+        out["model"], out["manufacturer"],
     )
     warnings.extend(correlation_warnings)
 
@@ -476,7 +476,7 @@ def merge_device_fields(rule: dict[str, Any], llm: dict[str, Any]) -> dict[str, 
     extracted = [k for k in out.keys() if k != "_meta" and out[k] is not None]
     logger.info(
         f"장비 필드 병합 완료: {len(extracted)}개 필드 추출 "
-        f"({', '.join(extracted)})"
+        f"({', '.join(extracted)})",
     )
 
     return out

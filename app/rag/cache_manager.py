@@ -40,7 +40,7 @@ class QueryCache:
             "hits": 0,
             "misses": 0,
             "evictions": 0,
-            "expired": 0
+            "expired": 0,
         }
         # 스탬피드 방지: 계산 중인 키 추적
         self._inflight: dict[str, threading.Event] = {}
@@ -224,7 +224,7 @@ class QueryCache:
                 "evictions": self.stats["evictions"],
                 "expired": self.stats["expired"],
                 "hit_rate": f"{hit_rate:.2%}",
-                "inflight_count": len(self._inflight)
+                "inflight_count": len(self._inflight),
             }
 
 
@@ -241,7 +241,7 @@ def get_cache() -> QueryCache:
             if _cache_instance is None:  # Double-checked locking
                 _cache_instance = QueryCache(
                     max_size=100,  # Store up to 100 queries
-                    ttl=7200       # 2 hours TTL
+                    ttl=7200,       # 2 hours TTL
                 )
     return _cache_instance
 

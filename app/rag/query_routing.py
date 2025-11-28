@@ -167,7 +167,7 @@ def route_query(query: str) -> dict[str, Any]:
     logger.info(
         f"🎯 라우팅 결정: mode={mode}, detailed={detailed}, section={section}, "
         f"summary={needs_summary}, top_k={retriever_params['top_k']}, "
-        f"max_tokens={max_tokens}"
+        f"max_tokens={max_tokens}",
     )
 
     return {
@@ -283,7 +283,7 @@ def _encode_file_ref(filename: str) -> Optional[str]:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT path FROM documents WHERE filename = ? LIMIT 1",
-                (filename,)
+                (filename,),
             )
             result = cursor.fetchone()
 

@@ -219,14 +219,14 @@ class PDFViewer:
             if info.is_large:
                 st.info(
                     f"💡 대용량 파일({info.size_mb:.1f}MB)은 "
-                    "페이지별 이미지 모드를 권장합니다"
+                    "페이지별 이미지 모드를 권장합니다",
                 )
         elif self.pdfplumber_available:
             modes = [ViewMode.TEXT]
             default = ViewMode.TEXT
             st.warning(
                 "⚠️ PyMuPDF 미설치로 텍스트 추출만 가능합니다. "
-                "전체 기능을 위해 'pip install pymupdf' 실행을 권장합니다"
+                "전체 기능을 위해 'pip install pymupdf' 실행을 권장합니다",
             )
         else:
             # 아무것도 없는 경우
@@ -236,7 +236,7 @@ class PDFViewer:
                 "🔴 PDF 라이브러리가 설치되지 않았습니다.\n"
                 "다음 중 하나를 설치하세요:\n"
                 "- `pip install pymupdf` (전체 기능)\n"
-                "- `pip install pdfplumber` (텍스트 추출만)"
+                "- `pip install pdfplumber` (텍스트 추출만)",
             )
 
         return modes, default
@@ -247,7 +247,7 @@ class PDFViewer:
         if info.size_mb > 1.5:
             st.warning(
                 f"⚠️ 큰 파일({info.size_mb:.1f}MB)은 "
-                "페이지별 이미지 모드를 사용해주세요"
+                "페이지별 이미지 모드를 사용해주세요",
             )
             st.info("🖼️ 위에서 '페이지별 이미지' 모드를 선택하시면 " "PDF를 볼 수 있습니다")
             return False
@@ -326,7 +326,7 @@ class PDFViewer:
                 # 캐시된 PNG 렌더링 (색공간 안전 처리)
                 mtime = self.file_path.stat().st_mtime
                 png_bytes = _cached_page_png(
-                    str(self.file_path), mtime, current_page - 1, zoom
+                    str(self.file_path), mtime, current_page - 1, zoom,
                 )
 
                 if png_bytes is None:
@@ -342,7 +342,7 @@ class PDFViewer:
                 if img.width > display_width:
                     ratio = display_width / img.width
                     img = img.resize(
-                        (display_width, int(img.height * ratio)), Image.Resampling.LANCZOS
+                        (display_width, int(img.height * ratio)), Image.Resampling.LANCZOS,
                     )
 
                 # 이미지 표시
@@ -457,11 +457,11 @@ class PDFViewer:
                 # 성공 메시지 (OCR 스킵 또는 성공)
                 if ocr_result.get("engine") == "skip":
                     st.info(
-                        f"ℹ️ 텍스트 레이어가 있어 OCR을 스킵했습니다 (총 {ocr_result.get('pages', 0)}페이지)"
+                        f"ℹ️ 텍스트 레이어가 있어 OCR을 스킵했습니다 (총 {ocr_result.get('pages', 0)}페이지)",
                     )
                 else:
                     st.success(
-                        f"✅ OCR 처리 성공! (엔진: {ocr_result.get('engine', 'tesseract')})"
+                        f"✅ OCR 처리 성공! (엔진: {ocr_result.get('engine', 'tesseract')})",
                     )
 
                 ocr_text = ocr_result["text"]
@@ -486,14 +486,14 @@ class PDFViewer:
                     st.info("💡 설치: pip install pytesseract pdf2image")
                 else:
                     st.warning(
-                        f"⚠️ OCR 처리 후에도 텍스트를 추출할 수 없습니다 (사유: {why})"
+                        f"⚠️ OCR 처리 후에도 텍스트를 추출할 수 없습니다 (사유: {why})",
                     )
                 return False
 
         except ImportError:
             st.warning(
                 "⚠️ OCR 기능을 사용하려면 "
-                "'pip install pytesseract pdf2image' 설치가 필요합니다"
+                "'pip install pytesseract pdf2image' 설치가 필요합니다",
             )
             return False
 

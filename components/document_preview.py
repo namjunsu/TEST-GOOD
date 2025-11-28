@@ -121,7 +121,7 @@ def render_document_preview(rag_instance: Any, config_module: Any) -> None:
             <span>PDF 문서를 브라우저에서 직접 확인할 수 있습니다.</span>
         </div>
         """,
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
     # 토글 버튼(표시/숨김 통합)

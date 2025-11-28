@@ -182,7 +182,7 @@ def render_pdf_preview(
             st.info("💡 미리보기 대신 파일을 직접 다운로드할 수 있습니다.")
             download_pdf_button(
                 file_path,
-                key=f"fallback_download_{safe_file_path.stem}"
+                key=f"fallback_download_{safe_file_path.stem}",
             )
 
         return ok
@@ -206,7 +206,7 @@ def render_pdf_preview(
             st.info("💡 미리보기 대신 파일을 직접 다운로드할 수 있습니다.")
             download_pdf_button(
                 file_path,
-                key=f"fallback_download_error_{Path(file_path).stem}"
+                key=f"fallback_download_error_{Path(file_path).stem}",
             )
 
         return False
@@ -265,7 +265,7 @@ def list_pdf_files(subdirectory: Optional[str] = None) -> list[Path]:
         pdf_files = sorted(
             search_path.glob("**/*.pdf"),
             key=lambda p: p.stat().st_mtime,
-            reverse=True
+            reverse=True,
         )
 
         # 각 파일이 DOCS_ROOT 하위인지 재검증

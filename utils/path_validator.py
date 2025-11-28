@@ -71,7 +71,7 @@ def validate_and_resolve_path(
     file_path_str: Optional[str],
     base_dir: Path,
     fallback_filename: Optional[str] = None,
-    must_exist: bool = True
+    must_exist: bool = True,
 ) -> Optional[Path]:
     """파일 경로 검증 및 안전한 절대경로 반환
 

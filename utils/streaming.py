@@ -23,25 +23,25 @@ StreamingConfig = {
     "slow": {
         "mode": "char",
         "delay": 0.015,
-        "description": "글자 단위 느린 스트리밍"
+        "description": "글자 단위 느린 스트리밍",
     },
     "medium_short": {
         "mode": "chunk",
         "chunk_size": 5,
         "delay": 0.015,
-        "description": "짧은 텍스트용 청크 스트리밍"
+        "description": "짧은 텍스트용 청크 스트리밍",
     },
     "medium_long": {
         "mode": "chunk",
         "chunk_size": 15,
         "delay": 0.02,
-        "description": "긴 텍스트용 청크 스트리밍"
+        "description": "긴 텍스트용 청크 스트리밍",
     },
     "fast": {
         "mode": "word",
         "delay": 0.03,
-        "description": "단어 단위 빠른 스트리밍"
-    }
+        "description": "단어 단위 빠른 스트리밍",
+    },
 }
 
 # 텍스트 길이 임계값
@@ -54,7 +54,7 @@ TEXT_LENGTH_THRESHOLD = 300
 
 def stream_text_incremental(
     text: str,
-    delay_per_char: float = 0.01
+    delay_per_char: float = 0.01,
 ) -> Generator[str, None, None]:
     """
     Stream text character by character for ChatGPT-style display
@@ -83,7 +83,7 @@ def stream_text_incremental(
 
 def stream_text_by_words(
     text: str,
-    delay_per_word: float = 0.05
+    delay_per_word: float = 0.05,
 ) -> Generator[str, None, None]:
     """
     Stream text word by word for faster progressive display
@@ -114,7 +114,7 @@ def stream_text_by_words(
 def stream_text_by_chunks(
     text: str,
     chunk_size: int = 10,
-    delay_per_chunk: float = 0.02
+    delay_per_chunk: float = 0.02,
 ) -> Generator[str, None, None]:
     """
     Stream text in fixed-size character chunks for balanced speed and smoothness
@@ -144,7 +144,7 @@ def stream_text_by_chunks(
 
 def stream_text_smart(
     text: str,
-    speed: Literal["slow", "medium", "fast"] = "medium"
+    speed: Literal["slow", "medium", "fast"] = "medium",
 ) -> Generator[str, None, None]:
     """
     Smart streaming that adapts based on text length and desired speed
@@ -183,7 +183,7 @@ def stream_text_smart(
         yield from stream_text_by_chunks(
             text,
             chunk_size=config["chunk_size"],
-            delay_per_chunk=config["delay"]
+            delay_per_chunk=config["delay"],
         )
 
 
@@ -193,7 +193,7 @@ def stream_text_smart(
 
 async def astream_text_incremental(
     text: str,
-    delay_per_char: float = 0.01
+    delay_per_char: float = 0.01,
 ) -> AsyncGenerator[str, None]:
     """
     Async version of stream_text_incremental
@@ -220,7 +220,7 @@ async def astream_text_incremental(
 
 async def astream_text_by_words(
     text: str,
-    delay_per_word: float = 0.05
+    delay_per_word: float = 0.05,
 ) -> AsyncGenerator[str, None]:
     """
     Async version of stream_text_by_words
@@ -245,7 +245,7 @@ async def astream_text_by_words(
 async def astream_text_by_chunks(
     text: str,
     chunk_size: int = 10,
-    delay_per_chunk: float = 0.02
+    delay_per_chunk: float = 0.02,
 ) -> AsyncGenerator[str, None]:
     """
     Async version of stream_text_by_chunks
@@ -269,7 +269,7 @@ async def astream_text_by_chunks(
 
 async def astream_text_smart(
     text: str,
-    speed: Literal["slow", "medium", "fast"] = "medium"
+    speed: Literal["slow", "medium", "fast"] = "medium",
 ) -> AsyncGenerator[str, None]:
     """
     Async version of stream_text_smart
@@ -309,7 +309,7 @@ async def astream_text_smart(
         async for chunk in astream_text_by_chunks(
             text,
             chunk_size=config["chunk_size"],
-            delay_per_chunk=config["delay"]
+            delay_per_chunk=config["delay"],
         ):
             yield chunk
 
@@ -330,7 +330,7 @@ def get_streaming_config() -> dict:
 
 def update_streaming_config(
     speed_mode: str,
-    **kwargs
+    **kwargs,
 ) -> None:
     """
     Update streaming configuration
@@ -351,7 +351,7 @@ def update_streaming_config(
 
 def estimate_streaming_duration(
     text: str,
-    speed: Literal["slow", "medium", "fast"] = "medium"
+    speed: Literal["slow", "medium", "fast"] = "medium",
 ) -> float:
     """
     Estimate total streaming duration

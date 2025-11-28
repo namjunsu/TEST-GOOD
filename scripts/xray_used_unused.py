@@ -62,7 +62,7 @@ class XRayAnalyzer:
                         self.coverage_data[str(rel_path)] = {
                             "covered_lines": lines_covered,
                             "total_lines": lines_total,
-                            "coverage_percent": coverage_pct
+                            "coverage_percent": coverage_pct,
                         }
         except Exception as e:
             print(f"Error loading coverage data: {e}", file=sys.stderr)
@@ -90,7 +90,7 @@ class XRayAnalyzer:
             "app/api/main.py",
             "app/main.py",
             "apps/backend.py",
-            "apps/ui_app.py"
+            "apps/ui_app.py",
         ]
 
         for entry in common_entries:
@@ -102,7 +102,7 @@ class XRayAnalyzer:
             for py_file in root.rglob("*.py"):
                 if "__pycache__" not in str(py_file):
                     try:
-                        with open(py_file, "r", encoding="utf-8") as f:
+                        with Path(py_file).open("r", encoding="utf-8") as f:
                             if "__main__" in f.read():
                                 rel_path = py_file.relative_to(self.base_path)
                                 entry_points.add(str(rel_path))
@@ -124,7 +124,7 @@ class XRayAnalyzer:
             rel_path = filepath.relative_to(self.base_path)
             module_path = str(rel_path)
 
-            with open(filepath, "r", encoding="utf-8") as f:
+            with Path(filepath).open("r", encoding="utf-8") as f:
                 content = f.read()
 
             tree = ast.parse(content, str(filepath))
@@ -314,14 +314,14 @@ class XRayAnalyzer:
             f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             "",
             "## Module Details",
-            ""
+            "",
         ]
 
         # Load metadata if available
         metadata_path = Path("docs/xray/modules_metadata.json")
         metadata = {}
         if metadata_path.exists():
-            with open(metadata_path) as f:
+            with Path(metadata_path).open() as f:
                 raw_metadata = json.load(f)
                 # Convert module paths to file paths
                 for _module_name, info in raw_metadata.items():
@@ -405,17 +405,17 @@ def main():
 
     # Generate FILE_INDEX.md
     print(f"Generating {args.index_md}...")
-    with open(args.index_md, "w") as f:
+    with Path(args.index_md).open("w") as f:
         f.write(analyzer.generate_file_index(classifications))
 
     # Generate MODULE_ATLAS.md
     print(f"Generating {args.atlas_md}...")
-    with open(args.atlas_md, "w") as f:
+    with Path(args.atlas_md).open("w") as f:
         f.write(analyzer.generate_module_atlas(classifications))
 
     # Generate coverage CSV
     print(f"Generating {args.coverage_csv}...")
-    with open(args.coverage_csv, "w", newline="") as f:
+    with Path(args.coverage_csv).open("w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["File", "Classification", "Coverage%", "Covered Lines", "Total Lines"])
         for filepath in sorted(classifications.keys()):
@@ -427,7 +427,7 @@ def main():
                     classification,
                     f"{cov['coverage_percent']:.1f}",
                     cov["covered_lines"],
-                    cov["total_lines"]
+                    cov["total_lines"],
                 ])
             else:
                 writer.writerow([filepath, classification, "0.0", 0, 0])
@@ -435,7 +435,7 @@ def main():
     # Generate reachable modules list
     print(f"Generating {args.reachable_list}...")
     reachable = [f for f, c in classifications.items() if c in ["USED", "REACHABLE"]]
-    with open(args.reachable_list, "w") as f:
+    with Path(args.reachable_list).open("w") as f:
         f.write("\n".join(sorted(reachable)))
 
     # Print summary

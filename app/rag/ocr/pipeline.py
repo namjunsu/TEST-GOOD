@@ -36,7 +36,7 @@ def _get_paddleocr():
                 logger.info("PaddleOCR 초기화 중...")
                 _paddle_ocr_instance = PaddleOCR(
                     use_textline_orientation=True,
-                    lang="korean"
+                    lang="korean",
                 )
     return _paddle_ocr_instance
 
@@ -46,7 +46,7 @@ def ocr_extract_pdf(
     dpi: int = 300,
     lang: str = "kor+eng",
     progress_callback: Optional[Callable[[int, int], None]] = None,
-    engine: Literal["tesseract", "paddleocr"] = "paddleocr"
+    engine: Literal["tesseract", "paddleocr"] = "paddleocr",
 ) -> str:
     """PDF를 OCR로 텍스트 추출
 
@@ -87,7 +87,7 @@ def ocr_extract_pdf(
 def _ocr_with_tesseract(
     images,
     lang: str,
-    progress_callback: Optional[Callable[[int, int], None]]
+    progress_callback: Optional[Callable[[int, int], None]],
 ) -> str:
     """Tesseract OCR 수행"""
     text_pages = []
@@ -108,7 +108,7 @@ def _ocr_with_tesseract(
 
 def _ocr_with_paddleocr(
     images,
-    progress_callback: Optional[Callable[[int, int], None]]
+    progress_callback: Optional[Callable[[int, int], None]],
 ) -> str:
     """PaddleOCR 수행"""
     ocr = _get_paddleocr()
@@ -142,7 +142,7 @@ def update_document_text(
     db_path: str,
     filename: str,
     full_text: str,
-    use_transaction: bool = True
+    use_transaction: bool = True,
 ) -> bool:
     """documents 테이블의 text_preview 업데이트
 

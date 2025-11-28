@@ -42,28 +42,28 @@ class TextCleaner:
             self.config.get("text_cleaning", {}).get(
                 "protected_substrings",
                 ["http://", "https://", "ftp://", "10.", "192.168."],
-            )
+            ),
         )
 
         self.noise_patterns = self._compile_patterns()
         self.deduplicate_lines = self.config.get("text_cleaning", {}).get(
-            "deduplicate_lines", True
+            "deduplicate_lines", True,
         )
         self.max_duplicate_threshold = self.config.get("text_cleaning", {}).get(
-            "max_duplicate_threshold", 2
+            "max_duplicate_threshold", 2,
         )
         self.min_repeat_for_noise = self.config.get("text_cleaning", {}).get(
-            "min_repeat_for_noise", 3
+            "min_repeat_for_noise", 3,
         )
 
         # 페이지 헤더/푸터 스캔 범위 (상하단 N행)
         self.page_scan_lines = self.config.get("text_cleaning", {}).get(
-            "page_scan_lines", 4
+            "page_scan_lines", 4,
         )
 
         logger.info(
             f"🧹 텍스트 클리너 v2.0 초기화: {len(self.noise_patterns)}개 패턴, "
-            f"{len(self.protected)}개 보호 문자열"
+            f"{len(self.protected)}개 보호 문자열",
         )
 
     def _load_config(self, config_path: str) -> dict[str, Any]:
@@ -81,7 +81,7 @@ class TextCleaner:
                 logger.warning(f"⚠️ 설정 파일 없음: {config_path}, 기본값 사용")
                 return {}
 
-            with open(config_file, "r", encoding="utf-8") as f:
+            with Path(config_file).open("r", encoding="utf-8") as f:
                 config = yaml.safe_load(f) or {}
 
             # 하위 호환: v0 스키마를 v1로 정규화
@@ -119,7 +119,7 @@ class TextCleaner:
                 compiled = re.compile(pattern_str, flags)
                 patterns.append((compiled, description))
                 logger.debug(
-                    f"✓ 패턴 컴파일: {description} - {pattern_str} (flags={flags})"
+                    f"✓ 패턴 컴파일: {description} - {pattern_str} (flags={flags})",
                 )
             except re.error as e:
                 logger.error(f"❌ 패턴 컴파일 실패: {pattern_str} - {e}")
@@ -213,7 +213,7 @@ class TextCleaner:
         return cleaned_text, noise_counts
 
     def _remove_pattern_noise(
-        self, lines: list[str]
+        self, lines: list[str],
     ) -> tuple[list[str], dict[str, int], list[str]]:
         """패턴 기반 노이즈 제거 (보호 문자열 가드 포함)
 
@@ -248,7 +248,7 @@ class TextCleaner:
         return cleaned_lines, counts, samples
 
     def _remove_repeated_lines(
-        self, lines: list[str]
+        self, lines: list[str],
     ) -> tuple[list[str], int, list[str]]:
         """빈도 기반 반복 헤더/푸터 제거 (페이지 단위 스캔)
 
@@ -297,7 +297,7 @@ class TextCleaner:
         return cleaned_lines, removed_count, samples
 
     def _deduplicate_consecutive_lines(
-        self, lines: list[str]
+        self, lines: list[str],
     ) -> tuple[list[str], int]:
         """연속된 중복 라인 제거
 

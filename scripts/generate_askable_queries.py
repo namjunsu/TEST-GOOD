@@ -13,6 +13,7 @@ DB 기반 질문 프리셋 자동 생성기
 
 import json
 import os
+import pathlib
 import re
 import sqlite3
 from collections import defaultdict
@@ -96,15 +97,15 @@ class QueryGenerator:
                 "category": "일반 대화",
                 "expected_mode": "chat",
                 "expected_citations": False,
-                "difficulty": "easy"
+                "difficulty": "easy",
             },
             {
                 "query": "1 + 1은?",
                 "category": "일반 대화",
                 "expected_mode": "chat",
                 "expected_citations": False,
-                "difficulty": "easy"
-            }
+                "difficulty": "easy",
+            },
         ])
 
         # 2. 작성자별 문서 검색 (실제 작성자만)
@@ -121,7 +122,7 @@ class QueryGenerator:
                 "expected_mode": "rag",
                 "expected_citations": True,
                 "difficulty": "medium",
-                "metadata": {"drafter": drafter, "expected_count": count}
+                "metadata": {"drafter": drafter, "expected_count": count},
             })
 
         # 3. 연도별 문서 검색
@@ -138,7 +139,7 @@ class QueryGenerator:
                 "expected_mode": "rag",
                 "expected_citations": True,
                 "difficulty": "medium",
-                "metadata": {"year": year, "expected_count": count}
+                "metadata": {"year": year, "expected_count": count},
             })
 
         # 4. 특정 문서 요약 (파일명 기반)
@@ -154,7 +155,7 @@ class QueryGenerator:
                     "expected_mode": "rag",
                     "expected_citations": True,
                     "difficulty": "medium",
-                    "metadata": {"filename": filename}
+                    "metadata": {"filename": filename},
                 })
 
         # 5. 장비별 문서 검색 (실제 키워드 기반)
@@ -169,7 +170,7 @@ class QueryGenerator:
                     "expected_mode": "rag",
                     "expected_citations": True,
                     "difficulty": "hard",
-                    "metadata": {"equipment": equipment, "expected_count": count}
+                    "metadata": {"equipment": equipment, "expected_count": count},
                 })
 
         # 6. 카테고리별 검색
@@ -186,7 +187,7 @@ class QueryGenerator:
                     "expected_mode": "rag",
                     "expected_citations": True,
                     "difficulty": "medium",
-                    "metadata": {"category": category, "expected_count": count}
+                    "metadata": {"category": category, "expected_count": count},
                 })
 
         # 7. 무근거 질문 (DB에 없는 내용)
@@ -196,15 +197,15 @@ class QueryGenerator:
                 "category": "무근거 방지",
                 "expected_mode": "chat",
                 "expected_citations": False,
-                "difficulty": "hard"
+                "difficulty": "hard",
             },
             {
                 "query": "존재하지_않는_장비_12345의 구매 이력은?",
                 "category": "무근거 방지",
                 "expected_mode": "chat",
                 "expected_citations": False,
-                "difficulty": "hard"
-            }
+                "difficulty": "hard",
+            },
         ])
 
         return queries
@@ -213,7 +214,7 @@ class QueryGenerator:
         """Markdown 포맷 출력"""
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-        with open(output_path, "w", encoding="utf-8") as f:
+        with pathlib.Path(output_path).open("w", encoding="utf-8") as f:
             f.write("# AI-CHAT 질문 가능 목록 (Askable Queries)\n\n")
             f.write(f"**생성 일시**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write("**DB 기준**: metadata.db (483개 문서)\n")
@@ -253,7 +254,7 @@ class QueryGenerator:
         import csv
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-        with open(output_path, "w", encoding="utf-8-sig", newline="") as f:
+        with pathlib.Path(output_path).open("w", encoding="utf-8-sig", newline="") as f:
             writer = csv.writer(f)
             writer.writerow([
                 "query",
@@ -261,7 +262,7 @@ class QueryGenerator:
                 "expected_mode",
                 "expected_citations",
                 "difficulty",
-                "metadata"
+                "metadata",
             ])
 
             for q in queries:
@@ -271,7 +272,7 @@ class QueryGenerator:
                     q["expected_mode"],
                     q["expected_citations"],
                     q["difficulty"],
-                    json.dumps(q.get("metadata", {}), ensure_ascii=False)
+                    json.dumps(q.get("metadata", {}), ensure_ascii=False),
                 ])
 
         print(f"✅ CSV 저장: {output_path}")
@@ -285,7 +286,7 @@ class QueryGenerator:
             "version": "1.0",
             "generated_at": datetime.now().isoformat(),
             "total_queries": len(queries),
-            "presets": []
+            "presets": [],
         }
 
         for q in queries:
@@ -294,7 +295,7 @@ class QueryGenerator:
                 "text": q["query"],
                 "category": q["category"],
                 "mode": q["expected_mode"],
-                "difficulty": q["difficulty"]
+                "difficulty": q["difficulty"],
             }
 
             if "metadata" in q:
@@ -302,7 +303,7 @@ class QueryGenerator:
 
             presets["presets"].append(preset)
 
-        with open(output_path, "w", encoding="utf-8") as f:
+        with pathlib.Path(output_path).open("w", encoding="utf-8") as f:
             json.dump(presets, f, indent=2, ensure_ascii=False)
 
         print(f"✅ JSON 저장: {output_path}")

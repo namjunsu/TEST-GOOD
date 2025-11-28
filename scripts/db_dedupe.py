@@ -26,7 +26,7 @@ def find_duplicates(db: MetadataDB):
         FROM documents
         WHERE content_hash IS NOT NULL
         ORDER BY content_hash, created_at
-        """
+        """,
     )
 
     rows = cursor.fetchall()
@@ -39,7 +39,7 @@ def find_duplicates(db: MetadataDB):
         hash_groups[content_hash].append({
             "id": doc_id,
             "filename": filename,
-            "created_at": created_at
+            "created_at": created_at,
         })
 
     # 중복 그룹 필터링 (2개 이상)
@@ -75,7 +75,7 @@ def remove_duplicates(db: MetadataDB, duplicates: dict, dry_run: bool = True):
 
 def generate_report(duplicates: dict, removed: list, output_path: str):
     """보고서 생성"""
-    with open(output_path, "w", encoding="utf-8") as f:
+    with Path(output_path).open("w", encoding="utf-8") as f:
         f.write("# 데이터베이스 중복 제거 보고서\n\n")
         f.write(f"중복 그룹 수: {len(duplicates)}\n")
         f.write(f"제거된 문서 수: {len(removed)}\n\n")

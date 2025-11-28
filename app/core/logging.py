@@ -131,11 +131,11 @@ def _init_logger() -> logging.Logger:
     else:
         console_fmt = UtcFormatter(
             "[%(asctime)s] %(levelname)-8s %(name)s: %(message)s",
-            datefmt="%H:%M:%S"
+            datefmt="%H:%M:%S",
         )
         file_fmt = UtcFormatter(
             "[%(asctime)s] %(levelname)-8s [%(name)s:%(lineno)d] %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
+            datefmt="%Y-%m-%d %H:%M:%S",
         )
 
     # 콘솔 핸들러
@@ -151,7 +151,7 @@ def _init_logger() -> logging.Logger:
             filename=str(LOG_DIR / "app.log"),  # Path → str 명시
             maxBytes=max_mb * 1024 * 1024,
             backupCount=backups,
-            encoding="utf-8"
+            encoding="utf-8",
         )
         file_handler.setLevel(logging.DEBUG)  # 파일은 상세 수집
         file_handler.setFormatter(file_fmt)
@@ -171,7 +171,7 @@ def _init_logger() -> logging.Logger:
         "Logging system initialized (level=%s, json=%s, dir=%s)",
         level_name,
         json_mode,
-        str(LOG_DIR)
+        str(LOG_DIR),
     )
 
     _LOGGER = logger

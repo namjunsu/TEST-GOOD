@@ -15,7 +15,7 @@ def get_installed_packages():
     result = subprocess.run(
         ["pip", "list", "--format=json"],
         capture_output=True,
-        text=True
+        text=True,
     )
     return json.loads(result.stdout)
 
@@ -121,7 +121,7 @@ def scan_licenses():
                 ["pip", "show", name],
                 capture_output=True,
                 text=True,
-                timeout=2
+                timeout=2,
             )
 
             license_info = "Unknown"
@@ -141,7 +141,7 @@ def scan_licenses():
             "name": name,
             "version": version,
             "license": license_info,
-            "category": classify_license(license_info)
+            "category": classify_license(license_info),
         })
 
         # Security checks
@@ -160,7 +160,7 @@ def scan_licenses():
             security_concerns.append({
                 "package": name,
                 "version": version,
-                "issues": security_issues
+                "issues": security_issues,
             })
 
     return licenses, security_concerns
@@ -183,7 +183,7 @@ def generate_report():
         f"Scan date: {subprocess.check_output(['date']).decode().strip()}",
         "",
         "📊 License Distribution:",
-        "-" * 30
+        "-" * 30,
     ]
 
     for category, count in sorted(license_counts.items()):
@@ -193,7 +193,7 @@ def generate_report():
     report_lines.extend([
         "",
         "📜 Package Licenses:",
-        "-" * 30
+        "-" * 30,
     ])
 
     # Group by category
@@ -210,7 +210,7 @@ def generate_report():
     report_lines.extend([
         "",
         "🔒 Security Analysis:",
-        "-" * 30
+        "-" * 30,
     ])
 
     if security_concerns:
@@ -230,7 +230,7 @@ def generate_report():
         f"✅ Permissive licenses: {license_counts.get('Permissive', 0)} packages",
         f"⚠️  Copyleft licenses: {license_counts.get('Copyleft', 0)} packages",
         f"ℹ️  Unknown licenses: {license_counts.get('Unknown', 0)} packages",
-        ""
+        "",
     ])
 
     # Risk assessment
@@ -249,13 +249,13 @@ def generate_report():
 
     report_lines.extend([
         f"Risk Level: {risk_icon} {risk}",
-        ""
+        "",
     ])
 
     # Recommendations
     report_lines.extend([
         "💡 Recommendations:",
-        "-" * 30
+        "-" * 30,
     ])
 
     if copyleft_count > 0:
@@ -283,11 +283,11 @@ def generate_report():
         "packages": licenses,
         "security_concerns": security_concerns,
         "risk_level": risk,
-        "timestamp": subprocess.check_output(["date"]).decode().strip()
+        "timestamp": subprocess.check_output(["date"]).decode().strip(),
     }
 
     json_file = Path("reports/licenses_detail.json")
-    with open(json_file, "w") as f:
+    with Path(json_file).open("w") as f:
         json.dump(json_report, f, indent=2)
 
     print(report_text)

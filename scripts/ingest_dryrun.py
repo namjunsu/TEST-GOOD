@@ -30,7 +30,7 @@ from rag_system.active.enhanced_ocr_processor import EnhancedOCRProcessor
 
 logging.basicConfig(
     level=logging.INFO,
-    format="[%(levelname)s] %(message)s"
+    format="[%(levelname)s] %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ class TextSplitter:
         self,
         chunk_size_tokens: int = 900,
         chunk_overlap: int = 150,
-        min_chunk_size: int = 200
+        min_chunk_size: int = 200,
     ):
         self.chunk_size = chunk_size_tokens
         self.overlap = chunk_overlap
@@ -50,7 +50,7 @@ class TextSplitter:
 
         # 문장 경계 패턴 (한국어 최적화)
         self.sentence_endings = re.compile(
-            r"(?<=[.!?])\s+|(?<=[다요]\.)\s+|(?<=\))\s+(?=[A-Z가-힣])"
+            r"(?<=[.!?])\s+|(?<=[다요]\.)\s+|(?<=\))\s+(?=[A-Z가-힣])",
         )
 
     def estimate_tokens(self, text: str) -> int:
@@ -119,7 +119,7 @@ class IngestDryrun:
         self.splitter = TextSplitter(
             chunk_size_tokens=900,
             chunk_overlap=150,
-            min_chunk_size=200
+            min_chunk_size=200,
         )
 
         # 통계
@@ -176,7 +176,7 @@ class IngestDryrun:
 
         return {
             "ko": round(korean_chars / total_chars * 100, 2),
-            "en": round(english_chars / total_chars * 100, 2)
+            "en": round(english_chars / total_chars * 100, 2),
         }
 
     def process_file(self, pdf_path: Path) -> dict:
@@ -186,7 +186,7 @@ class IngestDryrun:
             "path": str(pdf_path.relative_to(self.input_dir.parent)),
             "stages": {},
             "errors": [],
-            "elapsed_ms": {}
+            "elapsed_ms": {},
         }
 
         try:
@@ -208,7 +208,7 @@ class IngestDryrun:
                 "engine": "pdfplumber",
                 "pages": pages,
                 "text_length": len(raw_text),
-                "ok": len(raw_text) > 0
+                "ok": len(raw_text) > 0,
             }
             trace["elapsed_ms"]["loader"] = int((t1 - t0) * 1000)
             logger.info(f"[INGEST] file={pdf_path.name}, stage=loader, elapsed_ms={trace['elapsed_ms']['loader']}, ok=True")
@@ -235,7 +235,7 @@ class IngestDryrun:
                         "lang": "kor+eng",
                         "engine": ocr_result["engine"],
                         "text_length": len(raw_text),
-                        "ok": True
+                        "ok": True,
                     }
                     trace["elapsed_ms"]["ocr"] = int((t1 - t0) * 1000)
                     logger.info(f"[OCR] decision=run, reason=no_text_layer, lang=kor+eng, elapsed_ms={trace['elapsed_ms']['ocr']}")
@@ -246,7 +246,7 @@ class IngestDryrun:
                         "decision": "run",
                         "reason": "no_text_layer",
                         "engine": ocr_result["engine"],
-                        "success": True
+                        "success": True,
                     })
                 else:
                     # OCR 실패
@@ -254,7 +254,7 @@ class IngestDryrun:
                         "decision": "run",
                         "reason": "no_text_layer",
                         "ok": False,
-                        "why": ocr_result["why"]
+                        "why": ocr_result["why"],
                     }
                     trace["errors"].append(f"OCR failed: {ocr_result['why']}")
                     trace["elapsed_ms"]["ocr"] = int((t1 - t0) * 1000)
@@ -267,7 +267,7 @@ class IngestDryrun:
                         "reason": "no_text_layer",
                         "engine": ocr_result.get("engine", "unknown"),
                         "success": False,
-                        "why": ocr_result["why"]
+                        "why": ocr_result["why"],
                     })
 
                     self.stats["failed"] += 1
@@ -277,7 +277,7 @@ class IngestDryrun:
                 trace["stages"]["ocr"] = {
                     "decision": "skip",
                     "reason": "has_text_layer",
-                    "ok": True
+                    "ok": True,
                 }
                 logger.info("[OCR] decision=skip, reason=has_text_layer, lang=kor+eng")
                 self.stats["ocr_skipped"] += 1
@@ -286,7 +286,7 @@ class IngestDryrun:
                     "filename": pdf_path.name,
                     "decision": "skip",
                     "reason": "has_text_layer",
-                    "success": True
+                    "success": True,
                 })
 
             # 3. 정규화 단계
@@ -296,7 +296,7 @@ class IngestDryrun:
             trace["stages"]["normalize"] = {
                 "before_length": len(raw_text),
                 "after_length": len(cleaned_text),
-                "ok": True
+                "ok": True,
             }
             trace["elapsed_ms"]["normalize"] = int((t1 - t0) * 1000)
 
@@ -318,7 +318,7 @@ class IngestDryrun:
                 "max_tokens": max_chunk_size,
                 "small_chunks": small_chunks,
                 "small_chunk_rate": round(small_chunks / len(chunks) * 100, 2) if chunks else 0,
-                "ok": True
+                "ok": True,
             }
             trace["elapsed_ms"]["split"] = int((t1 - t0) * 1000)
             logger.info(f"[INGEST] file={pdf_path.name}, stage=split, chunks={len(chunks)}, avg_tokens={avg_chunk_size:.1f}, elapsed_ms={trace['elapsed_ms']['split']}, ok=True")
@@ -338,7 +338,7 @@ class IngestDryrun:
                     "chunk_id": i,
                     "chunk_size_tokens": chunk_tokens,
                     "ko_ratio": lang_stats["ko"],
-                    "en_ratio": lang_stats["en"]
+                    "en_ratio": lang_stats["en"],
                 })
 
             # 통계 업데이트
@@ -349,7 +349,7 @@ class IngestDryrun:
             trace["stages"]["summary"] = {
                 "doctype": doctype,
                 "language": lang_stats,
-                "total_tokens": sum(chunk_sizes)
+                "total_tokens": sum(chunk_sizes),
             }
 
         except Exception as e:
@@ -413,21 +413,21 @@ class IngestDryrun:
         trace_file: str,
         chunk_stats_file: str,
         embedding_report_file: str,
-        ocr_audit_file: str
+        ocr_audit_file: str,
     ):
         """보고서 저장"""
         logger.info("\n보고서 생성 중...")
 
         # 1. 트레이스 (JSONL)
         Path(trace_file).parent.mkdir(parents=True, exist_ok=True)
-        with open(trace_file, "w", encoding="utf-8") as f:
+        with Path(trace_file).open("w", encoding="utf-8") as f:
             for trace in self.traces:
                 f.write(json.dumps(trace, ensure_ascii=False) + "\n")
         logger.info(f"✓ {trace_file}")
 
         # 2. 청크 통계 (CSV)
         if self.chunk_stats:
-            with open(chunk_stats_file, "w", newline="", encoding="utf-8") as f:
+            with Path(chunk_stats_file).open("w", newline="", encoding="utf-8") as f:
                 writer = csv.DictWriter(f, fieldnames=self.chunk_stats[0].keys())
                 writer.writeheader()
                 writer.writerows(self.chunk_stats)
@@ -440,14 +440,14 @@ class IngestDryrun:
             "normalization": "L2",
             "metric": "cosine_similarity",
             "error_count": 0,  # 드라이런에서는 임베딩 미수행
-            "note": "Embedding not performed in dryrun mode"
+            "note": "Embedding not performed in dryrun mode",
         }
-        with open(embedding_report_file, "w", encoding="utf-8") as f:
+        with Path(embedding_report_file).open("w", encoding="utf-8") as f:
             json.dump(embedding_report, f, ensure_ascii=False, indent=2)
         logger.info(f"✓ {embedding_report_file}")
 
         # 4. OCR 감사 (Markdown)
-        with open(ocr_audit_file, "w", encoding="utf-8") as f:
+        with Path(ocr_audit_file).open("w", encoding="utf-8") as f:
             f.write("# OCR 감사 보고서\n\n")
             f.write(f"**생성 시각:** {datetime.now().isoformat()}\n\n")
 
@@ -512,7 +512,7 @@ def main():
         trace_file=args.trace,
         chunk_stats_file=args.chunk_stats,
         embedding_report_file=args.embedding_report,
-        ocr_audit_file=args.ocr_audit
+        ocr_audit_file=args.ocr_audit,
     )
 
     logger.info("\n✅ 드라이런 완료")

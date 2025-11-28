@@ -42,7 +42,7 @@ def fetch_index_metrics(api_base_url: str, timeout: int = 5) -> dict[str, Any]:
     response = requests.get(
         f"{api_base_url}/metrics",
         headers={"Cache-Control": "no-cache"},
-        timeout=timeout
+        timeout=timeout,
     )
     response.raise_for_status()
     return response.json()
@@ -144,7 +144,7 @@ def render_index_status_panel(api_base_url: str = "http://localhost:7860"):
             st.warning(
                 f"⚠️ 동기화 필요: {unindexed_count}개 문서가 인덱스에 없습니다. "
                 f"`make reindex`를 실행하세요.",
-                icon="⚠️"
+                icon="⚠️",
             )
         else:
             st.success("✅ 모든 문서가 인덱스에 동기화되었습니다.", icon="✅")
@@ -168,13 +168,13 @@ def render_index_status_panel(api_base_url: str = "http://localhost:7860"):
         for i, (label, path) in enumerate(report_files):
             with cols[i]:
                 if path.exists() and path.is_file():
-                    with open(path, "rb") as f:
+                    with Path(path).open("rb") as f:
                         st.download_button(
                             label=label,
                             data=f,
                             file_name=label,
                             mime="text/markdown" if path.suffix == ".md" else "text/csv",
-                            key=f"download_{label}"
+                            key=f"download_{label}",
                         )
                 else:
                     st.button(label, disabled=True, key=f"disabled_{label}")

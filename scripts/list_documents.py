@@ -113,7 +113,7 @@ def list_documents(db_path="metadata.db", limit=None, show_details=False):
                     "category": category,
                     "drafter": drafter,
                     "page_count": page_count,
-                    "keywords": keywords
+                    "keywords": keywords,
                 })
         else:
             # 간단한 테이블 형태
@@ -138,7 +138,7 @@ def list_documents(db_path="metadata.db", limit=None, show_details=False):
                     "category": row["category"],
                     "drafter": row["drafter"],
                     "page_count": row["page_count"],
-                    "keywords": row["keywords"]
+                    "keywords": row["keywords"],
                 })
 
         print("\n" + "=" * 80)
@@ -202,7 +202,7 @@ def main():
     documents = list_documents(
         db_path=args.db,
         limit=args.limit,
-        show_details=args.details
+        show_details=args.details,
     )
 
     return 0 if documents else 1

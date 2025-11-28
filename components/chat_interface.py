@@ -169,7 +169,7 @@ def render_doc_card(
     drafter: Optional[str],
     summary: str,
     show_preview_inline: bool = False,
-    msg_idx: int = 0
+    msg_idx: int = 0,
 ) -> None:
     """문서 카드 렌더링 (고정 레이아웃) - 안전가드 + 캐시 적용
 
@@ -238,7 +238,7 @@ def render_doc_card(
                 file_path=str(file_path),
                 key=f"download_{unique_key}",
                 width="stretch",
-                icon_only=True
+                icon_only=True,
             )
 
         # PDF 미리보기 (선택 시)
@@ -247,7 +247,7 @@ def render_doc_card(
             render_pdf_preview(
                 file_path=str(file_path),
                 height=500,
-                show_download_fallback=True
+                show_download_fallback=True,
             )
     else:
         st.caption("⚠️ 파일 경로 없음")
@@ -307,7 +307,7 @@ def _normalize_rag_response(resp: Any) -> dict:
             "text": str(text),
             "evidence": evidence,
             "status": status,
-            "diagnostics": diagnostics
+            "diagnostics": diagnostics,
         }
 
     # dict인 경우
@@ -326,7 +326,7 @@ def _normalize_rag_response(resp: Any) -> dict:
             "text": str(text),
             "evidence": evidence,
             "status": status,
-            "diagnostics": diagnostics
+            "diagnostics": diagnostics,
         }
 
     # 그 외 알 수 없는 타입
@@ -390,7 +390,7 @@ def _render_toolbar() -> None:
                 file_name=f"chat_history_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
                 mime="application/json",
                 use_container_width=True,
-                help="대화 기록을 JSON 파일로 저장합니다"
+                help="대화 기록을 JSON 파일로 저장합니다",
             )
         else:
             st.button("📥 JSON 내보내기", use_container_width=True, disabled=True, help="대화 기록이 없습니다")
@@ -405,7 +405,7 @@ def _render_toolbar() -> None:
                 min_value=1,
                 max_value=20,
                 value=st.session_state.chat_options["top_k"],
-                help="RAG 검색 시 가져올 최대 문서 수"
+                help="RAG 검색 시 가져올 최대 문서 수",
             )
             if new_top_k != st.session_state.chat_options["top_k"]:
                 st.session_state.chat_options["top_k"] = new_top_k
@@ -415,7 +415,7 @@ def _render_toolbar() -> None:
             speed_options = {
                 "slow": "느리게 (가독성)",
                 "medium": "보통 (권장)",
-                "fast": "빠르게 (효율성)"
+                "fast": "빠르게 (효율성)",
             }
             current_speed = st.session_state.chat_options["streaming_speed"]
             new_speed = st.selectbox(
@@ -423,7 +423,7 @@ def _render_toolbar() -> None:
                 options=list(speed_options.keys()),
                 index=list(speed_options.keys()).index(current_speed),
                 format_func=lambda x: speed_options[x],
-                help="응답을 표시하는 속도 조절"
+                help="응답을 표시하는 속도 조절",
             )
             if new_speed != current_speed:
                 st.session_state.chat_options["streaming_speed"] = new_speed
@@ -433,7 +433,7 @@ def _render_toolbar() -> None:
             new_show_evidence = st.checkbox(
                 "출처 문서 표시",
                 value=st.session_state.chat_options["show_evidence"],
-                help="AI 응답의 근거가 된 문서를 표시합니다"
+                help="AI 응답의 근거가 된 문서를 표시합니다",
             )
             if new_show_evidence != st.session_state.chat_options["show_evidence"]:
                 st.session_state.chat_options["show_evidence"] = new_show_evidence
@@ -467,7 +467,7 @@ def _display_evidence_section(evidence_list: list, msg_idx: int) -> None:
     # expanded 파라미터를 동적으로 변경하면 재렌더링 시 충돌이 발생할 수 있음
     with st.expander(
         f"📚 출처 문서 ({len(display_evidence)}건)",
-        expanded=False
+        expanded=False,
     ):
         for i, ev in enumerate(display_evidence, 1):
             # Evidence가 dict 또는 객체일 수 있으므로 안전하게 접근
@@ -528,7 +528,7 @@ def _display_evidence_section(evidence_list: list, msg_idx: int) -> None:
                 drafter=drafter,
                 summary=snippet,
                 show_preview_inline=False,
-                msg_idx=msg_idx
+                msg_idx=msg_idx,
             )
 
             # 간결한 구분 (마지막 아이템 제외)
@@ -743,7 +743,7 @@ def _handle_error(error: Exception) -> dict:
     return {
         "message": user_message,
         "details": details,
-        "error_type": error_type
+        "error_type": error_type,
     }
 
 
@@ -785,7 +785,7 @@ def _generate_ai_response(
     query: str,
     rag_instance: RAGProtocol,
     message_placeholder: Any,
-    selected_filename: Optional[str] = None
+    selected_filename: Optional[str] = None,
 ) -> Optional[dict]:
     """AI 응답 생성 (Evidence 포함)
 
@@ -818,7 +818,7 @@ def _generate_ai_response(
         raw_response = rag_instance.answer(
             query,
             top_k=top_k,
-            selected_filename=selected_filename
+            selected_filename=selected_filename,
         )
         logger.info(f"RAG query executed with top_k={top_k}, selected_filename={selected_filename}")
 
@@ -862,7 +862,7 @@ def _add_message(role: Literal["user", "assistant"], content: str, evidence: Opt
     message: ChatMessage = {
         "role": role,
         "content": content,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }
 
     # Evidence 추가 (있는 경우만)
@@ -912,7 +912,7 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                         <span>{title} 문서를 우선적으로 검색합니다</span>
                     </div>
                     """,
-                    unsafe_allow_html=True
+                    unsafe_allow_html=True,
                 )
             with col2:
                 if st.button("❌", key="clear_doc_context", help="문서 컨텍스트 해제"):
@@ -967,7 +967,7 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                     enhanced_query,
                     unified_rag_instance,
                     message_placeholder,
-                    selected_filename=selected_filename
+                    selected_filename=selected_filename,
                 )
 
                 # 응답이 있으면 표시 및 저장

@@ -40,7 +40,7 @@ def _dumps(obj: Any, compress: bool = True) -> bytes:
         직렬화된 바이트
     """
     data = json.dumps(
-        {"v": 1, "payload": obj}, ensure_ascii=False, separators=(",", ":")
+        {"v": 1, "payload": obj}, ensure_ascii=False, separators=(",", ":"),
     ).encode("utf-8")
     return zlib.compress(data, level=6) if compress else data
 
@@ -149,13 +149,13 @@ class PersistentCache:
             """)
             # 인덱스
             cur.execute(
-                "CREATE INDEX IF NOT EXISTS idx_accessed_at ON query_cache(accessed_at)"
+                "CREATE INDEX IF NOT EXISTS idx_accessed_at ON query_cache(accessed_at)",
             )
             cur.execute(
-                "CREATE INDEX IF NOT EXISTS idx_created_at ON query_cache(created_at)"
+                "CREATE INDEX IF NOT EXISTS idx_created_at ON query_cache(created_at)",
             )
             cur.execute(
-                "CREATE INDEX IF NOT EXISTS idx_access_count ON query_cache(access_count)"
+                "CREATE INDEX IF NOT EXISTS idx_access_count ON query_cache(access_count)",
             )
             logger.info(f"Persistent cache v2.0 initialized: {self.db_path}")
 
@@ -220,7 +220,7 @@ class PersistentCache:
             return None
 
         logger.info(
-            f"✅ Persistent Cache HIT: {query[:50]}... (accessed {access_count + 1} times)"
+            f"✅ Persistent Cache HIT: {query[:50]}... (accessed {access_count + 1} times)",
         )
         return result
 
@@ -280,7 +280,7 @@ class PersistentCache:
         with self._connect() as conn:
             cur = conn.cursor()
             cur.execute(
-                f"DELETE FROM query_cache WHERE (? - {ref_col}) > ?", (now, self.ttl)
+                f"DELETE FROM query_cache WHERE (? - {ref_col}) > ?", (now, self.ttl),
             )
             deleted = cur.rowcount or 0
 
@@ -312,15 +312,15 @@ class PersistentCache:
                 """
                 SELECT cache_key FROM query_cache
                 ORDER BY accessed_at ASC LIMIT 1000
-            """
+            """,
             )
             keys = [k for (k,) in cur.fetchall()]
             if keys:
                 cur.executemany(
-                    "DELETE FROM query_cache WHERE cache_key=?", [(k,) for k in keys]
+                    "DELETE FROM query_cache WHERE cache_key=?", [(k,) for k in keys],
                 )
                 logger.info(
-                    f"Size limit exceeded ({size:.1f}MB). Evicted {len(keys)} entries"
+                    f"Size limit exceeded ({size:.1f}MB). Evicted {len(keys)} entries",
                 )
 
     # ---- 통계 & 유틸리티 -------------------------------------------------------
@@ -348,7 +348,7 @@ class PersistentCache:
 
             # 전체 카운트/접근 수
             cur.execute(
-                "SELECT COUNT(*), COALESCE(SUM(access_count),0) FROM query_cache"
+                "SELECT COUNT(*), COALESCE(SUM(access_count),0) FROM query_cache",
             )
             total_count, total_accesses = cur.fetchone()
 
@@ -357,7 +357,7 @@ class PersistentCache:
                 """
                 SELECT query, access_count FROM query_cache
                 ORDER BY access_count DESC LIMIT 5
-            """
+            """,
             )
             top = [{"query": q[:80], "count": c} for q, c in cur.fetchall()]
 

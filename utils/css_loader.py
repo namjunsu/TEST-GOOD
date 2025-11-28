@@ -52,12 +52,12 @@ def load_css(css_filename: str = "main.css", fallback: bool = True) -> bool:
 
     if css_path.exists() and css_path.is_file():
         try:
-            with open(css_path, "r", encoding="utf-8") as f:
+            with Path(css_path).open("r", encoding="utf-8") as f:
                 css_content = f.read()
                 # key 기반 중복 삽입 방지
                 st.markdown(
                     f"<style>{css_content}</style>",
-                    unsafe_allow_html=True
+                    unsafe_allow_html=True,
                 )
                 logger.info(f"CSS 로드 성공: {css_filename}")
                 return True

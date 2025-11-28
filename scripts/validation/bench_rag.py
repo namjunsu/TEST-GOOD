@@ -89,15 +89,15 @@ class BenchSummary:
 DEFAULT_GOLDEN_SET = [
     {
         "query": "2024년 예산은 얼마인가요?",
-        "expected_docs": ["budget_2024.pdf", "finance_report_2024.pdf"]
+        "expected_docs": ["budget_2024.pdf", "finance_report_2024.pdf"],
     },
     {
         "query": "신규 채용 계획이 있나요?",
-        "expected_docs": ["hr_plan_2024.pdf", "recruitment_2024.pdf"]
+        "expected_docs": ["hr_plan_2024.pdf", "recruitment_2024.pdf"],
     },
     {
         "query": "올해 주요 프로젝트는?",
-        "expected_docs": ["project_plan_2024.pdf", "annual_goals_2024.pdf"]
+        "expected_docs": ["project_plan_2024.pdf", "annual_goals_2024.pdf"],
     },
     # 실제로는 30~50개 질문
 ]
@@ -113,7 +113,7 @@ def load_golden_set(filepath: Optional[Path] = None) -> list[dict[str, Any]]:
         List of queries with expected docs
     """
     if filepath and filepath.exists():
-        with open(filepath, "r", encoding="utf-8") as f:
+        with Path(filepath).open("r", encoding="utf-8") as f:
             return json.load(f)
     else:
         print(f"⚠️  골든 셋 파일 없음, 기본값 사용: {len(DEFAULT_GOLDEN_SET)}개")
@@ -266,7 +266,7 @@ def run_benchmark(golden_set_path: Optional[Path] = None, top_k: int = 5) -> Ben
     output_path = Path("var/log/bench_metrics.json")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(output_path, "w", encoding="utf-8") as f:
+    with Path(output_path).open("w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=2, ensure_ascii=False)
 
     print(f"\n✅ 결과 저장: {output_path}")

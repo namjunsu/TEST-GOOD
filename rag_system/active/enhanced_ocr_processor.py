@@ -134,7 +134,7 @@ class EnhancedOCRProcessor:
         """캐시 파일 로드"""
         if cache_file.exists():
             try:
-                with open(cache_file, "r", encoding="utf-8") as f:
+                with Path(cache_file).open("r", encoding="utf-8") as f:
                     return json.load(f)
             except Exception as e:
                 logger.warning(f"캐시 로드 실패: {cache_file} - {e}")
@@ -143,7 +143,7 @@ class EnhancedOCRProcessor:
     def _save_cache(self, cache_file: Path, cache_data: dict):
         """캐시 파일 저장"""
         try:
-            with open(cache_file, "w", encoding="utf-8") as f:
+            with Path(cache_file).open("w", encoding="utf-8") as f:
                 json.dump(cache_data, f, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"캐시 저장 실패: {cache_file} - {e}")
@@ -204,7 +204,7 @@ class EnhancedOCRProcessor:
             "text": "",
             "pages": 0,
             "engine": "unknown",
-            "why": ""
+            "why": "",
         }
 
         try:
@@ -270,7 +270,7 @@ class EnhancedOCRProcessor:
                     text = pytesseract.image_to_string(
                         image,
                         lang=lang,
-                        config=self.tesseract_config
+                        config=self.tesseract_config,
                     )
                     if text.strip():
                         processed_text = self._post_process_text(text)
@@ -323,7 +323,7 @@ class EnhancedOCRProcessor:
             "ocr_performed": False,
             "page_count": 0,
             "image_count": 0,
-            "ocr_text_length": 0
+            "ocr_text_length": 0,
         }
 
         try:
@@ -357,7 +357,7 @@ class EnhancedOCRProcessor:
             # 캐시 저장
             self.ocr_cache[pdf_hash] = {
                 "text": full_text,
-                "metadata": metadata
+                "metadata": metadata,
             }
             self._save_cache(self.ocr_cache_file, self.ocr_cache)
 
@@ -385,7 +385,7 @@ class EnhancedOCRProcessor:
                     text = pytesseract.image_to_string(
                         image,
                         lang=self.tesseract_lang,
-                        config=self.tesseract_config
+                        config=self.tesseract_config,
                     )
 
                     if text.strip():
@@ -434,7 +434,7 @@ class EnhancedOCRProcessor:
             lambda m: m.group(1) + m.group(2) + m.group(3)
             if len(m.group(1) + m.group(2) + m.group(3)) <= self.MAX_KOREAN_WORD_LENGTH
             else m.group(0),
-            text
+            text,
         )
 
         # 2글자 병합 처리
@@ -442,7 +442,7 @@ class EnhancedOCRProcessor:
             lambda m: m.group(1) + m.group(2)
             if len(m.group(1) + m.group(2)) <= self.MAX_KOREAN_WORD_LENGTH
             else m.group(0),
-            text
+            text,
         )
 
         return text
@@ -509,11 +509,11 @@ class EnhancedOCRProcessor:
             "cache_hit_rate": cache_hit_rate,
             "cache_size": {
                 "metadata": len(self.metadata_cache),
-                "ocr": len(self.ocr_cache)
+                "ocr": len(self.ocr_cache),
             },
             "compiled_patterns": {
                 "ocr_error": len(self.compiled_ocr_patterns),
-                "number": len(self.compiled_number_patterns)
-            }
+                "number": len(self.compiled_number_patterns),
+            },
         }
         return stats

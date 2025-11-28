@@ -20,8 +20,8 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
         logging.FileHandler("logs/auto_indexer.log"),
-        logging.StreamHandler()
-    ]
+        logging.StreamHandler(),
+    ],
 )
 logger = logging.getLogger(__name__)
 
@@ -67,13 +67,13 @@ class AutoIndexWatcher:
         if self.vector_store is None:
             logger.info("KoreanVectorStore 로드 중...")
             self.vector_store = KoreanVectorStore(
-                index_path="var/index/korean_vector_index.faiss"
+                index_path="var/index/korean_vector_index.faiss",
             )
 
     def _get_file_hash(self, file_path: Path) -> str:
         """파일 해시 계산 (변경 감지용)"""
         try:
-            with open(file_path, "rb") as f:
+            with Path(file_path).open("rb") as f:
                 return hashlib.md5(f.read()).hexdigest()
         except Exception as e:
             logger.warning(f"해시 계산 실패 {file_path.name}: {e}")
@@ -115,8 +115,8 @@ class AutoIndexWatcher:
                 metadata={
                     "filename": pdf_path.name,
                     "path": str(pdf_path),
-                    "indexed_at": datetime.now().isoformat()
-                }
+                    "indexed_at": datetime.now().isoformat(),
+                },
             )
 
             # Vector 인덱스에 추가
@@ -127,8 +127,8 @@ class AutoIndexWatcher:
                 metadata={
                     "filename": pdf_path.name,
                     "path": str(pdf_path),
-                    "indexed_at": datetime.now().isoformat()
-                }
+                    "indexed_at": datetime.now().isoformat(),
+                },
             )
 
             # 인덱스 저장
@@ -217,20 +217,20 @@ def main():
         "--interval",
         type=int,
         default=60,
-        help="체크 간격 (초, 기본: 60)"
+        help="체크 간격 (초, 기본: 60)",
     )
     parser.add_argument(
         "--docs-dir",
         type=str,
         default="docs",
-        help="감시할 문서 디렉토리 (기본: docs)"
+        help="감시할 문서 디렉토리 (기본: docs)",
     )
 
     args = parser.parse_args()
 
     watcher = AutoIndexWatcher(
         docs_dir=args.docs_dir,
-        check_interval=args.interval
+        check_interval=args.interval,
     )
 
     watcher.start()

@@ -31,7 +31,7 @@ CONFIG_PATH = Path(__file__).parent.parent.parent / "config" / "filters.yaml"
 RE_YEAR_4 = re.compile(r"(?<!\d)(19|20)\d{2}(?= *년| *년도|\b|[^0-9])")
 RE_YEAR_2 = re.compile(r"(?<!\d)(\d{2})(?= *년| *년도|\b)")
 RE_YEAR_RANGE = re.compile(
-    r"(?<!\d)((?:19|20)\d{2}|\d{2})\s*(?:~|~?부터|[-–—]|~?→|~?to|~?>)\s*((?:19|20)\d{2}|\d{2})(?= *년| *년도|\b)?"
+    r"(?<!\d)((?:19|20)\d{2}|\d{2})\s*(?:~|~?부터|[-–—]|~?→|~?to|~?>)\s*((?:19|20)\d{2}|\d{2})(?= *년| *년도|\b)?",
 )
 RE_RELATIVE = re.compile(r"(올해|작년|재작년)")
 RE_KOREAN_NAME_2_4 = re.compile(r"[가-힣]{2,4}")
@@ -50,7 +50,7 @@ RE_TOKEN_DIRECTIVES = {
 def _load_yaml_config() -> dict:
     try:
         if CONFIG_PATH.exists():
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            with Path(CONFIG_PATH).open("r", encoding="utf-8") as f:
                 cfg = yaml.safe_load(f) or {}
             return cfg
     except Exception as e:
@@ -134,7 +134,7 @@ class QueryParser:
 
         logger.info(
             f"✅ QueryParser 초기화: 기안자 {len(self._known_original)}명 "
-            f"(정규화 {len(self._known_norm_set)}), 불용어 {len(self.stopwords)}개"
+            f"(정규화 {len(self._known_norm_set)}), 불용어 {len(self.stopwords)}개",
         )
 
     # ---------- 설정 ----------

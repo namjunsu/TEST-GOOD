@@ -135,7 +135,7 @@ def main():
         queue_file = project_root / "data" / "reindex_queue.txt"
         queue_file.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(queue_file, "w") as f:
+        with Path(queue_file).open("w") as f:
             for doc in missing:
                 f.write(f"{doc['doc_id']}\t{doc['filename']}\t{doc['content_len']}\n")
 

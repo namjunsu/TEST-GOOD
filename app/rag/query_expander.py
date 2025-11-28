@@ -234,7 +234,7 @@ class QueryExpander:
         self.domain_terms = self._load_domain_terms()
         logger.info(
             f"✅ QueryExpander 초기화: {len(self.search_stopwords)}개 불용어, "
-            f"{len(self.domain_terms)}개 도메인 용어"
+            f"{len(self.domain_terms)}개 도메인 용어",
         )
 
     def _load_search_stopwords(self) -> set[str]:
@@ -242,7 +242,7 @@ class QueryExpander:
         try:
             # 환경변수 우선
             cfg_path = Path(os.getenv("FILTERS_CONFIG", str(CONFIG_PATH)))
-            with open(cfg_path, "r", encoding="utf-8") as f:
+            with Path(cfg_path).open("r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
             stopwords = set(config.get("search_stopwords", []))
             logger.info(f"📋 검색 불용어 {len(stopwords)}개 로드됨")
@@ -255,7 +255,7 @@ class QueryExpander:
         """도메인 특화 용어 로드 (방송장비 모델명 등)"""
         try:
             cfg_path = Path(os.getenv("FILTERS_CONFIG", str(CONFIG_PATH)))
-            with open(cfg_path, "r", encoding="utf-8") as f:
+            with Path(cfg_path).open("r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
             terms = config.get("domain_terms", [])
 
@@ -301,7 +301,7 @@ class QueryExpander:
                 context_chunks=[],
                 max_retries=1,  # 빠른 실패
                 enable_complex_processing=False,
-                mode="tool"  # 도구 모드 (키워드 추출 전용)
+                mode="tool",  # 도구 모드 (키워드 추출 전용)
             )
 
             # JSON 추출 및 파싱
@@ -377,7 +377,7 @@ class QueryExpander:
                 "original_keywords": keywords,
                 "expanded_keywords": list(all_keywords),
                 "search_query": search_query,
-                "synonyms": synonyms_dict
+                "synonyms": synonyms_dict,
             }
 
             # 캐시에 저장
@@ -422,7 +422,7 @@ class QueryExpander:
             "expanded_keywords": list(expanded),
             "search_query": " OR ".join(quoted),
             "synonyms": {},
-            "fallback": True
+            "fallback": True,
         }
 
 

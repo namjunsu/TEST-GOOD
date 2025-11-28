@@ -106,7 +106,7 @@ class Compressor(Protocol):
     """컨텍스트 압축기 인터페이스"""
 
     def compress(
-        self, chunks: list[dict[str, Any]], ratio: float
+        self, chunks: list[dict[str, Any]], ratio: float,
     ) -> list[dict[str, Any]]:
         """문서 압축
 

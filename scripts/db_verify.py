@@ -24,7 +24,7 @@ logger = get_logger(__name__)
 def compute_file_hash(file_path: Path) -> str:
     """파일 SHA256 해시 계산"""
     sha256 = hashlib.sha256()
-    with open(file_path, "rb") as f:
+    with Path(file_path).open("rb") as f:
         for chunk in iter(lambda: f.read(8192), b""):
             sha256.update(chunk)
     return sha256.hexdigest()
@@ -45,7 +45,7 @@ def verify_file_existence(db: MetadataDB):
             missing_files.append({
                 "id": doc_id,
                 "filename": filename,
-                "path": str(path)
+                "path": str(path),
             })
             logger.warning(f"파일 없음: {filename} (id={doc_id})")
 
@@ -57,7 +57,7 @@ def verify_content_hash(db: MetadataDB):
     logger.info("content_hash 무결성 검증 중...")
     conn = db._get_conn()
     cursor = conn.execute(
-        "SELECT id, filename, path, content_hash FROM documents WHERE content_hash IS NOT NULL"
+        "SELECT id, filename, path, content_hash FROM documents WHERE content_hash IS NOT NULL",
     )
 
     mismatches = []
@@ -75,7 +75,7 @@ def verify_content_hash(db: MetadataDB):
                     "id": doc_id,
                     "filename": filename,
                     "stored_hash": stored_hash[:16] + "...",
-                    "actual_hash": actual_hash[:16] + "..."
+                    "actual_hash": actual_hash[:16] + "...",
                 })
                 logger.warning(f"해시 불일치: {filename} (id={doc_id})")
         except Exception as e:
@@ -89,7 +89,7 @@ def verify_temp_filenames(db: MetadataDB):
     logger.info("임시 파일명 패턴 검증 중...")
     conn = db._get_conn()
     cursor = conn.execute(
-        "SELECT id, filename FROM documents WHERE filename GLOB '*_[0-9].pdf'"
+        "SELECT id, filename FROM documents WHERE filename GLOB '*_[0-9].pdf'",
     )
 
     temp_files = []
@@ -97,7 +97,7 @@ def verify_temp_filenames(db: MetadataDB):
         doc_id, filename = row
         temp_files.append({
             "id": doc_id,
-            "filename": filename
+            "filename": filename,
         })
         logger.warning(f"임시 파일명: {filename} (id={doc_id})")
 
@@ -115,7 +115,7 @@ def verify_required_fields(db: MetadataDB):
         WHERE date IS NULL OR date = ''
            OR drafter IS NULL OR drafter = ''
            OR doctype IS NULL OR doctype = ''
-        """
+        """,
     )
 
     missing_fields = []
@@ -132,7 +132,7 @@ def verify_required_fields(db: MetadataDB):
         missing_fields.append({
             "id": doc_id,
             "filename": filename,
-            "missing": ", ".join(missing)
+            "missing": ", ".join(missing),
         })
         logger.warning(f"필수 필드 누락: {filename} - {', '.join(missing)}")
 
@@ -141,7 +141,7 @@ def verify_required_fields(db: MetadataDB):
 
 def generate_report(results: dict, output_path: str):
     """검증 보고서 생성"""
-    with open(output_path, "w", encoding="utf-8") as f:
+    with Path(output_path).open("w", encoding="utf-8") as f:
         f.write("# 데이터베이스 무결성 검증 보고서\n\n")
 
         f.write("## 검증 요약\n\n")
@@ -193,7 +193,7 @@ def main():
         "missing_files": verify_file_existence(db),
         "hash_mismatches": verify_content_hash(db),
         "temp_files": verify_temp_filenames(db),
-        "missing_fields": verify_required_fields(db)
+        "missing_fields": verify_required_fields(db),
     }
 
     # 보고서 생성

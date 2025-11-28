@@ -111,8 +111,8 @@ class PerformanceMonitor:
                 "total_time": 0.0,
                 "min_time": float("inf"),
                 "max_time": 0.0,
-                "errors": 0
-            }
+                "errors": 0,
+            },
         )
 
         metrics["count"] += 1
@@ -156,7 +156,7 @@ class PerformanceMonitor:
             "total_errors": sum(m["errors"] for m in metrics.values()),
             "slowest_function": None,
             "fastest_function": None,
-            "most_called": None
+            "most_called": None,
         }
 
         # 가장 느린 함수
@@ -164,21 +164,21 @@ class PerformanceMonitor:
             slowest = max(metrics.items(), key=lambda x: x[1]["max_time"])
             summary["slowest_function"] = {
                 "name": slowest[0],
-                "time": slowest[1]["max_time"]
+                "time": slowest[1]["max_time"],
             }
 
             # 가장 빠른 함수
             fastest = min(metrics.items(), key=lambda x: x[1]["min_time"])
             summary["fastest_function"] = {
                 "name": fastest[0],
-                "time": fastest[1]["min_time"]
+                "time": fastest[1]["min_time"],
             }
 
             # 가장 많이 호출된 함수
             most_called = max(metrics.items(), key=lambda x: x[1]["count"])
             summary["most_called"] = {
                 "name": most_called[0],
-                "count": most_called[1]["count"]
+                "count": most_called[1]["count"],
             }
 
         return summary
@@ -228,7 +228,7 @@ class PerformanceMonitor:
                         "최소(s)": round(data["min_time"], 3) if data["min_time"] != float("inf") else 0,
                         "최대(s)": round(data["max_time"], 3),
                         "총 시간(s)": round(data["total_time"], 3),
-                        "에러": data["errors"]
+                        "에러": data["errors"],
                     })
 
                 df = pd.DataFrame(rows)
@@ -255,7 +255,7 @@ class PerformanceMonitor:
                         "최대(s)": st.column_config.NumberColumn(format="%.3f"),
                         "총 시간(s)": st.column_config.NumberColumn(format="%.3f"),
                         "에러": st.column_config.NumberColumn(format="%d"),
-                    }
+                    },
                 )
 
                 # 성능 인사이트
@@ -263,12 +263,12 @@ class PerformanceMonitor:
                 if summary["slowest_function"]:
                     st.warning(
                         f"가장 느린 실행: **{summary['slowest_function']['name']}** "
-                        f"({summary['slowest_function']['time']:.2f}s)"
+                        f"({summary['slowest_function']['time']:.2f}s)",
                     )
                 if summary["most_called"]:
                     st.info(
                         f"가장 많이 호출: **{summary['most_called']['name']}** "
-                        f"({summary['most_called']['count']}회)"
+                        f"({summary['most_called']['count']}회)",
                     )
             else:
                 st.caption("수집된 메트릭이 없습니다")
@@ -366,7 +366,7 @@ def benchmark(iterations: int = 100):
                 f"avg={avg_time * 1000:.3f}ms, "
                 f"min={min_time * 1000:.3f}ms, "
                 f"max={max_time * 1000:.3f}ms "
-                f"({iterations} iterations)"
+                f"({iterations} iterations)",
             )
 
             return result

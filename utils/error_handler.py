@@ -52,7 +52,7 @@ class ErrorHandler:
         error: Exception,
         context: str = "",
         show_details: bool = True,
-        use_console: bool = False
+        use_console: bool = False,
     ) -> None:
         """
         에러 타입별 처리
@@ -73,7 +73,7 @@ class ErrorHandler:
             error_type.name,
             context or "unknown",
             str(error),
-            exc_info=True
+            exc_info=True,
         )
 
         # UI/콘솔 출력 분기
@@ -90,7 +90,7 @@ class ErrorHandler:
         message: str,
         icon: str,
         show_details: bool,
-        context: str
+        context: str,
     ) -> None:
         """Streamlit UI 처리"""
         # 사용자에게 표시
@@ -121,7 +121,7 @@ class ErrorHandler:
         message: str,
         icon: str,
         show_details: bool,
-        context: str
+        context: str,
     ) -> None:
         """콘솔 출력 처리 (백엔드/CLI용)"""
         # 콘솔 색상 코드 (선택적)
@@ -229,7 +229,7 @@ class ErrorHandler:
             ErrorType.IMPORT_ERROR: "📦",
             ErrorType.INDEX_ERROR: "🔍",
             ErrorType.TIMEOUT_ERROR: "⏱️",
-            ErrorType.UNKNOWN: "❌"
+            ErrorType.UNKNOWN: "❌",
         }
         return icons.get(error_type, "❗")
 
@@ -246,7 +246,7 @@ class ErrorHandler:
             ErrorType.PDF_ERROR: "PDF 파일이 손상되지 않았는지 확인하세요.",
             ErrorType.IMPORT_ERROR: "필요한 패키지를 설치하세요. (pip install -r requirements.txt)",
             ErrorType.INDEX_ERROR: "인덱스를 재구축하세요. (python scripts/rebuild_rag_indexes.py)",
-            ErrorType.TIMEOUT_ERROR: "작업 시간이 초과되었습니다. 데이터 양을 줄이거나 타임아웃 설정을 늘려보세요."
+            ErrorType.TIMEOUT_ERROR: "작업 시간이 초과되었습니다. 데이터 양을 줄이거나 타임아웃 설정을 늘려보세요.",
         }
         return solutions.get(error_type)
 
@@ -273,7 +273,7 @@ class ErrorHandler:
         context: str = "",
         default_return: Any = None,
         show_details: bool = True,
-        **kwargs
+        **kwargs,
     ) -> Any:
         """
         안전한 함수 실행 (에러 시 기본값 반환)
@@ -299,7 +299,7 @@ class ErrorHandler:
 def handle_errors(
     context: str = "",
     show_details: bool = True,
-    default_return: Any = None
+    default_return: Any = None,
 ) -> Callable:
     """
     에러 처리 데코레이터
@@ -326,7 +326,7 @@ def handle_errors(
                 ErrorHandler.handle(
                     e,
                     context or func.__name__,
-                    show_details=show_details
+                    show_details=show_details,
                 )
                 return default_return
         return wrapper

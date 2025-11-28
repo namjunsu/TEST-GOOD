@@ -73,7 +73,7 @@ def backfill_model_codes(limit: int | None = None, dry_run: bool = False):
                 continue
 
             # 텍스트 읽기
-            with open(txt_path, "r", encoding="utf-8", errors="ignore") as f:
+            with Path(txt_path).open("r", encoding="utf-8", errors="ignore") as f:
                 text = f.read()
 
             if not text.strip():
@@ -153,7 +153,7 @@ def backfill_model_codes(limit: int | None = None, dry_run: bool = False):
         # 샘플 확인 (padded_norm 컬럼 존재 여부 체크)
         try:
             cursor = conn.execute(
-                "SELECT raw_code, norm_code, padded_norm FROM model_codes LIMIT 10"
+                "SELECT raw_code, norm_code, padded_norm FROM model_codes LIMIT 10",
             )
             samples = cursor.fetchall()
             print("\n   샘플 (10개):")
@@ -165,7 +165,7 @@ def backfill_model_codes(limit: int | None = None, dry_run: bool = False):
             print(f"   {e}")
             # 대신 raw_code, norm_code만 조회
             cursor = conn.execute(
-                "SELECT raw_code, norm_code FROM model_codes LIMIT 10"
+                "SELECT raw_code, norm_code FROM model_codes LIMIT 10",
             )
             samples = cursor.fetchall()
             print("\n   샘플 (10개, raw → norm):")

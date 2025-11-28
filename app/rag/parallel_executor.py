@@ -235,7 +235,7 @@ def get_parallel_executor(max_workers: int = 6) -> ParallelSearchExecutor:
             _global_executor = ParallelSearchExecutor(max_workers=max_workers)
             atexit.register(lambda: _global_executor.shutdown())
             logger.info(
-                f"✅ Global parallel executor initialized (max_workers={max_workers})"
+                f"✅ Global parallel executor initialized (max_workers={max_workers})",
             )
     return _global_executor
 

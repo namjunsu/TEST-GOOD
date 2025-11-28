@@ -41,7 +41,7 @@ class _NoOpCompressor:
     """No-op 압축기 (압축하지 않음)"""
 
     def compress(
-        self, chunks: list[dict[str, Any]], ratio: float
+        self, chunks: list[dict[str, Any]], ratio: float,
     ) -> list[dict[str, Any]]:
         logger.debug("No-op compressor: 압축 스킵")
         return chunks
@@ -110,7 +110,7 @@ class _QuickFixGenerator:
             # 1) QuickFixRAG에 전용 메서드가 있으면 사용
             if hasattr(self.rag, "generate_from_context"):
                 return self.rag.generate_from_context(
-                    query, context, temperature=temperature, mode=mode
+                    query, context, temperature=temperature, mode=mode,
                 )
 
             # 2) 내부 LLM 직접 접근 경로가 있으면 사용
@@ -124,22 +124,22 @@ class _QuickFixGenerator:
                 if self.compressed_chunks:
                     # Use stored compressed chunks (preferred)
                     logger.debug(
-                        f"Using {len(self.compressed_chunks)} compressed chunks for generation (mode={mode})"
+                        f"Using {len(self.compressed_chunks)} compressed chunks for generation (mode={mode})",
                     )
                     response = self.rag.llm.generate_response(
-                        query, self.compressed_chunks, max_retries=1, mode=mode
+                        query, self.compressed_chunks, max_retries=1, mode=mode,
                     )
                 else:
                     # Fallback: convert context string to minimal chunks
                     logger.warning(
-                        "No compressed_chunks available, converting context string"
+                        "No compressed_chunks available, converting context string",
                     )
                     snippets = context.split("\n\n")
                     chunks = [
                         {"snippet": s, "content": s} for s in snippets if s.strip()
                     ]
                     response = self.rag.llm.generate_response(
-                        query, chunks, max_retries=1, mode=mode
+                        query, chunks, max_retries=1, mode=mode,
                     )
 
                 # Extract answer from RAGResponse object
@@ -247,7 +247,7 @@ class _V2RetrieverAdapter:
                         else f"문서 ID: {doc_id}"
                     )
                     logger.warning(
-                        f"V2 Adapter: doc_id={doc_id} snippet 결손, 메타데이터 폴백 사용"
+                        f"V2 Adapter: doc_id={doc_id} snippet 결손, 메타데이터 폴백 사용",
                     )
 
                 v1_results.append(
@@ -263,7 +263,7 @@ class _V2RetrieverAdapter:
                             "date": doc.get("date", ""),
                             "page": 1,
                         },
-                    }
+                    },
                 )
 
             logger.info(f"V2 Adapter: {len(v1_results)} results converted")

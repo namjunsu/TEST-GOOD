@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 
 def purge_missing_files_from_metadata(
     db_path: str = "metadata.db",
-    dry_run: bool = False
+    dry_run: bool = False,
 ) -> tuple[int, list[str]]:
     """metadata.db에서 물리적으로 존재하지 않는 파일 레코드 삭제
 
@@ -116,7 +116,7 @@ def verify_sync(metadata_db: str = "metadata.db", index_db: str = "everything_in
         "diff": 0,
         "missing_in_index": [],
         "stale_in_index": [],
-        "synced": False
+        "synced": False,
     }
 
     try:

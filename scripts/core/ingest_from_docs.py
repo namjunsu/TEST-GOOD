@@ -164,7 +164,7 @@ class DocumentIngester:
     def _compute_hash(self, file_path: Path) -> str:
         """파일 해시 계산 (SHA1)"""
         sha1 = hashlib.sha1()
-        with open(file_path, "rb") as f:
+        with Path(file_path).open("rb") as f:
             for chunk in iter(lambda: f.read(8192), b""):
                 sha1.update(chunk)
         return sha1.hexdigest()
@@ -260,7 +260,7 @@ class DocumentIngester:
             return ""
 
     def _is_duplicate(
-        self, file_path: Path, file_hash: str, norm_filename: str
+        self, file_path: Path, file_hash: str, norm_filename: str,
     ) -> tuple[bool, str]:
         """중복 판정"""
         if self.dry_run or not self.db:
@@ -334,7 +334,7 @@ class DocumentIngester:
             parsed_meta = self.meta_parser.parse(
                 metadata={},
                 title=pdf_path.stem,
-                content=cleaned_text[:1000]
+                content=cleaned_text[:1000],
             )
 
             # TableParser를 사용한 비용 정보 추출
@@ -395,7 +395,7 @@ class DocumentIngester:
             if tables.get("cost_table"):
                 cost_data = tables["cost_table"]
                 result["actions"].append(
-                    f"cost_items={len(cost_data.get('items', []))}"
+                    f"cost_items={len(cost_data.get('items', []))}",
                 )
 
             # 7.1 claimed_total 추출 (표 파싱 → 폴백)
@@ -520,7 +520,7 @@ class DocumentIngester:
                         else:
                             # 내용이 다를 가능성: 자동 rename 대신 '충돌' 상태만 로그
                             logger.error(
-                                f"year 폴더에 동일 이름 다른 파일 존재. 자동 rename 금지: src={pdf_path}, dest={dest}"
+                                f"year 폴더에 동일 이름 다른 파일 존재. 자동 rename 금지: src={pdf_path}, dest={dest}",
                             )
                             result["actions"].append("→conflict_existing_different_file")
                             # incoming에 그대로 남겨서 수동 처리 유도
@@ -582,7 +582,7 @@ class DocumentIngester:
             pdf_files = list(self.incoming_dir.glob(pattern))
         else:
             pdf_files = list(self.incoming_dir.glob("*.pdf")) + list(
-                self.incoming_dir.glob("*.PDF")
+                self.incoming_dir.glob("*.PDF"),
             )
 
         pdf_files = pdf_files[:limit] if limit else pdf_files
@@ -598,7 +598,7 @@ class DocumentIngester:
 
             # 진행 상황 출력
             logger.info(
-                f"  ✓ {result['status']} ({result['duration_ms']}ms) - {result['doctype']}"
+                f"  ✓ {result['status']} ({result['duration_ms']}ms) - {result['doctype']}",
             )
             if result["reason"]:
                 logger.info(f"    사유: {result['reason']}")
@@ -641,7 +641,7 @@ class DocumentIngester:
         if self.stats["total"] == 10:
             sla_ok = total_duration <= 60000
             logger.info(
-                f"SLA (10건/60초): {'✅ 통과' if sla_ok else '❌ 초과'} ({total_duration / 1000:.1f}초)"
+                f"SLA (10건/60초): {'✅ 통과' if sla_ok else '❌ 초과'} ({total_duration / 1000:.1f}초)",
             )
 
         logger.info("=" * 80)
@@ -664,7 +664,7 @@ class DocumentIngester:
         }
 
         log_file.write_text(
-            json.dumps(log_data, ensure_ascii=False, indent=2), encoding="utf-8"
+            json.dumps(log_data, ensure_ascii=False, indent=2), encoding="utf-8",
         )
         logger.info(f"\n📄 상세 로그 저장: {log_file}")
 
@@ -685,7 +685,7 @@ def main():
         help="OCR 활성화 (Deprecated: --ocr-mode fallback 사용 권장)",
     )
     parser.add_argument(
-        "--dry-run", action="store_true", help="실제 이동/업서트 없이 리포트만"
+        "--dry-run", action="store_true", help="실제 이동/업서트 없이 리포트만",
     )
 
     args = parser.parse_args()
@@ -695,7 +695,7 @@ def main():
     ocr_enabled = args.ocr
 
     ingester = DocumentIngester(
-        ocr_mode=ocr_mode, ocr_enabled=ocr_enabled, dry_run=args.dry_run
+        ocr_mode=ocr_mode, ocr_enabled=ocr_enabled, dry_run=args.dry_run,
     )
 
     ingester.run(limit=args.limit, pattern=args.only)

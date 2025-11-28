@@ -37,7 +37,7 @@ class SessionManager:
         "auto_indexer": None,
         "ocr_processor": None,
         "performance_metrics": {},
-        "debug_mode": False  # 환경 변수로 초기화됨
+        "debug_mode": False,  # 환경 변수로 초기화됨
     }
 
     @classmethod
@@ -166,7 +166,7 @@ class SessionManager:
         cls.update({
             "show_doc_preview": False,
             "selected_doc": None,
-            "pdf_preview_shown": False
+            "pdf_preview_shown": False,
         })
 
     @classmethod
@@ -196,7 +196,7 @@ class SessionManager:
     def export_session(
         cls,
         file_path: str = "session_backup.json",
-        show_message: bool = True
+        show_message: bool = True,
     ) -> bool:
         """
         세션 상태 내보내기 (JSON 직렬화 가능한 값만)
@@ -228,7 +228,7 @@ class SessionManager:
             safe_path.parent.mkdir(parents=True, exist_ok=True)
 
             # 파일로 저장
-            with open(safe_path, "w", encoding="utf-8") as f:
+            with Path(safe_path).open("w", encoding="utf-8") as f:
                 json.dump(exportable, f, indent=2, ensure_ascii=False)
 
             if show_message:
@@ -237,7 +237,7 @@ class SessionManager:
                     st.info(
                         f"ℹ️ JSON으로 내보낼 수 없는 키는 제외되었습니다: "
                         f"{', '.join(skipped_keys[:5])}"
-                        f"{'...' if len(skipped_keys) > 5 else ''}"
+                        f"{'...' if len(skipped_keys) > 5 else ''}",
                     )
 
             logger.info(f"Session exported to {safe_path} ({len(exportable)} keys)")
@@ -253,7 +253,7 @@ class SessionManager:
     def import_session(
         cls,
         file_path: str = "session_backup.json",
-        show_message: bool = True
+        show_message: bool = True,
     ) -> bool:
         """
         세션 상태 가져오기
@@ -276,7 +276,7 @@ class SessionManager:
                 return False
 
             # 파일에서 로드
-            with open(safe_path, "r", encoding="utf-8") as f:
+            with Path(safe_path).open("r", encoding="utf-8") as f:
                 data = json.load(f)
 
             # 세션 상태 업데이트
@@ -332,7 +332,7 @@ class SessionManager:
                     hide_index=True,
                     column_config={
                         "크기(KB)": st.column_config.NumberColumn(format="%.3f"),
-                    }
+                    },
                 )
 
                 # 디버그 모드 토글
@@ -340,7 +340,7 @@ class SessionManager:
                 new_debug = st.toggle(
                     "🐛 디버그 모드 활성화",
                     value=current_debug,
-                    help="성능 타이머 및 상세 로그 표시"
+                    help="성능 타이머 및 상세 로그 표시",
                 )
                 if new_debug != current_debug:
                     cls.set("debug_mode", new_debug)

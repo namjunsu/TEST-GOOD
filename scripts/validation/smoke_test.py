@@ -91,7 +91,7 @@ class SmokeTestRunner:
                 checks.append((
                     "Keywords",
                     keyword_pass,
-                    f"키워드 {len(found_keywords)}/{len(keywords)}개 발견: {found_keywords}"
+                    f"키워드 {len(found_keywords)}/{len(keywords)}개 발견: {found_keywords}",
                 ))
 
             # 3. Source docs 개수 확인
@@ -101,7 +101,7 @@ class SmokeTestRunner:
                 checks.append((
                     "Sources",
                     sources_pass,
-                    f"참고 문서 {len(response.source_docs)}개 (최소 {min_sources}개)"
+                    f"참고 문서 {len(response.source_docs)}개 (최소 {min_sources}개)",
                 ))
 
             # 4. 지연 시간 확인
@@ -111,7 +111,7 @@ class SmokeTestRunner:
                 checks.append((
                     "Latency",
                     latency_pass,
-                    f"지연 {total_time:.3f}s (최대 {max_latency}s)"
+                    f"지연 {total_time:.3f}s (최대 {max_latency}s)",
                 ))
 
             # 검증 결과 출력
@@ -135,8 +135,8 @@ class SmokeTestRunner:
                     "success": response.success,
                     "answer_length": len(response.answer),
                     "sources": len(response.source_docs),
-                    "metrics": response.metrics
-                }
+                    "metrics": response.metrics,
+                },
             })
 
             if all_passed:
@@ -155,7 +155,7 @@ class SmokeTestRunner:
                 "name": name,
                 "query": query,
                 "passed": False,
-                "error": str(e)
+                "error": str(e),
             })
             return False
 
@@ -167,8 +167,8 @@ class SmokeTestRunner:
             expectations={
                 "keywords": ["LVM", "교체", "기안"],
                 "min_sources": 1,
-                "max_latency": 5.0
-            }
+                "max_latency": 5.0,
+            },
         )
 
     def test_2_semantic_query(self):
@@ -179,8 +179,8 @@ class SmokeTestRunner:
             expectations={
                 "keywords": ["IDIS", "용량", "저장"],
                 "min_sources": 1,  # Adjusted from 2 to 1
-                "max_latency": 5.0
-            }
+                "max_latency": 5.0,
+            },
         )
 
     def test_3_query_expansion_dvr(self):
@@ -191,8 +191,8 @@ class SmokeTestRunner:
             expectations={
                 "keywords": ["dvr", "녹화", "구매", "디브이알", "디비알", "레코더"],
                 "min_sources": 1,
-                "max_latency": 0.8  # 800ms 제한
-            }
+                "max_latency": 0.8,  # 800ms 제한
+            },
         )
 
     def test_4_query_expansion_purchase(self):
@@ -203,8 +203,8 @@ class SmokeTestRunner:
             expectations={
                 "keywords": ["카메라", "구입", "구매"],  # 구입/구매 are synonyms
                 "min_sources": 1,
-                "max_latency": 0.8  # 800ms 제한
-            }
+                "max_latency": 0.8,  # 800ms 제한
+            },
         )
 
     def test_5_context_compression(self):
@@ -215,8 +215,8 @@ class SmokeTestRunner:
             expectations={
                 "keywords": ["구매", "SPG"],
                 "min_sources": 1,
-                "max_latency": 6.0  # 압축 포함이므로 조금 더 여유
-            }
+                "max_latency": 6.0,  # 압축 포함이므로 조금 더 여유
+            },
         )
 
     def print_summary(self):
@@ -251,16 +251,16 @@ class SmokeTestRunner:
         # 결과 JSON 저장
         output_file = Path("var/smoke_test_results.json")
         output_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_file, "w", encoding="utf-8") as f:
+        with Path(output_file).open("w", encoding="utf-8") as f:
             json.dump({
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "summary": {
                     "total": total,
                     "passed": self.passed,
                     "failed": self.failed,
-                    "pass_rate": self.passed / total if total > 0 else 0
+                    "pass_rate": self.passed / total if total > 0 else 0,
                 },
-                "results": self.results
+                "results": self.results,
             }, f, ensure_ascii=False, indent=2)
 
         logger.info(f"📄 결과 저장: {output_file}")

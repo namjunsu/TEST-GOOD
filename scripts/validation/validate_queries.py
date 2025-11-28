@@ -50,7 +50,7 @@ class QueryValidator:
         """CSV에서 질문 로드"""
         queries = []
 
-        with open(self.csv_path, "r", encoding="utf-8-sig") as f:
+        with Path(self.csv_path).open("r", encoding="utf-8-sig") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 query = {
@@ -59,7 +59,7 @@ class QueryValidator:
                     "expected_mode": row["expected_mode"],
                     "expected_citations": row["expected_citations"].lower() == "true",
                     "difficulty": row["difficulty"],
-                    "metadata": json.loads(row.get("metadata", "{}"))
+                    "metadata": json.loads(row.get("metadata", "{}")),
                 }
                 queries.append(query)
 
@@ -130,7 +130,7 @@ class QueryValidator:
                 "answer_length": len(response.answer),
                 "source_docs": response.source_docs,
                 "mode_match": mode_match,
-                "citation_match": citation_match
+                "citation_match": citation_match,
             }
 
             self.results.append(result)
@@ -146,7 +146,7 @@ class QueryValidator:
                 "query": query_text,
                 "category": query_data["category"],
                 "status": "ERROR",
-                "error": str(e)
+                "error": str(e),
             }
             self.results.append(result)
             return result
@@ -188,7 +188,7 @@ class QueryValidator:
             "avg_latency": f"{avg_latency:.2f}s",
             "avg_score": f"{avg_score:.3f}",
             "by_category": by_category,
-            "results": self.results
+            "results": self.results,
         }
 
         return report
@@ -197,7 +197,7 @@ class QueryValidator:
         """JSON 리포트 저장"""
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-        with open(output_path, "w", encoding="utf-8") as f:
+        with Path(output_path).open("w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, ensure_ascii=False)
 
         print(f"✅ JSON 리포트 저장: {output_path}")
@@ -206,7 +206,7 @@ class QueryValidator:
         """Markdown 리포트 저장"""
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-        with open(output_path, "w", encoding="utf-8") as f:
+        with Path(output_path).open("w", encoding="utf-8") as f:
             f.write("# AI-CHAT 질문 프리셋 검증 리포트\n\n")
             f.write(f"**검증 일시**: {report['timestamp']}\n")
             f.write(f"**총 질문 수**: {report['total']}개\n\n")

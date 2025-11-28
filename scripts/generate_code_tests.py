@@ -66,7 +66,7 @@ def generate_test_cases(db_path: str = "metadata.db", top_n: int = 20) -> list[d
             "expect_norm_code": norm_code,
             "expect_contains": norm_code,  # norm_code 기준
             "min_hits_at_3": 1,
-            "description": f"{norm_code} 기본 검색 ({doc_count}개 문서)"
+            "description": f"{norm_code} 기본 검색 ({doc_count}개 문서)",
         })
         test_id_counter += 1
 
@@ -77,7 +77,7 @@ def generate_test_cases(db_path: str = "metadata.db", top_n: int = 20) -> list[d
             "expect_norm_code": norm_code,
             "expect_contains": norm_code,
             "min_hits_at_3": 1,
-            "description": f"{norm_code} 수식어 검색 (정보)"
+            "description": f"{norm_code} 수식어 검색 (정보)",
         })
         test_id_counter += 1
 
@@ -88,7 +88,7 @@ def generate_test_cases(db_path: str = "metadata.db", top_n: int = 20) -> list[d
             "expect_norm_code": norm_code,
             "expect_contains": norm_code,
             "min_hits_at_3": 1,
-            "description": f"{norm_code} 소문자+수식어 검색 (사양)"
+            "description": f"{norm_code} 소문자+수식어 검색 (사양)",
         })
         test_id_counter += 1
 
@@ -111,7 +111,7 @@ def main():
     suite_path = Path("suites/model_codes.yaml")
 
     if suite_path.exists():
-        with open(suite_path, "r", encoding="utf-8") as f:
+        with Path(suite_path).open("r", encoding="utf-8") as f:
             existing_suite = yaml.safe_load(f)
 
         performance_criteria = existing_suite.get("performance_criteria", {})
@@ -121,23 +121,23 @@ def main():
             "hit_at_3_min": 0.90,
             "mrr_at_10_min": 0.80,
             "citation_rate_min": 1.0,
-            "p95_latency_max_ms": 5000
+            "p95_latency_max_ms": 5000,
         }
         validation_options = {
             "top_k": 10,
             "check_citations": True,
-            "measure_latency": True
+            "measure_latency": True,
         }
 
     # 새 YAML 구조 생성
     new_suite = {
         "test_cases": test_cases,
         "performance_criteria": performance_criteria,
-        "validation_options": validation_options
+        "validation_options": validation_options,
     }
 
     # YAML 파일로 저장
-    with open(suite_path, "w", encoding="utf-8") as f:
+    with Path(suite_path).open("w", encoding="utf-8") as f:
         yaml.dump(new_suite, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
 
     print(f"\n✅ 테스트 스위트 생성 완료: {suite_path}")

@@ -37,12 +37,12 @@ logger = get_logger(__name__)
 
 # 불용어 목록
 STOP_WORDS = [
-    "문서", "파일", "기안서", "찾아줘", "찾아", "검색", "관련", "좀", "해줘"
+    "문서", "파일", "기안서", "찾아줘", "찾아", "검색", "관련", "좀", "해줘",
 ]
 
 # 정밀 검색용 추가 불용어
 CONTENT_STOP_WORDS = [
-    "내용", "본문", "들어간", "포함", "포함된", "있는", "만"
+    "내용", "본문", "들어간", "포함", "포함된", "있는", "만",
 ]
 
 # 조사 (단어 경계에서만 제거)
@@ -50,7 +50,7 @@ POSTPOSITIONS = [" 에 ", " 에서 ", " 이 ", " 가 ", " 을 ", " 를 "]
 
 # 자주 등장하는 기안자 목록
 COMMON_DRAFTERS = [
-    "남준수", "최새름", "유인혁", "이의주", "강병규", "박연수", "이호영", "이승헌"
+    "남준수", "최새름", "유인혁", "이의주", "강병규", "박연수", "이호영", "이승헌",
 ]
 
 # 개수 질의 키워드
@@ -69,7 +69,7 @@ DETAIL_INDICATORS = {"1)", "2)", "3)", "내용", "부분만", "요약", "설명"
 # 대량 검색 패턴
 BULK_PATTERNS = [
     r"(전부|모두|모든).*(알려|보여|찾아)",
-    r"(알려|보여|찾아).*(전부|모두)"
+    r"(알려|보여|찾아).*(전부|모두)",
 ]
 
 
@@ -247,7 +247,7 @@ class SearchHandler(BaseHandler):
             logger.info(
                 f"🔍 문서 검색: 키워드='{keywords}'"
                 f"{f' | 기안자={drafter_filter}' if drafter_filter else ''}"
-                f"{f' | 연도={year_filter}' if year_filter else ''}"
+                f"{f' | 연도={year_filter}' if year_filter else ''}",
             )
 
             # 2. 검색 top_k 결정
@@ -270,13 +270,13 @@ class SearchHandler(BaseHandler):
             # 5. 개수만 묻는 질의 처리
             if is_count_query(query):
                 return self._handle_count_query(
-                    keywords, drafter_filter, year_filter
+                    keywords, drafter_filter, year_filter,
                 )
 
             # 6. 문서 상세 정보 조회
             max_docs = calculate_max_docs(query, drafter_filter)
             doc_details = self._get_doc_details(
-                filenames[:max_docs], drafter_filter, year_filter
+                filenames[:max_docs], drafter_filter, year_filter,
             )
 
             # 7. 응답 생성
@@ -342,7 +342,7 @@ class SearchHandler(BaseHandler):
                 return self._make_error_response("검색 기능을 사용할 수 없습니다.")
 
             search_results = self.retriever.search(
-                expanded_query, top_k=50, strict_content=True
+                expanded_query, top_k=50, strict_content=True,
             )
 
             if not search_results:
@@ -356,8 +356,8 @@ class SearchHandler(BaseHandler):
                     "status": {
                         "retrieved_count": 0,
                         "selected_count": 0,
-                        "found": False
-                    }
+                        "found": False,
+                    },
                 }
 
             # 4. 파일명 추출 및 메타데이터 조회
@@ -379,8 +379,8 @@ class SearchHandler(BaseHandler):
                 "status": {
                     "retrieved_count": 0,
                     "selected_count": 0,
-                    "found": False
-                }
+                    "found": False,
+                },
             }
 
     # ========================================================================
@@ -402,7 +402,7 @@ class SearchHandler(BaseHandler):
         self,
         keywords: str,
         drafter_filter: Optional[str],
-        year_filter: Optional[str]
+        year_filter: Optional[str],
     ) -> dict[str, Any]:
         """개수만 묻는 질의 처리"""
         conn = self._db._get_conn()
@@ -433,15 +433,15 @@ class SearchHandler(BaseHandler):
             "status": {
                 "retrieved_count": total_count,
                 "selected_count": 0,
-                "found": total_count > 0
-            }
+                "found": total_count > 0,
+            },
         }
 
     def _get_doc_details(
         self,
         filenames: list[str],
         drafter_filter: Optional[str],
-        year_filter: Optional[str]
+        year_filter: Optional[str],
     ) -> list[dict[str, Any]]:
         """파일명 목록에서 문서 상세 정보 조회"""
         doc_details = []
@@ -471,7 +471,7 @@ class SearchHandler(BaseHandler):
                     "date": doc.get("display_date") or doc.get("date", "날짜 없음"),
                     "doctype": doc.get("doctype", "문서"),
                     "claimed_total": doc.get("claimed_total"),
-                    "text_preview": doc.get("text_preview", "")[:400]
+                    "text_preview": doc.get("text_preview", "")[:400],
                 })
             elif not drafter_filter:
                 # 필터 없을 때만 메타데이터 없는 문서 포함
@@ -481,7 +481,7 @@ class SearchHandler(BaseHandler):
                     "date": "날짜 없음",
                     "doctype": "문서",
                     "claimed_total": None,
-                    "text_preview": ""
+                    "text_preview": "",
                 })
 
         return doc_details
@@ -494,7 +494,7 @@ class SearchHandler(BaseHandler):
         for filename in filenames:
             cursor = conn.execute(
                 "SELECT * FROM documents WHERE filename = ? LIMIT 1",
-                [filename]
+                [filename],
             )
             row = cursor.fetchone()
 
@@ -508,7 +508,7 @@ class SearchHandler(BaseHandler):
                     "drafter": doc.get("drafter", "작성자 미상"),
                     "claimed_total": doc.get("claimed_total", 0),
                     "text_preview": doc.get("text_preview", "")[:100],
-                    "path": doc.get("path", "")
+                    "path": doc.get("path", ""),
                 })
 
         return doc_details
@@ -518,7 +518,7 @@ class SearchHandler(BaseHandler):
         keywords: str,
         query: str,
         doc_details: list[dict[str, Any]],
-        filenames: list[str]
+        filenames: list[str],
     ) -> dict[str, Any]:
         """검색 응답 생성"""
         # 카드 생성
@@ -528,7 +528,7 @@ class SearchHandler(BaseHandler):
 
             card_lines = [f"{i}. **{title}**"]
             card_lines.append(
-                f"   📋 {doc['doctype']} | 📅 {doc['date']} | ✍ {doc['drafter']}"
+                f"   📋 {doc['doctype']} | 📅 {doc['date']} | ✍ {doc['drafter']}",
             )
 
             if doc["claimed_total"]:
@@ -565,15 +565,15 @@ class SearchHandler(BaseHandler):
             "status": {
                 "retrieved_count": len(doc_details),
                 "selected_count": len(doc_details),
-                "found": True
-            }
+                "found": True,
+            },
         }
 
     def _build_content_only_response(
         self,
         keywords: str,
         doc_details: list[dict[str, Any]],
-        filenames: list[str]
+        filenames: list[str],
     ) -> dict[str, Any]:
         """정밀 검색 응답 생성"""
         response_text = f"📄 **'{keywords}' 내용 포함 문서 ({len(doc_details)}건)**\n\n"
@@ -615,8 +615,8 @@ class SearchHandler(BaseHandler):
                     "filename": doc["filename"],
                     "date": doc["date"],
                     "drafter": doc["drafter"],
-                    "category": doc["category"]
-                }
+                    "category": doc["category"],
+                },
             })
 
         logger.info(f"✅ 정밀 내용 검색 완료: {len(doc_details)}건")
@@ -631,8 +631,8 @@ class SearchHandler(BaseHandler):
             "status": {
                 "retrieved_count": len(filenames),
                 "selected_count": len(citations),
-                "found": len(citations) > 0
-            }
+                "found": len(citations) > 0,
+            },
         }
 
     def _build_evidence(self, doc_details: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -670,8 +670,8 @@ class SearchHandler(BaseHandler):
                     "filename": filename,
                     "drafter": doc.get("drafter"),
                     "date": doc.get("date"),
-                    "doctype": doc.get("doctype")
-                }
+                    "doctype": doc.get("doctype"),
+                },
             })
 
         return evidence
@@ -708,8 +708,8 @@ class CostSumHandler(BaseHandler):
                     "status": {
                         "retrieved_count": 0,
                         "selected_count": 0,
-                        "found": False
-                    }
+                        "found": False,
+                    },
                 }
 
             # 2. DB에서 claimed_total 수집
@@ -735,8 +735,8 @@ class CostSumHandler(BaseHandler):
                     "status": {
                         "retrieved_count": len(search_results),
                         "selected_count": 0,
-                        "found": False
-                    }
+                        "found": False,
+                    },
                 }
 
             # 3. 금액 내림차순 정렬
@@ -760,7 +760,7 @@ class CostSumHandler(BaseHandler):
     def _build_cost_response(
         self,
         cost_docs: list[tuple],
-        retrieved_count: int
+        retrieved_count: int,
     ) -> dict[str, Any]:
         """비용 응답 생성"""
         total_sum = sum(doc[0] for doc in cost_docs)
@@ -796,8 +796,8 @@ class CostSumHandler(BaseHandler):
                     "filename": filename,
                     "drafter": doc.get("drafter"),
                     "date": doc.get("display_date") or doc.get("date"),
-                    "claimed_total": claimed_total
-                }
+                    "claimed_total": claimed_total,
+                },
             }]
 
             logger.info(f"💰 비용 질의 성공 (단일): {filename} → ₩{claimed_total:,}")
@@ -824,8 +824,8 @@ class CostSumHandler(BaseHandler):
                         "filename": filename,
                         "drafter": doc.get("drafter"),
                         "date": doc.get("display_date") or doc.get("date"),
-                        "claimed_total": claimed_total
-                    }
+                        "claimed_total": claimed_total,
+                    },
                 })
 
             if len(cost_docs) > 10:
@@ -843,6 +843,6 @@ class CostSumHandler(BaseHandler):
             "status": {
                 "retrieved_count": retrieved_count,
                 "selected_count": len(cost_docs),
-                "found": True
-            }
+                "found": True,
+            },
         }

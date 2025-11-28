@@ -33,7 +33,7 @@ logger = get_logger(__name__)
 # 문서 조회용 불용어
 DOCUMENT_STOP_WORDS = [
     "이문서", "이 문서", "해당 문서", "내용", "알려줘", "알려",
-    "보여줘", "보여", "자세하게", "자세히", "요약", "정리"
+    "보여줘", "보여", "자세하게", "자세히", "요약", "정리",
 ]
 
 # 섹션 키워드 매핑
@@ -44,7 +44,7 @@ SECTION_KEYWORDS = {
     "비교": ["비교", "대안", "비교대안", "비교 대안", "방안", "옵션"],
     "선정": ["선정", "권고", "추천", "제안", "선정사유"],
     "내역": ["내역", "세부내역", "세부 내역", "상세내역", "상세"],
-    "예산": ["예산", "비용", "금액", "합계", "총액"]
+    "예산": ["예산", "비용", "금액", "합계", "총액"],
 }
 
 # 데이터 디렉토리
@@ -101,7 +101,7 @@ def load_document_text(filename: str) -> str:
     txt_path = EXTRACTED_DIR / txt_filename
 
     if txt_path.exists():
-        with open(txt_path, "r", encoding="utf-8") as f:
+        with Path(txt_path).open("r", encoding="utf-8") as f:
             return f.read()
     return ""
 
@@ -126,7 +126,7 @@ class DocumentHandler(BaseHandler):
         self,
         query: str,
         selected_filename: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ) -> dict[str, Any]:
         """DOCUMENT 모드 쿼리 처리
 
@@ -144,7 +144,7 @@ class DocumentHandler(BaseHandler):
 
             if not target_filename:
                 return self._make_empty_response(
-                    "문서를 찾을 수 없습니다. 문서명을 명확히 입력해주세요."
+                    "문서를 찾을 수 없습니다. 문서명을 명확히 입력해주세요.",
                 )
 
             # 2. DB에서 메타데이터 조회
@@ -152,7 +152,7 @@ class DocumentHandler(BaseHandler):
 
             if not metadata:
                 return self._make_empty_response(
-                    f"'{target_filename}' 문서의 메타데이터를 찾을 수 없습니다."
+                    f"'{target_filename}' 문서의 메타데이터를 찾을 수 없습니다.",
                 )
 
             # 3. 문서 텍스트 로드
@@ -160,7 +160,7 @@ class DocumentHandler(BaseHandler):
 
             if not full_text or len(full_text.strip()) < 10:
                 return self._make_empty_response(
-                    f"'{metadata['filename']}' 문서의 텍스트를 확보하지 못했습니다."
+                    f"'{metadata['filename']}' 문서의 텍스트를 확보하지 못했습니다.",
                 )
 
             # 4. 라우팅 결정 (섹션 감지, 요약 여부 등)
@@ -171,7 +171,7 @@ class DocumentHandler(BaseHandler):
                 query=query,
                 full_text=full_text,
                 metadata=metadata,
-                routing=routing
+                routing=routing,
             )
 
             # 6. Evidence 구성
@@ -181,7 +181,7 @@ class DocumentHandler(BaseHandler):
                 "mode": "DOCUMENT",
                 "filename": metadata["filename"],
                 "text_length": len(full_text),
-                "routing": routing
+                "routing": routing,
             })
 
             return {
@@ -194,26 +194,26 @@ class DocumentHandler(BaseHandler):
                 "status": {
                     "retrieved_count": 1,
                     "selected_count": 1,
-                    "found": True
-                }
+                    "found": True,
+                },
             }
 
         except DocumentNotFoundError as e:
             logger.warning(f"⚠️ 문서 없음: {e}")
             return self._make_error_response(
-                "요청하신 문서를 찾을 수 없습니다."
+                "요청하신 문서를 찾을 수 없습니다.",
             )
 
         except sqlite3.Error as e:
             logger.error(f"❌ DB 오류: {e}", exc_info=True)
             return self._make_error_response(
-                "문서 조회 중 데이터베이스 오류가 발생했습니다."
+                "문서 조회 중 데이터베이스 오류가 발생했습니다.",
             )
 
         except Exception as e:
             logger.error(f"❌ DOCUMENT 모드 처리 실패: {e}", exc_info=True)
             return self._make_error_response(
-                f"문서 내용 조회 중 오류가 발생했습니다: {str(e)}"
+                f"문서 내용 조회 중 오류가 발생했습니다: {str(e)}",
             )
 
     # ========================================================================
@@ -223,7 +223,7 @@ class DocumentHandler(BaseHandler):
     def _identify_document(
         self,
         query: str,
-        selected_filename: Optional[str]
+        selected_filename: Optional[str],
     ) -> Optional[str]:
         """문서 식별"""
         # 1. 미리 선택된 파일명 우선
@@ -273,7 +273,7 @@ class DocumentHandler(BaseHandler):
                     "date": result[2],
                     "display_date": result[3],
                     "category": result[4],
-                    "doctype": result[5]
+                    "doctype": result[5],
                 }
             return None
 
@@ -296,7 +296,7 @@ class DocumentHandler(BaseHandler):
             if chunks:
                 joined = "\n\n".join(
                     [(ch.get("text") or ch.get("snippet") or ch.get("content") or "")[:2000]
-                     for ch in chunks]
+                     for ch in chunks],
                 )[:8000]
                 logger.info(f"✅ 청크 {len(chunks)}개 결합 → {len(joined)}자 확보")
                 return joined
@@ -322,7 +322,7 @@ class DocumentHandler(BaseHandler):
                                 "page": 1,
                                 "text": content,
                                 "score": 1.0,
-                                "filename": filename
+                                "filename": filename,
                             })
 
                 if chunks:
@@ -345,7 +345,7 @@ class DocumentHandler(BaseHandler):
                         "page": result.get("page", 1),
                         "text": result.get("snippet", result.get("text", "")),
                         "score": result.get("score", 0.0),
-                        "filename": filename
+                        "filename": filename,
                     })
 
             return chunks
@@ -363,7 +363,7 @@ class DocumentHandler(BaseHandler):
                 "detailed_mode": routing.get("detailed_mode", False),
                 "detected_section": routing.get("detected_section"),
                 "needs_summary": routing.get("needs_summary", False),
-                "max_tokens": routing.get("max_tokens", 800)
+                "max_tokens": routing.get("max_tokens", 800),
             }
         except ImportError:
             # 폴백: 기본 라우팅
@@ -371,7 +371,7 @@ class DocumentHandler(BaseHandler):
                 "detailed_mode": "자세" in query or "상세" in query,
                 "detected_section": detect_section(query),
                 "needs_summary": "요약" in query or "정리" in query,
-                "max_tokens": 800
+                "max_tokens": 800,
             }
 
     def _generate_answer(
@@ -379,7 +379,7 @@ class DocumentHandler(BaseHandler):
         query: str,
         full_text: str,
         metadata: dict[str, Any],
-        routing: dict[str, Any]
+        routing: dict[str, Any],
     ) -> str:
         """응답 생성 (LLM 또는 원문)"""
         # 짧은 문서는 원문 그대로 반환
@@ -392,7 +392,7 @@ class DocumentHandler(BaseHandler):
                 query=query,
                 full_text=full_text,
                 metadata=metadata,
-                routing=routing
+                routing=routing,
             )
         except Exception as e:
             logger.warning(f"⚠️ LLM 응답 생성 실패: {e}", exc_info=True)
@@ -416,7 +416,7 @@ class DocumentHandler(BaseHandler):
         query: str,
         full_text: str,
         metadata: dict[str, Any],
-        routing: dict[str, Any]
+        routing: dict[str, Any],
     ) -> str:
         """LLM을 통한 응답 생성"""
         # LLM 접근 시도
@@ -430,13 +430,13 @@ class DocumentHandler(BaseHandler):
             query=query,
             full_text=full_text,
             metadata=metadata,
-            routing=routing
+            routing=routing,
         )
 
         # 토큰 제한 조정
         max_tokens = self._calculate_max_tokens(
             content_length=len(full_text),
-            routing=routing
+            routing=routing,
         )
 
         # LLM 호출
@@ -445,10 +445,10 @@ class DocumentHandler(BaseHandler):
             output = llm.llm.create_chat_completion(
                 messages=[
                     {"role": "system", "content": system_msg},
-                    {"role": "user", "content": llm_prompt}
+                    {"role": "user", "content": llm_prompt},
                 ],
                 max_tokens=max_tokens,
-                temperature=0.3
+                temperature=0.3,
             )
             raw_result = output["choices"][0]["message"]["content"]
 
@@ -465,7 +465,7 @@ class DocumentHandler(BaseHandler):
         query: str,
         full_text: str,
         metadata: dict[str, Any],
-        routing: dict[str, Any]
+        routing: dict[str, Any],
     ) -> tuple:
         """LLM 프롬프트 및 시스템 메시지 생성"""
         context = full_text[:4000]
@@ -485,14 +485,14 @@ class DocumentHandler(BaseHandler):
             return (
                 f"문서: {filename}\n기안자: {drafter}\n날짜: {date}\n\n"
                 f"문서 내용:\n{context}\n\n질문: {query}\n\n위 문서 내용을 바탕으로 답변해주세요.",
-                "당신은 문서 분석 전문가입니다."
+                "당신은 문서 분석 전문가입니다.",
             )
 
         # 우선순위: detailed > summary > section > QA
         if detailed_mode:
             prompt = build_detailed_prompt(
                 context=context, filename=filename,
-                drafter=drafter, date=date
+                drafter=drafter, date=date,
             )
             system_msg = "당신은 문서 분석 전문가입니다. 모든 세부사항을 빠짐없이 포함하여 상세하게 답변하세요."
 
@@ -501,21 +501,21 @@ class DocumentHandler(BaseHandler):
             kind = detect_doc_kind(filename, full_text)
             prompt = build_prompt(
                 kind=kind, filename=filename, drafter=drafter,
-                display_date=date, context_text=context, claimed_total=None
+                display_date=date, context_text=context, claimed_total=None,
             )
             system_msg = "당신은 문서 요약 전문가입니다. JSON 형식으로만 응답하세요."
 
         elif detected_section:
             prompt = build_section_prompt(
                 context=context, section=detected_section,
-                filename=filename, drafter=drafter, date=date
+                filename=filename, drafter=drafter, date=date,
             )
             system_msg = f"당신은 문서 분석 전문가입니다. '{detected_section}' 섹션만 정확하게 추출하여 답변하세요."
 
         else:
             prompt = build_qa_prompt(
                 context=context, query=query,
-                filename=filename, drafter=drafter, date=date
+                filename=filename, drafter=drafter, date=date,
             )
             system_msg = "당신은 문서 분석 전문가입니다. 문서 내용을 기반으로 정확하게 답변하세요."
 
@@ -524,7 +524,7 @@ class DocumentHandler(BaseHandler):
     def _calculate_max_tokens(
         self,
         content_length: int,
-        routing: dict[str, Any]
+        routing: dict[str, Any],
     ) -> int:
         """토큰 제한 계산"""
         base_max_tokens = routing.get("max_tokens", 800)
@@ -542,7 +542,7 @@ class DocumentHandler(BaseHandler):
     def _format_summary_output(
         self,
         raw_result: str,
-        metadata: dict[str, Any]
+        metadata: dict[str, Any],
     ) -> str:
         """요약 결과 포맷팅"""
         try:
@@ -563,7 +563,7 @@ class DocumentHandler(BaseHandler):
                 filename=metadata["filename"],
                 drafter=metadata.get("drafter"),
                 display_date=metadata.get("display_date"),
-                claimed_total=None
+                claimed_total=None,
             )
         except Exception as e:
             logger.warning(f"⚠️ 요약 포맷팅 실패: {e}")
@@ -572,7 +572,7 @@ class DocumentHandler(BaseHandler):
     def _build_evidence(
         self,
         metadata: dict[str, Any],
-        full_text: str
+        full_text: str,
     ) -> list[dict[str, Any]]:
         """Evidence 구성"""
         filename = metadata["filename"]
@@ -596,6 +596,6 @@ class DocumentHandler(BaseHandler):
                 "drafter": metadata.get("drafter"),
                 "date": metadata.get("display_date") or metadata.get("date"),
                 "category": metadata.get("category"),
-                "doctype": metadata.get("doctype")
-            }
+                "doctype": metadata.get("doctype"),
+            },
         }]

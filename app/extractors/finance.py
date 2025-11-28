@@ -102,7 +102,7 @@ def normalize_mixed_currency(text: str) -> Optional[int]:
     # 패턴: "1억" 또는 "1억 2,300만원" 형태
     pat = re.compile(
         rf"(?P<e>{NUM})\s*(?P<eu>억|억원)(?:\s*(?P<m>{NUM})\s*(?P<mu>만원))?",
-        re.IGNORECASE
+        re.IGNORECASE,
     )
 
     m = pat.search(text)
@@ -195,15 +195,15 @@ FIELD_PATTERNS = {
 # VAT 정책 플래그 패턴
 INCLUDE_VAT_RE = re.compile(
     r"(부가세\s*포함|VAT\s*포함|vat\s*inc|tax\s*incl)",
-    re.IGNORECASE
+    re.IGNORECASE,
 )
 EXCLUDE_VAT_RE = re.compile(
     r"(부가세\s*별도|VAT\s*별도|vat\s*ex|tax\s*excl)",
-    re.IGNORECASE
+    re.IGNORECASE,
 )
 ZERO_VAT_RE = re.compile(
     r"(면세|영세|0%\s*VAT)",
-    re.IGNORECASE
+    re.IGNORECASE,
 )
 
 
@@ -212,7 +212,7 @@ ZERO_VAT_RE = re.compile(
 # ============================================================================
 
 def _first_match_with_span(
-    pattern: str, text: str
+    pattern: str, text: str,
 ) -> Optional[tuple[str, tuple[int, int], re.Match]]:
     """패턴 매칭 + span 정보 반환
 
@@ -230,7 +230,7 @@ def _first_match_with_span(
 
 
 def _parse_num_and_unit(
-    m: re.Match, num_group: int = 1, unit_group: int = 2
+    m: re.Match, num_group: int = 1, unit_group: int = 2,
 ) -> Optional[int]:
     """Match 객체에서 숫자와 단위 추출 후 정규화
 
@@ -306,7 +306,7 @@ def extract_financial_fields(text: str) -> dict[str, Optional[int]]:
     raw, norm = _preprocess_dual(text)
 
     def search_in_both(
-        pattern: str
+        pattern: str,
     ) -> Optional[tuple[str, tuple[int, int], re.Match, bool]]:
         """원문과 정규화문 모두에서 탐색 (정규화문 우선)"""
         for s, is_norm in ((norm, True), (raw, False)):
@@ -339,7 +339,7 @@ def extract_financial_fields(text: str) -> dict[str, Optional[int]]:
                     fields["amount"] = qty * unit
                     spans[field] = span
                     logger.debug(
-                        f"✓ amount(calc): {qty} × {unit} → {fields['amount']}"
+                        f"✓ amount(calc): {qty} × {unit} → {fields['amount']}",
                     )
                     break
 
@@ -359,7 +359,7 @@ def extract_financial_fields(text: str) -> dict[str, Optional[int]]:
                     fields[field] = val
                     spans[field] = span
                     logger.debug(
-                        f"✓ {field}: '{full}' → {val} (norm={is_norm})"
+                        f"✓ {field}: '{full}' → {val} (norm={is_norm})",
                     )
                     break
 
@@ -367,7 +367,7 @@ def extract_financial_fields(text: str) -> dict[str, Optional[int]]:
     if fields["amount"] is None and fields["unit_price"] and fields["qty"]:
         fields["amount"] = fields["unit_price"] * fields["qty"]
         logger.debug(
-            f"✓ amount(backfill): unit_price×qty → {fields['amount']}"
+            f"✓ amount(backfill): unit_price×qty → {fields['amount']}",
         )
 
     # VAT 정책 플래그 감지
@@ -384,7 +384,7 @@ def extract_financial_fields(text: str) -> dict[str, Optional[int]]:
     if extracted:
         logger.info(
             f"💰 금액 필드 추출 완료: {len(extracted)}개 "
-            f"({', '.join(extracted.keys())}), VAT_MODE={vat_mode}"
+            f"({', '.join(extracted.keys())}), VAT_MODE={vat_mode}",
         )
     else:
         logger.warning("⚠️ 금액 필드 추출 실패 (패턴 매칭 없음)")
@@ -446,7 +446,7 @@ def validate_financial_consistency(fields: dict[str, Optional[int]]) -> dict[str
                 errors.append(
                     f"총액-공급가액 불일치(포함/면세): "
                     f"total={total:,}, amount={amount:,}, "
-                    f"diff={diff * 100:.2f}%"
+                    f"diff={diff * 100:.2f}%",
                 )
 
         elif vat_mode in ("excluded", "unknown"):
@@ -457,11 +457,11 @@ def validate_financial_consistency(fields: dict[str, Optional[int]]) -> dict[str
                     errors.append(
                         f"금액+부가세 ≠ 총액: "
                         f"{amount:,}+{vat:,}={amount + vat:,} vs {total:,} "
-                        f"(diff {diff * 100:.2f}%)"
+                        f"(diff {diff * 100:.2f}%)",
                     )
             else:
                 warnings.append(
-                    "부가세 별도일 가능성: vat 미검출. 문구/표 확인 필요"
+                    "부가세 별도일 가능성: vat 미검출. 문구/표 확인 필요",
                 )
 
     # 단가×수량 vs amount (±5% 허용)
@@ -472,7 +472,7 @@ def validate_financial_consistency(fields: dict[str, Optional[int]]) -> dict[str
             errors.append(
                 f"단가×수량 불일치: "
                 f"{unit_price:,}×{qty}={calc:,} vs amount={amount:,} "
-                f"(diff {diff * 100:.1f}%)"
+                f"(diff {diff * 100:.1f}%)",
             )
 
     # VAT 10% 규칙 (면세/포함 제외, ±2% 허용)
@@ -483,7 +483,7 @@ def validate_financial_consistency(fields: dict[str, Optional[int]]) -> dict[str
             warnings.append(
                 f"부가세 10% 규칙 벗어남: "
                 f"expected={exp_vat:,}, actual={vat:,} "
-                f"(diff {diff * 100:.1f}%)"
+                f"(diff {diff * 100:.1f}%)",
             )
 
     # 최종 검증 결과

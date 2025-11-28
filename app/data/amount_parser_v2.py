@@ -28,17 +28,17 @@ RE_KRW = re.compile(r"""
 # 억/만 단위 패턴 (콤마 지원)
 RE_EOK_MAN = re.compile(
     r"([\d,]+(?:\.\d+)?)\s*억(?:\s*([\d,]+(?:\.\d+)?)\s*만)?",
-    re.IGNORECASE
+    re.IGNORECASE,
 )
 RE_MAN_ONLY = re.compile(
     r"([\d,]+(?:\.\d+)?)\s*만(?![가-힣\w])",
-    re.IGNORECASE
+    re.IGNORECASE,
 )
 
 # 라인아이템 패턴: "333,000원 × 2EA", "380000 원 x 4"
 ITEM_PAT = re.compile(
     r"(?P<price>(?:₩\s*)?(?:\d{1,3}(?:[,.\s]\d{3})+|\d{4,})\s*(?:원)?)\s*[x×＊]\s*(?P<qty>\d+)\s*(EA|대)?",
-    re.IGNORECASE
+    re.IGNORECASE,
 )
 
 

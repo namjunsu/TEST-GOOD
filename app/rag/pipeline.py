@@ -174,7 +174,7 @@ class RAGPipeline:
         metrics = {}
         search_start = time.perf_counter()
         results = self.retriever.search(
-            query, top_k, mode=preliminary_mode, selected_filename=selected_filename
+            query, top_k, mode=preliminary_mode, selected_filename=selected_filename,
         )
         metrics["search_time"] = time.perf_counter() - search_start
 
@@ -249,7 +249,7 @@ class RAGPipeline:
                         f"🎯 AUTO 모드 (절대값): top_score={top_score:.3f}, "
                         f"has_keyword={has_keyword}, token_count={token_count}, "
                         f"coverage={keyword_coverage}/{min_coverage}, "
-                        f"threshold={vec_min}, selected_mode={metrics['mode']}"
+                        f"threshold={vec_min}, selected_mode={metrics['mode']}",
                     )
                 else:
                     # 기존 정규화 정책 (fallback)
@@ -257,7 +257,7 @@ class RAGPipeline:
                     metrics["mode"] = "rag" if top_score >= rag_min_score else "chat"
                     logger.info(
                         f"🎯 AUTO 모드 (정규화): top_score={top_score:.3f}, "
-                        f"threshold={rag_min_score}, selected_mode={metrics['mode']}"
+                        f"threshold={rag_min_score}, selected_mode={metrics['mode']}",
                     )
         elif mode_env == "CHAT":
             metrics["mode"] = "chat"
@@ -299,7 +299,7 @@ class RAGPipeline:
             def hydrate_context(
                 chunks: list[dict[str, Any]],
                 max_len: int = 10000,
-                mode: str = "rag"
+                mode: str = "rag",
             ) -> tuple[str, dict[str, Any]]:
                 """안전 폴백: 청크 스니펫 결합"""
                 parts = []
@@ -328,7 +328,7 @@ class RAGPipeline:
             diagnostics["used_k"] = len(compressed)
             if DIAG_LOG_LEVEL in ["DEBUG", "INFO"]:
                 logger.info(
-                    f"[DIAG] 생성 완료: from_context 경로, {len(compressed)}개 문서 사용"
+                    f"[DIAG] 생성 완료: from_context 경로, {len(compressed)}개 문서 사용",
                 )
 
         return answer
@@ -369,12 +369,12 @@ class RAGPipeline:
                 f"query='{query[:50]}...' | "
                 f"search={metrics['search_time']:.2f}s, "
                 f"hydrate={metrics.get('hydrate_time', 0):.3f}s, "
-                f"generate={metrics['generate_time']:.2f}s"
+                f"generate={metrics['generate_time']:.2f}s",
             )
         elif total_latency > 3.0:
             logger.warning(
                 f"⚠️  SLOW_QUERY (>3s): {total_latency:.2f}s | "
-                f"query='{query[:50]}...'"
+                f"query='{query[:50]}...'",
             )
 
         logger.info(
@@ -382,7 +382,7 @@ class RAGPipeline:
             f"(search={metrics['search_time']:.2f}s, "
             f"compress={metrics['compress_time']:.2f}s, "
             f"hydrate={metrics.get('hydrate_time', 0):.3f}s, "
-            f"generate={metrics['generate_time']:.2f}s)"
+            f"generate={metrics['generate_time']:.2f}s)",
         )
 
         # CHAT 모드일 경우 출처 제거
@@ -501,7 +501,7 @@ class RAGPipeline:
                 diagnostics["compression_ratio"] = compression_ratio
                 if DIAG_LOG_LEVEL in ["DEBUG", "INFO"]:
                     logger.info(
-                        f"[DIAG] 압축 완료: {len(results)} → {len(compressed)}개 문서"
+                        f"[DIAG] 압축 완료: {len(results)} → {len(compressed)}개 문서",
                     )
 
             # 3. 생성: 모드 결정 → 컨텍스트 최적화 → 생성
@@ -509,7 +509,7 @@ class RAGPipeline:
             if hasattr(self.generator, "compressed_chunks"):
                 self.generator.compressed_chunks = compressed
                 logger.debug(
-                    f"Injected {len(compressed)} compressed chunks into generator"
+                    f"Injected {len(compressed)} compressed chunks into generator",
                 )
 
             # [DIAG] 생성 전 컨텍스트 스냅샷
@@ -519,7 +519,7 @@ class RAGPipeline:
                         f"[DIAG] Context[{i}]: doc_id={c.get('doc_id')}, "
                         f"filename={c.get('filename', 'N/A')}, "
                         f"page={c.get('page', 0)}, "
-                        f"snippet={c.get('snippet', '')[:120]}..."
+                        f"snippet={c.get('snippet', '')[:120]}...",
                     )
 
             # 🎯 STEP 1: QueryRouter 모드 분류 (DOC_ANCHORED 최우선 체크)
@@ -574,7 +574,7 @@ class RAGPipeline:
                             f"🎯 AUTO 모드 (절대값): top_score={top_score:.3f}, "
                             f"has_keyword={has_keyword}, token_count={token_count}, "
                             f"coverage={keyword_coverage}/{min_coverage}, "
-                            f"threshold={vec_min}, selected_mode={metrics['mode']}"
+                            f"threshold={vec_min}, selected_mode={metrics['mode']}",
                         )
                     else:
                         # 기존 정규화 정책 (fallback)
@@ -582,7 +582,7 @@ class RAGPipeline:
                         metrics["mode"] = "rag" if top_score >= rag_min_score else "chat"
                         logger.info(
                             f"🎯 AUTO 모드 (정규화): top_score={top_score:.3f}, "
-                            f"threshold={rag_min_score}, selected_mode={metrics['mode']}"
+                            f"threshold={rag_min_score}, selected_mode={metrics['mode']}",
                         )
 
             elif mode_env == "CHAT":
@@ -605,7 +605,7 @@ class RAGPipeline:
                 def hydrate_context(
                     chunks: list[dict[str, Any]],
                     max_len: int = 10000,
-                    mode: str = "rag"
+                    mode: str = "rag",
                 ) -> tuple[str, dict[str, Any]]:
                     """안전 폴백: 청크 스니펫 결합"""
                     parts = []
@@ -635,7 +635,7 @@ class RAGPipeline:
                 diagnostics["used_k"] = len(compressed)
                 if DIAG_LOG_LEVEL in ["DEBUG", "INFO"]:
                     logger.info(
-                        f"[DIAG] 생성 완료: from_context 경로, {len(compressed)}개 문서 사용"
+                        f"[DIAG] 생성 완료: from_context 경로, {len(compressed)}개 문서 사용",
                     )
 
             total_latency = time.perf_counter() - start_time
@@ -648,12 +648,12 @@ class RAGPipeline:
                     f"query='{query[:50]}...' | "
                     f"search={metrics['search_time']:.2f}s, "
                     f"hydrate={metrics.get('hydrate_time', 0):.3f}s, "
-                    f"generate={metrics['generate_time']:.2f}s"
+                    f"generate={metrics['generate_time']:.2f}s",
                 )
             elif total_latency > 3.0:
                 logger.warning(
                     f"⚠️  SLOW_QUERY (>3s): {total_latency:.2f}s | "
-                    f"query='{query[:50]}...'"
+                    f"query='{query[:50]}...'",
                 )
 
             logger.info(
@@ -661,7 +661,7 @@ class RAGPipeline:
                 f"(search={metrics['search_time']:.2f}s, "
                 f"compress={metrics['compress_time']:.2f}s, "
                 f"hydrate={metrics.get('hydrate_time', 0):.3f}s, "
-                f"generate={metrics['generate_time']:.2f}s)"
+                f"generate={metrics['generate_time']:.2f}s)",
             )
 
             # CHAT 모드일 경우 출처 제거 (일반 대화는 문서 인용 불필요)
@@ -709,7 +709,7 @@ class RAGPipeline:
             )
 
     def _make_response(
-        self, text: str, selected: list[dict[str, Any]], retrieved: list[dict[str, Any]]
+        self, text: str, selected: list[dict[str, Any]], retrieved: list[dict[str, Any]],
     ) -> dict:
         """표준 응답 구조 생성 (citations 포함)
 
@@ -891,7 +891,7 @@ class RAGPipeline:
                 route_decision.reason = "summary_with_date_pattern"
 
             logger.info(
-                f"🔀 라우팅 결과: mode={route_decision.mode.value}, reason={route_decision.reason}"
+                f"🔀 라우팅 결과: mode={route_decision.mode.value}, reason={route_decision.reason}",
             )
 
             # 💰 COST 모드: 비용 합계 직접 조회
@@ -925,7 +925,7 @@ class RAGPipeline:
                     "page": c.get("page", 1),
                     "snippet": c.get("snippet", ""),
                     "meta": c.get(
-                        "meta", {"doc_id": c.get("doc_id"), "page": c.get("page", 1)}
+                        "meta", {"doc_id": c.get("doc_id"), "page": c.get("page", 1)},
                     ),
                 }
                 for c in (response.evidence_chunks or [])
@@ -980,7 +980,7 @@ class RAGPipeline:
                 f"backfill={evidence_injected} | "
                 f"search_ms={search_ms} | "
                 f"generate_ms={generate_ms} | "
-                f"total_ms={total_ms}"
+                f"total_ms={total_ms}",
             )
 
             result = {
@@ -1001,7 +1001,7 @@ class RAGPipeline:
         else:
             # 에러 발생 시 (중립 톤, 사과 표현 금지)
             error_msg = ERROR_MESSAGES.get(
-                ErrorCode.E_GENERATE, "답변 생성 중 오류가 발생했다."
+                ErrorCode.E_GENERATE, "답변 생성 중 오류가 발생했다.",
             )
             if response.error:
                 error_msg = f"{error_msg}\n\n상세: {response.error}"
@@ -1009,7 +1009,7 @@ class RAGPipeline:
             # 운영 표준 로그 (에러 케이스)
             logger.error(
                 f'[RAG] query="{query[:50]}..." | '
-                f'status=ERROR | error="{response.error}"'
+                f'status=ERROR | error="{response.error}"',
             )
 
             return {
@@ -1104,7 +1104,7 @@ class RAGPipeline:
                             "page": 1,
                             "text": content,  # 전체 텍스트
                             "score": 1.0,  # 직접 매칭이므로 최고 스코어
-                            "filename": filename
+                            "filename": filename,
                         })
                         logger.info(f"✓ 문서 content 로드: {len(content)}자")
 
@@ -1130,7 +1130,7 @@ class RAGPipeline:
                         "page": result.get("page", 1),
                         "text": result.get("snippet", result.get("text", "")),
                         "score": result.get("score", 0.0),
-                        "filename": filename
+                        "filename": filename,
                     })
 
             if not chunks:
@@ -1163,7 +1163,7 @@ class RAGPipeline:
             images = convert_from_path(
                 pdf_path,
                 first_page=start_page + 1,  # 1-based
-                last_page=total_pages
+                last_page=total_pages,
             )
 
             text = ""
@@ -1312,7 +1312,7 @@ class RAGPipeline:
         """기본 검색 엔진 생성 (HybridRetriever v1)"""
         if settings.USE_V2_RETRIEVER:
             logger.warning(
-                "⚠️ USE_V2_RETRIEVER는 더 이상 지원되지 않습니다. v1 Retriever를 사용합니다."
+                "⚠️ USE_V2_RETRIEVER는 더 이상 지원되지 않습니다. v1 Retriever를 사용합니다.",
             )
 
         try:

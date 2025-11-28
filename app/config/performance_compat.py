@@ -88,7 +88,7 @@ def _normalize_parallel(cfg: dict[str, Any]) -> None:
 
         logger.info(
             f"병렬 풀 변환: io={io_workers}, cpu={cpu_workers} "
-            f"(use_mp={use_mp}, cpu_count={cpu_count})"
+            f"(use_mp={use_mp}, cpu_count={cpu_count})",
         )
 
 
@@ -162,7 +162,7 @@ def _normalize_memory(cfg: dict[str, Any]) -> None:
 
         logger.info(
             f"메모리 임계값 설정: soft={memory['soft_limit_mb']}MB, "
-            f"hard={memory['hard_limit_mb']}MB"
+            f"hard={memory['hard_limit_mb']}MB",
         )
 
     # queue_backpressure 기본값
@@ -216,7 +216,7 @@ def _normalize_logging(cfg: dict[str, Any]) -> None:
 
 
 def resolve_auto_workers(
-    pool_type: str, cpu_count: Optional[int] = None
+    pool_type: str, cpu_count: Optional[int] = None,
 ) -> int:
     """
     'auto' 워커 수 계산

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 def select_by_text_length(
     db_path: str,
     threshold: int = 100,
-    limit: Optional[int] = None
+    limit: Optional[int] = None,
 ) -> list[dict[str, Any]]:
     """텍스트 길이 기준 선택 (force_ocr_update.py 로직)
 
@@ -53,7 +53,7 @@ def select_by_text_length(
 def select_by_avg_per_page(
     db_path: str,
     threshold: int = 300,
-    limit: Optional[int] = None
+    limit: Optional[int] = None,
 ) -> list[dict[str, Any]]:
     """페이지당 평균 글자수 기준 선택 (reprocess_with_ocr.py 로직)
 
@@ -95,7 +95,7 @@ def select_by_avg_per_page(
 
 def select_zero_text(
     db_path: str,
-    limit: Optional[int] = None
+    limit: Optional[int] = None,
 ) -> list[dict[str, Any]]:
     """0자 문서 선택 (batch_ocr_zero_chars.py 로직)
 
@@ -132,7 +132,7 @@ def select_zero_text(
 
 def select_from_file_list(
     file_list_path: str,
-    db_path: str = "metadata.db"
+    db_path: str = "metadata.db",
 ) -> list[dict[str, Any]]:
     """파일 목록에서 읽기 (batch_ocr_from_report.py 로직)
 
@@ -152,7 +152,7 @@ def select_from_file_list(
         for filename in file_list:
             cursor = conn.execute(
                 "SELECT id, path, filename, page_count FROM documents WHERE filename = ?",
-                (filename,)
+                (filename,),
             )
             row = cursor.fetchone()
             if row:

@@ -67,11 +67,11 @@ class HealthChecker:
                 self.ok_items.append(f"✅ 동기화 완벽: {total_pdfs}개 파일 = {db_count}개 DB 레코드")
             elif diff <= 5:
                 self.warnings.append(
-                    f"⚠️ 동기화 약간 불일치: {total_pdfs}개 파일 vs {db_count}개 DB ({diff}개 차이)"
+                    f"⚠️ 동기화 약간 불일치: {total_pdfs}개 파일 vs {db_count}개 DB ({diff}개 차이)",
                 )
             else:
                 self.issues.append(
-                    f"❌ 동기화 심각한 불일치: {total_pdfs}개 파일 vs {db_count}개 DB ({diff}개 차이)"
+                    f"❌ 동기화 심각한 불일치: {total_pdfs}개 파일 vs {db_count}개 DB ({diff}개 차이)",
                 )
 
         except Exception as e:
@@ -81,7 +81,7 @@ class HealthChecker:
         """디스크 공간 체크"""
         try:
             result = subprocess.run(
-                ["df", "-h", "."], capture_output=True, text=True, timeout=10
+                ["df", "-h", "."], capture_output=True, text=True, timeout=10,
             )
             lines = result.stdout.strip().split("\n")
             if len(lines) >= 2:
@@ -120,7 +120,7 @@ class HealthChecker:
 
             # 텍스트 추출 품질
             cursor = conn.execute(
-                "SELECT COUNT(*) FROM documents WHERE length(text_preview) < 100"
+                "SELECT COUNT(*) FROM documents WHERE length(text_preview) < 100",
             )
             poor_count = cursor.fetchone()[0]
 
@@ -143,7 +143,7 @@ class HealthChecker:
             dup_count = len(list(dup_folder.glob("*.pdf")))
             if dup_count > 0:
                 self.warnings.append(
-                    f"⚠️ year_정보 없 폴더에 {dup_count}개 파일 (정리 권장)"
+                    f"⚠️ year_정보 없 폴더에 {dup_count}개 파일 (정리 권장)",
                 )
             else:
                 self.ok_items.append("✅ 중복 폴더 없음")
@@ -167,18 +167,18 @@ class HealthChecker:
 
             if backup_age_hours > 48:  # 48시간 이상 오래됨
                 self.warnings.append(
-                    f"⚠️ 최신 백업이 오래됨: {backup_age_hours:.1f}시간 전 ({latest_backup.name})"
+                    f"⚠️ 최신 백업이 오래됨: {backup_age_hours:.1f}시간 전 ({latest_backup.name})",
                 )
             else:
                 self.ok_items.append(
-                    f"✅ DB 백업 정상: {len(backups)}개 파일, 최신 {backup_age_hours:.1f}시간 전"
+                    f"✅ DB 백업 정상: {len(backups)}개 파일, 최신 {backup_age_hours:.1f}시간 전",
                 )
 
     def check_services(self):
         """서비스 프로세스 체크"""
         try:
             result = subprocess.run(
-                ["ps", "aux"], capture_output=True, text=True, timeout=10
+                ["ps", "aux"], capture_output=True, text=True, timeout=10,
             )
             output = result.stdout
 

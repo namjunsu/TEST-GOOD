@@ -135,7 +135,7 @@ def clean_ui_metadata(query: str) -> str:
 
     if query != original:
         logger.info(
-            f"🧹 UI 메타데이터 제거: '{original[:60]}...' → '{query[:60]}...'"
+            f"🧹 UI 메타데이터 제거: '{original[:60]}...' → '{query[:60]}...'",
         )
 
     return query
@@ -197,7 +197,7 @@ def encode_file_ref(filename: str) -> Optional[str]:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT path FROM documents WHERE filename = ? LIMIT 1",
-                (filename,)
+                (filename,),
             )
             result = cursor.fetchone()
 
@@ -262,7 +262,7 @@ def build_evidence_item(
     date: str = None,
     category: str = None,
     doctype: str = None,
-    claimed_total: int = None
+    claimed_total: int = None,
 ) -> dict[str, Any]:
     """단일 Evidence 아이템 생성"""
     file_path = build_file_path(filename)
@@ -281,14 +281,14 @@ def build_evidence_item(
             "date": date,
             "category": category,
             "doctype": doctype,
-            "claimed_total": claimed_total
-        }
+            "claimed_total": claimed_total,
+        },
     }
 
 
 def build_evidence_list(
     doc_details: list[dict[str, Any]],
-    retriever=None
+    retriever=None,
 ) -> list[dict[str, Any]]:
     """Evidence 목록 생성
 
@@ -326,7 +326,7 @@ def build_evidence_list(
             date=doc.get("date"),
             category=doc.get("category"),
             doctype=doc.get("doctype"),
-            claimed_total=doc.get("claimed_total")
+            claimed_total=doc.get("claimed_total"),
         ))
 
     return evidence
@@ -343,7 +343,7 @@ def format_search_card(
     date: str = "날짜 없음",
     doctype: str = "문서",
     claimed_total: int = None,
-    text_preview: str = ""
+    text_preview: str = "",
 ) -> str:
     """검색 결과 카드 포맷팅"""
     title = format_title_from_filename(filename)
@@ -366,7 +366,7 @@ def format_search_card(
 def format_search_results(
     keywords: str,
     doc_details: list[dict[str, Any]],
-    is_count_query: bool = False
+    is_count_query: bool = False,
 ) -> str:
     """검색 결과 전체 포맷팅"""
     cards = []
@@ -378,7 +378,7 @@ def format_search_results(
             date=doc.get("date", "날짜 없음"),
             doctype=doc.get("doctype", "문서"),
             claimed_total=doc.get("claimed_total"),
-            text_preview=doc.get("text_preview", "")
+            text_preview=doc.get("text_preview", ""),
         )
         cards.append(card)
 
@@ -402,7 +402,7 @@ def build_standard_response(
     citations: list[dict[str, Any]] = None,
     found: bool = True,
     retrieved_count: int = None,
-    selected_count: int = None
+    selected_count: int = None,
 ) -> dict[str, Any]:
     """표준 응답 딕셔너리 생성"""
     citations = citations or []
@@ -419,8 +419,8 @@ def build_standard_response(
         "status": {
             "retrieved_count": retrieved_count,
             "selected_count": selected_count,
-            "found": found
-        }
+            "found": found,
+        },
     }
 
 
@@ -431,7 +431,7 @@ def build_error_response(mode: str, error: str) -> dict[str, Any]:
         text=f"오류: {error}",
         files=[],
         count=0,
-        found=False
+        found=False,
     )
 
 
@@ -442,5 +442,5 @@ def build_empty_response(mode: str, message: str) -> dict[str, Any]:
         text=message,
         files=[],
         count=0,
-        found=False
+        found=False,
     )

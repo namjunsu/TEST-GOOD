@@ -68,7 +68,7 @@ def hydrate_context(chunks: list[dict[str, Any]], max_len: int = 10000, mode: st
         "extraction_time": 0.0,
         "compression_applied": False,
         "token_estimate": 0,
-        "truncate_reason": "none"
+        "truncate_reason": "none",
     }
 
     parts = []
@@ -134,7 +134,7 @@ def hydrate_context(chunks: list[dict[str, Any]], max_len: int = 10000, mode: st
         f"truncate={metrics['truncate_reason']} "
         f"mode={mode} "
         f"coef={tokens_per_char:.2f} "
-        f"time={metrics['extraction_time']:.3f}s"
+        f"time={metrics['extraction_time']:.3f}s",
     )
 
     if current_len == 0:
@@ -142,7 +142,7 @@ def hydrate_context(chunks: list[dict[str, Any]], max_len: int = 10000, mode: st
             f"❌ CONTEXT_EMPTY chunks={len(chunks)} "
             f"fallback_chain={metrics['fallback_chain']} "
             f"pdf_tail_status={metrics['pdf_tail_status']} "
-            f"metrics={metrics}"
+            f"metrics={metrics}",
         )
 
     return current_text, metrics

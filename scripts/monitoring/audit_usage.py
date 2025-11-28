@@ -83,7 +83,7 @@ def check_file_usage(rel_path: str, rg_available: bool) -> dict:
     # 2. CLI 엔트리 포인트 검사
     is_cli = False
     try:
-        with open(path, encoding="utf-8", errors="ignore") as f:
+        with Path(path).open(encoding="utf-8", errors="ignore") as f:
             text = f.read()
         if 'if __name__ == "__main__"' in text:
             is_cli = True
@@ -129,7 +129,7 @@ def main() -> None:
     rg_available = has_rg()
     if not rg_available:
         print(
-            "⚠️  ripgrep(rg)이 설치되어 있지 않습니다. import 기반 사용성 분석은 비활성화됩니다."
+            "⚠️  ripgrep(rg)이 설치되어 있지 않습니다. import 기반 사용성 분석은 비활성화됩니다.",
         )
         print("    → status=UNUSED 판정은 신뢰도가 낮을 수 있습니다.\n")
 
@@ -153,14 +153,14 @@ def main() -> None:
 
     # JSON 저장
     raw_path = REPORTS_DIR / "usage_audit_raw.json"
-    with open(raw_path, "w", encoding="utf-8") as f:
+    with Path(raw_path).open("w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
 
     # Markdown 리포트 생성
     md_path = REPORTS_DIR / "USAGE_AUDIT.md"
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    with open(md_path, "w", encoding="utf-8") as f:
+    with Path(md_path).open("w", encoding="utf-8") as f:
         f.write("# Usage Audit Report\n\n")
         f.write(f"**Date**: {now_str}\n\n")
         f.write(f"**Project Root**: `{PROJECT_ROOT}`\n\n")
@@ -176,7 +176,7 @@ def main() -> None:
         for item in sorted(unused, key=lambda x: x["filepath"]):
             f.write(
                 f"| `{item['filepath']}` | UNUSED | "
-                f"No imports (rg={rg_available}), not CLI, not special |\n"
+                f"No imports (rg={rg_available}), not CLI, not special |\n",
             )
 
         f.write("\n## Used Files (top 20 by import count)\n\n")
@@ -186,7 +186,7 @@ def main() -> None:
             cli = "✓" if item["is_cli"] else ""
             special = "✓" if item["is_special"] else ""
             f.write(
-                f"| `{item['filepath']}` | {item['import_count']} | {cli} | {special} |\n"
+                f"| `{item['filepath']}` | {item['import_count']} | {cli} | {special} |\n",
             )
 
     print("✅ Reports saved:")

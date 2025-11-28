@@ -68,7 +68,7 @@ class ExactMatchRetriever:
             "total_queries": 0,
             "exact_hits": 0,
             "filename_hits": 0,
-            "total_query_time_ms": 0.0
+            "total_query_time_ms": 0.0,
         }
 
         if not self.enabled:
@@ -162,7 +162,7 @@ class ExactMatchRetriever:
 
         logger.info(
             f"📊 ExactMatch v2.0: {len(results)}건 반환 "
-            f"(exact={len(exact_matches)}, filename={len(filename_matches)}, {elapsed_ms:.1f}ms)"
+            f"(exact={len(exact_matches)}, filename={len(filename_matches)}, {elapsed_ms:.1f}ms)",
         )
 
         return results
@@ -206,7 +206,7 @@ class ExactMatchRetriever:
                 patterns = [f"% {v} %" for v in variants]
                 union_clauses = " UNION ALL ".join(
                     ["SELECT DISTINCT doc_id FROM model_codes WHERE padded_norm LIKE ?"]
-                    * len(patterns)
+                    * len(patterns),
                 )
                 query_boundary = f"SELECT DISTINCT doc_id FROM ({union_clauses})"
 
@@ -220,7 +220,7 @@ class ExactMatchRetriever:
             results = [(doc_id, self.EXACT_CODE_WEIGHT, "exact_code") for doc_id in doc_ids_found]
 
             logger.debug(
-                f"model_codes 일치: {len(results)}건 (정확={exact_count}, 경계={boundary_count})"
+                f"model_codes 일치: {len(results)}건 (정확={exact_count}, 경계={boundary_count})",
             )
             return results
 
@@ -229,7 +229,7 @@ class ExactMatchRetriever:
             return []
 
     def _query_filename_matches(
-        self, variants: set[str], original_codes: list[str]
+        self, variants: set[str], original_codes: list[str],
     ) -> list[tuple[int, float, str]]:
         """파일명에서 코드 일치 검색 v2.0
 
@@ -257,7 +257,7 @@ class ExactMatchRetriever:
             # UNION ALL로 배치 (1회 라운드트립, COLLATE NOCASE로 인덱스 활용)
             union_clauses = " UNION ALL ".join(
                 ["SELECT DISTINCT id, filename FROM documents WHERE filename COLLATE NOCASE LIKE ? ESCAPE '\\'"]
-                * len(patterns)
+                * len(patterns),
             )
             query = f"SELECT DISTINCT id, filename FROM ({union_clauses})"
 
@@ -295,7 +295,7 @@ class ExactMatchRetriever:
             partial_count = len(results) - exact_count
 
             logger.debug(
-                f"filename 일치: {len(results)}건 (정확={exact_count}, 부분={partial_count})"
+                f"filename 일치: {len(results)}건 (정확={exact_count}, 부분={partial_count})",
             )
             return results
 
@@ -306,7 +306,7 @@ class ExactMatchRetriever:
     def _merge_results(
         self,
         exact_matches: list[tuple[int, float, str]],
-        filename_matches: list[tuple[int, float, str]]
+        filename_matches: list[tuple[int, float, str]],
     ) -> list[tuple[int, float, str]]:
         """검색 결과 병합 및 중복 제거
 
@@ -382,7 +382,7 @@ class ExactMatchRetriever:
                     "drafter": row[6],
                     "category": row[7],
                     "text_preview": row[8],
-                    "page_count": row[9]
+                    "page_count": row[9],
                 })
 
             return results
@@ -456,8 +456,8 @@ class ExactMatchRetriever:
                     "date": doc.get("date", ""),
                     "category": doc.get("category", "pdf"),
                     "doc_id": doc.get("filename", "unknown"),
-                    "match_type": match_type  # 메타에도 포함
-                }
+                    "match_type": match_type,  # 메타에도 포함
+                },
             })
 
         logger.info(f"🎯 ExactMatch v2.0: {len(results)}건 반환 (score range: 0-10)")

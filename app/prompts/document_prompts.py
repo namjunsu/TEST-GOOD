@@ -222,7 +222,7 @@ def build_section_prompt(
     ctx = _sanitize_context(context)
     sec = (section or "").strip()
     return header + SECTION_PROMPT.format(
-        context=ctx, section=sec, common_rules=COMMON_RULES
+        context=ctx, section=sec, common_rules=COMMON_RULES,
     )
 
 
@@ -271,5 +271,5 @@ def build_qa_prompt(
     ctx = _sanitize_context(context)
     q = (query or "").strip()
     return header + QA_PROMPT.format(
-        context=ctx, query=q, common_rules=COMMON_RULES
+        context=ctx, query=q, common_rules=COMMON_RULES,
     )

@@ -170,7 +170,7 @@ class HybridRetriever:
 
                 logger.info(
                     f"✅ 라우터 키워드 로드 완료: {len(profiles)}개 프로파일, "
-                    f"{len(all_allow_patterns)}개 allow 패턴, {len(all_deny_patterns)}개 deny 패턴"
+                    f"{len(all_allow_patterns)}개 allow 패턴, {len(all_deny_patterns)}개 deny 패턴",
                 )
             else:
                 # 폴백: 하드코딩 패턴 사용
@@ -247,7 +247,7 @@ class HybridRetriever:
                         "date": doc.get("date"),
                         "drafter": doc.get("drafter"),
                         "category": doc.get("category"),
-                    }
+                    },
                 }
             logger.warning(f"⚠️ 선택된 문서를 찾을 수 없음: {selected_filename}")
             return None
@@ -321,7 +321,7 @@ class HybridRetriever:
                         "date": date,
                         "drafter": drafter,
                         "category": category,
-                    }
+                    },
                 })
 
             logger.info(f"✅ FTS 검색 완료: {len(results)}개 결과 (원본='{query}', 확장키워드={expanded_kw_count}개)")
@@ -455,7 +455,7 @@ class HybridRetriever:
                                 "date": result.get("date"),
                                 "drafter": result.get("drafter"),
                                 "category": result.get("category"),
-                            }
+                            },
                         })
 
                     # 후처리: 실제 content에 query 키워드가 포함된 것만 필터링
@@ -500,7 +500,7 @@ class HybridRetriever:
                         "top2": top2,
                         "top3": top3,
                         "delta12": max(0.0, top1 - top2),
-                        "delta13": max(0.0, top1 - top3)
+                        "delta13": max(0.0, top1 - top3),
                     }
 
                     return ResultsWithStats(filtered_results, score_stats)
@@ -546,7 +546,7 @@ class HybridRetriever:
                                 "drafter": result.get("drafter"),
                                 "category": result.get("category"),
                                 "title": result.get("title", ""),
-                            }
+                            },
                         })
 
                     # 중복 제거 및 상위 K개 반환
@@ -586,14 +586,14 @@ class HybridRetriever:
                                 "name": "bm25_search",
                                 "func": self.bm25.search,
                                 "args": (query,),
-                                "kwargs": {"top_k": search_k}
+                                "kwargs": {"top_k": search_k},
                             },
                             {
                                 "name": "selected_doc_lookup",
                                 "func": self._find_selected_document,
                                 "args": (selected_filename,),
-                                "kwargs": {}
-                            }
+                                "kwargs": {},
+                            },
                         ]
                         parallel_results = self.parallel_executor.execute_searches(search_tasks)
                         bm25_results = parallel_results.get("bm25_search", [])
@@ -630,7 +630,7 @@ class HybridRetriever:
                                 "date": result.get("date"),
                                 "drafter": result.get("drafter"),
                                 "category": result.get("category"),
-                            }
+                            },
                         })
                         seen_filenames.add(filename)
 
@@ -707,7 +707,7 @@ class HybridRetriever:
                 results = self.metadata_db.search_documents(
                     year=year,
                     drafter=drafter,
-                    limit=top_k * 3
+                    limit=top_k * 3,
                 )
 
                 normalized = []
@@ -729,7 +729,7 @@ class HybridRetriever:
                             "date": doc.get("date", ""),
                             "category": doc.get("category", "pdf"),
                             "doc_id": doc.get("filename", "unknown"),
-                        }
+                        },
                     })
 
                 normalized.sort(key=lambda x: x["score"], reverse=True)
@@ -753,7 +753,7 @@ class HybridRetriever:
                 "top2": top2,
                 "top3": top3,
                 "delta12": max(0.0, top1 - top2),
-                "delta13": max(0.0, top1 - top3)
+                "delta13": max(0.0, top1 - top3),
             }
 
             results_with_stats = ResultsWithStats(normalized, score_stats)
@@ -761,7 +761,7 @@ class HybridRetriever:
             backend = "BM25" if (self.use_bm25 and self.bm25) else "MetadataDB"
             logger.info(
                 f"🔍 HybridRetriever ({backend}): {len(normalized)}건 검색 완료 "
-                f"(top1={top1:.2f}, delta12={score_stats['delta12']:.2f})"
+                f"(top1={top1:.2f}, delta12={score_stats['delta12']:.2f})",
             )
 
             # 검색 품질 로깅 (Phase 3 추가)
@@ -772,7 +772,7 @@ class HybridRetriever:
                     query=query,
                     results=normalized,
                     score_stats=score_stats,
-                    metadata={"mode": mode, "backend": backend}
+                    metadata={"mode": mode, "backend": backend},
                 )
             except Exception as e:
                 logger.debug(f"품질 로깅 실패 (무시): {e}")
@@ -854,7 +854,7 @@ class HybridRetriever:
                 logger.info(
                     f"📈 파일명 보너스: {filename[:40]} | "
                     f"유사도={similarity:.2f} | "
-                    f"점수 {original_score:.2f} → {result['score']:.2f} (+{bonus:.1f})"
+                    f"점수 {original_score:.2f} → {result['score']:.2f} (+{bonus:.1f})",
                 )
 
         return results
@@ -876,7 +876,7 @@ class HybridRetriever:
                 "retrieve_topk": self.retrieve_topk,
                 "display_limit": self.display_limit,
                 "snippet_max_length": self.snippet_max_length,
-            }
+            },
         }
 
         # ExactMatch 메트릭

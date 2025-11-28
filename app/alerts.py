@@ -127,7 +127,7 @@ def _json_block(payload: dict) -> str:
 
 
 def _build_blocks(
-    title: str, payload: dict, severity: str, source: Optional[str]
+    title: str, payload: dict, severity: str, source: Optional[str],
 ) -> dict[str, Any]:
     """Slack 메시지 블록 구성
 
@@ -226,7 +226,7 @@ def _post_slack(body: dict) -> dict[str, Any]:
             elif 500 <= status < 600 and attempt < MAX_RETRIES:
                 delay = BACKOFF_BASE * (2**attempt)
                 logger.warning(
-                    f"Server error ({status}), retrying in {delay:.1f}s (attempt {attempt + 1}/{MAX_RETRIES})"
+                    f"Server error ({status}), retrying in {delay:.1f}s (attempt {attempt + 1}/{MAX_RETRIES})",
                 )
                 time.sleep(delay)
                 attempt += 1
@@ -237,7 +237,7 @@ def _post_slack(body: dict) -> dict[str, Any]:
             if attempt < MAX_RETRIES:
                 delay = BACKOFF_BASE * (2**attempt)
                 logger.warning(
-                    f"Network error, retrying in {delay:.1f}s (attempt {attempt + 1}/{MAX_RETRIES}): {e}"
+                    f"Network error, retrying in {delay:.1f}s (attempt {attempt + 1}/{MAX_RETRIES}): {e}",
                 )
                 time.sleep(delay)
                 attempt += 1
@@ -247,7 +247,7 @@ def _post_slack(body: dict) -> dict[str, Any]:
 
 
 def send_warning(
-    title: str, payload: dict, *, severity: str = "HIGH", source: Optional[str] = None
+    title: str, payload: dict, *, severity: str = "HIGH", source: Optional[str] = None,
 ) -> dict:
     """
     Slack으로 경고 알림 전송 (강화판)
@@ -290,7 +290,7 @@ def send_warning(
         # DRY-RUN 또는 잘못된 Webhook → 콘솔로 안전 출력
         safe = _mask_sensitive(payload)
         logger.warning(
-            f"[ALERTS DRY-RUN] {title} [{severity}] service={SERVICE_NAME} env={ENV} source={source or 'index-hygiene'}"
+            f"[ALERTS DRY-RUN] {title} [{severity}] service={SERVICE_NAME} env={ENV} source={source or 'index-hygiene'}",
         )
         logger.info(json.dumps(safe, ensure_ascii=False, indent=2))
         return {"dry_run": True, "payload": body}

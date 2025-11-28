@@ -5,6 +5,7 @@
 토큰 경계 보장 + 상대 시간 전처리 + 도메인 용어 보호
 """
 
+import pathlib
 import re
 import threading
 import unicodedata
@@ -38,7 +39,7 @@ class QueryFilter:
         search_cfg = self.config.get("search_stopwords", {})
 
         self.drafter_sw_re = self._build_stopword_regex(
-            drafter_cfg.get("values", [])
+            drafter_cfg.get("values", []),
         )
         self.search_sw_re = self._build_stopword_regex(search_cfg.get("values", []))
 
@@ -51,24 +52,24 @@ class QueryFilter:
 
         # 쿼리 토큰 패턴 (확장)
         self.query_tokens = self._compile_query_tokens(
-            self.config.get("query_tokens", {})
+            self.config.get("query_tokens", {}),
         )
 
         # 도메인 용어 (변형 생성)
         self.domain_terms = self._build_domain_terms(
-            self.config.get("domain_terms", {})
+            self.config.get("domain_terms", {}),
         )
 
         logger.info(
             f"쿼리 필터 초기화: drafter_sw={len(drafter_cfg.get('values', []))}, "
             f"search_sw={len(search_cfg.get('values', []))}, "
-            f"domain_terms={len(self.domain_terms)}"
+            f"domain_terms={len(self.domain_terms)}",
         )
 
     def _load_config(self) -> dict[str, Any]:
         """설정 파일 로드"""
         try:
-            with open(self.config_path, "r", encoding="utf-8") as f:
+            with pathlib.Path(self.config_path).open("r", encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}
         except Exception as e:
             logger.warning(f"⚠️ 설정 로드 실패: {e}, 기본값 사용")
@@ -78,7 +79,7 @@ class QueryFilter:
         """불용어 리스트 → 토큰 경계 정규식 (NFKC 정규화)"""
         # NFKC 정규화 + 중복 제거
         norm = sorted(
-            {unicodedata.normalize("NFKC", w).strip() for w in words if w}
+            {unicodedata.normalize("NFKC", w).strip() for w in words if w},
         )
         # 길이 긴 것 우선 (부분 겹침 방지), 특수문자 이스케이프
         pat = "|".join(sorted(map(re.escape, norm), key=len, reverse=True))
@@ -142,7 +143,7 @@ class QueryFilter:
         """도메인 용어를 일시 치환으로 보호 (불용어 필터 영향 배제)"""
         mapping = {}
         for i, term in enumerate(
-            sorted(self.domain_terms, key=len, reverse=True), 1
+            sorted(self.domain_terms, key=len, reverse=True), 1,
         ):
             if term in query:
                 key = f"__DOM_{i}__"
@@ -312,7 +313,7 @@ class QueryFilter:
 
         logger.info(
             f"쿼리 전처리: '{original}' → '{query}' "
-            f"(parsed={parsed_tokens}, removed={len(removed_stopwords)}, protected={len(protected_terms)})"
+            f"(parsed={parsed_tokens}, removed={len(removed_stopwords)}, protected={len(protected_terms)})",
         )
 
         return {

@@ -195,7 +195,7 @@ def ensure_citations(json_data: dict[str, Any], doc_ref: Optional[str] = None) -
         json_data["citations"].append({
             "source": doc_ref,
             "pages": "전체",
-            "confidence": "high"
+            "confidence": "high",
         })
         logger.info(f"✓ 인용 추가: {doc_ref}")
 
@@ -317,7 +317,7 @@ def validate_numeric_fields(json_data: dict[str, Any], source_text: str) -> dict
                     nearest = nearest_amount_to_keyword(
                         source_text,
                         ["총액", "합계", "총금액", "총 액"],
-                        prefer_later=True  # 문서 후반부 우선 (결론부)
+                        prefer_later=True,  # 문서 후반부 우선 (결론부)
                     )
                     if nearest:
                         correct_total = nearest["value"]
@@ -364,7 +364,7 @@ def validate_numeric_fields(json_data: dict[str, Any], source_text: str) -> dict
                     nearest = nearest_amount_to_keyword(
                         source_text,
                         ["단가", "단위가격", "단위 가격"],
-                        prefer_later=False  # 선언부 우선
+                        prefer_later=False,  # 선언부 우선
                     )
                     if nearest:
                         correct_unit = nearest["value"]

@@ -17,7 +17,7 @@ class ImportTracker:
         self.entry_points = [
             "web_interface.py",
             "app/api/main.py",
-            "utils/system_checker.py"
+            "utils/system_checker.py",
         ]
         self.project_root = Path.cwd()
 
@@ -25,7 +25,7 @@ class ImportTracker:
         """Extract all imports from a Python file."""
         imports = []
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with Path(file_path).open("r", encoding="utf-8") as f:
                 tree = ast.parse(f.read())
 
             for node in ast.walk(tree):
@@ -58,7 +58,7 @@ class ImportTracker:
         possibilities = [
             str(target) + ".py",
             str(target / "__init__.py"),
-            str(target / "__main__.py")
+            str(target / "__main__.py"),
         ]
 
         for path in possibilities:
@@ -123,7 +123,7 @@ class ImportTracker:
             "entry_points": self.entry_points,
             "used": sorted(list(self.used_files)),
             "unused": sorted(list(unused_files)),
-            "categories": self.categorize_files(unused_files)
+            "categories": self.categorize_files(unused_files),
         }
 
         return report
@@ -136,7 +136,7 @@ class ImportTracker:
             "scripts": [],
             "legacy": [],
             "utils": [],
-            "other": []
+            "other": [],
         }
 
         for file in files:
@@ -163,16 +163,16 @@ def main():
     report = tracker.analyze()
 
     # Save JSON report
-    with open("reports/usage_audit.json", "w") as f:
+    with Path("reports/usage_audit.json").open("w") as f:
         json.dump(report, f, indent=2)
 
     # Save CSV report for unused files
-    with open("reports/dead_code.csv", "w") as f:
+    with Path("reports/dead_code.csv").open("w") as f:
         f.write("file_path,category,lines\n")
         for category, files in report["categories"].items():
             for file in files:
                 try:
-                    with open(file, "r", encoding="utf-8") as src:
+                    with Path(file).open("r", encoding="utf-8") as src:
                         lines = sum(1 for _ in src)
                     f.write(f"{file},{category},{lines}\n")
                 except Exception:

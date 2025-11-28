@@ -54,13 +54,13 @@ MANU_RE = re.compile("|".join(MANU_MAP.keys()), re.IGNORECASE)
 # 기간 패턴 (약/대략/±, 붙여쓰기/띄어쓰기, 경과/사용/운영/노후/간/째/이상 등)
 YEARS_RE = re.compile(
     r"(?:약|대략|\+/-|±)?\s*(\d{1,2})\s*년(?:\s*(?:간|째|이상|초과|경과|사용|운영|노후))?",
-    re.IGNORECASE
+    re.IGNORECASE,
 )
 
 # 교체 사유 키워드
 REASON_KEYS = (
     "경과", "노후", "고장", "성능 저하", "단종", "용량 부족",
-    "장애", "불안정", "끊김", "스트리밍", "열화", "수명"
+    "장애", "불안정", "끊김", "스트리밍", "열화", "수명",
 )
 
 
@@ -103,7 +103,7 @@ def _is_private_ipv4(ip: str) -> bool:
 
 
 def _prefer_private_ipv4(
-    candidates: list[tuple[str, tuple[int, int]]]
+    candidates: list[tuple[str, tuple[int, int]]],
 ) -> Optional[tuple[str, tuple[int, int]]]:
     """사설망 IP 우선 선택
 
@@ -288,7 +288,7 @@ def extract_fields_rule_based(text: str) -> dict[str, Any]:
             "manufacturer_span": manu_span,
             "ip_span": ip_span,
             "duration_span": duration_span,
-        }
+        },
     }
 
 

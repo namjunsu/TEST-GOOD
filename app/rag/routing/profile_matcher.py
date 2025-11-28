@@ -5,6 +5,7 @@
 쿼리에서 키워드 감지 → 프로파일 후보 선정
 """
 
+import pathlib
 import re
 import threading
 from typing import Any
@@ -35,13 +36,13 @@ class ProfileMatcher:
         self.priority = self.config.get("profile_matching", {}).get("priority", [])
 
         logger.info(
-            f"프로파일 매칭 초기화: {len(self.profile_patterns)} 프로파일 로드"
+            f"프로파일 매칭 초기화: {len(self.profile_patterns)} 프로파일 로드",
         )
 
     def _load_config(self) -> dict[str, Any]:
         """설정 파일 로드"""
         try:
-            with open(self.config_path, "r", encoding="utf-8") as f:
+            with pathlib.Path(self.config_path).open("r", encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}
         except Exception as e:
             logger.warning(f"⚠️ 설정 로드 실패: {e}, 기본값 사용")
@@ -72,11 +73,11 @@ class ProfileMatcher:
                 try:
                     expanded = self._expand_macro(pattern)
                     compiled[profile_name].append(
-                        re.compile(expanded, re.IGNORECASE)
+                        re.compile(expanded, re.IGNORECASE),
                     )
                 except Exception as e:
                     logger.warning(
-                        f"⚠️ 프로파일 '{profile_name}' 패턴 컴파일 실패: {e}"
+                        f"⚠️ 프로파일 '{profile_name}' 패턴 컴파일 실패: {e}",
                     )
 
         return compiled

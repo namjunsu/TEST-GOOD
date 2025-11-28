@@ -109,7 +109,7 @@ class AppError(Exception):
         message: str,
         details: str | None = None,
         code: ErrorCode | None = None,
-        status_code: int = 500
+        status_code: int = 500,
     ):
         super().__init__(message)
         self.message = message

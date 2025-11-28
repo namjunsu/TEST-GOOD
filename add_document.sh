@@ -33,7 +33,8 @@ cp "$PDF_PATH" docs/incoming/
 
 # 3. ingest 실행
 echo "3. ingest 실행 중..."
-PYTHONPATH=/home/wnstn4647/AI-CHAT .venv/bin/python scripts/ingest_from_docs.py
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYTHONPATH="$SCRIPT_DIR" "$SCRIPT_DIR/.venv/bin/python" scripts/core/ingest_from_docs.py
 
 # 4. 확인
 echo "4. DB 확인 중..."

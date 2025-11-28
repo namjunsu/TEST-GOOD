@@ -84,7 +84,7 @@ def is_allowed_extension(filename: str) -> bool:
 
     # 다중 확장자 처리 (예: .backup.pdf → 마지막 유효 확장자 찾기)
     # 최대 3개까지만 체크하여 무한 루프 방지
-    parts = filename.split('.')
+    parts = filename.split(".")
     for i in range(len(parts) - 1, max(0, len(parts) - 4), -1):
         ext = f".{parts[i].lower()}"
         if ext in ALLOWED_EXTS:

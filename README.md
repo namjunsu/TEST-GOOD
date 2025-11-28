@@ -129,16 +129,27 @@ Get cost aggregates from documents.
 ### Project Structure
 ```
 AI-CHAT/
-├── apps/           # Application entry points
-├── src/            # Core library modules
-│   ├── rag/        # RAG pipeline
-│   ├── config/     # Configuration
-│   └── utils/      # Utilities
-├── configs/        # Config files
-├── docs/           # Documentation
-├── scripts/        # Maintenance scripts
-├── tests/          # Test files
-└── reports/        # Analysis reports
+├── app/                    # Main application code
+│   ├── api/                # REST API endpoints
+│   ├── rag/                # RAG pipeline & retrievers
+│   ├── prompts/            # AI prompts
+│   └── utils/              # Utilities
+├── config/                 # Configuration files (YAML)
+├── docs/                   # Documentation
+│   └── archive/            # Old reports (archived)
+├── scripts/                # Maintenance & operation scripts
+│   ├── core/               # Core functionality
+│   ├── data/               # Data processing
+│   │   ├── ocr/            # OCR processing
+│   │   ├── metadata/       # Metadata processing
+│   │   └── indexing/       # Index management
+│   ├── validation/         # Testing & validation
+│   ├── monitoring/         # Performance monitoring
+│   └── ops/                # Operations (backup, health)
+├── tests/                  # Test files
+├── rag_system/             # RAG index & data
+├── models/                 # ML models (6GB)
+└── var/                    # Runtime files
 ```
 
 ### Common Commands
@@ -168,12 +179,13 @@ python scripts/analyze_usage.py     # Analyze code usage
 - [System Overview](docs/SYSTEM_OVERVIEW.md) - Architecture and components
 - [Architecture](docs/ARCHITECTURE.md) - Technical design and dependencies
 - [Runbook](docs/RUNBOOK.md) - Operations and troubleshooting
-- [Ops Checklist](docs/OPS_CHECKLIST.md) - Deployment and monitoring
+- [Operations](docs/OPERATIONS.md) - Daily operations guide
+- [RAG Implementation](docs/RAG_V2_IMPLEMENTATION.md) - RAG v2 details
 
-### Additional Guides
-- [Network Access Guide](네트워크_접속_가이드.md) - External access setup
-- [Docker Guide](DOCKER_사용법.md) - Docker deployment
-- [Troubleshooting](문제해결.md) - Common issues and solutions
+### Additional Resources
+- [ChatGPT Context](docs/CHATGPT_PROJECT_CONTEXT.md) - Full project context
+- [Cache Usage](docs/CACHE-USAGE-v2.md) - Caching guide
+- [Archived Docs](docs/archive/) - Historical reports
 
 ## 🔧 Troubleshooting
 
@@ -264,6 +276,6 @@ make pre-commit # Run all hooks
 
 ---
 
-**Version**: 2025.10.29
+**Version**: 2025.11.26
 **Status**: Production Ready
-**Last Audit**: See `reports/` folder
+**Last Updated**: 2025-11-26

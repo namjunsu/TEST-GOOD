@@ -112,7 +112,7 @@ class RouterConfig:
     # 파일명 유사도 스코어링
     PARTIAL_MATCH_BASE: float = 0.8     # 부분 포함 시 기본 점수
     LENGTH_BONUS_MAX: float = 0.4       # 길이 보너스 최대값
-    LENGTH_PENALTY_FACTOR: float = 0.01 # 길이 차이 페널티 계수
+    LENGTH_PENALTY_FACTOR: float = 0.01  # 길이 차이 페널티 계수
 
     # 후보 선택 임계값
     SINGLE_CANDIDATE_THRESHOLD: float = 0.66  # 단일 후보 확정 점수

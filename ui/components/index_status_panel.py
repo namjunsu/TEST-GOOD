@@ -8,11 +8,12 @@
     render_index_status_panel(api_base_url="http://localhost:7860")
 """
 
-import streamlit as st
-import requests
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
+import requests
+import streamlit as st
 
 # 프로젝트 루트 상수 (상대 경로 문제 해결)
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -167,7 +168,7 @@ def render_index_status_panel(api_base_url: str = "http://localhost:7860"):
         for i, (label, path) in enumerate(report_files):
             with cols[i]:
                 if path.exists() and path.is_file():
-                    with open(path, 'rb') as f:
+                    with open(path, "rb") as f:
                         st.download_button(
                             label=label,
                             data=f,

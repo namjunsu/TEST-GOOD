@@ -12,12 +12,12 @@ pypdf>=6.1.2
 PyMuPDF>=1.26.5
 pytesseract>=0.3.13
 pdf2image>=1.17.0
-pypdfium2>=4.30.0
+# pypdfium2 - 제거됨 (미사용)
 
 # Vector Store & Embeddings
 faiss-cpu>=1.12.0
 sentence-transformers>=5.1.1
-chromadb>=1.2.1
+# chromadb - 제거됨 (미사용, FAISS 사용 중)
 
 # Search
 rank-bm25>=0.2.2

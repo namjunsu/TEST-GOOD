@@ -322,8 +322,8 @@ def render_sidebar_library(rag_instance) -> None:
     # =========================================================================
     st.markdown("### 📚 총 인덱스 문서")
     try:
-        from config.indexing import ALLOWED_EXTS
         from app.data.metadata_db import MetadataDB
+        from config.indexing import ALLOWED_EXTS
 
         db = MetadataDB()
 

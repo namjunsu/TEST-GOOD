@@ -15,25 +15,25 @@ ChatGPT 스타일의 채팅 인터페이스 UI를 렌더링하는 컴포넌트
 - 옵션 UI (top_k, 스트리밍 속도)
 """
 
-import os
 import json
-import streamlit as st
-import requests
-from typing import List, Dict, Optional, Protocol, Any
-from typing_extensions import TypedDict, Literal
+import os
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Protocol
+
+import requests
+import streamlit as st
+from typing_extensions import Literal, TypedDict
 
 from app.core.logging import get_logger
 from utils.streaming import stream_text_smart
-
 
 # ===== 로깅 설정 =====
 logger = get_logger(__name__)
 
 # 진단 모드 설정
-DIAG_RAG = os.getenv('DIAG_RAG', 'false').lower() == 'true'
+DIAG_RAG = os.getenv("DIAG_RAG", "false").lower() == "true"
 
 
 # ===== 타입 정의 =====
@@ -189,10 +189,10 @@ def render_doc_card(
         summary: LLM 요약 (이미 160자로 제한된 상태)
         show_preview_inline: 인라인 미리보기 표시 여부
     """
-    from utils.pdf_utils import download_pdf_button, render_pdf_preview
-
     # 리스트 형식으로 간결하게 표시
     import hashlib
+
+    from utils.pdf_utils import download_pdf_button, render_pdf_preview
     # 고유 키 생성: msg_idx와 index를 포함하여 중복 방지
     file_hash = hashlib.md5(filename.encode()).hexdigest()[:8]
     unique_key = f"{msg_idx}_{index}_{file_hash}"
@@ -204,7 +204,7 @@ def render_doc_card(
         meta_parts.append(display_date)
     if drafter:
         meta_parts.append(drafter)
-    meta_str = ' · '.join(meta_parts) if meta_parts else ""
+    meta_str = " · ".join(meta_parts) if meta_parts else ""
 
     # 요약 (40자로 단축)
     summary_short = summary[:40].strip()
@@ -339,11 +339,11 @@ def _initialize_chat_state() -> None:
 
     세션 상태에 messages 리스트와 chat_options가 없으면 초기화합니다.
     """
-    if 'messages' not in st.session_state:
+    if "messages" not in st.session_state:
         st.session_state.messages = []
         logger.info("Chat session initialized")
 
-    if 'chat_options' not in st.session_state:
+    if "chat_options" not in st.session_state:
         st.session_state.chat_options = {
             "top_k": ChatConfig.DEFAULT_TOP_K,
             "streaming_speed": ChatConfig.DEFAULT_STREAMING_SPEED,
@@ -493,14 +493,15 @@ def _display_evidence_section(evidence_list: List, msg_idx: int) -> None:
                     from app.config.settings import settings
                     # DB path가 'docs/'로 시작하면 제거 (중복 방지)
                     path_str = str(file_path)
-                    if path_str.startswith('docs/'):
+                    if path_str.startswith("docs/"):
                         path_str = path_str[5:]  # 'docs/' 제거
                     file_path = settings.DOCS_DIR / path_str
             else:
                 # Fallback: year 폴더 추출 (절대 경로 생성)
-                from app.config.settings import settings
                 import re
-                year_match = re.search(r'(\d{4})-', filename)
+
+                from app.config.settings import settings
+                year_match = re.search(r"(\d{4})-", filename)
                 if year_match:
                     year = year_match.group(1)
                     file_path = settings.DOCS_DIR / f"year_{year}" / filename
@@ -557,14 +558,14 @@ def _validate_message_structure(message: Any) -> bool:
         return False
 
     # 필수 필드만 검사 (timestamp, evidence는 선택적)
-    required_keys = {'role', 'content'}
+    required_keys = {"role", "content"}
     if not required_keys.issubset(message.keys()):
         return False
 
-    if message['role'] not in [ChatConfig.ROLE_USER, ChatConfig.ROLE_ASSISTANT]:
+    if message["role"] not in [ChatConfig.ROLE_USER, ChatConfig.ROLE_ASSISTANT]:
         return False
 
-    if not isinstance(message['content'], str):
+    if not isinstance(message["content"], str):
         return False
 
     return True
@@ -646,11 +647,11 @@ def _build_conversation_context(messages: List[Dict[str, str]], max_turns: int =
             continue
 
         # 역할 변환
-        role = msg['role']
+        role = msg["role"]
         display_role = ChatConfig.ROLE_DISPLAY_USER if role == ChatConfig.ROLE_USER else ChatConfig.ROLE_DISPLAY_ASSISTANT
 
         # 메시지 내용 처리 (긴 응답은 요약)
-        content = msg['content']
+        content = msg["content"]
 
         # AI 응답이 너무 길면 요약 (500자 제한)
         MAX_CONTEXT_LENGTH = 500
@@ -659,12 +660,12 @@ def _build_conversation_context(messages: List[Dict[str, str]], max_turns: int =
             if "관련 문서" in content and "건)" in content:
                 # 문서 리스트 응답인 경우: 건수만 추출
                 import re
-                match = re.search(r'\((\d+)건\)', content)
+                match = re.search(r"\((\d+)건\)", content)
                 if match:
                     doc_count = match.group(1)
                     content = f"(이전 응답: {doc_count}건의 문서 리스트 제공됨)"
                 else:
-                    content = f"(이전 응답: 문서 리스트 제공됨 - 생략)"
+                    content = "(이전 응답: 문서 리스트 제공됨 - 생략)"
             else:
                 # 일반 긴 응답: 앞부분만 유지
                 content = content[:MAX_CONTEXT_LENGTH] + "...(생략)"
@@ -805,7 +806,7 @@ def _generate_ai_response(
         if rag_instance is None:
             raise AttributeError("RAG instance is None")
 
-        if not hasattr(rag_instance, 'answer'):
+        if not hasattr(rag_instance, "answer"):
             raise AttributeError("RAG instance has no 'answer' method")
 
         # 옵션에서 top_k 가져오기
@@ -895,11 +896,11 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
     _initialize_chat_state()
 
     # 1-1. 선택된 문서 알림 (사이드바에서 문서 선택시)
-    if 'selected_doc' in st.session_state and st.session_state.selected_doc is not None and st.session_state.get('show_doc_preview', False):
+    if "selected_doc" in st.session_state and st.session_state.selected_doc is not None and st.session_state.get("show_doc_preview", False):
         selected_doc = st.session_state.selected_doc
         # pandas Series가 아닌 dict인 경우만 처리
         if isinstance(selected_doc, dict):
-            title = selected_doc.get('title', '알 수 없음')
+            title = selected_doc.get("title", "알 수 없음")
             col1, col2 = st.columns([10, 1])
             with col1:
                 # 얇은 배너 스타일로 표시
@@ -916,7 +917,7 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
             with col2:
                 if st.button("❌", key="clear_doc_context", help="문서 컨텍스트 해제"):
                     st.session_state.show_doc_preview = False
-                    if 'selected_doc' in st.session_state:
+                    if "selected_doc" in st.session_state:
                         del st.session_state.selected_doc
                     # Streamlit 자동 재렌더링으로 충분 (st.rerun() 제거, 2025-11-07)
 
@@ -950,11 +951,11 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
 
             # 선택된 문서 확인 (사이드바에서 선택한 문서 우선 검색용)
             selected_filename = None
-            doc = st.session_state.get('selected_doc')
+            doc = st.session_state.get("selected_doc")
             if doc is not None:
                 try:
                     # 딕셔너리 또는 pandas Series에서 filename 추출
-                    selected_filename = doc.get('filename') if hasattr(doc, 'get') else doc['filename']
+                    selected_filename = doc.get("filename") if hasattr(doc, "get") else doc["filename"]
                     if selected_filename:
                         logger.info(f"📌 선택된 문서 우선 검색: {selected_filename}")
                 except (KeyError, TypeError, AttributeError):
@@ -1031,7 +1032,7 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                             st.caption(f"최종 사용 문서 수: {diag.get('used_k', 0)}")
                             # 응답 시간
                             latency_ms = diag.get("latency_ms", 0)
-                            st.caption(f"응답 시간: {latency_ms:,}ms ({latency_ms/1000:.2f}s)")
+                            st.caption(f"응답 시간: {latency_ms:,}ms ({latency_ms / 1000:.2f}s)")
                             # Evidence 강제 주입 여부
                             injected = "Yes" if diag.get("evidence_injected") else "No"
                             st.caption(f"Evidence 강제 주입: {injected}")

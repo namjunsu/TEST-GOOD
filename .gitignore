@@ -103,9 +103,9 @@ data/
 # Runtime variable data (indexes, cache, locks, etc.)
 var/
 
-# Test artifacts
-test_*.py
-verify_*.py
-check_*.py
-debug_*.py
+# Test artifacts (루트 디렉터리 전용 - 임시 테스트 스크립트용)
+/test_*.py
+/verify_*.py
+/check_*.py
+/debug_*.py
 health_check.py

@@ -33,21 +33,15 @@ from app.config.settings import settings
 
 # 분리된 모듈에서 import
 from app.rag.contracts import (
-    RAGRequest,
     RAGResponse,
     Retriever,
     Compressor,
     Generator,
 )
 from app.rag.query_routing import (
-    SMALLTALK_PATTERNS,
-    DOMAIN_KEYWORDS,
     DIAG_RAG,
     DIAG_LOG_LEVEL,
     clean_ui_metadata,
-    route_query,
-    is_smalltalk,
-    is_simple_math,
     has_domain_keyword,
     get_keyword_coverage,
     force_chat_mode,
@@ -60,7 +54,6 @@ from app.rag.adapters import (
     _DummyGenerator,
     _LLMAdapter,
     _QuickFixGenerator,
-    _V2RetrieverAdapter,
 )
 
 logger = get_logger(__name__)

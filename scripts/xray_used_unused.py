@@ -106,7 +106,7 @@ class XRayAnalyzer:
                             if "__main__" in f.read():
                                 rel_path = py_file.relative_to(self.base_path)
                                 entry_points.add(str(rel_path))
-                    except:
+                    except Exception:
                         pass
 
         return entry_points
@@ -173,7 +173,7 @@ class XRayAnalyzer:
             if strategy.exists():
                 try:
                     return str(strategy.relative_to(self.base_path))
-                except:
+                except Exception:
                     pass
 
         return None

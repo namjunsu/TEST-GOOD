@@ -134,7 +134,7 @@ def scan_licenses():
             if (not license_info or license_info == "Unknown") and name in known_licenses:
                 license_info = known_licenses[name]
 
-        except:
+        except Exception:
             license_info = known_licenses.get(name, "Unknown")
 
         licenses.append({

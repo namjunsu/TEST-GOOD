@@ -152,7 +152,7 @@ class AnomalyDetector:
                 idx = pickle.load(f)
                 if "metadata" in idx:
                     index_count = len(idx["metadata"])
-        except:
+        except Exception:
             pass
 
         diff = abs(db_count - index_count)

@@ -476,14 +476,14 @@ class IngestDryrun:
                     result = subprocess.run(["tesseract", "--version"], capture_output=True, text=True)
                     version_line = result.stdout.split("\n")[0]
                     f.write(f"- 버전: {version_line}\n")
-                except:
+                except Exception:
                     pass
 
                 try:
                     result = subprocess.run(["tesseract", "--list-langs"], capture_output=True, text=True)
                     langs = result.stdout.strip().split("\n")[1:]
                     f.write(f"- 언어팩: {', '.join(langs)}\n")
-                except:
+                except Exception:
                     pass
             else:
                 f.write("- ⚠️ Tesseract가 PATH에 없습니다\n")

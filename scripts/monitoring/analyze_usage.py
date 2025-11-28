@@ -36,7 +36,7 @@ class ImportTracker:
                 elif isinstance(node, ast.ImportFrom):
                     if node.module:
                         imports.append(node.module)
-        except:
+        except Exception:
             pass
 
         return imports
@@ -176,7 +176,7 @@ def main():
                     with open(file, "r", encoding="utf-8") as src:
                         lines = sum(1 for _ in src)
                     f.write(f"{file},{category},{lines}\n")
-                except:
+                except Exception:
                     f.write(f"{file},{category},0\n")
 
     # Print summary

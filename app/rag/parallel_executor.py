@@ -29,7 +29,7 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 
-def timed_execution(func_name: str, level: int = logging.DEBUG):
+def timed_execution(func_name: str, level: int = logging.DEBUG) -> Callable[[Callable], Callable]:
     """Decorator to log execution time with exception safety
 
     Args:
@@ -40,9 +40,9 @@ def timed_execution(func_name: str, level: int = logging.DEBUG):
         Decorated function
     """
 
-    def decorator(func):
+    def decorator(func: Callable) -> Callable:
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             t0 = time.perf_counter_ns()
             try:
                 return func(*args, **kwargs)
@@ -233,7 +233,7 @@ def get_parallel_executor(max_workers: int = 6) -> ParallelSearchExecutor:
     with _global_executor_lock:
         if _global_executor is None:
             _global_executor = ParallelSearchExecutor(max_workers=max_workers)
-            atexit.register(lambda: _global_executor.shutdown())
+            atexit.register(lambda: _global_executor.shutdown() if _global_executor else None)
             logger.info(
                 f"✅ Global parallel executor initialized (max_workers={max_workers})",
             )
@@ -256,10 +256,10 @@ def reconfigure_parallel_executor(max_workers: int) -> None:
 
 
 def parallel_search_with_fallback(
-    primary_search: Callable,
-    fallback_search: Optional[Callable] = None,
+    primary_search: Callable[[], list[Any]],
+    fallback_search: Optional[Callable[[], list[Any]]] = None,
     timeout: float = 5.0,
-) -> Any:
+) -> list[Any]:
     """Execute search with race execution: primary + fallback simultaneously
 
     프라이머리와 폴백을 동시 실행하고, 먼저 완료된 결과를 채택.

@@ -139,7 +139,15 @@ class QueryParser:
 
     # ---------- 설정 ----------
     def _load_stopwords(self) -> set[str]:
-        sw = set(map(_normalize_text, self.cfg.get("drafter_stopwords", []) or []))
+        stopwords_cfg = self.cfg.get("drafter_stopwords", {})
+        # YAML 구조: drafter_stopwords.values 리스트 또는 직접 리스트
+        if isinstance(stopwords_cfg, dict):
+            sw_list = stopwords_cfg.get("values", []) or []
+        elif isinstance(stopwords_cfg, list):
+            sw_list = stopwords_cfg
+        else:
+            sw_list = []
+        sw = set(map(_normalize_text, sw_list))
         if not sw:
             sw = {"문서", "자료", "파일", "보고서", "전체", "모든"}
         return sw
@@ -174,7 +182,7 @@ class QueryParser:
 
     # ---------- Token rules ----------
     def _extract_from_tokens(self, q: str) -> dict[str, Optional[str]]:
-        res = {"year": None, "drafter": None}
+        res: dict[str, Optional[str]] = {"year": None, "drafter": None}
 
         # year
         pat_y = self.token_patterns.get("year")
@@ -183,12 +191,19 @@ class QueryParser:
         else:
             m = RE_TOKEN_DIRECTIVES["year"].search(q)
         if m:
-            y = m.group(1)
-            if len(y) == 2:
-                y4 = _two_digit_to_four(int(y), self.today)
-                res["year"] = str(y4)
-            elif len(y) == 4 and 1900 <= int(y) <= 2100:
-                res["year"] = y
+            # YAML 패턴은 다중 그룹: (범위시작)(범위끝)(비교연산)(비교연도)(단일연도)
+            # 매칭된 그룹 중 첫 번째 non-None 값 사용
+            y = None
+            for g in m.groups():
+                if g and g.isdigit():
+                    y = g
+                    break
+            if y:
+                if len(y) == 2:
+                    y4 = _two_digit_to_four(int(y), self.today)
+                    res["year"] = str(y4)
+                elif len(y) == 4 and 1900 <= int(y) <= 2100:
+                    res["year"] = y
 
         # drafter
         pat_d = self.token_patterns.get("drafter")
@@ -197,10 +212,25 @@ class QueryParser:
         else:
             m = RE_TOKEN_DIRECTIVES["drafter"].search(q)
         if m:
-            cand_raw = m.group(1).strip()
-            cand_norm = _normalize_name(cand_raw)
-            if cand_norm in self._known_norm_set:
-                res["drafter"] = self._norm_to_original[cand_norm]
+            # YAML 패턴은 다중 그룹: (quoted1)(quoted2)(plain)
+            cand_raw = None
+            for g in m.groups():
+                if g:
+                    cand_raw = g.strip()
+                    break
+            if cand_raw:
+                # 다른 토큰 키워드 이전까지만 추출 (year, type, date 등)
+                # 패턴: 공백 + 키워드 ([:=] 유무 상관없이)
+                token_boundary = re.search(
+                    r"\s+(year|type|date|drafter|기안자|작성자|연도|유형|날짜)(?:\s*[:=]|\s|$)",
+                    cand_raw,
+                    re.IGNORECASE,
+                )
+                if token_boundary:
+                    cand_raw = cand_raw[:token_boundary.start()].strip()
+                cand_norm = _normalize_name(cand_raw)
+                if cand_norm in self._known_norm_set:
+                    res["drafter"] = self._norm_to_original[cand_norm]
         return res
 
     # ---------- Year ----------

@@ -18,7 +18,9 @@ from urllib.parse import quote
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query, Request
+from typing import Any
+
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
@@ -65,7 +67,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 # Startup 이벤트
 @app.on_event("startup")
-async def startup_event():
+async def startup_event() -> None:
     """서버 시작 시 로그 기록"""
     log.info(
         "FastAPI server starting",
@@ -80,7 +82,7 @@ async def startup_event():
 
 # 요청 로깅 미들웨어 (contextvars 기반 req_id/trace_id 자동 전파)
 @app.middleware("http")
-async def request_logging_middleware(request: Request, call_next):
+async def request_logging_middleware(request: Request, call_next) -> Response:
     """모든 HTTP 요청에 req_id/trace_id 자동 주입 및 로깅
 
     - contextvars를 통해 하위 모든 로그에 자동 전파
@@ -135,7 +137,7 @@ async def request_logging_middleware(request: Request, call_next):
 
 # 보안 응답 헤더 미들웨어
 @app.middleware("http")
-async def security_headers(request: Request, call_next):
+async def security_headers(request: Request, call_next) -> Response:
     """보안 응답 헤더 추가
 
     - X-Content-Type-Options: nosniff (MIME 스니핑 방지)
@@ -279,7 +281,7 @@ def get_public_base_url(request: Request) -> str:
 
 
 # 파일 접근 로깅 함수
-def log_file_access(filename: str, action: str, query: str = ""):
+def log_file_access(filename: str, action: str, query: str = "") -> None:
     """파일 접근 로그 기록 (자동 로테이션: 10MB 임계치)
 
     Args:
@@ -312,7 +314,7 @@ def log_file_access(filename: str, action: str, query: str = ""):
 
 
 @app.get("/_healthz")
-def health():
+def health() -> dict[str, Any]:
     """헬스체크 엔드포인트
 
     Returns:
@@ -368,7 +370,7 @@ def health():
 
 
 @app.get("/files/preview")
-def preview_file(ref: str = Query(..., description="base64 encoded file path")):
+def preview_file(ref: str = Query(..., description="base64 encoded file path")) -> FileResponse:
     """파일 미리보기 (보안: DOCS_DIR 하위만 허용)
 
     Args:
@@ -398,7 +400,7 @@ def preview_file(ref: str = Query(..., description="base64 encoded file path")):
 
 
 @app.get("/files/download")
-def download_file(ref: str = Query(..., description="base64 encoded file path")):
+def download_file(ref: str = Query(..., description="base64 encoded file path")) -> FileResponse:
     """파일 다운로드 (보안: DOCS_DIR 하위만 허용)
 
     Args:
@@ -428,7 +430,7 @@ def download_file(ref: str = Query(..., description="base64 encoded file path"))
 
 
 @app.get("/")
-def root():
+def root() -> dict[str, Any]:
     """루트 엔드포인트"""
     return {
         "message": "AI-CHAT API Server",
@@ -443,7 +445,7 @@ def root():
 
 
 @app.get("/api/config")
-def get_api_config(request: Request):
+def get_api_config(request: Request) -> dict[str, str]:
     """API 설정 반환 (Streamlit에서 동적 URL을 가져가기 위함)
 
     Returns:
@@ -462,7 +464,7 @@ def get_api_config(request: Request):
 
 
 @app.get("/metrics")
-def get_metrics():
+def get_metrics() -> dict[str, Any]:
     """RAG 인덱스 메트릭 엔드포인트 (단일 진실원, SoT)
 
     Returns:
@@ -708,7 +710,7 @@ def get_metrics():
 
 
 @app.get("/_debug/llm")
-def debug_llm():
+def debug_llm() -> dict[str, Any]:
     """LLM 로딩 디버그 엔드포인트"""
     import sys
     import traceback

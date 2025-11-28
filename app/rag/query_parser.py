@@ -249,7 +249,7 @@ class QueryParser:
 
         # 공백 포함 한글 패턴 추가 (예: "최 새 름", "남 준수")
         # 패턴: 1-2자 음절이 공백으로 구분되어 2-4개 있는 경우
-        spaced_pattern = re.compile(r'[가-힣]{1,2}(?: +[가-힣]{1,2}){1,3}')
+        spaced_pattern = re.compile(r"[가-힣]{1,2}(?: +[가-힣]{1,2}){1,3}")
         candidates_spaced = spaced_pattern.findall(q)
 
         # 공백 포함 후보에서 불용어 제거 (단어 단위)

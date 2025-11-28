@@ -178,7 +178,7 @@ class QueryCache:
             ev.wait(timeout=timeout)
 
     def set(self, query: str, result: Any, mode: Optional[str] = None,
-            namespace: Optional[str] = None):
+            namespace: Optional[str] = None) -> None:
         """Cache query result (thread-safe)
 
         Args:
@@ -203,7 +203,7 @@ class QueryCache:
             self.cache[key] = (result, self._now())
             logger.debug(f"📝 Cached: {key[:80]}...")
 
-    def clear(self):
+    def clear(self) -> None:
         """Clear all cached entries (thread-safe)"""
         with self._lock:
             self.cache.clear()
@@ -247,7 +247,7 @@ def get_cache() -> QueryCache:
 
 
 def cache_query_result(query: str, result: Any, mode: Optional[str] = None,
-                       namespace: Optional[str] = None):
+                       namespace: Optional[str] = None) -> None:
     """Helper function to cache a query result
 
     Args:
@@ -280,3 +280,16 @@ def get_cache_stats() -> Dict[str, Any]:
     """Get cache statistics"""
     cache = get_cache()
     return cache.get_stats()
+
+
+def build_answer_cache_key(query: str, selected_filename: Optional[str] = None) -> str:
+    """answer() 메서드용 캐시 키 생성 (단일 소스)
+
+    Args:
+        query: 검색 질의
+        selected_filename: 선택된 파일명 (있을 경우)
+
+    Returns:
+        캐시 키 문자열
+    """
+    return f"{query}:{selected_filename}" if selected_filename else query

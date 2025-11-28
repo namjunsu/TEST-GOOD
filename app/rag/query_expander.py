@@ -4,14 +4,16 @@ Query Expansion using LLM
 """
 
 import json
-import yaml
-import re
 import os
-import time
+import re
 import threading
+import time
 import unicodedata
 from pathlib import Path
-from typing import List, Dict, Any, Set, Optional, TypedDict
+from typing import Any, Dict, List, Optional, Set, TypedDict
+
+import yaml
+
 from app.core.logging import get_logger
 from rag_system.active.llm_singleton import LLMSingleton
 
@@ -29,7 +31,7 @@ SYSTEM_GUARD = (
 MAX_QUERY_LENGTH = 500  # 프롬프트 인젝션 방지를 위한 질의 길이 제한
 
 # JSON 블록 추출용 정규식 (중첩된 괄호 포함)
-_JSON_BLOCK_RE = re.compile(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', re.DOTALL)
+_JSON_BLOCK_RE = re.compile(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", re.DOTALL)
 
 # 한국어 조사 (검색에 불필요)
 _HANGUL_JOSA = {"은", "는", "이", "가", "을", "를", "와", "과", "의", "에", "에서", "으로", "로", "께", "만", "도", "까지", "부터"}
@@ -131,7 +133,7 @@ def _filter_tokens(tokens: List[str], stopwords: Set[str]) -> List[str]:
     filtered = []
 
     # 도메인 키워드 패턴 (대문자+숫자 조합, 장비명 등)
-    DOMAIN_PATTERN = re.compile(r'^[A-Z]{2,}[-\d]*|^[A-Z]+\d+|^(DVR|NVR|SDI|HDMI|UPS|LED|CCU)$', re.IGNORECASE)
+    DOMAIN_PATTERN = re.compile(r"^[A-Z]{2,}[-\d]*|^[A-Z]+\d+|^(DVR|NVR|SDI|HDMI|UPS|LED|CCU)$", re.IGNORECASE)
 
     for token in tokens:
         normalized = _normalize_token(token)
@@ -214,7 +216,7 @@ class _MemCache:
 
             return data
 
-    def set(self, query: str, data: Dict[str, Any]):
+    def set(self, query: str, data: Dict[str, Any]) -> None:
         """캐시에 저장"""
         key = self._norm_key(query)
         with self._lock:
@@ -387,68 +389,53 @@ class QueryExpander:
             logger.warning(f"⚠️ JSON 파싱 실패, fallback 사용: {e}")
             if hasattr(response, "answer"):
                 logger.debug(f"LLM response: {response.answer[:500]}")
-            # Fallback: 정규식 토큰화 + 필터링 + Variants
-            tokens = _quick_tokens(query)
-            filtered = _filter_tokens(tokens, self.search_stopwords)
-
-            if not filtered:
-                filtered = tokens  # 모두 제거되면 원본 유지
-
-            # Variants 확장
-            expanded = set(filtered)
-            for t in filtered:
-                expanded.update(_variants(t))
-
-            # 따옴표 이스케이프
-            def _quote_safe(kw: str) -> str:
-                return '"' + kw.replace('"', '\\"') + '"'
-
-            quoted = [_quote_safe(w) for w in list(expanded)[:24]]
-
-            return {
-                "original_keywords": tokens,
-                "expanded_keywords": list(expanded),
-                "search_query": " OR ".join(quoted),
-                "synonyms": {},
-                "fallback": True  # Fallback 사용 표시
-            }
+            return self._create_fallback_expansion(query)
 
         except Exception as e:
             logger.warning(f"⚠️ Query expansion 실패, fallback 사용: {e}")
-            # Fallback: 정규식 토큰화 + 필터링 + Variants
-            tokens = _quick_tokens(query)
-            filtered = _filter_tokens(tokens, self.search_stopwords)
+            return self._create_fallback_expansion(query)
 
-            if not filtered:
-                filtered = tokens
+    def _create_fallback_expansion(self, query: str) -> Dict[str, Any]:
+        """Fallback 쿼리 확장 (정규식 토큰화 + 필터링 + Variants)
 
-            # Variants 확장
-            expanded = set(filtered)
-            for t in filtered:
-                expanded.update(_variants(t))
+        LLM 호출 실패 또는 JSON 파싱 실패 시 사용하는 단순 확장 로직.
+        """
+        tokens = _quick_tokens(query)
+        filtered = _filter_tokens(tokens, self.search_stopwords)
 
-            # 따옴표 이스케이프
-            def _quote_safe(kw: str) -> str:
-                return '"' + kw.replace('"', '\\"') + '"'
+        if not filtered:
+            filtered = tokens  # 모두 제거되면 원본 유지
 
-            quoted = [_quote_safe(w) for w in list(expanded)[:24]]
+        # Variants 확장
+        expanded = set(filtered)
+        for t in filtered:
+            expanded.update(_variants(t))
 
-            return {
-                "original_keywords": tokens,
-                "expanded_keywords": list(expanded),
-                "search_query": " OR ".join(quoted),
-                "synonyms": {},
-                "fallback": True
-            }
+        # 따옴표 이스케이프
+        def _quote_safe(kw: str) -> str:
+            return '"' + kw.replace('"', '\\"') + '"'
+
+        quoted = [_quote_safe(w) for w in list(expanded)[:24]]
+
+        return {
+            "original_keywords": tokens,
+            "expanded_keywords": list(expanded),
+            "search_query": " OR ".join(quoted),
+            "synonyms": {},
+            "fallback": True
+        }
 
 
-# 싱글톤 인스턴스
+# 싱글톤 인스턴스 (thread-safe)
 _expander = None
+_expander_lock = threading.Lock()
 
 
 def get_query_expander() -> QueryExpander:
-    """싱글톤 QueryExpander 인스턴스 반환"""
+    """싱글톤 QueryExpander 인스턴스 반환 (thread-safe)"""
     global _expander
     if _expander is None:
-        _expander = QueryExpander()
+        with _expander_lock:
+            if _expander is None:  # Double-check
+                _expander = QueryExpander()
     return _expander

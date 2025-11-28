@@ -46,7 +46,7 @@ def _load_domain_synonyms() -> Dict[str, List[str]]:
         return {}
 
     try:
-        with open(yaml_path, 'r', encoding='utf-8') as f:
+        with open(yaml_path, "r", encoding="utf-8") as f:
             yaml_data = yaml.safe_load(f)
 
         if not yaml_data:

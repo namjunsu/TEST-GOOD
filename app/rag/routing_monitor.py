@@ -6,13 +6,12 @@
 """
 
 import json
-import os
 import threading
+from collections import Counter
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass, asdict
-from collections import Counter
+from typing import Any, Dict, List, Optional
 
 from app.core.logging import get_logger
 
@@ -139,7 +138,7 @@ class RoutingMonitor:
             # 최근 7일 로그 수집
             all_queries = []
             for i in range(7):
-                date = datetime.now().date() - __import__('datetime').timedelta(days=i)
+                date = datetime.now().date() - __import__("datetime").timedelta(days=i)
                 log_file = self.log_dir / f"routing_{date}.jsonl"
 
                 if log_file.exists():

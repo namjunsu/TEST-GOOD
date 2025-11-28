@@ -356,6 +356,77 @@ def build_prompt(
 """
 
 
+def _repair_truncated_json(s: str) -> Optional[str]:
+    """잘린 JSON 복구 시도
+
+    Args:
+        s: 불완전한 JSON 문자열
+
+    Returns:
+        복구된 JSON 문자열, 실패 시 None
+    """
+    if not s or "{" not in s:
+        return None
+
+    # 시작 위치 찾기
+    start = s.find("{")
+    if start == -1:
+        return None
+
+    s = s[start:]
+
+    # 1. "증거" 필드 이후 잘림 처리 - 증거 필드 제거
+    evidence_patterns = [
+        r',\s*"증거"\s*:\s*\[.*$',   # "증거": [ 이후
+        r',\s*"증거"\s*:.*$',         # "증거": 이후
+    ]
+    for pattern in evidence_patterns:
+        cleaned = re.sub(pattern, "", s, flags=re.DOTALL)
+        if cleaned != s:
+            s = cleaned
+            break
+
+    # 2. 닫히지 않은 괄호 카운트
+    open_braces = 0
+    open_brackets = 0
+    in_string = False
+    escape_next = False
+
+    for ch in s:
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\":
+            escape_next = True
+            continue
+        if ch == '"' and not escape_next:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            open_braces += 1
+        elif ch == "}":
+            open_braces -= 1
+        elif ch == "[":
+            open_brackets += 1
+        elif ch == "]":
+            open_brackets -= 1
+
+    # 3. 열린 문자열 닫기 (마지막에 열린 " 처리)
+    if in_string:
+        s += '"'
+
+    # 4. 닫히지 않은 괄호 닫기
+    s += "]" * max(0, open_brackets)
+    s += "}" * max(0, open_braces)
+
+    # 5. 끝에 trailing comma 제거
+    s = re.sub(r",\s*([}\]])", r"\1", s)
+
+    return s
+
+
 def _extract_first_json_object(s: str) -> Optional[str]:
     """스택 기반 중괄호 밸런싱으로 첫 완결 JSON 객체 추출
 
@@ -374,15 +445,20 @@ def _extract_first_json_object(s: str) -> Optional[str]:
     start = None
     depth = 0
     for i, ch in enumerate(s):
-        if ch == '{':
+        if ch == "{":
             if depth == 0:
                 start = i
             depth += 1
-        elif ch == '}':
+        elif ch == "}":
             if depth > 0:
                 depth -= 1
                 if depth == 0 and start is not None:
                     return s[start:i + 1]
+
+    # 완결 JSON을 찾지 못한 경우: 잘린 JSON 복구 시도
+    if start is not None and depth > 0:
+        return _repair_truncated_json(s[start:])
+
     return None
 
 
@@ -476,97 +552,97 @@ def format_summary_output(
     output = f"📄 {parsed_json.get('제목') or filename}\n\n"
 
     # 요약 (공통)
-    if parsed_json.get('요약'):
+    if parsed_json.get("요약"):
         output += f"📝 요약\n{parsed_json['요약']}\n\n"
 
     # 소모품/구매 문서
     if kind == "consumables":
-        if parsed_json.get('구매목적'):
+        if parsed_json.get("구매목적"):
             output += f"**🎯 구매 목적**\n{parsed_json['구매목적']}\n\n"
 
-        if parsed_json.get('품목') and len(parsed_json['품목']) > 0:
+        if parsed_json.get("품목") and len(parsed_json["품목"]) > 0:
             output += "**📦 품목 내역**\n"
-            for i, item in enumerate(parsed_json['품목'], 1):
-                품명 = item.get('품명', '없음')
-                규격 = item.get('규격모델', '없음')
-                수량 = item.get('수량', '없음')
-                단가 = item.get('단가', '없음')
-                금액 = item.get('금액', '없음')
+            for i, item in enumerate(parsed_json["품목"], 1):
+                품명 = item.get("품명", "없음")
+                규격 = item.get("규격모델", "없음")
+                수량 = item.get("수량", "없음")
+                단가 = item.get("단가", "없음")
+                금액 = item.get("금액", "없음")
                 output += f"{i}. **{품명}** - {규격}\n"
                 output += f"   - 수량: {수량}"
-                if 단가 != '없음':
+                if 단가 != "없음":
                     output += f" | 단가: {단가}"
-                if 금액 != '없음':
+                if 금액 != "없음":
                     output += f" | 금액: {금액}"
                 output += "\n"
             output += "\n"
 
-        총액 = parsed_json.get('총액')
-        if 총액 and str(총액) != '없음':
+        총액 = parsed_json.get("총액")
+        if 총액 and str(총액) != "없음":
             output += f"**💰 총액**: {총액}\n\n"
 
-        if parsed_json.get('예산계정') and parsed_json['예산계정'] != '없음':
+        if parsed_json.get("예산계정") and parsed_json["예산계정"] != "없음":
             output += f"**📊 예산/계정**: {parsed_json['예산계정']}\n\n"
 
-        if parsed_json.get('납품장소') and parsed_json['납품장소'] != '없음':
+        if parsed_json.get("납품장소") and parsed_json["납품장소"] != "없음":
             output += f"**📍 납품 장소**: {parsed_json['납품장소']}\n\n"
 
-        if parsed_json.get('비고') and parsed_json['비고'] != '없음':
+        if parsed_json.get("비고") and parsed_json["비고"] != "없음":
             output += f"**📌 비고**: {parsed_json['비고']}\n\n"
 
     # 수리 문서
     elif kind == "repair":
         # 장비 정보
-        if parsed_json.get('장비정보'):
-            equip_info = parsed_json['장비정보']
-            if equip_info.get('장비명'):
+        if parsed_json.get("장비정보"):
+            equip_info = parsed_json["장비정보"]
+            if equip_info.get("장비명"):
                 output += f"**🔧 장비명**: {equip_info['장비명']}\n"
-            if equip_info.get('장비설명'):
+            if equip_info.get("장비설명"):
                 output += f"**📝 장비 설명**: {equip_info['장비설명']}\n"
-            if equip_info.get('장비현황'):
+            if equip_info.get("장비현황"):
                 output += f"**📊 장비 현황**: {equip_info['장비현황']}\n"
             output += "\n"
 
         # 증상
-        if parsed_json.get('증상'):
+        if parsed_json.get("증상"):
             output += "**⚠️ 증상**\n"
-            for item in parsed_json['증상']:
+            for item in parsed_json["증상"]:
                 output += f"- {item}\n"
             output += "\n"
 
         # 원인
-        if parsed_json.get('원인'):
+        if parsed_json.get("원인"):
             output += "**🔍 원인**\n"
-            for item in parsed_json['원인']:
+            for item in parsed_json["원인"]:
                 output += f"- {item}\n"
             output += "\n"
 
         # 조치
-        if parsed_json.get('조치'):
+        if parsed_json.get("조치"):
             output += "**✅ 조치**\n"
-            for item in parsed_json['조치']:
+            for item in parsed_json["조치"]:
                 output += f"- {item}\n"
             output += "\n"
 
         # 결과/검증
-        if parsed_json.get('결과검증'):
+        if parsed_json.get("결과검증"):
             output += "**✓ 결과/검증**\n"
-            for item in parsed_json['결과검증']:
+            for item in parsed_json["결과검증"]:
                 output += f"- {item}\n"
             output += "\n"
 
         # 비용 상세
-        if parsed_json.get('비용상세'):
-            cost_detail = parsed_json['비용상세']
+        if parsed_json.get("비용상세"):
+            cost_detail = parsed_json["비용상세"]
             output += "**💰 비용 상세**\n"
-            if cost_detail.get('업체명'):
+            if cost_detail.get("업체명"):
                 output += f"- 업체: {cost_detail['업체명']}\n"
-            if cost_detail.get('품명'):
+            if cost_detail.get("품명"):
                 output += f"- 품명: {cost_detail['품명']}\n"
-            if cost_detail.get('단가'):
+            if cost_detail.get("단가"):
                 output += f"- 단가: {cost_detail['단가']}\n"
-            if cost_detail.get('총액'):
-                total = cost_detail['총액']
+            if cost_detail.get("총액"):
+                total = cost_detail["총액"]
                 if isinstance(total, int):
                     output += f"- **총액: ₩{total:,}**\n"
                 else:
@@ -574,30 +650,30 @@ def format_summary_output(
             output += "\n"
 
         # 긴급도
-        if parsed_json.get('긴급도') and parsed_json['긴급도'] != '없음':
+        if parsed_json.get("긴급도") and parsed_json["긴급도"] != "없음":
             output += f"**⏰ 긴급도**: {parsed_json['긴급도']}\n\n"
 
     # 구매/교체 검토서
     elif kind == "proc_eval":
-        if parsed_json.get('배경목적'):
+        if parsed_json.get("배경목적"):
             output += f"🎯 배경/목적\n{parsed_json['배경목적']}\n\n"
 
-        if parsed_json.get('비교대안') and len(parsed_json['비교대안']) > 0:
+        if parsed_json.get("비교대안") and len(parsed_json["비교대안"]) > 0:
             output += "🔍 비교 대안\n\n"
-            for i, item in enumerate(parsed_json['비교대안'][:4], 1):  # 최대 4개까지 표시
-                model = item.get('모델', '없음')
-                spec = item.get('사양', '없음')  # 수정: '사양특징' → '사양'
-                qty = item.get('수량', '')
-                price = item.get('가격', '없음')
+            for i, item in enumerate(parsed_json["비교대안"][:4], 1):  # 최대 4개까지 표시
+                model = item.get("모델", "없음")
+                spec = item.get("사양", "없음")  # 수정: '사양특징' → '사양'
+                qty = item.get("수량", "")
+                price = item.get("가격", "없음")
                 # 수량 정보가 있으면 추가
-                qty_str = f" x{qty}" if qty and qty != '없음' else ""
+                qty_str = f" x{qty}" if qty and qty != "없음" else ""
                 output += f"{i}. {model}{qty_str}\n   - 사양: {spec}\n   - 가격: {price}\n\n"
 
-        if parsed_json.get('선정권고') and parsed_json['선정권고'] != '없음':
+        if parsed_json.get("선정권고") and parsed_json["선정권고"] != "없음":
             output += f"✅ 선정/권고\n{parsed_json['선정권고']}\n\n"
 
-        budget = parsed_json.get('예산합계') or claimed_total
-        if budget and str(budget) != '없음':
+        budget = parsed_json.get("예산합계") or claimed_total
+        if budget and str(budget) != "없음":
             if isinstance(budget, int):
                 output += f"💰 예산/합계: ₩{budget:,}\n\n"
             else:
@@ -605,72 +681,72 @@ def format_summary_output(
 
     # 폐기 문서
     elif kind == "disposal":
-        if parsed_json.get('폐기사유'):
+        if parsed_json.get("폐기사유"):
             output += f"**🎯 폐기 사유**\n{parsed_json['폐기사유']}\n\n"
 
-        if parsed_json.get('폐기대상'):
+        if parsed_json.get("폐기대상"):
             output += "**📦 폐기 대상**\n"
-            for item in parsed_json['폐기대상']:
-                품명 = item.get('품명', '없음')
-                수량 = item.get('수량', '없음')
-                취득 = item.get('취득일/사용기간', '없음')
+            for item in parsed_json["폐기대상"]:
+                품명 = item.get("품명", "없음")
+                수량 = item.get("수량", "없음")
+                취득 = item.get("취득일/사용기간", "없음")
                 output += f"- {품명} (수량: {수량}, 취득/사용: {취득})\n"
             output += "\n"
 
-        if parsed_json.get('폐기방법'):
+        if parsed_json.get("폐기방법"):
             output += f"**♻️ 폐기 방법**\n{parsed_json['폐기방법']}\n\n"
 
     # 회의록
     elif kind == "minutes":
-        if parsed_json.get('참석자'):
+        if parsed_json.get("참석자"):
             output += f"**👥 참석자**: {', '.join(parsed_json['참석자'])}\n\n"
 
-        if parsed_json.get('주요안건'):
+        if parsed_json.get("주요안건"):
             output += "**📋 주요 안건**\n"
-            for i, item in enumerate(parsed_json['주요안건'], 1):
+            for i, item in enumerate(parsed_json["주요안건"], 1):
                 output += f"{i}. {item}\n"
             output += "\n"
 
-        if parsed_json.get('결정사항'):
+        if parsed_json.get("결정사항"):
             output += "**✅ 결정 사항**\n"
-            for i, item in enumerate(parsed_json['결정사항'], 1):
+            for i, item in enumerate(parsed_json["결정사항"], 1):
                 output += f"{i}. {item}\n"
             output += "\n"
 
-        if parsed_json.get('액션아이템'):
+        if parsed_json.get("액션아이템"):
             output += "**🎯 액션 아이템**\n"
-            for item in parsed_json['액션아이템']:
-                담당 = item.get('담당자', '없음')
-                내용 = item.get('내용', '없음')
-                기한 = item.get('기한', '없음')
+            for item in parsed_json["액션아이템"]:
+                담당 = item.get("담당자", "없음")
+                내용 = item.get("내용", "없음")
+                기한 = item.get("기한", "없음")
                 output += f"- {담당}: {내용} (기한: {기한})\n"
             output += "\n"
 
     # 일반 문서
     else:
-        if parsed_json.get('목적배경'):
+        if parsed_json.get("목적배경"):
             output += f"**🎯 목적/배경**\n{parsed_json['목적배경']}\n\n"
 
-        if parsed_json.get('주요내용'):
+        if parsed_json.get("주요내용"):
             output += f"**📝 주요 내용**\n{parsed_json['주요내용']}\n\n"
 
-        if parsed_json.get('결론조치'):
+        if parsed_json.get("결론조치"):
             output += f"**✅ 결론/조치**\n{parsed_json['결론조치']}\n\n"
 
-        budget = parsed_json.get('예산') or claimed_total
-        if budget and str(budget) != '없음':
+        budget = parsed_json.get("예산") or claimed_total
+        if budget and str(budget) != "없음":
             if isinstance(budget, int):
                 output += f"**💰 예산**: ₩{budget:,}\n\n"
             else:
                 output += f"**💰 예산**: {budget}\n\n"
 
     # 증거 (있으면)
-    if parsed_json.get('증거') and len(parsed_json['증거']) > 0:
+    if parsed_json.get("증거") and len(parsed_json["증거"]) > 0:
         output += "**📌 근거**\n"
-        for ev in parsed_json['증거'][:2]:  # 최대 2개
-            page = ev.get('page', '?')
-            quote = ev.get('quote', '없음')
-            output += f"- p.{page}: \"{quote}\"\n"
+        for ev in parsed_json["증거"][:2]:  # 최대 2개
+            page = ev.get("page", "?")
+            quote = ev.get("quote", "없음")
+            output += f'- p.{page}: "{quote}"\n'
         output += "\n"
 
     # 하단 메타데이터

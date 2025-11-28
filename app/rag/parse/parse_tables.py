@@ -20,7 +20,7 @@ v2.0 변경사항:
 import re
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 import yaml
 
@@ -107,7 +107,7 @@ class TableParser:
 
         logger.info(f"📊 표 파서 초기화: {len(self.header_patterns)}개 헤더 패턴")
 
-    def _load_config(self, config_path: str) -> Dict[str, Any]:
+    def _load_config(self, config_path: str) -> dict[str, Any]:
         """설정 파일 로드
 
         Args:
@@ -200,7 +200,7 @@ class TableParser:
         logger.debug(f"⚠️ 숫자 변환 실패: '{text}'")
         return None
 
-    def _tokenize_row(self, line: str) -> List[str]:
+    def _tokenize_row(self, line: str) -> list[str]:
         """행을 셀로 분할 (|, 탭, 2칸 이상 공백 구분자 지원)
 
         Args:
@@ -215,7 +215,7 @@ class TableParser:
         tmp = re.sub(r"\s{2,}", "  ", tmp)  # 열 간격 유지
         return [c.strip() for c in tmp.split("  ") if c.strip()]
 
-    def _colmap(self, cells: List[str]) -> Dict[str, int]:
+    def _colmap(self, cells: list[str]) -> dict[str, int]:
         """헤더 셀을 표준 키로 맵핑
 
         Args:
@@ -236,7 +236,7 @@ class TableParser:
                 mapping["amount"] = i
         return mapping
 
-    def _best_header_row(self, lines: List[str]) -> Tuple[int, List[str]]:
+    def _best_header_row(self, lines: list[str]) -> tuple[int, list[str]]:
         """config 패턴과 가장 유사한 라인을 헤더로 탐지 (유사도 기반)
 
         Args:
@@ -282,7 +282,7 @@ class TableParser:
         logger.debug(f"✓ 헤더 라인 발견: idx={idx}, cells={cells}")
         return idx, cells
 
-    def detect_table_headers(self, text: str) -> List[str]:
+    def detect_table_headers(self, text: str) -> list[str]:
         """표 헤더 감지 (이전 호환성 유지)
 
         Args:
@@ -323,8 +323,8 @@ class TableParser:
         return amount
 
     def _parse_rows(
-        self, lines: List[str], start_idx: int, header_cells: List[str]
-    ) -> List[Dict[str, Any]]:
+        self, lines: list[str], start_idx: int, header_cells: list[str]
+    ) -> list[dict[str, Any]]:
         """헤더 아래 행들을 파싱하여 아이템 리스트 생성
 
         Args:
@@ -395,7 +395,7 @@ class TableParser:
 
     def extract_cost_table(
         self, text: str
-    ) -> Tuple[List[Dict[str, Any]], bool, str]:
+    ) -> tuple[list[dict[str, Any]], bool, str]:
         """비용 표 추출 (v2.0 행 단위 파싱)
 
         Args:
@@ -444,11 +444,11 @@ class TableParser:
 
     def validate_sum(
         self,
-        items: List[Dict[str, Any]],
+        items: list[dict[str, Any]],
         claimed_total: Optional[int] = None,
         vat: Optional[int] = None,
         rel_tol: float = 0.01,
-    ) -> Tuple[bool, int, Optional[int]]:
+    ) -> tuple[bool, int, Optional[int]]:
         """합계 검증 (절대/상대 허용치 + VAT 교차 검증)
 
         Args:
@@ -503,7 +503,7 @@ class TableParser:
 
         return ok, calc, claimed_total
 
-    def parse(self, text: str) -> Dict[str, Any]:
+    def parse(self, text: str) -> dict[str, Any]:
         """표 파싱 v2.0 (전체 프로세스)
 
         Args:
@@ -614,7 +614,7 @@ class TableParser:
 
         return None
 
-    def format_cost_display(self, parsed_table: Dict[str, Any]) -> str:
+    def format_cost_display(self, parsed_table: dict[str, Any]) -> str:
         """비용 표 표시 형식 생성 (VAT 포함)
 
         Args:

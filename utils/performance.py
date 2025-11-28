@@ -13,7 +13,7 @@ import logging
 import os
 import time
 from functools import wraps
-from typing import Any, Dict
+from typing import Any
 
 import pandas as pd
 import streamlit as st
@@ -134,12 +134,12 @@ class PerformanceMonitor:
                 st.caption(f"⏱️ {func_name}: {duration:.3f}s")
 
     @classmethod
-    def get_metrics(cls) -> Dict[str, Any]:
+    def get_metrics(cls) -> dict[str, Any]:
         """수집된 메트릭 반환"""
         return st.session_state.get("performance_metrics", {})
 
     @classmethod
-    def get_summary(cls) -> Dict[str, Any]:
+    def get_summary(cls) -> dict[str, Any]:
         """메트릭 요약 정보 (평균 시간 추가)"""
         metrics = cls.get_metrics()
         if not metrics:

@@ -9,7 +9,7 @@
 의존성: contracts (Protocol), logger
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from app.core.logging import get_logger
 
@@ -32,7 +32,7 @@ class _DummyRetriever:
         mode: str = "chat",
         selected_filename: Optional[str] = None,
         strict_content: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         logger.warning("Dummy retriever: 빈 결과 반환")
         return []
 
@@ -41,8 +41,8 @@ class _NoOpCompressor:
     """No-op 압축기 (압축하지 않음)"""
 
     def compress(
-        self, chunks: List[Dict[str, Any]], ratio: float
-    ) -> List[Dict[str, Any]]:
+        self, chunks: list[dict[str, Any]], ratio: float
+    ) -> list[dict[str, Any]]:
         logger.debug("No-op compressor: 압축 스킵")
         return chunks
 
@@ -102,7 +102,7 @@ class _QuickFixGenerator:
 
     def __init__(self, rag: Any) -> None:
         self.rag = rag
-        self.compressed_chunks: Optional[List[Dict[str, Any]]] = None  # Store chunks for LLM
+        self.compressed_chunks: Optional[list[dict[str, Any]]] = None  # Store chunks for LLM
 
     def generate(self, query: str, context: str, temperature: float, mode: str = "rag") -> str:
         # 재검색 금지. 컨텍스트 기반 생성으로 우선 시도.
@@ -187,7 +187,7 @@ class _V2RetrieverAdapter:
         self.v2_retriever = v2_retriever
         self.db = v2_retriever.db  # MetadataDB for content fetching
 
-    def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    def search(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
         """Search using v2 retriever, convert to v1 format
 
         Args:

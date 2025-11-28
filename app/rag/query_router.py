@@ -22,7 +22,7 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 import yaml
 
@@ -66,10 +66,10 @@ class RouteDecision:
     # 추출된 파라미터 (필터링용)
     drafter: Optional[str] = None    # 기안자 이름
     year: Optional[int] = None       # 연도 (YYYY)
-    date_range: Optional[Tuple[str, str]] = None  # 날짜 범위 (시작, 끝)
+    date_range: Optional[tuple[str, str]] = None  # 날짜 범위 (시작, 끝)
 
     # 정렬 기준 (최신순, 오래된순 등)
-    sort_by: Optional[List[str]] = None  # ["date_desc"], ["date_asc"] 등
+    sort_by: Optional[list[str]] = None  # ["date_desc"], ["date_asc"] 등
 
 
 # 헬퍼 함수: 파일명 정규화 (공백/특수문자 제거)
@@ -238,7 +238,7 @@ class QueryRouter:
             f"QueryParser={'enabled' if query_parser else 'disabled'}"
         )
 
-    def _load_config(self, config_path: str) -> Dict[str, Any]:
+    def _load_config(self, config_path: str) -> dict[str, Any]:
         """설정 파일 로드
 
         Args:
@@ -312,7 +312,7 @@ class QueryRouter:
             # 모니터링 실패가 라우팅을 막으면 안 됨
             logger.error(f"라우팅 모니터링 실패: {e}")
 
-    def _detect_intents(self, query: str) -> Dict[str, bool]:
+    def _detect_intents(self, query: str) -> dict[str, bool]:
         """의도 신호 감지 (Phase 1: 중복 제거 및 단일화)
 
         Args:
@@ -350,7 +350,7 @@ class QueryRouter:
     def _check_exists_intent(
         self,
         query: str,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         has_filename: bool,
         has_doc_reference: bool
     ) -> Optional[RouteDecision]:
@@ -390,7 +390,7 @@ class QueryRouter:
     def _check_content_only(
         self,
         query: str,
-        params: Dict[str, Any]
+        params: dict[str, Any]
     ) -> Optional[RouteDecision]:
         """정밀 내용 검색 체크 ("내용에 X 들어간 문서만")
 
@@ -415,8 +415,8 @@ class QueryRouter:
     def _check_cost_intent(
         self,
         query: str,
-        params: Dict[str, Any],
-        intents: Dict[str, bool]
+        params: dict[str, Any],
+        intents: dict[str, bool]
     ) -> Optional[RouteDecision]:
         """비용 질의 체크 ("합계", "총액", "금액")
 
@@ -441,8 +441,8 @@ class QueryRouter:
     def _check_document_mode(
         self,
         query: str,
-        params: Dict[str, Any],
-        intents: Dict[str, bool],
+        params: dict[str, Any],
+        intents: dict[str, bool],
         has_filename: bool,
         has_doc_reference: bool,
         has_doc_type_keyword: bool
@@ -488,8 +488,8 @@ class QueryRouter:
     def _check_search_mode(
         self,
         query: str,
-        params: Dict[str, Any],
-        intents: Dict[str, bool],
+        params: dict[str, Any],
+        intents: dict[str, bool],
         has_filename: bool,
         has_doc_reference: bool
     ) -> Optional[RouteDecision]:
@@ -531,7 +531,7 @@ class QueryRouter:
     def _check_qa_intent(
         self,
         query: str,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         has_qa_intent: bool
     ) -> Optional[RouteDecision]:
         """QA 의도 키워드 체크
@@ -553,7 +553,7 @@ class QueryRouter:
             drafter=params.get("drafter")
         )
 
-    def _default_qa_mode(self, query: str, params: Dict[str, Any]) -> RouteDecision:
+    def _default_qa_mode(self, query: str, params: dict[str, Any]) -> RouteDecision:
         """기본 QA 모드 반환"""
         logger.info("🎯 모드 결정: QA (기본)")
         reason = "default_qa"
@@ -570,7 +570,7 @@ class QueryRouter:
     # 기존 메서드들
     # ============================================================================
 
-    def _extract_query_params(self, query: str) -> Dict[str, Any]:
+    def _extract_query_params(self, query: str) -> dict[str, Any]:
         """쿼리에서 파라미터 추출 (기안자, 연도 등)
 
         Args:
@@ -716,7 +716,7 @@ class QueryRouter:
 
         return "|".join(reason_parts)
 
-    def suggest_alternative_modes(self, query: str) -> List[Tuple[QueryMode, float, str]]:
+    def suggest_alternative_modes(self, query: str) -> list[tuple[QueryMode, float, str]]:
         """낮은 신뢰도일 때 대체 모드 제안
 
         Args:
@@ -819,8 +819,8 @@ class QueryRouter:
     def classify_mode_with_hits(
         self,
         query: str,
-        hits: Optional[List[Dict[str, Any]]] = None
-    ) -> Tuple[RouteDecision, Optional[List[Dict[str, Any]]]]:
+        hits: Optional[list[dict[str, Any]]] = None
+    ) -> tuple[RouteDecision, Optional[list[dict[str, Any]]]]:
         """검색 결과(hits)를 고려한 모드 분류 + 단일 후보 확정 (2025-11-10: RouteDecision 반환)
 
         Args:

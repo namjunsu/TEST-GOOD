@@ -11,7 +11,7 @@ import time
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import yaml
 
@@ -53,7 +53,7 @@ class GenerationConfig:
 class RAGResponse:
     """RAG 응답 구조"""
     answer: str
-    sources_cited: List[str]
+    sources_cited: list[str]
     confidence: float
     generation_time: float
     has_proper_citation: bool
@@ -62,7 +62,7 @@ class RAGResponse:
     # 적응형 길이 조정 관련 정보
     length_recommendation: Optional[Any] = None
     original_length: Optional[int] = None
-    length_adjustments: List[str] = None
+    length_adjustments: list[str] = None
     adaptive_length_used: bool = False
 
 
@@ -84,7 +84,7 @@ class BaseRAGLLM:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.length_analyzer = None  # 명시적 초기화
 
-    def _get_chunk_source(self, chunk: Dict[str, Any]) -> str:
+    def _get_chunk_source(self, chunk: dict[str, Any]) -> str:
         """청크에서 소스 정보 추출 (공통 유틸리티)"""
         return (chunk.get("source")
                 or chunk.get("filename")
@@ -94,7 +94,7 @@ class BaseRAGLLM:
                 or chunk.get("metadata", {}).get("filename")
                 or "")
 
-    def _format_context(self, context_chunks: List[Dict[str, Any]]) -> str:
+    def _format_context(self, context_chunks: list[dict[str, Any]]) -> str:
         """컨텍스트 포맷팅 (공통 로직)"""
         formatted = []
         for chunk in context_chunks:
@@ -106,7 +106,7 @@ class BaseRAGLLM:
             formatted.append(f"[{source_name}]\n{content}")
         return "\n\n".join(formatted)
 
-    def _extract_sources(self, context_chunks: List[Dict[str, Any]]) -> List[str]:
+    def _extract_sources(self, context_chunks: list[dict[str, Any]]) -> list[str]:
         """소스 파일명 추출 (공통 로직)"""
         sources = []
         for chunk in context_chunks:
@@ -117,7 +117,7 @@ class BaseRAGLLM:
                     sources.append(source_name)
         return sources
 
-    def get_token_budget(self, mode: str = "default") -> Dict[str, int]:
+    def get_token_budget(self, mode: str = "default") -> dict[str, int]:
         """모드별 토큰 예산 반환"""
         return MODE_TOKEN_CONFIG.get(mode, MODE_TOKEN_CONFIG["default"])
 
@@ -373,7 +373,7 @@ class QwenLLM(BaseRAGLLM):
 
 답변 방식: 문서 내용을 바탕으로 한 구체적이고 유용한 답변 + 출처 인용"""
 
-    def create_user_prompt(self, question: str, context_chunks: List[Dict[str, Any]]) -> str:
+    def create_user_prompt(self, question: str, context_chunks: list[dict[str, Any]]) -> str:
         """사용자 프롬프트 생성 (최적화 모드 지원)"""
 
         if self.use_optimized_prompts:
@@ -458,7 +458,7 @@ class QwenLLM(BaseRAGLLM):
 
 반드시 한국어로만 답변하세요. 중국어나 영어로 답변하지 마세요."""
 
-    def _create_optimized_user_prompt(self, question: str, context_chunks: List[Dict[str, Any]]) -> str:
+    def _create_optimized_user_prompt(self, question: str, context_chunks: list[dict[str, Any]]) -> str:
         """최적화된 사용자 프롬프트 생성 - 금액/품목 정보 우선"""
         context_text = ""
         total_tokens = 0
@@ -543,7 +543,7 @@ A:"""
 
 답변 목표: 사용자가 문서 내용을 완전히 이해할 수 있는 유용한 요약 + [{filename}]"""
 
-    def generate_response(self, question: str, context_chunks: List[Dict[str, Any]],
+    def generate_response(self, question: str, context_chunks: list[dict[str, Any]],
                          max_retries: int = 2, enable_complex_processing: bool = True,
                          mode: str = "rag") -> RAGResponse:
         """RAG 응답 생성 (복합 질문 처리 및 적응형 길이 조정 통합)"""
@@ -751,8 +751,8 @@ A:"""
             retry_count=retry_count
         )
 
-    def _generate_structured_response(self, question_analysis: Dict[str, Any],
-                                    context_chunks: List[Dict[str, Any]],
+    def _generate_structured_response(self, question_analysis: dict[str, Any],
+                                    context_chunks: list[dict[str, Any]],
                                     max_retries: int = 2) -> RAGResponse:
         """구조화된 복합 질문 응답 생성"""
 
@@ -841,8 +841,8 @@ A:"""
         return self.generate_response(question_analysis.original_question, context_chunks,
                                     max_retries=MAX_LLM_RETRY, enable_complex_processing=False)
 
-    def _handle_comparison_question(self, question_analysis: Dict[str, Any],
-                                  context_chunks: List[Dict[str, Any]],
+    def _handle_comparison_question(self, question_analysis: dict[str, Any],
+                                  context_chunks: list[dict[str, Any]],
                                   max_retries: int = None) -> RAGResponse:
         """비교 질문 특별 처리"""
 
@@ -902,8 +902,8 @@ A:"""
 
         return self._generate_with_enhanced_prompt(enhanced_prompt, context_chunks, max_retries, "비교")
 
-    def _handle_analysis_question(self, question_analysis: Dict[str, Any],
-                                context_chunks: List[Dict[str, Any]],
+    def _handle_analysis_question(self, question_analysis: dict[str, Any],
+                                context_chunks: list[dict[str, Any]],
                                 max_retries: int = 2) -> RAGResponse:
         """분석 질문 특별 처리"""
 
@@ -942,8 +942,8 @@ A:"""
 
         return self._generate_with_enhanced_prompt(enhanced_prompt, context_chunks, max_retries, "분석")
 
-    def _handle_complex_multi_question(self, question_analysis: Dict[str, Any],
-                                     context_chunks: List[Dict[str, Any]],
+    def _handle_complex_multi_question(self, question_analysis: dict[str, Any],
+                                     context_chunks: list[dict[str, Any]],
                                      max_retries: int = 2) -> RAGResponse:
         """복합 다중 질문 특별 처리"""
 
@@ -977,7 +977,7 @@ A:"""
 
         return self._generate_with_enhanced_prompt(enhanced_prompt, context_chunks, max_retries, "복합")
 
-    def _generate_with_enhanced_prompt(self, enhanced_prompt: str, context_chunks: List[Dict[str, Any]],
+    def _generate_with_enhanced_prompt(self, enhanced_prompt: str, context_chunks: list[dict[str, Any]],
                                      max_retries: int, question_type_name: str) -> RAGResponse:
         """향상된 프롬프트로 응답 생성 (품질 최우선 매개변수)"""
 
@@ -1046,7 +1046,7 @@ A:"""
             retry_count=max_retries
         )
 
-    def _prioritize_same_document_chunks(self, context_chunks: List[Dict[str, Any]], max_chunks: int = 10) -> List[Dict[str, Any]]:
+    def _prioritize_same_document_chunks(self, context_chunks: list[dict[str, Any]], max_chunks: int = 10) -> list[dict[str, Any]]:
         """같은 문서의 청크들을 우선적으로 선택하여 포괄적 정보 제공"""
         if not context_chunks:
             return context_chunks
@@ -1121,7 +1121,7 @@ A:"""
 
         return result.strip()
 
-    def _validate_citations(self, answer: str, context_chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _validate_citations(self, answer: str, context_chunks: list[dict[str, Any]]) -> dict[str, Any]:
         """인용 유효성 검증"""
         cited_files = []
         available_files = set()
@@ -1215,7 +1215,7 @@ A:"""
         # 구체적 정보가 1개 이상 있으면 의미있는 답변으로 간주 (더 관대하게)
         return meaningful_count >= 1
 
-    def _apply_length_preference_adjustments(self, recommendation: Dict[str, Any]) -> Dict[str, Any]:
+    def _apply_length_preference_adjustments(self, recommendation: dict[str, Any]) -> dict[str, Any]:
         """길이 선호도에 따른 조정 적용"""
 
         # 길이 선호도별 조정 비율
@@ -1250,7 +1250,7 @@ A:"""
             adjustment_factors=recommendation.adjustment_factors + [f"길이선호도_{self.config.length_preference}"]
         )
 
-    def _calculate_adaptive_max_tokens(self, recommendation: Dict[str, Any]) -> int:
+    def _calculate_adaptive_max_tokens(self, recommendation: dict[str, Any]) -> int:
         """적응형 길이 추천에 따른 max_tokens 계산"""
         # 한국어 기준: 대략 1.5토큰/글자 (여유를 위해 2.0 사용)
         tokens_per_char = 2.0
@@ -1266,7 +1266,7 @@ A:"""
 
         return max(min_tokens, min(adaptive_tokens, max_tokens))
 
-    def _create_adaptive_system_prompt(self, recommendation: Dict[str, Any]) -> str:
+    def _create_adaptive_system_prompt(self, recommendation: dict[str, Any]) -> str:
         """적응형 길이 기반 시스템 프롬프트 생성"""
         base_prompt = self.create_system_prompt()
 
@@ -1305,10 +1305,10 @@ A:"""
 
         return base_prompt + adaptive_instructions
 
-    def _generate_structured_response_with_adaptive_length(self, question_analysis: Dict[str, Any],
-                                                         context_chunks: List[Dict[str, Any]],
+    def _generate_structured_response_with_adaptive_length(self, question_analysis: dict[str, Any],
+                                                         context_chunks: list[dict[str, Any]],
                                                          max_retries: int,
-                                                         length_recommendation: Dict[str, Any] = None) -> Dict[str, Any]:
+                                                         length_recommendation: dict[str, Any] = None) -> dict[str, Any]:
         """적응형 길이 조정을 포함한 구조화된 답변 생성"""
 
         # 기존 구조화된 응답 생성 (길이 조정 없이)
@@ -1337,7 +1337,7 @@ A:"""
             adaptive_length_used=True
         )
 
-    def _calculate_confidence(self, answer: str, context_chunks: List[Dict[str, Any]]) -> float:
+    def _calculate_confidence(self, answer: str, context_chunks: list[dict[str, Any]]) -> float:
         """답변 신뢰도 계산"""
         if not context_chunks:
             return 0.0
@@ -1368,7 +1368,7 @@ A:"""
         confidence = base_confidence + citation_bonus - length_penalty - negative_penalty
         return max(0.0, min(1.0, confidence))
 
-    def generate_conversational_response(self, question: str, context_chunks: List[Dict[str, Any]],
+    def generate_conversational_response(self, question: str, context_chunks: list[dict[str, Any]],
                                         max_retries: int = 2) -> RAGResponse:
         """대화형 응답 생성 (ChatGPT/Claude 스타일)"""
 
@@ -1502,7 +1502,7 @@ A:"""
             retry_count=retry_count
         )
 
-    def generate_smart_response(self, question: str, search_result: Dict[str, Any], max_retries: int = 2) -> RAGResponse:
+    def generate_smart_response(self, question: str, search_result: dict[str, Any], max_retries: int = 2) -> RAGResponse:
         """스마트 모드 응답 생성: 검색 결과에 따라 적절한 방식으로 답변 생성"""
 
         if not search_result.get("success", False):
@@ -1528,7 +1528,7 @@ A:"""
             context_chunks = search_results.get("fused_results", [])
             return self.generate_response(question, context_chunks, max_retries)
 
-    def _generate_full_document_response(self, question: str, search_result: Dict[str, Any],
+    def _generate_full_document_response(self, question: str, search_result: dict[str, Any],
                                        max_retries: int, start_time: float) -> RAGResponse:
         """전체 문서 모드 응답 생성"""
 
@@ -1769,7 +1769,7 @@ class LlamaLLM(BaseRAGLLM):
             self.logger.error(f"Llama 모델 로딩 실패: {e}")
             raise
 
-    def generate_response(self, question: str, context_chunks: List[Dict[str, Any]]) -> RAGResponse:
+    def generate_response(self, question: str, context_chunks: list[dict[str, Any]]) -> RAGResponse:
         """Llama로 응답 생성"""
         start_time = time.time()
 

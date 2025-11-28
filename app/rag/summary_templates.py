@@ -10,7 +10,7 @@
 import json
 import re
 import unicodedata
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional
 
 # Compiled regex patterns for performance
 _KW = {
@@ -145,7 +145,7 @@ def _windowed_money_candidates(text: str, window: int = 60) -> list:
     return cand
 
 
-def _recheck_money_and_decision(text: str, claimed_total: Optional[int]) -> Tuple[Optional[int], bool]:
+def _recheck_money_and_decision(text: str, claimed_total: Optional[int]) -> tuple[Optional[int], bool]:
     """본문 재스캔으로 "없음" 남발 방지 (v2: 억/만 지원)
 
     Args:
@@ -462,7 +462,7 @@ def _extract_first_json_object(s: str) -> Optional[str]:
     return None
 
 
-def parse_summary_json(response: str) -> Optional[Dict[str, Any]]:
+def parse_summary_json(response: str) -> Optional[dict[str, Any]]:
     """LLM 응답에서 JSON 추출 및 파싱 (v2: 스택 기반)
 
     Args:
@@ -526,7 +526,7 @@ def _fmt_krw(v: Optional[int]) -> str:
 
 
 def format_summary_output(
-    parsed_json: Dict[str, Any],
+    parsed_json: dict[str, Any],
     kind: str,
     filename: str,
     drafter: str,

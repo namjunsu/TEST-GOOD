@@ -22,7 +22,6 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
 
 # 프로젝트 루트 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -60,7 +59,7 @@ class TextSplitter:
         english_words = len(text.split())
         return max(korean_chars, english_words)
 
-    def split(self, text: str) -> List[str]:
+    def split(self, text: str) -> list[str]:
         """텍스트를 청크로 분할"""
         # 문장 단위로 분리
         sentences = self.sentence_endings.split(text)
@@ -166,7 +165,7 @@ class IngestDryrun:
         else:
             return "기타문서"
 
-    def detect_language(self, text: str) -> Dict[str, float]:
+    def detect_language(self, text: str) -> dict[str, float]:
         """언어 비율 추정"""
         korean_chars = len([c for c in text if "\uac00" <= c <= "\ud7a3"])
         english_chars = len([c for c in text if "a" <= c.lower() <= "z"])
@@ -180,7 +179,7 @@ class IngestDryrun:
             "en": round(english_chars / total_chars * 100, 2)
         }
 
-    def process_file(self, pdf_path: Path) -> Dict:
+    def process_file(self, pdf_path: Path) -> dict:
         """단일 파일 처리"""
         trace = {
             "filename": pdf_path.name,

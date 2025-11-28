@@ -14,7 +14,7 @@ import logging
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional
 
 import pandas as pd
 
@@ -217,7 +217,7 @@ class DocumentLoader:
             logger.info(f"metadata.db에서 {len(rows)}개 문서 로드됨")
 
             # 3. 문서 정보 처리
-            documents: List[Dict] = []
+            documents: list[dict] = []
 
             for filename, path, date, year, category, drafter, keywords, title, page_count, created_at, display_date, file_size in rows:
                 # 카테고리 분류

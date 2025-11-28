@@ -8,7 +8,6 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Set
 
 # .env 로드 (선택)
 try:
@@ -55,9 +54,9 @@ def _parse_host(env_key: str, default: str = "localhost") -> str:
     return v or default
 
 
-def _parse_exts(env_key: str, default: str = ".pdf,.txt") -> Set[str]:
+def _parse_exts(env_key: str, default: str = ".pdf,.txt") -> set[str]:
     raw = os.getenv(env_key, default)
-    out: Set[str] = set()
+    out: set[str] = set()
     for token in raw.split(","):
         t = token.strip().lower()
         if not t:
@@ -105,9 +104,9 @@ class Settings:
     INCOMING_DIR: Path
     LOG_DIR: Path
 
-    DB_PATHS: Dict[str, str]
+    DB_PATHS: dict[str, str]
 
-    ALLOWED_EXTS: Set[str]
+    ALLOWED_EXTS: set[str]
 
     STREAMLIT_HOST: str
     STREAMLIT_PORT: int
@@ -116,8 +115,8 @@ class Settings:
     EMBEDDING_MODEL: str
 
     # RAG 인덱스 경로 (다중 후보)
-    BM25_CANDIDATES: List[Path]
-    FAISS_CANDIDATES: List[Path]
+    BM25_CANDIDATES: list[Path]
+    FAISS_CANDIDATES: list[Path]
 
     # RAG 검색/스코어 설정
     RAG_MIN_SCORE: float
@@ -166,14 +165,14 @@ _DB_EVERYTHING = str(_as_path("DB_EVERYTHING_PATH", _PROJECT_ROOT / "everything_
 _DB_FILE_INDEX = str(_as_path("DB_FILE_INDEX_PATH", _PROJECT_ROOT / "file_index.json"))
 
 # RAG 인덱스 경로 (다중 후보, 중복 제거)
-_BM25_CANDIDATES: List[Path] = []
+_BM25_CANDIDATES: list[Path] = []
 if os.getenv("BM25_INDEX_PATH"):
     _BM25_CANDIDATES.append(_as_path("BM25_INDEX_PATH", _PROJECT_ROOT / "var/index/bm25_index.pkl"))
 else:
     _BM25_CANDIDATES.append(_PROJECT_ROOT / "var/index/bm25_index.pkl")
 # rag_system/db/ 경로는 제거됨 (var/index/가 기본)
 
-_FAISS_CANDIDATES: List[Path] = []
+_FAISS_CANDIDATES: list[Path] = []
 if os.getenv("FAISS_INDEX_PATH"):
     _FAISS_CANDIDATES.append(_as_path("FAISS_INDEX_PATH", _PROJECT_ROOT / "var/index/faiss.index"))
 else:

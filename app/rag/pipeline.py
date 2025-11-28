@@ -13,7 +13,7 @@ import os
 import re
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from app.config.settings import settings
 from app.core.errors import (
@@ -158,7 +158,7 @@ class RAGPipeline:
         preliminary_mode: str,
         selected_filename: Optional[str],
         diagnostics: dict,
-    ) -> tuple[List[Dict[str, Any]], dict]:
+    ) -> tuple[list[dict[str, Any]], dict]:
         """검색 수행
 
         Args:
@@ -197,7 +197,7 @@ class RAGPipeline:
     def _determine_rag_mode(
         self,
         query: str,
-        results: List[Dict[str, Any]],
+        results: list[dict[str, Any]],
         metrics: dict,
     ) -> str:
         """RAG 모드 결정 (chat/rag)
@@ -271,7 +271,7 @@ class RAGPipeline:
     def _hydrate_and_generate(
         self,
         query: str,
-        compressed: List[Dict[str, Any]],
+        compressed: list[dict[str, Any]],
         determined_mode: str,
         temperature: float,
         metrics: dict,
@@ -297,10 +297,10 @@ class RAGPipeline:
             logger.warning(f"⚠️ hydrate_context import 실패, 폴백 사용: {e}")
 
             def hydrate_context(
-                chunks: List[Dict[str, Any]],
+                chunks: list[dict[str, Any]],
                 max_len: int = 10000,
                 mode: str = "rag"
-            ) -> tuple[str, Dict[str, Any]]:
+            ) -> tuple[str, dict[str, Any]]:
                 """안전 폴백: 청크 스니펫 결합"""
                 parts = []
                 for c in chunks:
@@ -337,8 +337,8 @@ class RAGPipeline:
         self,
         query: str,
         answer: str,
-        results: List[Dict[str, Any]],
-        compressed: List[Dict[str, Any]],
+        results: list[dict[str, Any]],
+        compressed: list[dict[str, Any]],
         determined_mode: str,
         start_time: float,
         metrics: dict,
@@ -603,10 +603,10 @@ class RAGPipeline:
                 logger.warning(f"⚠️ hydrate_context import 실패, 폴백 사용: {e}")
 
                 def hydrate_context(
-                    chunks: List[Dict[str, Any]],
+                    chunks: list[dict[str, Any]],
                     max_len: int = 10000,
                     mode: str = "rag"
-                ) -> tuple[str, Dict[str, Any]]:
+                ) -> tuple[str, dict[str, Any]]:
                     """안전 폴백: 청크 스니펫 결합"""
                     parts = []
                     for c in chunks:
@@ -709,7 +709,7 @@ class RAGPipeline:
             )
 
     def _make_response(
-        self, text: str, selected: List[Dict[str, Any]], retrieved: List[Dict[str, Any]]
+        self, text: str, selected: list[dict[str, Any]], retrieved: list[dict[str, Any]]
     ) -> dict:
         """표준 응답 구조 생성 (citations 포함)
 

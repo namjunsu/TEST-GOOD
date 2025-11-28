@@ -7,7 +7,6 @@ metadata.db Cleaner - Stale 레코드 정리 유틸리티
 import os
 import sqlite3
 from pathlib import Path
-from typing import List, Tuple
 
 from app.core.logging import get_logger
 
@@ -17,7 +16,7 @@ logger = get_logger(__name__)
 def purge_missing_files_from_metadata(
     db_path: str = "metadata.db",
     dry_run: bool = False
-) -> Tuple[int, List[str]]:
+) -> tuple[int, list[str]]:
     """metadata.db에서 물리적으로 존재하지 않는 파일 레코드 삭제
 
     Args:

@@ -5,7 +5,7 @@ Sidebar Library Component
 
 import hashlib
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import pandas as pd
 import streamlit as st
@@ -37,7 +37,7 @@ def _hash_key(*parts: str) -> str:
     return h[:12]
 
 
-def _as_dict(row) -> Dict[str, Any]:
+def _as_dict(row) -> dict[str, Any]:
     """pandas Series를 dict로 안전하게 변환"""
     try:
         return row.to_dict()  # pd.Series → dict

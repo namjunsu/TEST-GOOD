@@ -9,7 +9,7 @@
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Optional, Protocol
 
 # ============================================================================
 # Request / Response 데이터 클래스
@@ -52,9 +52,9 @@ class RAGResponse:
     """
 
     answer: str
-    source_docs: List[str] = field(default_factory=list)
-    evidence_chunks: List[Dict[str, Any]] = field(default_factory=list)
-    raw_results: List[Dict[str, Any]] = field(default_factory=list)
+    source_docs: list[str] = field(default_factory=list)
+    evidence_chunks: list[dict[str, Any]] = field(default_factory=list)
+    raw_results: list[dict[str, Any]] = field(default_factory=list)
     latency: float = 0.0
     success: bool = True
     error: Optional[str] = None
@@ -78,7 +78,7 @@ class Retriever(Protocol):
         mode: str = "chat",
         selected_filename: Optional[str] = None,
         strict_content: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """검색 수행 (정규화 스키마 반환)
 
         Args:
@@ -106,8 +106,8 @@ class Compressor(Protocol):
     """컨텍스트 압축기 인터페이스"""
 
     def compress(
-        self, chunks: List[Dict[str, Any]], ratio: float
-    ) -> List[Dict[str, Any]]:
+        self, chunks: list[dict[str, Any]], ratio: float
+    ) -> list[dict[str, Any]]:
         """문서 압축
 
         Args:

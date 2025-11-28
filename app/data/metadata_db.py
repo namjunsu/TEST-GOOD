@@ -12,9 +12,10 @@ import json
 import re
 import sqlite3
 import threading
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, Optional
 
 from app.core.logging import get_logger
 from app.utils.sqlite_helpers import connect_metadata  # v2.1: 공용 커넥터 사용
@@ -224,7 +225,7 @@ class MetadataDB:
         except Exception as e:
             logger.error(f"스키마 마이그레이션 실패: {e}")
 
-    def add_document(self, metadata: Dict[str, Any]) -> int:
+    def add_document(self, metadata: dict[str, Any]) -> int:
         """문서 메타데이터 추가"""
         try:
             # 키워드를 JSON 문자열로 변환
@@ -267,7 +268,7 @@ class MetadataDB:
             logger.error(f"문서 추가 실패: {e}")
             return -1
 
-    def search_by_year(self, year: str) -> List[Dict[str, Any]]:
+    def search_by_year(self, year: str) -> list[dict[str, Any]]:
         """연도별 검색"""
         conn = self._get_conn()
         cursor = conn.execute(
@@ -277,7 +278,7 @@ class MetadataDB:
 
     def search_documents(
         self, drafter: Optional[str] = None, year: Optional[str] = None, limit: int = 20
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """다중 필터 검색 (drafter, year 조합 지원)
 
         Args:
@@ -340,7 +341,7 @@ class MetadataDB:
         result = cursor.fetchone()
         return result["count"] if result else 0
 
-    def search_by_category(self, category: str) -> List[Dict[str, Any]]:
+    def search_by_category(self, category: str) -> list[dict[str, Any]]:
         """카테고리별 검색"""
         conn = self._get_conn()
         cursor = conn.execute(
@@ -349,7 +350,7 @@ class MetadataDB:
         )
         return [dict(row) for row in cursor.fetchall()]
 
-    def search_by_keyword(self, keyword: str, limit: int = 20) -> List[Dict[str, Any]]:
+    def search_by_keyword(self, keyword: str, limit: int = 20) -> list[dict[str, Any]]:
         """키워드 검색 (FTS5 BM25 스코어링 사용, syntax error 안전 처리)"""
         try:
             conn = self._get_conn()
@@ -375,7 +376,7 @@ class MetadataDB:
 
     def search_by_date_range(
         self, start_date: str, end_date: str
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """날짜 범위 검색"""
         conn = self._get_conn()
         cursor = conn.execute(
@@ -384,7 +385,7 @@ class MetadataDB:
         )
         return [dict(row) for row in cursor.fetchall()]
 
-    def get_document_by_path(self, path: str) -> Optional[Dict[str, Any]]:
+    def get_document_by_path(self, path: str) -> Optional[dict[str, Any]]:
         """경로로 문서 조회"""
         norm = self._normalize_path(str(path))
         conn = self._get_conn()
@@ -394,7 +395,7 @@ class MetadataDB:
         row = cursor.fetchone()
         return dict(row) if row else None
 
-    def get_document(self, filename: str) -> Optional[Dict[str, Any]]:
+    def get_document(self, filename: str) -> Optional[dict[str, Any]]:
         """파일명으로 문서 조회 (perfect_rag.py 호환용)"""
         # 파일명만으로 검색
         conn = self._get_conn()
@@ -404,7 +405,7 @@ class MetadataDB:
         row = cursor.fetchone()
         return dict(row) if row else None
 
-    def get_by_filename(self, filename: str) -> Optional[Dict[str, Any]]:
+    def get_by_filename(self, filename: str) -> Optional[dict[str, Any]]:
         """파일명으로 문서 조회 (claimed_total 포함, 대소문자 무시)
 
         Args:
@@ -421,7 +422,7 @@ class MetadataDB:
         row = cursor.fetchone()
         return dict(row) if row else None
 
-    def get_by_filename_fuzzy(self, name: str) -> Optional[Dict[str, Any]]:
+    def get_by_filename_fuzzy(self, name: str) -> Optional[dict[str, Any]]:
         """퍼지 매칭으로 파일명 검색 (언더스코어/공백/특수기호 무시)
 
         Args:
@@ -584,7 +585,7 @@ class MetadataDB:
                 (text_preview[:1000], self._normalize_path(str(path))),  # 최대 1000자
             )
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """DB 통계 정보"""
         conn = self._get_conn()
         cursor = conn.execute("SELECT COUNT(*) as total FROM documents")
@@ -790,7 +791,7 @@ class MetadataDB:
         self.close()
 
 
-def extract_metadata_from_filename(filename: str) -> Dict[str, Any]:
+def extract_metadata_from_filename(filename: str) -> dict[str, Any]:
     """파일명에서 메타데이터 추출"""
     metadata = {
         "filename": filename,

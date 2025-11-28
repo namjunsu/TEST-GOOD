@@ -8,7 +8,7 @@ import json
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 # 프로젝트 루트 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -43,7 +43,7 @@ class SmokeTestRunner:
             logger.error(f"❌ 초기화 실패: {e}")
             return False
 
-    def run_test(self, name: str, query: str, expectations: Dict[str, Any]) -> bool:
+    def run_test(self, name: str, query: str, expectations: dict[str, Any]) -> bool:
         """개별 테스트 실행
 
         Args:

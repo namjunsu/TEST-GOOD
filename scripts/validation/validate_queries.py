@@ -17,7 +17,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -46,7 +46,7 @@ class QueryValidator:
         self.pipeline = RAGPipeline()
         self.results = []
 
-    def load_queries(self) -> List[Dict[str, Any]]:
+    def load_queries(self) -> list[dict[str, Any]]:
         """CSV에서 질문 로드"""
         queries = []
 
@@ -65,7 +65,7 @@ class QueryValidator:
 
         return queries
 
-    def validate_query(self, query_data: Dict[str, Any], index: int) -> Dict[str, Any]:
+    def validate_query(self, query_data: dict[str, Any], index: int) -> dict[str, Any]:
         """단일 질문 검증"""
         query_text = query_data["query"]
 
@@ -151,7 +151,7 @@ class QueryValidator:
             self.results.append(result)
             return result
 
-    def generate_report(self) -> Dict[str, Any]:
+    def generate_report(self) -> dict[str, Any]:
         """검증 리포트 생성"""
         passed = sum(1 for r in self.results if r["status"] == "PASS")
         failed = sum(1 for r in self.results if r["status"] == "FAIL")
@@ -193,7 +193,7 @@ class QueryValidator:
 
         return report
 
-    def export_json_report(self, report: Dict[str, Any], output_path: str):
+    def export_json_report(self, report: dict[str, Any], output_path: str):
         """JSON 리포트 저장"""
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
@@ -202,7 +202,7 @@ class QueryValidator:
 
         print(f"✅ JSON 리포트 저장: {output_path}")
 
-    def export_markdown_report(self, report: Dict[str, Any], output_path: str):
+    def export_markdown_report(self, report: dict[str, Any], output_path: str):
         """Markdown 리포트 저장"""
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 

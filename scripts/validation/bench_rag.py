@@ -19,7 +19,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 # 프로젝트 루트 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -29,8 +29,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 class BenchResult:
     """벤치마크 결과"""
     query: str
-    expected_docs: List[str]
-    retrieved_docs: List[str]
+    expected_docs: list[str]
+    retrieved_docs: list[str]
     hit: bool
     reciprocal_rank: float
     latency: float
@@ -45,8 +45,8 @@ class BenchSummary:
     hits: int = 0
     success: int = 0
     failures: int = 0
-    latencies: List[float] = field(default_factory=list)
-    reciprocal_ranks: List[float] = field(default_factory=list)
+    latencies: list[float] = field(default_factory=list)
+    reciprocal_ranks: list[float] = field(default_factory=list)
 
     def add_result(self, result: BenchResult):
         """결과 추가"""
@@ -60,7 +60,7 @@ class BenchSummary:
         else:
             self.failures += 1
 
-    def compute(self) -> Dict[str, Any]:
+    def compute(self) -> dict[str, Any]:
         """메트릭 계산"""
         if not self.latencies:
             return {
@@ -103,7 +103,7 @@ DEFAULT_GOLDEN_SET = [
 ]
 
 
-def load_golden_set(filepath: Optional[Path] = None) -> List[Dict[str, Any]]:
+def load_golden_set(filepath: Optional[Path] = None) -> list[dict[str, Any]]:
     """골든 셋 로드
 
     Args:
@@ -120,7 +120,7 @@ def load_golden_set(filepath: Optional[Path] = None) -> List[Dict[str, Any]]:
         return DEFAULT_GOLDEN_SET
 
 
-def bench_query(pipeline, query: str, expected_docs: List[str], top_k: int = 5) -> BenchResult:
+def bench_query(pipeline, query: str, expected_docs: list[str], top_k: int = 5) -> BenchResult:
     """단일 질의 벤치마크
 
     Args:

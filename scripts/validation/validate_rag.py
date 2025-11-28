@@ -7,7 +7,7 @@ import json
 import statistics
 from collections import defaultdict
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any
 
 import yaml
 
@@ -24,7 +24,7 @@ class RAGValidator:
         self.results = []
         self.metrics = defaultdict(list)
 
-    def validate_parsing_coverage(self, result: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_parsing_coverage(self, result: dict[str, Any]) -> dict[str, Any]:
         """파싱 커버리지 검증"""
         chunks_used = result.get("chunks_used", 0)
         sources_count = result.get("sources_count", 0)
@@ -40,7 +40,7 @@ class RAGValidator:
 
         return coverage
 
-    def validate_schema(self, result: Dict[str, Any], mode: str) -> Dict[str, Any]:
+    def validate_schema(self, result: dict[str, Any], mode: str) -> dict[str, Any]:
         """스키마 적합도 검증"""
         response_data = result.get("response_data", {})
 
@@ -74,7 +74,7 @@ class RAGValidator:
             "missing_rate": missing_rate
         }
 
-    def calculate_citation_rate(self, results: List[Dict]) -> float:
+    def calculate_citation_rate(self, results: list[dict]) -> float:
         """인용률 계산"""
         rag_results = [r for r in results if r.get("mode") == "rag"]
         if not rag_results:
@@ -83,7 +83,7 @@ class RAGValidator:
         cited_count = sum(1 for r in rag_results if r.get("sources_count", 0) > 0)
         return cited_count / len(rag_results)
 
-    def calculate_hit_at_k(self, results: List[Dict], k: int = 3) -> float:
+    def calculate_hit_at_k(self, results: list[dict], k: int = 3) -> float:
         """Hit@K 계산"""
         if not results:
             return 0.0
@@ -91,7 +91,7 @@ class RAGValidator:
         hits = sum(1 for r in results if r.get("rank", 999) <= k)
         return hits / len(results)
 
-    def calculate_mrr_at_k(self, results: List[Dict], k: int = 10) -> float:
+    def calculate_mrr_at_k(self, results: list[dict], k: int = 10) -> float:
         """MRR@K 계산"""
         if not results:
             return 0.0
@@ -106,7 +106,7 @@ class RAGValidator:
 
         return sum(reciprocal_ranks) / len(reciprocal_ranks)
 
-    def validate_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_result(self, result: dict[str, Any]) -> dict[str, Any]:
         """단일 결과 검증"""
         mode = result.get("mode", "unknown")
 
@@ -129,7 +129,7 @@ class RAGValidator:
 
         return validation
 
-    def run_validation(self, results_file: str) -> Dict[str, Any]:
+    def run_validation(self, results_file: str) -> dict[str, Any]:
         """검증 실행"""
         print("=" * 80)
         print("🔍 RAG Pipeline Quality Assurance")
@@ -225,7 +225,7 @@ class RAGValidator:
 
         return report
 
-    def generate_report(self, report: Dict, output_path: str):
+    def generate_report(self, report: dict, output_path: str):
         """마크다운 리포트 생성"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 

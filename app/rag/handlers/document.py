@@ -12,7 +12,7 @@ Strangler Fig 패턴:
 import re
 import sqlite3
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from app.core.errors import DocumentNotFoundError
 from app.core.logging import get_logger
@@ -127,7 +127,7 @@ class DocumentHandler(BaseHandler):
         query: str,
         selected_filename: Optional[str] = None,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """DOCUMENT 모드 쿼리 처리
 
         Args:
@@ -250,7 +250,7 @@ class DocumentHandler(BaseHandler):
 
         return None
 
-    def _get_document_metadata(self, filename: str) -> Optional[Dict[str, Any]]:
+    def _get_document_metadata(self, filename: str) -> Optional[dict[str, Any]]:
         """DB에서 문서 메타데이터 조회"""
         try:
             with connect_metadata() as conn:
@@ -305,7 +305,7 @@ class DocumentHandler(BaseHandler):
 
         return ""
 
-    def _make_chunks_for_doc(self, filename: str) -> List[Dict[str, Any]]:
+    def _make_chunks_for_doc(self, filename: str) -> list[dict[str, Any]]:
         """특정 문서의 청크만 로드"""
         try:
             # BM25 인덱스에서 직접 접근
@@ -354,7 +354,7 @@ class DocumentHandler(BaseHandler):
             logger.error(f"❌ 문서 청크 로드 실패: {e}")
             return []
 
-    def _route_document_query(self, query: str) -> Dict[str, Any]:
+    def _route_document_query(self, query: str) -> dict[str, Any]:
         """문서 질의 라우팅 결정"""
         try:
             from app.rag.pipeline import route_query
@@ -378,8 +378,8 @@ class DocumentHandler(BaseHandler):
         self,
         query: str,
         full_text: str,
-        metadata: Dict[str, Any],
-        routing: Dict[str, Any]
+        metadata: dict[str, Any],
+        routing: dict[str, Any]
     ) -> str:
         """응답 생성 (LLM 또는 원문)"""
         # 짧은 문서는 원문 그대로 반환
@@ -415,8 +415,8 @@ class DocumentHandler(BaseHandler):
         self,
         query: str,
         full_text: str,
-        metadata: Dict[str, Any],
-        routing: Dict[str, Any]
+        metadata: dict[str, Any],
+        routing: dict[str, Any]
     ) -> str:
         """LLM을 통한 응답 생성"""
         # LLM 접근 시도
@@ -464,8 +464,8 @@ class DocumentHandler(BaseHandler):
         self,
         query: str,
         full_text: str,
-        metadata: Dict[str, Any],
-        routing: Dict[str, Any]
+        metadata: dict[str, Any],
+        routing: dict[str, Any]
     ) -> tuple:
         """LLM 프롬프트 및 시스템 메시지 생성"""
         context = full_text[:4000]
@@ -524,7 +524,7 @@ class DocumentHandler(BaseHandler):
     def _calculate_max_tokens(
         self,
         content_length: int,
-        routing: Dict[str, Any]
+        routing: dict[str, Any]
     ) -> int:
         """토큰 제한 계산"""
         base_max_tokens = routing.get("max_tokens", 800)
@@ -542,7 +542,7 @@ class DocumentHandler(BaseHandler):
     def _format_summary_output(
         self,
         raw_result: str,
-        metadata: Dict[str, Any]
+        metadata: dict[str, Any]
     ) -> str:
         """요약 결과 포맷팅"""
         try:
@@ -571,9 +571,9 @@ class DocumentHandler(BaseHandler):
 
     def _build_evidence(
         self,
-        metadata: Dict[str, Any],
+        metadata: dict[str, Any],
         full_text: str
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Evidence 구성"""
         filename = metadata["filename"]
 

@@ -13,7 +13,7 @@
 """
 
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from app.core.logging import get_logger
 
@@ -54,7 +54,7 @@ def _is_private_ip(ip: str) -> bool:
     return False
 
 
-def _pick_ip(rule_ip: Optional[str], llm_ip: Optional[str]) -> Tuple[Optional[str], str]:
+def _pick_ip(rule_ip: Optional[str], llm_ip: Optional[str]) -> tuple[Optional[str], str]:
     """사설망 우선 + rule 우선 정책으로 IP 선택
 
     Args:
@@ -280,7 +280,7 @@ def _valid(v: Optional[Any]) -> bool:
 
 def _validate_model_manufacturer(
     model: Optional[str], manufacturer: Optional[str]
-) -> List[str]:
+) -> list[str]:
     """모델명과 제조사 간 상관 검증
 
     Args:
@@ -294,7 +294,7 @@ def _validate_model_manufacturer(
         >>> _validate_model_manufacturer("HRD-442", "IDIS")
         ['모델-제조사 불일치: HRD/XRN 계열은 Hanwha Vision 제품입니다']
     """
-    warnings: List[str] = []
+    warnings: list[str] = []
 
     if not model or not manufacturer:
         return warnings
@@ -338,7 +338,7 @@ def _validate_model_manufacturer(
 # 메인 병합 함수
 # ============================================================================
 
-def merge_device_fields(rule: Dict[str, Any], llm: Dict[str, Any]) -> Dict[str, Any]:
+def merge_device_fields(rule: dict[str, Any], llm: dict[str, Any]) -> dict[str, Any]:
     """장비 필드 병합 및 검증 (개선판: provenance + normalization + validation)
 
     규칙 우선(rule-first) 정책:
@@ -380,10 +380,10 @@ def merge_device_fields(rule: Dict[str, Any], llm: Dict[str, Any]) -> Dict[str, 
         >>> result["_meta"]["chosen"]["model"]
         'rule'
     """
-    out: Dict[str, Any] = {}
-    chosen: Dict[str, str] = {}
-    rejected: Dict[str, Dict[str, Any]] = {}
-    warnings: List[str] = []
+    out: dict[str, Any] = {}
+    chosen: dict[str, str] = {}
+    rejected: dict[str, dict[str, Any]] = {}
+    warnings: list[str] = []
 
     # 1) model 병합 + 정규화
     r_model, l_model = rule.get("model"), llm.get("model")

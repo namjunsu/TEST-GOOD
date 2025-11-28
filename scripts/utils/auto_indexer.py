@@ -10,7 +10,6 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict
 
 from scripts.utils.lock import is_reindexing
 
@@ -49,7 +48,7 @@ class AutoIndexer:
                                 "category_disposal", "category_consumables"]
         self.SPECIAL_FOLDERS = ["recent", "archive", "assets"]
 
-    def _load_index(self) -> Dict:
+    def _load_index(self) -> dict:
         """기존 인덱스 로드"""
         if self.index_file.exists():
             try:
@@ -150,7 +149,7 @@ class AutoIndexer:
 
         return search_paths
 
-    def check_new_files(self, force: bool = False) -> Dict:
+    def check_new_files(self, force: bool = False) -> dict:
         """새 파일 체크 (성능 최적화)
 
         Args:
@@ -275,7 +274,7 @@ class AutoIndexer:
             print(f"❌ 인덱싱 실패: {e}")
             self._handle_indexing_error(files, e)
 
-    def get_statistics(self) -> Dict:
+    def get_statistics(self) -> dict:
         """통계 정보 (실시간 파일 시스템 기반)"""
         # 실제 파일 시스템에서 직접 개수 확인 (인덱스가 오래된 경우 대비)
         pdf_files = []
@@ -441,7 +440,7 @@ class AutoIndexer:
                 except Exception as e:
                     self._handle_file_error(file_path, e)
 
-    def get_error_statistics(self) -> Dict:
+    def get_error_statistics(self) -> dict:
         """에러 통계 반환"""
         return {
             "failed_files_count": len(self.failed_files),

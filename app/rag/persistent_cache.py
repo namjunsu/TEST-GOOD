@@ -17,8 +17,9 @@ import random
 import sqlite3
 import time
 import zlib
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Optional
 
 from app.rag.smart_cache_key import generate_smart_cache_key
 
@@ -336,7 +337,7 @@ class PersistentCache:
             deleted = cur.rowcount or 0
         logger.info(f"Invalidated {deleted} keys with prefix={prefix}")
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """캐시 통계
 
         Returns:
@@ -421,7 +422,7 @@ def get_cached_result_persistent(query: str, mode: str | None = None) -> Optiona
     return cache.get(query, mode)
 
 
-def get_persistent_cache_stats() -> Dict[str, Any]:
+def get_persistent_cache_stats() -> dict[str, Any]:
     """Get persistent cache statistics
 
     Returns:

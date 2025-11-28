@@ -8,7 +8,7 @@ import os
 import re
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ IGNORE_SEMVER_IN_NUMERIC = os.getenv("IGNORE_SEMVER_IN_NUMERIC", "false").lower(
 END_BONUS = int(os.getenv("END_BONUS", "1"))
 
 
-def hydrate_context(chunks: List[Dict[str, Any]], max_len: int = 10000, mode: str = "rag") -> Tuple[str, Dict[str, Any]]:
+def hydrate_context(chunks: list[dict[str, Any]], max_len: int = 10000, mode: str = "rag") -> tuple[str, dict[str, Any]]:
     """
     청크에서 텍스트를 추출하고 부족하면 PDF 보강
 
@@ -169,7 +169,7 @@ def _hard_cut_paragraphwise(text: str, max_len: int) -> str:
     return "\n\n".join(out) if out else text[:max_len]
 
 
-def _extract_text_from_chunk(chunk: Dict[str, Any], metrics: Dict[str, Any]) -> str:
+def _extract_text_from_chunk(chunk: dict[str, Any], metrics: dict[str, Any]) -> str:
     """
     청크에서 텍스트 추출 (폴백 체인 + 경량 정규화)
 
@@ -221,7 +221,7 @@ def _is_under_docs(path: Path) -> bool:
         return False
 
 
-def _extract_pdf_tail(chunk: Dict[str, Any], metrics: Dict[str, Any], needed: int = 5000) -> str:
+def _extract_pdf_tail(chunk: dict[str, Any], metrics: dict[str, Any], needed: int = 5000) -> str:
     """
     PDF 마지막 2페이지 추출 (결론/요약 가능성 높음)
 

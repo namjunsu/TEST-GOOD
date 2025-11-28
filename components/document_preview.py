@@ -6,7 +6,7 @@ Document Preview Component
 import hashlib
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import streamlit as st
 
@@ -17,7 +17,7 @@ MAX_DL_MB = int(os.getenv("MAX_PREVIEW_DL_MB", "64"))
 MAX_PREVIEW_BYTES = MAX_DL_MB * 1024 * 1024
 
 
-def _doc_safe_get(doc: Dict[str, Any], key: str, default: str = "미상") -> str:
+def _doc_safe_get(doc: dict[str, Any], key: str, default: str = "미상") -> str:
     """문서 딕셔너리에서 안전하게 값 추출"""
     v = doc.get(key)
     return str(v) if v not in (None, "", "None") else default
@@ -59,7 +59,7 @@ def render_document_preview(rag_instance: Any, config_module: Any) -> None:
     doc_raw = st.session_state.selected_doc
 
     # pandas Series인 경우 dict로 변환
-    doc: Dict[str, Any] = doc_raw.to_dict() if hasattr(doc_raw, "to_dict") else doc_raw
+    doc: dict[str, Any] = doc_raw.to_dict() if hasattr(doc_raw, "to_dict") else doc_raw
 
     title = _doc_safe_get(doc, "title", "알 수 없음")
     drafter = _doc_safe_get(doc, "drafter")

@@ -4,7 +4,7 @@ Year field utility functions
 """
 
 import re
-from typing import Any, List, Optional, Union
+from typing import Any, Optional, Union
 
 YEAR_PATTERN = re.compile(r"(\d{4})")  # 4자리 숫자만 추출
 
@@ -54,7 +54,7 @@ def safe_year_to_int(year_value: Any) -> Optional[int]:
     return None
 
 
-def normalize_year_list(years: List[Any]) -> List[int]:
+def normalize_year_list(years: list[Any]) -> list[int]:
     """year 리스트를 정규화하여 정수 리스트로 변환
 
     Args:

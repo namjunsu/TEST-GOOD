@@ -13,6 +13,7 @@ import atexit
 import logging
 import threading
 import time
+from collections.abc import Callable, Hashable
 from concurrent.futures import (
     FIRST_COMPLETED,
     ThreadPoolExecutor,
@@ -23,7 +24,7 @@ from concurrent.futures import (
     TimeoutError as FuturesTimeout,
 )
 from functools import wraps
-from typing import Any, Callable, Dict, Hashable, List, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -68,10 +69,10 @@ class ParallelSearchExecutor:
 
     def execute_searches(
         self,
-        search_tasks: List[Dict[str, Any]],
+        search_tasks: list[dict[str, Any]],
         per_task_timeout: Optional[float] = None,
         total_timeout: Optional[float] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Execute multiple search tasks in parallel with timeout support
 
         Args:
@@ -99,8 +100,8 @@ class ParallelSearchExecutor:
         if not search_tasks:
             return {}
 
-        results: Dict[str, Any] = {}
-        errors: Dict[str, str] = {}
+        results: dict[str, Any] = {}
+        errors: dict[str, str] = {}
         futures = {}
         t0 = time.perf_counter_ns()
 
@@ -161,10 +162,10 @@ class ParallelSearchExecutor:
 
     def execute_filters(
         self,
-        items: List[Any],
-        filter_funcs: List[Callable[[Any], bool]],
+        items: list[Any],
+        filter_funcs: list[Callable[[Any], bool]],
         key: Optional[Callable[[Any], Hashable]] = None,
-    ) -> List[Any]:
+    ) -> list[Any]:
         """Apply multiple filter functions in parallel with key-based intersection
 
         Args:
@@ -192,7 +193,7 @@ class ParallelSearchExecutor:
             futures[future] = f"filter_{i}"
 
         # Collect filtered results
-        result_sets: List[set] = []
+        result_sets: list[set] = []
         for future in as_completed(futures):
             try:
                 result = future.result()

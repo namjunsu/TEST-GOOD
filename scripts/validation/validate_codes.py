@@ -8,7 +8,7 @@ suites/model_codes.yaml 테스트 케이스 실행 및 메트릭 산출
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import yaml
 
@@ -20,7 +20,7 @@ from app.rag.retrievers.hybrid import HybridRetriever
 logger = get_logger(__name__)
 
 
-def calculate_reciprocal_rank(results: List[Dict], expect_norm_code: str, db_conn) -> float:
+def calculate_reciprocal_rank(results: list[dict], expect_norm_code: str, db_conn) -> float:
     """Reciprocal Rank 계산 (norm_code 기준)
 
     Args:
@@ -50,10 +50,10 @@ def calculate_reciprocal_rank(results: List[Dict], expect_norm_code: str, db_con
 
 def validate_test_case(
     retriever: HybridRetriever,
-    test_case: Dict[str, Any],
+    test_case: dict[str, Any],
     db_conn,
     top_k: int = 10
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """단일 테스트 케이스 검증 (norm_code 기준)
 
     Args:
@@ -123,7 +123,7 @@ def validate_test_case(
     }
 
 
-def run_validation_suite(suite_path: str = "suites/model_codes.yaml") -> Dict[str, Any]:
+def run_validation_suite(suite_path: str = "suites/model_codes.yaml") -> dict[str, Any]:
     """검증 스위트 실행
 
     Args:

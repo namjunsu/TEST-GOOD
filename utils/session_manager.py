@@ -15,7 +15,7 @@ import os
 import pickle
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import pandas as pd
 import streamlit as st
@@ -90,7 +90,7 @@ class SessionManager:
         st.session_state[key] = value
 
     @classmethod
-    def update(cls, updates: Dict[str, Any]) -> None:
+    def update(cls, updates: dict[str, Any]) -> None:
         """
         여러 세션 값 한번에 업데이트
 
@@ -130,7 +130,7 @@ class SessionManager:
         return key in st.session_state
 
     @classmethod
-    def clear(cls, preserve_keys: Optional[List[str]] = None) -> None:
+    def clear(cls, preserve_keys: Optional[list[str]] = None) -> None:
         """
         세션 클리어 (완전 초기화)
 
@@ -175,7 +175,7 @@ class SessionManager:
         st.session_state.messages = []
 
     @classmethod
-    def get_state_size(cls) -> Dict[str, int]:
+    def get_state_size(cls) -> dict[str, int]:
         """
         세션 상태 크기 정보
 
@@ -382,12 +382,12 @@ def set_session(key: str, value: Any) -> None:
     SessionManager.set(key, value)
 
 
-def update_session(updates: Dict[str, Any]) -> None:
+def update_session(updates: dict[str, Any]) -> None:
     """여러 세션 값 한번에 업데이트 (간단한 래퍼)"""
     SessionManager.update(updates)
 
 
-def clear_session(preserve_keys: Optional[List[str]] = None) -> None:
+def clear_session(preserve_keys: Optional[list[str]] = None) -> None:
     """세션 클리어 (간단한 래퍼)"""
     SessionManager.clear(preserve_keys)
 

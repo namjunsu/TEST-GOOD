@@ -20,11 +20,11 @@ import os
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Literal, Optional, Protocol
 
 import requests
 import streamlit as st
-from typing_extensions import Literal, TypedDict
+from typing_extensions import TypedDict
 
 from app.core.logging import get_logger
 from utils.streaming import stream_text_smart
@@ -44,7 +44,7 @@ class Evidence(TypedDict, total=False):
     page: int
     snippet: str
     file_path: str
-    meta: Dict[str, Any]
+    meta: dict[str, Any]
 
 
 class ChatMessage(TypedDict, total=False):
@@ -52,7 +52,7 @@ class ChatMessage(TypedDict, total=False):
     role: Literal["user", "assistant"]
     content: str
     timestamp: str
-    evidence: List[Evidence]  # NotRequired: total=False로 모든 필드가 선택적
+    evidence: list[Evidence]  # NotRequired: total=False로 모든 필드가 선택적
 
 
 class RAGProtocol(Protocol):
@@ -446,7 +446,7 @@ def _render_toolbar() -> None:
                       f"출처={'표시' if st.session_state.chat_options['show_evidence'] else '숨김'}")
 
 
-def _display_evidence_section(evidence_list: List, msg_idx: int) -> None:
+def _display_evidence_section(evidence_list: list, msg_idx: int) -> None:
     """출처 문서 섹션 표시
 
     Evidence 리스트를 간결한 리스트 형식으로 표시하며,
@@ -596,7 +596,7 @@ def _validate_input(prompt: str) -> tuple[bool, Optional[str]]:
     return True, None
 
 
-def _cleanup_old_messages(messages: List[ChatMessage]) -> List[ChatMessage]:
+def _cleanup_old_messages(messages: list[ChatMessage]) -> list[ChatMessage]:
     """오래된 메시지 정리
 
     메시지 수가 MAX_MESSAGES를 초과하면 오래된 메시지부터 삭제합니다.
@@ -615,7 +615,7 @@ def _cleanup_old_messages(messages: List[ChatMessage]) -> List[ChatMessage]:
     return messages
 
 
-def _build_conversation_context(messages: List[Dict[str, str]], max_turns: int = ChatConfig.MAX_CONTEXT_TURNS) -> str:
+def _build_conversation_context(messages: list[dict[str, str]], max_turns: int = ChatConfig.MAX_CONTEXT_TURNS) -> str:
     """대화 맥락 구성
 
     최근 N개 턴의 대화를 문자열로 변환하여 컨텍스트를 구성합니다.
@@ -747,7 +747,7 @@ def _handle_error(error: Exception) -> dict:
     }
 
 
-def _display_chat_history(messages: List[Dict[str, str]]) -> None:
+def _display_chat_history(messages: list[dict[str, str]]) -> None:
     """채팅 기록 표시
 
     저장된 모든 메시지를 Streamlit chat UI로 표시합니다.
@@ -848,7 +848,7 @@ def _generate_ai_response(
         return {"text": error_info["message"], "evidence": []}  # 에러 메시지 반환
 
 
-def _add_message(role: Literal["user", "assistant"], content: str, evidence: Optional[List] = None) -> None:
+def _add_message(role: Literal["user", "assistant"], content: str, evidence: Optional[list] = None) -> None:
     """메시지 추가
 
     세션 상태에 새로운 메시지를 추가합니다.

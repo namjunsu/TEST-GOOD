@@ -8,7 +8,7 @@ model_codes 테이블에서 상위 N개 코드를 추출하여
 import sqlite3
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import yaml
 
@@ -19,7 +19,7 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 
-def generate_test_cases(db_path: str = "metadata.db", top_n: int = 20) -> List[Dict[str, Any]]:
+def generate_test_cases(db_path: str = "metadata.db", top_n: int = 20) -> list[dict[str, Any]]:
     """실제 DB에서 상위 코드 추출 및 테스트 케이스 생성
 
     Args:

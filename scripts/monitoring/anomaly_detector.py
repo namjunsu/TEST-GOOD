@@ -12,7 +12,7 @@ from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional
 
 import requests
 
@@ -27,7 +27,7 @@ class AnomalyDetector:
         self.last_alert_file = Path("var/last_alert.json")
         self.alert_history = self._load_alert_history()
 
-    def _load_config(self) -> Dict:
+    def _load_config(self) -> dict:
         """알림 설정 로드"""
         if self.config_path.exists():
             with open(self.config_path, "r") as f:
@@ -45,7 +45,7 @@ class AnomalyDetector:
                 "enabled": True
             }
 
-    def _load_alert_history(self) -> Dict:
+    def _load_alert_history(self) -> dict:
         """이전 알림 기록 로드"""
         if self.last_alert_file.exists():
             with open(self.last_alert_file, "r") as f:
@@ -58,7 +58,7 @@ class AnomalyDetector:
         with open(self.last_alert_file, "w") as f:
             json.dump(self.alert_history, f, indent=2)
 
-    def detect_anomalies(self) -> List[Dict]:
+    def detect_anomalies(self) -> list[dict]:
         """이상 감지"""
         anomalies = []
 
@@ -137,7 +137,7 @@ class AnomalyDetector:
 
         return anomalies
 
-    def _check_sync_status(self) -> Optional[Dict]:
+    def _check_sync_status(self) -> Optional[dict]:
         """동기화 상태 확인"""
         # DB 문서 수
         conn = sqlite3.connect("metadata.db")
@@ -175,7 +175,7 @@ class AnomalyDetector:
         score -= (missing_category / max(total, 1)) * 30
         return max(0, score)
 
-    def _detect_sudden_changes(self) -> List[Dict]:
+    def _detect_sudden_changes(self) -> list[dict]:
         """급격한 변화 감지"""
         anomalies = []
 
@@ -212,7 +212,7 @@ class AnomalyDetector:
 
         return anomalies
 
-    def should_send_alert(self, anomaly: Dict) -> bool:
+    def should_send_alert(self, anomaly: dict) -> bool:
         """알림 발송 여부 결정 (쿨다운 체크)"""
         alert_key = anomaly["type"]
         last_sent = self.alert_history.get(alert_key)
@@ -225,7 +225,7 @@ class AnomalyDetector:
 
         return True
 
-    def send_alerts(self, anomalies: List[Dict]):
+    def send_alerts(self, anomalies: list[dict]):
         """알림 발송"""
         if not anomalies:
             return
@@ -264,7 +264,7 @@ class AnomalyDetector:
             self.alert_history[anomaly["type"]] = datetime.now().isoformat()
         self._save_alert_history()
 
-    def _format_alert_message(self, critical: List, high: List, medium: List) -> str:
+    def _format_alert_message(self, critical: list, high: list, medium: list) -> str:
         """알림 메시지 포맷팅"""
         lines = []
 
@@ -291,7 +291,7 @@ class AnomalyDetector:
 
         return "\n".join(lines)
 
-    def _send_slack_alert(self, message: str, anomalies: List[Dict]):
+    def _send_slack_alert(self, message: str, anomalies: list[dict]):
         """Slack 웹훅으로 알림 발송"""
         webhook_url = self.config.get("slack_webhook")
         if not webhook_url:
@@ -328,7 +328,7 @@ class AnomalyDetector:
         except Exception as e:
             print(f"Slack 알림 오류: {e}")
 
-    def _send_email_alert(self, message: str, anomalies: List[Dict]):
+    def _send_email_alert(self, message: str, anomalies: list[dict]):
         """이메일 알림 발송"""
         email_config = self.config.get("email", {})
         if not email_config:
@@ -353,7 +353,7 @@ class AnomalyDetector:
         except Exception as e:
             print(f"이메일 알림 오류: {e}")
 
-    def _format_email_html(self, anomalies: List[Dict]) -> str:
+    def _format_email_html(self, anomalies: list[dict]) -> str:
         """이메일 HTML 포맷팅"""
         html = """
         <html>

@@ -10,7 +10,7 @@ import re
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 try:
     import pdfplumber
@@ -28,7 +28,7 @@ logging.getLogger("pdfminer").setLevel(logging.ERROR)
 logging.getLogger("pdfminer.pdffont").setLevel(logging.ERROR)
 
 
-def _ocr_worker(args: Tuple[str, Dict]) -> Tuple[str, str, Dict]:
+def _ocr_worker(args: tuple[str, dict]) -> tuple[str, str, dict]:
     """멀티프로세싱 워커 함수 - 캐시 충돌 방지를 위해 별도 함수로 분리
 
     Args:
@@ -130,7 +130,7 @@ class EnhancedOCRProcessor:
 
         logger.info(f"패턴 컴파일 완료: {len(self.compiled_ocr_patterns)}개 OCR 패턴, {len(self.compiled_number_patterns)}개 숫자 패턴")
 
-    def _load_cache(self, cache_file: Path) -> Dict:
+    def _load_cache(self, cache_file: Path) -> dict:
         """캐시 파일 로드"""
         if cache_file.exists():
             try:
@@ -140,7 +140,7 @@ class EnhancedOCRProcessor:
                 logger.warning(f"캐시 로드 실패: {cache_file} - {e}")
         return {}
 
-    def _save_cache(self, cache_file: Path, cache_data: Dict):
+    def _save_cache(self, cache_file: Path, cache_data: dict):
         """캐시 파일 저장"""
         try:
             with open(cache_file, "w", encoding="utf-8") as f:
@@ -182,7 +182,7 @@ class EnhancedOCRProcessor:
             logger.warning(f"텍스트 레이어 체크 실패: {pdf_path} - {e}")
             return False  # 실패 시 스캔 PDF로 간주하여 OCR 시도
 
-    def process_pdf_with_ocr(self, pdf_path: str, page_num: Optional[int] = None, lang: str = "kor+eng") -> Dict:
+    def process_pdf_with_ocr(self, pdf_path: str, page_num: Optional[int] = None, lang: str = "kor+eng") -> dict:
         """OCR을 사용한 PDF 처리 (UI 호출용)
 
         Args:
@@ -301,7 +301,7 @@ class EnhancedOCRProcessor:
             logger.error(f"[OCR] decision=fail, reason=exception, detail={e}")
             return result
 
-    def extract_text_with_ocr(self, pdf_path: str) -> Tuple[str, Dict]:
+    def extract_text_with_ocr(self, pdf_path: str) -> tuple[str, dict]:
         """
         PDF에서 텍스트 추출 (텍스트 레이어 + OCR 이미지)
         Returns: (전체 텍스트, 메타데이터)
@@ -447,12 +447,12 @@ class EnhancedOCRProcessor:
 
         return text
 
-    def get_metadata_from_cache(self, pdf_path: str) -> Optional[Dict]:
+    def get_metadata_from_cache(self, pdf_path: str) -> Optional[dict]:
         """메타데이터 캐시에서 정보 가져오기"""
         relative_path = f"{self.DOCS_PREFIX}{Path(pdf_path).name}"
         return self.metadata_cache.get(relative_path)
 
-    def process_batch(self, pdf_files: List[str], use_multiprocessing: bool = False, max_workers: int = 4) -> Dict[str, Tuple[str, Dict]]:
+    def process_batch(self, pdf_files: list[str], use_multiprocessing: bool = False, max_workers: int = 4) -> dict[str, tuple[str, dict]]:
         """
         여러 PDF 파일 배치 처리 (수백 개 문서 대응)
         """
@@ -495,7 +495,7 @@ class EnhancedOCRProcessor:
 
         return results
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """성능 통계 반환"""
         cache_hit_rate = (self.cache_hits / (self.cache_hits + self.cache_misses) * 100
                          if (self.cache_hits + self.cache_misses) > 0 else 0.0)

@@ -12,7 +12,7 @@
 import hashlib
 import re
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from app.config.settings import settings
 from app.core.logging import get_logger
@@ -98,7 +98,7 @@ def clean_ui_metadata(query: str) -> str:
     return query
 
 
-def route_query(query: str) -> Dict[str, Any]:
+def route_query(query: str) -> dict[str, Any]:
     """쿼리 라우팅: 모드/섹션/프롬프트/리트리버 파라미터 결정
 
     우선순위:

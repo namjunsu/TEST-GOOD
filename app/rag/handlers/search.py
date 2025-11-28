@@ -11,7 +11,7 @@ Strangler Fig 패턴:
 
 import re
 import sqlite3
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from app.core.errors import SearchError
 from app.core.logging import get_logger
@@ -77,7 +77,7 @@ BULK_PATTERNS = [
 # 헬퍼 함수
 # ============================================================================
 
-def extract_keywords(query: str, stop_words: List[str]) -> str:
+def extract_keywords(query: str, stop_words: list[str]) -> str:
     """쿼리에서 불용어를 제거하고 키워드 추출
 
     Args:
@@ -219,7 +219,7 @@ class SearchHandler(BaseHandler):
         super().__init__(pipeline)
         self._db = MetadataDB()
 
-    def handle(self, query: str, **kwargs) -> Dict[str, Any]:
+    def handle(self, query: str, **kwargs) -> dict[str, Any]:
         """SEARCH 모드 쿼리 처리
 
         Args:
@@ -236,7 +236,7 @@ class SearchHandler(BaseHandler):
             return self._handle_content_only(query)
         return self._handle_search(query)
 
-    def _handle_search(self, query: str) -> Dict[str, Any]:
+    def _handle_search(self, query: str) -> dict[str, Any]:
         """일반 검색 처리"""
         try:
             # 1. 키워드 및 필터 추출
@@ -294,7 +294,7 @@ class SearchHandler(BaseHandler):
             logger.error(f"❌ 문서 검색 실패: {e}", exc_info=True)
             return self._make_error_response(f"문서 검색 중 오류가 발생했습니다: {str(e)}")
 
-    def _handle_content_only(self, query: str) -> Dict[str, Any]:
+    def _handle_content_only(self, query: str) -> dict[str, Any]:
         """정밀 내용 검색 처리 (본문에 키워드 포함된 문서만)"""
         try:
             # 1. 키워드 추출 (불용어 + 조사 제거)
@@ -387,7 +387,7 @@ class SearchHandler(BaseHandler):
     # Private 헬퍼 메서드
     # ========================================================================
 
-    def _extract_unique_filenames(self, search_results: List[Dict]) -> List[str]:
+    def _extract_unique_filenames(self, search_results: list[dict]) -> list[str]:
         """검색 결과에서 고유 파일명 추출"""
         filenames = []
         seen = set()
@@ -403,7 +403,7 @@ class SearchHandler(BaseHandler):
         keywords: str,
         drafter_filter: Optional[str],
         year_filter: Optional[str]
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """개수만 묻는 질의 처리"""
         conn = self._db._get_conn()
         sql = "SELECT COUNT(*) as cnt FROM documents WHERE 1=1"
@@ -439,10 +439,10 @@ class SearchHandler(BaseHandler):
 
     def _get_doc_details(
         self,
-        filenames: List[str],
+        filenames: list[str],
         drafter_filter: Optional[str],
         year_filter: Optional[str]
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """파일명 목록에서 문서 상세 정보 조회"""
         doc_details = []
         conn = self._db._get_conn()
@@ -486,7 +486,7 @@ class SearchHandler(BaseHandler):
 
         return doc_details
 
-    def _get_content_only_details(self, filenames: List[str]) -> List[Dict[str, Any]]:
+    def _get_content_only_details(self, filenames: list[str]) -> list[dict[str, Any]]:
         """정밀 검색용 문서 상세 정보 조회"""
         doc_details = []
         conn = self._db._get_conn()
@@ -517,9 +517,9 @@ class SearchHandler(BaseHandler):
         self,
         keywords: str,
         query: str,
-        doc_details: List[Dict[str, Any]],
-        filenames: List[str]
-    ) -> Dict[str, Any]:
+        doc_details: list[dict[str, Any]],
+        filenames: list[str]
+    ) -> dict[str, Any]:
         """검색 응답 생성"""
         # 카드 생성
         cards = []
@@ -572,9 +572,9 @@ class SearchHandler(BaseHandler):
     def _build_content_only_response(
         self,
         keywords: str,
-        doc_details: List[Dict[str, Any]],
-        filenames: List[str]
-    ) -> Dict[str, Any]:
+        doc_details: list[dict[str, Any]],
+        filenames: list[str]
+    ) -> dict[str, Any]:
         """정밀 검색 응답 생성"""
         response_text = f"📄 **'{keywords}' 내용 포함 문서 ({len(doc_details)}건)**\n\n"
 
@@ -635,7 +635,7 @@ class SearchHandler(BaseHandler):
             }
         }
 
-    def _build_evidence(self, doc_details: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _build_evidence(self, doc_details: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Evidence 목록 생성"""
         evidence = []
 
@@ -690,7 +690,7 @@ class CostSumHandler(BaseHandler):
         super().__init__(pipeline)
         self._db = MetadataDB()
 
-    def handle(self, query: str, **kwargs) -> Dict[str, Any]:
+    def handle(self, query: str, **kwargs) -> dict[str, Any]:
         """COST_SUM 모드 쿼리 처리"""
         try:
             # 1. 검색으로 후보 문서 찾기
@@ -759,9 +759,9 @@ class CostSumHandler(BaseHandler):
 
     def _build_cost_response(
         self,
-        cost_docs: List[tuple],
+        cost_docs: list[tuple],
         retrieved_count: int
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """비용 응답 생성"""
         total_sum = sum(doc[0] for doc in cost_docs)
         evidence = []

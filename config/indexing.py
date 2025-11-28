@@ -7,7 +7,6 @@ Indexing Configuration (Revised)
 import logging
 import os
 from pathlib import Path
-from typing import Dict, Set
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +16,8 @@ logger = logging.getLogger(__name__)
 try:
     from app.config.settings import settings
     # 확장자 정규화: 소문자로 변환 + 공백 제거
-    ALLOWED_EXTS: Set[str] = {ext.lower().strip() for ext in settings.ALLOWED_EXTS}
-    DB_PATHS: Dict[str, str] = settings.DB_PATHS
+    ALLOWED_EXTS: set[str] = {ext.lower().strip() for ext in settings.ALLOWED_EXTS}
+    DB_PATHS: dict[str, str] = settings.DB_PATHS
     PROJECT_ROOT = Path(settings.PROJECT_ROOT)
     logger.info(f"[IndexConfig] settings 모듈 로드 완료 - ALLOWED_EXTS: {ALLOWED_EXTS}")
 except Exception as e:

@@ -12,7 +12,7 @@
 6. 한국어 변형 처리 간소화
 """
 import re
-from typing import List, Optional
+from typing import Optional
 
 # 상세모드 트리거(저위험 키워드 우선, 고위험 단어는 문맥 제약으로 처리)
 DETAIL_KEYWORDS_BASE = [
@@ -141,7 +141,7 @@ def normalize_query(q: str) -> str:
     return s
 
 
-def is_detailed_mode(q: str, extra_keywords: Optional[List[str]] = None) -> bool:
+def is_detailed_mode(q: str, extra_keywords: Optional[list[str]] = None) -> bool:
     """상세 답변 모드 감지(과검출 절제: 고위험 키워드는 문맥 패턴으로만)
 
     Args:

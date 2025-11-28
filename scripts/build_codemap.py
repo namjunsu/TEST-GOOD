@@ -10,7 +10,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 import networkx as nx
 
@@ -18,7 +18,7 @@ import networkx as nx
 class PythonModuleAnalyzer:
     """Analyzes Python modules to extract dependencies and metadata."""
 
-    def __init__(self, roots: List[str]):
+    def __init__(self, roots: list[str]):
         self.roots = [Path(r).resolve() for r in roots]
         self.modules = {}  # path -> module_info
         self.import_graph = nx.DiGraph()

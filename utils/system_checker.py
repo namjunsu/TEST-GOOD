@@ -18,11 +18,12 @@ import platform
 import shutil
 import sys
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 # 외부 의존성 (조건부)
 try:
@@ -66,7 +67,7 @@ class CheckItem:
     name: str
     status: CheckStatus
     message: str
-    details: Optional[Dict[str, Any]] = None
+    details: Optional[dict[str, Any]] = None
     action: Optional[str] = None  # 사용자가 취할 수 있는 액션
 
     def __str__(self) -> str:
@@ -76,7 +77,7 @@ class CheckItem:
             result += f"\n   → {self.action}"
         return result
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """JSON 직렬화 가능한 딕셔너리로 변환"""
         return {
             "name": self.name,
@@ -90,8 +91,8 @@ class CheckItem:
 @dataclass
 class CheckResult:
     """검사 결과 데이터 클래스"""
-    items: List[CheckItem] = field(default_factory=list)
-    metrics: Dict[str, Any] = field(default_factory=dict)
+    items: list[CheckItem] = field(default_factory=list)
+    metrics: dict[str, Any] = field(default_factory=dict)
     timestamp: float = field(default_factory=time.time)
     duration: float = 0.0
 
@@ -99,22 +100,22 @@ class CheckResult:
         """검사 항목 추가"""
         self.items.append(item)
 
-    def get_by_status(self, status: CheckStatus) -> List[CheckItem]:
+    def get_by_status(self, status: CheckStatus) -> list[CheckItem]:
         """상태별 항목 필터링"""
         return [item for item in self.items if item.status == status]
 
     @property
-    def errors(self) -> List[CheckItem]:
+    def errors(self) -> list[CheckItem]:
         """에러 항목"""
         return self.get_by_status(CheckStatus.FAIL)
 
     @property
-    def warnings(self) -> List[CheckItem]:
+    def warnings(self) -> list[CheckItem]:
         """경고 항목"""
         return self.get_by_status(CheckStatus.WARN)
 
     @property
-    def passed(self) -> List[CheckItem]:
+    def passed(self) -> list[CheckItem]:
         """통과 항목"""
         return self.get_by_status(CheckStatus.PASS)
 
@@ -126,7 +127,7 @@ class CheckResult:
         """경고 있음"""
         return len(self.warnings) > 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환 (JSON 직렬화 가능)"""
         return {
             "success": self.is_success(),
@@ -144,7 +145,7 @@ class SystemChecker:
     """시스템 요구사항 및 상태 검사 (완벽 버전)"""
 
     # 필수 패키지 및 최소 버전
-    REQUIRED_PACKAGES: Dict[str, Tuple[str, str]] = {
+    REQUIRED_PACKAGES: dict[str, tuple[str, str]] = {
         "streamlit": ("1.20.0", "Streamlit"),
         "pandas": ("1.3.0", "Pandas"),
         "numpy": ("1.20.0", "NumPy"),
@@ -154,7 +155,7 @@ class SystemChecker:
     }
 
     # 선택적 패키지
-    OPTIONAL_PACKAGES: Dict[str, str] = {
+    OPTIONAL_PACKAGES: dict[str, str] = {
         "faiss": "FAISS (CPU)",
         # 'faiss-gpu': 'FAISS (GPU)',  # Python 3.12+는 faiss-cpu 사용 (AVX2 지원)
         "psutil": "psutil (시스템 모니터링)",
@@ -213,7 +214,7 @@ class SystemChecker:
                 return self.result
 
         # 검사 실행
-        checks: List[Tuple[str, Callable[[], None]]] = [
+        checks: list[tuple[str, Callable[[], None]]] = [
             ("Python 버전", self.check_python_version),
             ("필수 패키지", self.check_required_packages),
             ("디렉토리 구조", self.check_directories),
@@ -250,7 +251,7 @@ class SystemChecker:
 
     def _run_parallel_checks(
         self,
-        checks: List[Tuple[str, Callable[[], None]]],
+        checks: list[tuple[str, Callable[[], None]]],
         total: int
     ) -> None:
         """병렬 검사 실행"""
@@ -282,7 +283,7 @@ class SystemChecker:
 
     def _run_sequential_checks(
         self,
-        checks: List[Tuple[str, Callable[[], None]]],
+        checks: list[tuple[str, Callable[[], None]]],
         total: int
     ) -> None:
         """순차 검사 실행"""
@@ -316,8 +317,8 @@ class SystemChecker:
 
     def check_python_version(self) -> None:
         """Python 버전 체크 (타입 힌트 완전)"""
-        required_version: Tuple[int, int] = (3, 8)
-        current_version: Tuple[int, int] = sys.version_info[:2]
+        required_version: tuple[int, int] = (3, 8)
+        current_version: tuple[int, int] = sys.version_info[:2]
 
         self.result.metrics["python_version"] = f"{current_version[0]}.{current_version[1]}"
         self.result.metrics["python_impl"] = platform.python_implementation()
@@ -424,7 +425,7 @@ class SystemChecker:
 
     def check_directories(self) -> None:
         """필수 디렉토리 체크"""
-        required_dirs: Dict[str, str] = {
+        required_dirs: dict[str, str] = {
             "docs": "문서 디렉토리",
             "models": "모델 디렉토리",
             "logs": "로그 디렉토리",
@@ -602,7 +603,7 @@ class SystemChecker:
 
     def check_database_files(self) -> None:
         """데이터베이스 파일 체크"""
-        db_files: Dict[str, str] = {
+        db_files: dict[str, str] = {
             "everything_index.db": "문서 인덱스 DB",
             "metadata.db": "메타데이터 DB"
         }

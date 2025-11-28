@@ -7,7 +7,7 @@
 
 import re
 import threading
-from typing import Any, Dict, List
+from typing import Any
 
 import yaml
 
@@ -38,7 +38,7 @@ class ProfileMatcher:
             f"프로파일 매칭 초기화: {len(self.profile_patterns)} 프로파일 로드"
         )
 
-    def _load_config(self) -> Dict[str, Any]:
+    def _load_config(self) -> dict[str, Any]:
         """설정 파일 로드"""
         try:
             with open(self.config_path, "r", encoding="utf-8") as f:
@@ -61,7 +61,7 @@ class ProfileMatcher:
         pattern = pattern.replace("{KBR}", KBR)
         return pattern
 
-    def _compile_profile_patterns(self) -> Dict[str, List[re.Pattern]]:
+    def _compile_profile_patterns(self) -> dict[str, list[re.Pattern]]:
         """프로파일별 키워드 패턴 컴파일"""
         compiled = {}
         keywords = self.config.get("profile_matching", {}).get("keywords", {})
@@ -81,7 +81,7 @@ class ProfileMatcher:
 
         return compiled
 
-    def match_profiles(self, query: str) -> List[str]:
+    def match_profiles(self, query: str) -> list[str]:
         """
         쿼리에서 프로파일 후보 탐지
 
@@ -112,7 +112,7 @@ class ProfileMatcher:
         logger.info(f"프로파일 매칭: '{query}' → {sorted_profiles}")
         return sorted_profiles
 
-    def get_profile_weights(self) -> Dict[str, float]:
+    def get_profile_weights(self) -> dict[str, float]:
         """프로파일별 가중치 반환"""
         return (
             self.config.get("profile_matching", {})
@@ -120,7 +120,7 @@ class ProfileMatcher:
             .get("profile_weights", {})
         )
 
-    def get_multi_profile_config(self) -> Dict[str, Any]:
+    def get_multi_profile_config(self) -> dict[str, Any]:
         """다중 프로파일 병합 설정 반환"""
         return self.config.get("profile_matching", {}).get("multi_profile", {})
 

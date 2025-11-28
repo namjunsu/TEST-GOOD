@@ -7,7 +7,7 @@ import threading
 import time
 from contextlib import contextmanager
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from rag_system.active.llm_wrapper import QwenLLM
 
@@ -24,7 +24,7 @@ class LLMSingleton:
     _first_load_timestamp: Optional[datetime] = None
     _last_usage_timestamp: Optional[datetime] = None
     _total_processing_time: float = 0.0
-    _model_config: Dict[str, Any] = {}  # 초기 설정 저장
+    _model_config: dict[str, Any] = {}  # 초기 설정 저장
 
     # 로거
     _logger = logging.getLogger(__name__)
@@ -94,7 +94,7 @@ class LLMSingleton:
                 cls._logger.debug(f"📊 처리 시간: {processing_time:.3f}초")
 
     @classmethod
-    def get_stats(cls) -> Dict[str, Any]:
+    def get_stats(cls) -> dict[str, Any]:
         """사용 통계 반환 (확장된 메트릭, 스레드 안전)"""
         with cls._stats_lock:
             uptime = None

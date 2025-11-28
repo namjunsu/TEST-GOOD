@@ -9,7 +9,7 @@ import re
 import threading
 import unicodedata
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Optional
 
 import yaml
 
@@ -65,7 +65,7 @@ class QueryFilter:
             f"domain_terms={len(self.domain_terms)}"
         )
 
-    def _load_config(self) -> Dict[str, Any]:
+    def _load_config(self) -> dict[str, Any]:
         """설정 파일 로드"""
         try:
             with open(self.config_path, "r", encoding="utf-8") as f:
@@ -74,7 +74,7 @@ class QueryFilter:
             logger.warning(f"⚠️ 설정 로드 실패: {e}, 기본값 사용")
             return {}
 
-    def _build_stopword_regex(self, words: List[str]) -> re.Pattern:
+    def _build_stopword_regex(self, words: list[str]) -> re.Pattern:
         """불용어 리스트 → 토큰 경계 정규식 (NFKC 정규화)"""
         # NFKC 정규화 + 중복 제거
         norm = sorted(
@@ -87,7 +87,7 @@ class QueryFilter:
             return re.compile(r"(?!.*)", re.IGNORECASE)
         return re.compile(f"{TOKEN}(?:{pat}){ETOKEN}", re.IGNORECASE)
 
-    def _build_numeric_preserve_regex(self, units: List[str]) -> Optional[re.Pattern]:
+    def _build_numeric_preserve_regex(self, units: list[str]) -> Optional[re.Pattern]:
         """숫자 접미어 보호 패턴 (예: 12건)"""
         if not units:
             return None
@@ -95,7 +95,7 @@ class QueryFilter:
         pat = "|".join(map(re.escape, units))
         return re.compile(rf"\d+\s*(?:{pat})\b", re.IGNORECASE)
 
-    def _compile_query_tokens(self, tokens: Dict[str, str]) -> Dict[str, re.Pattern]:
+    def _compile_query_tokens(self, tokens: dict[str, str]) -> dict[str, re.Pattern]:
         """쿼리 토큰 패턴 컴파일"""
         compiled = {}
         for name, pattern in tokens.items():
@@ -105,7 +105,7 @@ class QueryFilter:
                 logger.warning(f"⚠️ 토큰 패턴 컴파일 실패 ({name}): {e}")
         return compiled
 
-    def _build_domain_terms(self, config: Dict[str, Any]) -> Set[str]:
+    def _build_domain_terms(self, config: dict[str, Any]) -> set[str]:
         """도메인 용어 집합 생성 (변형 자동 생성)"""
         base = config.get("base", [])
         generate_variants = config.get("generate_variants", False)
@@ -120,7 +120,7 @@ class QueryFilter:
 
         return terms
 
-    def _generate_term_variants(self, term: str) -> Set[str]:
+    def _generate_term_variants(self, term: str) -> set[str]:
         """용어 변형 생성 (하이픈/공백/무공백)"""
         variants = {term}
 
@@ -138,7 +138,7 @@ class QueryFilter:
 
         return variants
 
-    def protect_domain_terms(self, query: str) -> Tuple[str, Dict[str, str]]:
+    def protect_domain_terms(self, query: str) -> tuple[str, dict[str, str]]:
         """도메인 용어를 일시 치환으로 보호 (불용어 필터 영향 배제)"""
         mapping = {}
         for i, term in enumerate(
@@ -150,13 +150,13 @@ class QueryFilter:
                 mapping[key] = term
         return query, mapping
 
-    def restore_domain_terms(self, query: str, mapping: Dict[str, str]) -> str:
+    def restore_domain_terms(self, query: str, mapping: dict[str, str]) -> str:
         """보호된 도메인 용어 복원"""
         for key, value in mapping.items():
             query = query.replace(key, value)
         return query
 
-    def resolve_relative_year(self, token: str) -> Optional[Tuple[int, int]]:
+    def resolve_relative_year(self, token: str) -> Optional[tuple[int, int]]:
         """상대 연도 → 절대 연도 범위 변환 (올해/작년/재작년)"""
         y = datetime.now().year
         token_lower = token.lower()
@@ -168,7 +168,7 @@ class QueryFilter:
             return (y - 2, y - 2)
         return None
 
-    def parse_query_tokens(self, query: str) -> Dict[str, Any]:
+    def parse_query_tokens(self, query: str) -> dict[str, Any]:
         """쿼리 토큰 파싱 (year, drafter, type, date 등)"""
         parsed = {}
 
@@ -227,7 +227,7 @@ class QueryFilter:
 
         return parsed
 
-    def preprocess_query(self, query: str) -> Dict[str, Any]:
+    def preprocess_query(self, query: str) -> dict[str, Any]:
         """
         쿼리 전처리 파이프라인
 

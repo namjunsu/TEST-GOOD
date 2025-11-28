@@ -11,7 +11,7 @@ from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from app.core.logging import get_logger
 
@@ -79,7 +79,7 @@ class RoutingMonitor:
                 f"mode={mode}, query='{query[:50]}...'"
             )
 
-    def get_daily_stats(self) -> Dict[str, Any]:
+    def get_daily_stats(self) -> dict[str, Any]:
         """일일 통계 조회"""
         if not self.log_file.exists():
             return {"error": "No routing logs found"}
@@ -122,7 +122,7 @@ class RoutingMonitor:
             logger.error(f"통계 조회 실패: {e}")
             return {"error": str(e)}
 
-    def suggest_patterns(self, min_occurrences: int = 5) -> List[Dict[str, Any]]:
+    def suggest_patterns(self, min_occurrences: int = 5) -> list[dict[str, Any]]:
         """반복되는 질의에서 패턴 제안
 
         Args:

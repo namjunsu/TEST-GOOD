@@ -17,7 +17,7 @@ import re
 import sqlite3
 from collections import defaultdict
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any
 
 
 class QueryGenerator:
@@ -33,7 +33,7 @@ class QueryGenerator:
         self.rag_min_score = float(os.getenv("RAG_MIN_SCORE", "0.35"))
         self.require_citations = os.getenv("REQUIRE_CITATIONS", "true").lower() == "true"
 
-    def extract_equipment_keywords(self) -> Dict[str, int]:
+    def extract_equipment_keywords(self) -> dict[str, int]:
         """문서에서 실제 장비 키워드 추출"""
         self.cursor.execute("""
             SELECT keywords FROM documents
@@ -54,7 +54,7 @@ class QueryGenerator:
         # 빈도순 정렬
         return dict(sorted(equipment.items(), key=lambda x: x[1], reverse=True))
 
-    def get_document_summaries(self) -> List[Dict[str, Any]]:
+    def get_document_summaries(self) -> list[dict[str, Any]]:
         """문서 요약 정보 추출"""
         self.cursor.execute("""
             SELECT
@@ -85,7 +85,7 @@ class QueryGenerator:
 
         return summaries
 
-    def generate_query_templates(self, summaries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def generate_query_templates(self, summaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """실제 문서 기반 질문 템플릿 생성"""
         queries = []
 
@@ -209,7 +209,7 @@ class QueryGenerator:
 
         return queries
 
-    def export_markdown(self, queries: List[Dict[str, Any]], output_path: str):
+    def export_markdown(self, queries: list[dict[str, Any]], output_path: str):
         """Markdown 포맷 출력"""
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
@@ -248,7 +248,7 @@ class QueryGenerator:
 
         print(f"✅ Markdown 저장: {output_path}")
 
-    def export_csv(self, queries: List[Dict[str, Any]], output_path: str):
+    def export_csv(self, queries: list[dict[str, Any]], output_path: str):
         """CSV 포맷 출력"""
         import csv
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -276,7 +276,7 @@ class QueryGenerator:
 
         print(f"✅ CSV 저장: {output_path}")
 
-    def export_json(self, queries: List[Dict[str, Any]], output_path: str):
+    def export_json(self, queries: list[dict[str, Any]], output_path: str):
         """JSON 포맷 출력 (UI 프리셋용)"""
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 

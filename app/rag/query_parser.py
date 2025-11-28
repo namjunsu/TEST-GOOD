@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from datetime import date
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Dict, Optional, Set, Tuple
+from typing import Optional
 
 import yaml
 
@@ -107,7 +107,7 @@ class ParseResult:
 class QueryParser:
     """쿼리 파서 - Closed-World Validation + 연도 파서 고도화"""
 
-    def __init__(self, known_drafters: Set[str], today: Optional[date] = None):
+    def __init__(self, known_drafters: set[str], today: Optional[date] = None):
         """
         Args:
             known_drafters: 메타DB에서 로드한 '기안자 원형' 집합 (예: {'남준수','최새름',...})
@@ -122,15 +122,15 @@ class QueryParser:
         original = {d for d in (known_drafters or set()) if d and isinstance(d, str)}
         norm_pairs = {d: _normalize_name(d) for d in original}
         # 역인덱스(정규화값 → 원형 다중 매핑 방지: 가장 긴 원형 우선)
-        rev: Dict[str, str] = {}
+        rev: dict[str, str] = {}
         for raw, norm in norm_pairs.items():
             keep = rev.get(norm)
             if keep is None or len(raw) > len(keep):
                 rev[norm] = raw
 
-        self._known_original: Set[str] = original
-        self._known_norm_set: Set[str] = set(rev.keys())
-        self._norm_to_original: Dict[str, str] = rev
+        self._known_original: set[str] = original
+        self._known_norm_set: set[str] = set(rev.keys())
+        self._norm_to_original: dict[str, str] = rev
 
         logger.info(
             f"✅ QueryParser 초기화: 기안자 {len(self._known_original)}명 "
@@ -138,17 +138,17 @@ class QueryParser:
         )
 
     # ---------- 설정 ----------
-    def _load_stopwords(self) -> Set[str]:
+    def _load_stopwords(self) -> set[str]:
         sw = set(map(_normalize_text, self.cfg.get("drafter_stopwords", []) or []))
         if not sw:
             sw = {"문서", "자료", "파일", "보고서", "전체", "모든"}
         return sw
 
-    def _load_token_patterns(self) -> Dict[str, str]:
+    def _load_token_patterns(self) -> dict[str, str]:
         return self.cfg.get("query_tokens", {}) or {}
 
     # ---------- Public API ----------
-    def parse_filters(self, query: str) -> Dict[str, Optional[str]]:
+    def parse_filters(self, query: str) -> dict[str, Optional[str]]:
         """
         Returns: {"year": str|None, "drafter": str|None, "source": str|None}
         우선순위: 토큰 규칙 → (연도) → CW/퍼지 기안자
@@ -173,7 +173,7 @@ class QueryParser:
         return result
 
     # ---------- Token rules ----------
-    def _extract_from_tokens(self, q: str) -> Dict[str, Optional[str]]:
+    def _extract_from_tokens(self, q: str) -> dict[str, Optional[str]]:
         res = {"year": None, "drafter": None}
 
         # year
@@ -243,7 +243,7 @@ class QueryParser:
         return None
 
     # ---------- Drafter (CW → fuzzy) ----------
-    def _extract_drafter_closed_world(self, q: str) -> Tuple[Optional[str], Optional[str]]:
+    def _extract_drafter_closed_world(self, q: str) -> tuple[Optional[str], Optional[str]]:
         # 후보 추출: 한글 2-4자 + 공백 포함된 패턴도 추출
         candidates_ko = RE_KOREAN_NAME_2_4.findall(q)
 
@@ -279,7 +279,7 @@ class QueryParser:
                 return self._norm_to_original[n], "closed_world"
 
         # 2) 퍼지 매칭(안전장치 포함)
-        best: Tuple[Optional[str], float] = (None, 0.0)
+        best: tuple[Optional[str], float] = (None, 0.0)
         # 후보·대상 상한
         max_checks = 50
         checked = 0
@@ -310,6 +310,6 @@ class QueryParser:
 
 
 # ---------- 함수형 API ----------
-def parse_filters_simple(query: str, known_drafters: Set[str]) -> Dict[str, Optional[str]]:
+def parse_filters_simple(query: str, known_drafters: set[str]) -> dict[str, Optional[str]]:
     parser = QueryParser(known_drafters)
     return parser.parse_filters(query)

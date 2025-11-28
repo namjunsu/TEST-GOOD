@@ -21,7 +21,7 @@ import socket
 import time
 import urllib.error
 import urllib.request
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +94,7 @@ def _mask_sensitive(obj: Any) -> Any:
     return obj
 
 
-def _truncate_text(s: str, limit: int) -> Tuple[str, bool]:
+def _truncate_text(s: str, limit: int) -> tuple[str, bool]:
     """텍스트 축약
 
     Args:
@@ -128,7 +128,7 @@ def _json_block(payload: dict) -> str:
 
 def _build_blocks(
     title: str, payload: dict, severity: str, source: Optional[str]
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Slack 메시지 블록 구성
 
     Args:
@@ -186,7 +186,7 @@ def _build_blocks(
     return {"text": f":warning: {title}", "blocks": blocks}
 
 
-def _post_slack(body: dict) -> Dict[str, Any]:
+def _post_slack(body: dict) -> dict[str, Any]:
     """Slack Webhook POST (재시도/백오프 포함)
 
     Args:

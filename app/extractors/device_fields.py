@@ -14,7 +14,7 @@ LLM 추출 결과와 병합하여 정확도를 보장합니다.
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 # ============================================================================
 # 정규식 패턴
@@ -68,7 +68,7 @@ REASON_KEYS = (
 # 헬퍼 함수
 # ============================================================================
 
-def _findall_with_spans(pattern: re.Pattern, text: str) -> List[Tuple[str, Tuple[int, int]]]:
+def _findall_with_spans(pattern: re.Pattern, text: str) -> list[tuple[str, tuple[int, int]]]:
     """패턴 매칭 후보와 span 반환
 
     Args:
@@ -103,8 +103,8 @@ def _is_private_ipv4(ip: str) -> bool:
 
 
 def _prefer_private_ipv4(
-    candidates: List[Tuple[str, Tuple[int, int]]]
-) -> Optional[Tuple[str, Tuple[int, int]]]:
+    candidates: list[tuple[str, tuple[int, int]]]
+) -> Optional[tuple[str, tuple[int, int]]]:
     """사설망 IP 우선 선택
 
     Args:
@@ -122,7 +122,7 @@ def _prefer_private_ipv4(
     return private_ips[0] if private_ips else candidates[0]
 
 
-def _split_sentences(text: str) -> List[str]:
+def _split_sentences(text: str) -> list[str]:
     """한국어 문장 분할
 
     Args:
@@ -216,7 +216,7 @@ def _normalize_manufacturer(raw: Optional[str]) -> Optional[str]:
 # 메인 함수
 # ============================================================================
 
-def extract_fields_rule_based(text: str) -> Dict[str, Any]:
+def extract_fields_rule_based(text: str) -> dict[str, Any]:
     """정규식 기반 필드 추출 (후보 스코어링 포함)
 
     Args:

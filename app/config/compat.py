@@ -10,10 +10,10 @@ Configuration Compatibility Layer (Schema v0 → v1)
 3. Author stoplist 정규화: list → dict
 """
 
-from typing import Any, Dict
+from typing import Any
 
 
-def normalize_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_config(cfg: dict[str, Any]) -> dict[str, Any]:
     """
     구형 설정(schema v0)을 v1 스키마로 정규화합니다.
 
@@ -77,7 +77,7 @@ def normalize_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
     return cfg
 
 
-def is_legacy_config(cfg: Dict[str, Any]) -> bool:
+def is_legacy_config(cfg: dict[str, Any]) -> bool:
     """
     구형 설정 파일인지 확인합니다.
 

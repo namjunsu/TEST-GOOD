@@ -20,7 +20,7 @@ v1.5 변경사항:
 
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import yaml
 
@@ -197,7 +197,7 @@ class MetaParser:
         logger.debug(f"작성자 패턴 불일치: {a}")
         return False
 
-    def _load_config(self, config_path: Path) -> Dict[str, Any]:
+    def _load_config(self, config_path: Path) -> dict[str, Any]:
         """설정 파일 로드
 
         Args:
@@ -230,7 +230,7 @@ class MetaParser:
             self._last_load_ts = time.time()
             return {}
 
-    def parse_dates(self, metadata: Dict[str, Any]) -> Tuple[str, str]:
+    def parse_dates(self, metadata: dict[str, Any]) -> tuple[str, str]:
         """날짜 파싱 및 표준화
 
         Args:
@@ -390,7 +390,7 @@ class MetaParser:
 
     def classify_category(
         self, title: str = "", content: str = "", filename: str = ""
-    ) -> Tuple[str, str]:
+    ) -> tuple[str, str]:
         """카테고리 분류 (근거 포함)
 
         Args:
@@ -407,9 +407,9 @@ class MetaParser:
         search_text_file = (filename or "").lower()
         search_text_body = (content or "")[:500].lower()
 
-        matched: List[Tuple[str, str, str]] = []  # (category, source, keyword)
+        matched: list[tuple[str, str, str]] = []  # (category, source, keyword)
 
-        def match_rules(rules: List[Dict[str, Any]], source_name: str):
+        def match_rules(rules: list[dict[str, Any]], source_name: str):
             """규칙 매칭 헬퍼"""
             for rule in rules:
                 for kw in rule.get("keywords", []):
@@ -454,8 +454,8 @@ class MetaParser:
         return self.default_category, "default"
 
     def parse(
-        self, metadata: Dict[str, Any], title: str = "", content: str = ""
-    ) -> Dict[str, Any]:
+        self, metadata: dict[str, Any], title: str = "", content: str = ""
+    ) -> dict[str, Any]:
         """메타데이터 파싱 및 표준화 (v1.5)
 
         Args:
@@ -525,7 +525,7 @@ class MetaParser:
 
         return out
 
-    def format_meta_display(self, parsed_meta: Dict[str, Any]) -> str:
+    def format_meta_display(self, parsed_meta: dict[str, Any]) -> str:
         """메타데이터 표시 형식 생성
 
         Args:

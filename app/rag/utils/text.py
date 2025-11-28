@@ -5,10 +5,10 @@ pipeline.py, handlers/response.py에서 공통 사용.
 """
 
 import re
-from typing import Any, Dict, List, Set
+from typing import Any
 
 # 도메인 키워드 (장비/프로젝트/기술 용어)
-DOMAIN_KEYWORDS: Set[str] = {
+DOMAIN_KEYWORDS: set[str] = {
     # 장비
     "nvr", "sync", "eco8000", "lvm-180a", "odin", "vmix", "faiss",
     "tri-level", "sdi", "lut", "intercom", "di box", "dibox",
@@ -40,7 +40,7 @@ def get_query_token_count(query: str) -> int:
     return len(tokens)
 
 
-def get_keyword_coverage(query: str, results: List[Dict[str, Any]]) -> int:
+def get_keyword_coverage(query: str, results: list[dict[str, Any]]) -> int:
     """쿼리와 검색 결과 간 도메인 키워드 교집합 개수 계산
 
     Args:
@@ -67,7 +67,7 @@ def get_keyword_coverage(query: str, results: List[Dict[str, Any]]) -> int:
     return covered
 
 
-def norm_chunk_text(r: Dict[str, Any]) -> str:
+def norm_chunk_text(r: dict[str, Any]) -> str:
     """청크 텍스트 정규화 (snippet/content/text 통일)
 
     Args:

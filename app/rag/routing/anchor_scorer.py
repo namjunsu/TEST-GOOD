@@ -11,7 +11,7 @@
 
 import re
 import threading
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 import yaml
 
@@ -47,7 +47,7 @@ class AnchorScorer:
 
         logger.info(f"앵커 스코어 초기화: {len(self.profiles)} 프로파일 컴파일")
 
-    def _load_config(self) -> Dict[str, Any]:
+    def _load_config(self) -> dict[str, Any]:
         """설정 파일 로드"""
         try:
             with open(self.config_path, "r", encoding="utf-8") as f:
@@ -70,7 +70,7 @@ class AnchorScorer:
         pattern = pattern.replace("{KBR}", KBR)
         return pattern
 
-    def _compile_profiles(self) -> Dict[str, Dict[str, Any]]:
+    def _compile_profiles(self) -> dict[str, dict[str, Any]]:
         """프로파일별 패턴 컴파일"""
         compiled = {}
         profiles_raw = self.config.get("doc_anchored", {}).get("profiles", {})
@@ -99,7 +99,7 @@ class AnchorScorer:
 
         return compiled
 
-    def _compile_patterns(self, patterns: List[str]) -> List[re.Pattern]:
+    def _compile_patterns(self, patterns: list[str]) -> list[re.Pattern]:
         """패턴 리스트 컴파일"""
         compiled = []
         for pattern in patterns:
@@ -111,8 +111,8 @@ class AnchorScorer:
         return compiled
 
     def _check_allow(
-        self, text: str, patterns: List[re.Pattern]
-    ) -> Tuple[bool, List[str]]:
+        self, text: str, patterns: list[re.Pattern]
+    ) -> tuple[bool, list[str]]:
         """
         allow 패턴 체크 (하나라도 매칭 필수)
 
@@ -131,8 +131,8 @@ class AnchorScorer:
         return (len(matched) > 0, matched)
 
     def _check_deny(
-        self, text: str, patterns: List[re.Pattern]
-    ) -> Tuple[bool, List[str]]:
+        self, text: str, patterns: list[re.Pattern]
+    ) -> tuple[bool, list[str]]:
         """
         deny 패턴 체크
 
@@ -153,10 +153,10 @@ class AnchorScorer:
     def _calculate_boost(
         self,
         text: str,
-        high: List[re.Pattern],
-        medium: List[re.Pattern],
-        vendor: List[re.Pattern],
-        weights: Dict[str, float],
+        high: list[re.Pattern],
+        medium: list[re.Pattern],
+        vendor: list[re.Pattern],
+        weights: dict[str, float],
     ) -> float:
         """
         boost 점수 계산 (high/medium/vendor 누적)
@@ -188,7 +188,7 @@ class AnchorScorer:
         return score
 
     def _calculate_proximity(
-        self, text: str, pairs: List[Dict[str, Any]]
+        self, text: str, pairs: list[dict[str, Any]]
     ) -> float:
         """
         proximity 보너스 계산 (키워드 간 거리)
@@ -224,7 +224,7 @@ class AnchorScorer:
 
     def score_document(
         self, text: str, profile_name: str
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[dict[str, Any]]:
         """
         문서에 대해 프로파일별 앵커 점수 계산
 
@@ -317,7 +317,7 @@ class AnchorScorer:
             },
         }
 
-    def get_metrics(self) -> Dict[str, Any]:
+    def get_metrics(self) -> dict[str, Any]:
         """메트릭 반환"""
         return self.metrics.copy()
 

@@ -8,9 +8,7 @@ IDE 자동완성 및 타입 체킹 지원.
 """
 
 from enum import Enum
-from typing import Any, Dict, List, Optional, TypedDict, Union
-
-from typing_extensions import NotRequired
+from typing import Any, NotRequired, Optional, TypedDict, Union
 
 # ============================================================================
 # 열거형 타입
@@ -67,7 +65,7 @@ class SearchResultDict(TypedDict):
 
 class SearchResponseDict(TypedDict):
     """검색 응답 전체"""
-    results: List[SearchResultDict]
+    results: list[SearchResultDict]
     total_count: int
     query: str
     took_ms: NotRequired[float]
@@ -81,11 +79,11 @@ class RAGResponseDict(TypedDict):
     """RAG 응답"""
     mode: str  # "QA" | "SEARCH" | "DOCUMENT" | "COST_SUM" | "CHAT"
     text: str
-    files: List[str]
+    files: list[str]
     count: int
-    citations: NotRequired[List[Dict[str, Any]]]
-    evidence: NotRequired[List[Dict[str, Any]]]
-    status: NotRequired[Dict[str, Any]]
+    citations: NotRequired[list[dict[str, Any]]]
+    evidence: NotRequired[list[dict[str, Any]]]
+    status: NotRequired[dict[str, Any]]
     latency_ms: NotRequired[float]
 
 
@@ -94,7 +92,7 @@ class QueryRoutingDict(TypedDict):
     mode: str
     prompt_type: str
     max_tokens: int
-    retriever_params: Dict[str, Any]
+    retriever_params: dict[str, Any]
     detailed_mode: bool
     detected_section: Optional[str]
     needs_summary: bool
@@ -139,15 +137,15 @@ class SearchMetrics(TypedDict):
 # ============================================================================
 
 # JSON 호환 타입
-JSONValue = Union[str, int, float, bool, None, Dict[str, Any], List[Any]]
-JSONDict = Dict[str, JSONValue]
+JSONValue = Union[str, int, float, bool, None, dict[str, Any], list[Any]]
+JSONDict = dict[str, JSONValue]
 
 # 콜백 타입
 ProgressCallback = Optional[callable]  # (current: int, total: int) -> None
 
 # 검색 결과 리스트
-SearchResults = List[SearchResultDict]
-Documents = List[DocumentDict]
+SearchResults = list[SearchResultDict]
+Documents = list[DocumentDict]
 
 
 __all__ = [

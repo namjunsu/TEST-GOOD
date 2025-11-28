@@ -6,10 +6,9 @@ Normalizes queries to improve cache hit rate through synonym handling and normal
 import hashlib
 import re
 from datetime import datetime, timedelta
-from typing import Dict, Set
 
 # 동의어 매핑
-SYNONYMS: Dict[str, Set[str]] = {
+SYNONYMS: dict[str, set[str]] = {
     "얼마": {"가격", "비용", "금액", "price", "cost"},
     "찾아줘": {"찾아주세요", "검색", "찾기", "검색해줘", "알려줘"},
     "자세히": {"자세하게", "상세히", "구체적으로", "세세하게", "디테일하게"},
@@ -20,7 +19,7 @@ SYNONYMS: Dict[str, Set[str]] = {
 }
 
 # 역방향 매핑 생성 (빠른 조회용)
-SYNONYM_MAP: Dict[str, str] = {}
+SYNONYM_MAP: dict[str, str] = {}
 for canonical, synonyms in SYNONYMS.items():
     for syn in synonyms:
         SYNONYM_MAP[syn.lower()] = canonical

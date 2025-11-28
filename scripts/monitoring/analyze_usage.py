@@ -8,7 +8,6 @@ import ast
 import json
 import os
 from pathlib import Path
-from typing import Dict, List, Set
 
 
 class ImportTracker:
@@ -22,7 +21,7 @@ class ImportTracker:
         ]
         self.project_root = Path.cwd()
 
-    def extract_imports(self, file_path: str) -> List[str]:
+    def extract_imports(self, file_path: str) -> list[str]:
         """Extract all imports from a Python file."""
         imports = []
         try:
@@ -41,7 +40,7 @@ class ImportTracker:
 
         return imports
 
-    def resolve_import_to_file(self, import_name: str, from_file: str) -> List[str]:
+    def resolve_import_to_file(self, import_name: str, from_file: str) -> list[str]:
         """Resolve an import to actual file paths."""
         resolved = []
 
@@ -73,7 +72,7 @@ class ImportTracker:
 
         return resolved
 
-    def trace_dependencies(self, file_path: str, visited: Set[str] = None):
+    def trace_dependencies(self, file_path: str, visited: set[str] = None):
         """Recursively trace all dependencies from a file."""
         if visited is None:
             visited = set()
@@ -129,7 +128,7 @@ class ImportTracker:
 
         return report
 
-    def categorize_files(self, files: Set[str]) -> Dict[str, List[str]]:
+    def categorize_files(self, files: set[str]) -> dict[str, list[str]]:
         """Categorize files by their type/purpose."""
         categories = {
             "tests": [],

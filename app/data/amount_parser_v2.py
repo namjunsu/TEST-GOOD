@@ -11,7 +11,7 @@
 import re
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from app.core.logging import get_logger
 
@@ -59,7 +59,7 @@ def _to_int_krw(token: str) -> Optional[int]:
     return int(t) if t.isdigit() else None
 
 
-def _parse_eok_man(text: str) -> List[Tuple[int, int, int, str]]:
+def _parse_eok_man(text: str) -> list[tuple[int, int, int, str]]:
     """억/만 단위 파싱 (콤마 지원)
 
     Args:
@@ -120,7 +120,7 @@ def format_krw(value: Optional[int]) -> str:
     return f"{value:,}원"
 
 
-def extract_amount_candidates(text: str, window: int = 30) -> List[AmountCandidate]:
+def extract_amount_candidates(text: str, window: int = 30) -> list[AmountCandidate]:
     """텍스트에서 금액 후보 추출 (문맥 포함, 억/만 포함)
 
     Args:
@@ -130,7 +130,7 @@ def extract_amount_candidates(text: str, window: int = 30) -> List[AmountCandida
     Returns:
         AmountCandidate 리스트 (중복 제거됨)
     """
-    out: List[AmountCandidate] = []
+    out: list[AmountCandidate] = []
 
     # 1) 억/만 단위 우선 처리
     for value, s, e, kind in _parse_eok_man(text):
@@ -173,9 +173,9 @@ def extract_amount_candidates(text: str, window: int = 30) -> List[AmountCandida
     return unique
 
 
-def extract_line_items(text: str) -> List[Tuple[int, int]]:
+def extract_line_items(text: str) -> list[tuple[int, int]]:
     """라인아이템 추출: (unit_price, quantity)"""
-    items: List[Tuple[int, int]] = []
+    items: list[tuple[int, int]] = []
     for m in ITEM_PAT.finditer(text):
         price = _to_int_krw(m.group("price"))
         qty_str = m.group("qty")
@@ -192,7 +192,7 @@ def extract_line_items(text: str) -> List[Tuple[int, int]]:
     return items
 
 
-def choose_total_by_line_items(line_items: List[Tuple[int, int]]) -> Optional[int]:
+def choose_total_by_line_items(line_items: list[tuple[int, int]]) -> Optional[int]:
     """라인아이템 기반 총액 계산 (정상 범위 검증)"""
     if not line_items:
         return None
@@ -241,7 +241,7 @@ def select_document_amount(doc_id: str, text: str, item_hint: str = "") -> Optio
     return None
 
 
-def validate_amount(amount: Optional[int], context: str = "") -> Tuple[Optional[int], bool]:
+def validate_amount(amount: Optional[int], context: str = "") -> tuple[Optional[int], bool]:
     """
     금액 검증 (최종 가드)
     Returns: (validated_amount, is_valid)
@@ -268,7 +268,7 @@ def validate_amount(amount: Optional[int], context: str = "") -> Tuple[Optional[
 
 
 @lru_cache(maxsize=512)
-def extract_amounts(text: str) -> List[Dict[str, Any]]:
+def extract_amounts(text: str) -> list[dict[str, Any]]:
     """텍스트에서 모든 금액 추출 (억/만 포함, 캐시됨)
 
     Args:
@@ -292,10 +292,10 @@ def extract_amounts(text: str) -> List[Dict[str, Any]]:
 
 def nearest_amount_to_keyword(
     text: str,
-    keywords: List[str],
+    keywords: list[str],
     window: int = 80,
     prefer_later: bool = True,
-) -> Optional[Dict[str, Any]]:
+) -> Optional[dict[str, Any]]:
     """키워드 주변 가장 가까운 금액 1건 반환 (근접도 기반 랭킹)
 
     Args:

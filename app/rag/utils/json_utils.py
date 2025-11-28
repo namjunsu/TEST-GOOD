@@ -2,7 +2,7 @@
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ def _mask_sensitive_data(obj: Any, max_length: int = 200) -> str:
     return str(obj)[:max_length]
 
 
-def _extract_balanced_json_blocks(s: str) -> List[str]:
+def _extract_balanced_json_blocks(s: str) -> list[str]:
     """문자열에서 모든 균형 잡힌 JSON 객체 블록 추출 (문자열 내부 중괄호 안전 처리)
 
     Args:
@@ -73,7 +73,7 @@ def _extract_balanced_json_blocks(s: str) -> List[str]:
     return blocks
 
 
-def extract_last_json_block(s: str) -> Dict[str, Any]:
+def extract_last_json_block(s: str) -> dict[str, Any]:
     """마지막 균형 잡힌 {...} 블록만 추출 후 파싱 (문자열 안전)
 
     Args:
@@ -100,7 +100,7 @@ def extract_last_json_block(s: str) -> Dict[str, Any]:
         raise ValueError(f"Invalid JSON: {e}") from e
 
 
-def parse_summary_json_robust(response: str) -> Optional[Dict[str, Any]]:
+def parse_summary_json_robust(response: str) -> Optional[dict[str, Any]]:
     """LLM 응답에서 JSON 추출 및 파싱 (강건한 버전)
 
     여러 전략을 순차적으로 시도:
@@ -169,7 +169,7 @@ def parse_summary_json_robust(response: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def ensure_citations(json_data: Dict[str, Any], doc_ref: Optional[str] = None) -> Dict[str, Any]:
+def ensure_citations(json_data: dict[str, Any], doc_ref: Optional[str] = None) -> dict[str, Any]:
     """JSON 응답에 citations 필드 확인 및 보강 (중복 방지)
 
     Args:
@@ -220,7 +220,7 @@ def extract_amounts_from_text(text: str) -> list:
     return [(amt["value"], amt["context"]) for amt in amounts_dict]
 
 
-def validate_numeric_fields(json_data: Dict[str, Any], source_text: str) -> Dict[str, Any]:
+def validate_numeric_fields(json_data: dict[str, Any], source_text: str) -> dict[str, Any]:
     """JSON 응답의 수치 필드를 원문과 대조 검증 (근접도 기반, __validation__ 포함)
 
     Args:

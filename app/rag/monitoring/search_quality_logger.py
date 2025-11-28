@@ -12,7 +12,7 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 
 class SearchQualityLogger:
@@ -30,8 +30,8 @@ class SearchQualityLogger:
         # JSONL 파일 (추가 모드)
         self.log_file = self.log_dir / "search_quality.jsonl"
 
-    def log_search(self, query: str, results: List[Dict[str, Any]],
-                   score_stats: Dict[str, Any], metadata: Dict[str, Any] = None):
+    def log_search(self, query: str, results: list[dict[str, Any]],
+                   score_stats: dict[str, Any], metadata: dict[str, Any] = None):
         """검색 로깅
 
         Args:
@@ -70,8 +70,8 @@ class SearchQualityLogger:
         with open(self.log_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
 
-    def _assess_quality(self, score_stats: Dict[str, Any],
-                       results: List[Dict[str, Any]]) -> str:
+    def _assess_quality(self, score_stats: dict[str, Any],
+                       results: list[dict[str, Any]]) -> str:
         """검색 품질 평가
 
         Args:
@@ -101,7 +101,7 @@ class SearchQualityLogger:
         else:
             return "LOW_CONFIDENCE"
 
-    def get_recent_logs(self, n: int = 100) -> List[Dict[str, Any]]:
+    def get_recent_logs(self, n: int = 100) -> list[dict[str, Any]]:
         """최근 로그 조회
 
         Args:
@@ -124,7 +124,7 @@ class SearchQualityLogger:
         # 최근 n개 반환
         return logs[-n:]
 
-    def get_quality_stats(self, n: int = 1000) -> Dict[str, Any]:
+    def get_quality_stats(self, n: int = 1000) -> dict[str, Any]:
         """품질 통계 분석
 
         Args:

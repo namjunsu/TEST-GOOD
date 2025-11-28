@@ -11,7 +11,7 @@ import time
 from collections import defaultdict
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, DefaultDict, Dict, List, Optional, Set
+from typing import Any, Optional
 
 from app.core.logging import get_logger
 
@@ -141,7 +141,7 @@ class KoreanTokenizer:
         else:
             self.use_kiwi = False
 
-    def tokenize(self, text: str) -> List[str]:
+    def tokenize(self, text: str) -> list[str]:
         """텍스트를 토큰으로 분할"""
         self.tokenize_count += 1
 
@@ -174,7 +174,7 @@ class KoreanTokenizer:
             return [t.lower() for t in text.split() if len(t) > self.MIN_TOKEN_LENGTH]
 
 
-def build_dynamic_stopwords(doc_freqs: Dict[str, int], n_docs: int,
+def build_dynamic_stopwords(doc_freqs: dict[str, int], n_docs: int,
                            df_threshold: float = 0.75, max_token_len: int = 3,
                            whitelist: set = None) -> set:
     """문서 빈도 기반 동적 불용어 도출
@@ -219,16 +219,16 @@ class BM25Store:
     k1: float
     b: float
     idf_mode: str
-    stopwords: Set[str]
+    stopwords: set[str]
     logger: logging.Logger
     tokenizer: KoreanTokenizer
-    documents: List[str]
-    metadata: List[Dict[str, Any]]
-    term_freqs: List[Dict[str, int]]
-    doc_freqs: DefaultDict[str, int]
-    doc_lens: List[int]
+    documents: list[str]
+    metadata: list[dict[str, Any]]
+    term_freqs: list[dict[str, int]]
+    doc_freqs: defaultdict[str, int]
+    doc_lens: list[int]
     avg_doc_len: float
-    vocab: Set[str]
+    vocab: set[str]
     search_count: int
     total_search_time: float
     index_time: float
@@ -239,7 +239,7 @@ class BM25Store:
         k1: Optional[float] = None,
         b: Optional[float] = None,
         idf_mode: str = "clipped",  # "rsj" | "log1p" | "clipped"
-        stopwords: Optional[Set[str]] = None,
+        stopwords: Optional[set[str]] = None,
     ) -> None:
         self.index_path = Path(index_path) if index_path else Path(self.DEFAULT_INDEX_PATH)
         self.k1 = k1 if k1 is not None else self.DEFAULT_K1
@@ -297,7 +297,7 @@ class BM25Store:
             self.logger.warning(f"Unknown IDF mode: {self.idf_mode}, using clipped")
             return max(0.0, rsj)
 
-    def _filter_tokens(self, tokens: List[str]) -> List[str]:
+    def _filter_tokens(self, tokens: list[str]) -> list[str]:
         """불용어 필터링"""
         if not self.stopwords:
             return tokens
@@ -425,7 +425,7 @@ class BM25Store:
             self.logger.error(f"BM25 인덱스 로드 실패: {e}")
             raise
 
-    def add_documents(self, texts: List[str], metadatas: List[Dict[str, Any]], batch_size: int = 100) -> None:
+    def add_documents(self, texts: list[str], metadatas: list[dict[str, Any]], batch_size: int = 100) -> None:
         """문서들을 인덱스에 추가 (배치 처리 최적화)"""
         if len(texts) != len(metadatas):
             raise ValueError("텍스트와 메타데이터 개수가 일치하지 않습니다")
@@ -487,7 +487,7 @@ class BM25Store:
             self.logger.error(f"BM25 문서 추가 실패: {e}")
             raise
 
-    def search(self, query: str, top_k: int = 5, snippet_max: int = 5000, **kwargs) -> List[Dict[str, Any]]:
+    def search(self, query: str, top_k: int = 5, snippet_max: int = 5000, **kwargs) -> list[dict[str, Any]]:
         """BM25 스코어로 문서 검색 (성능 추적 포함)
 
         Args:
@@ -629,7 +629,7 @@ class BM25Store:
 
         return dynamic_stopwords
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """BM25 인덱스 통계 (확장된 메트릭)"""
         tokenizer_stats = {
             "type": "kiwipiepy" if self.tokenizer.use_kiwi else "basic",

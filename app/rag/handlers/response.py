@@ -12,7 +12,7 @@ Strangler Fig 패턴:
 import hashlib
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from app.core.logging import get_logger
 from app.rag.utils.text import get_query_token_count
@@ -141,7 +141,7 @@ def clean_ui_metadata(query: str) -> str:
     return query
 
 
-def normalize_chunk_text(result: Dict[str, Any]) -> str:
+def normalize_chunk_text(result: dict[str, Any]) -> str:
     """청크 텍스트 정규화 (snippet/content/text 통일)"""
     return (
         result.get("snippet") or
@@ -232,7 +232,7 @@ def encode_file_ref(filename: str) -> Optional[str]:
 # 키워드 분석 함수들
 # ============================================================================
 
-def get_keyword_coverage(query: str, results: List[Dict]) -> int:
+def get_keyword_coverage(query: str, results: list[dict]) -> int:
     """쿼리와 검색 결과 간 도메인 키워드 교집합 개수 계산"""
     q_lower = query.lower()
     query_keywords = {kw for kw in DOMAIN_KEYWORDS if kw in q_lower}
@@ -263,7 +263,7 @@ def build_evidence_item(
     category: str = None,
     doctype: str = None,
     claimed_total: int = None
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """단일 Evidence 아이템 생성"""
     file_path = build_file_path(filename)
     ref = encode_file_ref(filename)
@@ -287,9 +287,9 @@ def build_evidence_item(
 
 
 def build_evidence_list(
-    doc_details: List[Dict[str, Any]],
+    doc_details: list[dict[str, Any]],
     retriever=None
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Evidence 목록 생성
 
     Args:
@@ -365,7 +365,7 @@ def format_search_card(
 
 def format_search_results(
     keywords: str,
-    doc_details: List[Dict[str, Any]],
+    doc_details: list[dict[str, Any]],
     is_count_query: bool = False
 ) -> str:
     """검색 결과 전체 포맷팅"""
@@ -397,13 +397,13 @@ def format_search_results(
 def build_standard_response(
     mode: str,
     text: str,
-    files: List[str],
+    files: list[str],
     count: int,
-    citations: List[Dict[str, Any]] = None,
+    citations: list[dict[str, Any]] = None,
     found: bool = True,
     retrieved_count: int = None,
     selected_count: int = None
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """표준 응답 딕셔너리 생성"""
     citations = citations or []
     retrieved_count = retrieved_count if retrieved_count is not None else count
@@ -424,7 +424,7 @@ def build_standard_response(
     }
 
 
-def build_error_response(mode: str, error: str) -> Dict[str, Any]:
+def build_error_response(mode: str, error: str) -> dict[str, Any]:
     """에러 응답 생성"""
     return build_standard_response(
         mode=mode,
@@ -435,7 +435,7 @@ def build_error_response(mode: str, error: str) -> Dict[str, Any]:
     )
 
 
-def build_empty_response(mode: str, message: str) -> Dict[str, Any]:
+def build_empty_response(mode: str, message: str) -> dict[str, Any]:
     """빈 결과 응답 생성"""
     return build_standard_response(
         mode=mode,

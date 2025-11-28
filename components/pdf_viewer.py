@@ -10,7 +10,7 @@ import os
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Optional
 
 import streamlit as st
 
@@ -204,7 +204,7 @@ class PDFViewer:
 
         st.markdown("---")
 
-    def _get_available_modes(self, info: PDFInfo) -> Tuple[List[ViewMode], ViewMode]:
+    def _get_available_modes(self, info: PDFInfo) -> tuple[list[ViewMode], ViewMode]:
         """사용 가능한 보기 모드 및 기본 모드 반환
 
         Returns:

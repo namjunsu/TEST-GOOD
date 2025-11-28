@@ -16,7 +16,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -43,7 +43,7 @@ class ScenarioTest:
                     title: str,
                     query: str,
                     expected_mode: str,
-                    expected_has_citations: bool) -> Dict[str, Any]:
+                    expected_has_citations: bool) -> dict[str, Any]:
         """단일 시나리오 실행
 
         Args:

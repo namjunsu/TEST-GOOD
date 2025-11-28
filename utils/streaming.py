@@ -13,7 +13,8 @@ Simulates ChatGPT-style incremental text rendering
 import asyncio
 import logging
 import time
-from typing import AsyncGenerator, Generator, Literal
+from collections.abc import AsyncGenerator, Generator
+from typing import Literal
 
 logger = logging.getLogger(__name__)
 

@@ -14,7 +14,6 @@ Architecture:
 """
 
 from pathlib import Path
-from typing import Dict, List, Set
 
 import yaml
 
@@ -23,11 +22,11 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 # Singleton pattern: 한 번만 로드
-_SYNONYM_DICT: Dict[str, List[str]] = {}
+_SYNONYM_DICT: dict[str, list[str]] = {}
 _LOADED = False
 
 
-def _load_domain_synonyms() -> Dict[str, List[str]]:
+def _load_domain_synonyms() -> dict[str, list[str]]:
     """YAML 파일에서 동의어 사전 로드 (Lazy loading)
 
     Returns:
@@ -123,7 +122,7 @@ def expand_for_strict_content(query: str) -> str:
 
     tokens = query.lower().split()  # 소문자 변환 후 분리
     expanded_tokens = []
-    seen: Set[str] = set()  # 중복 제거용
+    seen: set[str] = set()  # 중복 제거용
 
     for token in tokens:
         # 동의어 사전에서 확장
@@ -142,7 +141,7 @@ def expand_for_strict_content(query: str) -> str:
     return " ".join(expanded_tokens)
 
 
-def get_synonyms(keyword: str) -> List[str]:
+def get_synonyms(keyword: str) -> list[str]:
     """특정 키워드의 동의어 리스트 반환
 
     Args:

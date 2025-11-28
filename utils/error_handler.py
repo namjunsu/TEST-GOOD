@@ -12,9 +12,10 @@ Version: 2.0
 import functools
 import logging
 import traceback
+from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 # Streamlit 선택적 임포트
 try:

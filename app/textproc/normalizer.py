@@ -13,7 +13,6 @@
 
 import re
 import unicodedata
-from typing import List, Set
 
 # 하이픈 계열 유니코드 문자 (U+2010~U+2014, U+2212)
 HYPHEN_VARIANTS = {
@@ -126,7 +125,7 @@ def normalize_code(code: str, uppercase: bool = True) -> str:
     return code
 
 
-def generate_variants(code: str) -> List[str]:
+def generate_variants(code: str) -> list[str]:
     """코드 변형 생성 (구분자 보존 정규화 → 교차 변형 → 무공백)
 
     Args:
@@ -150,7 +149,7 @@ def generate_variants(code: str) -> List[str]:
     # 1) 구분자 보존 정규화 (NFKC + 하이픈 통일 + 공백 압축 + 대문자)
     base = normalize_text(code).upper()
 
-    variants: Set[str] = set()
+    variants: set[str] = set()
 
     # 2) 기본 표기 (하이픈 통일 상태)
     variants.add(base)
@@ -170,7 +169,7 @@ def generate_variants(code: str) -> List[str]:
     return sorted(variants)
 
 
-def extract_codes(text: str, normalize_result: bool = True) -> List[str]:
+def extract_codes(text: str, normalize_result: bool = True) -> list[str]:
     """텍스트에서 코드 패턴 추출
 
     Args:

@@ -10,14 +10,14 @@ v0 → v1 자동 매핑:
 """
 
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
 
-def normalize_performance_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_performance_config(cfg: dict[str, Any]) -> dict[str, Any]:
     """
     성능 설정 v0 → v1 정규화
 
@@ -54,7 +54,7 @@ def normalize_performance_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
     return cfg
 
 
-def _normalize_parallel(cfg: Dict[str, Any]) -> None:
+def _normalize_parallel(cfg: dict[str, Any]) -> None:
     """병렬 처리 설정 정규화"""
     parallel = cfg.get("parallel", {})
 
@@ -92,7 +92,7 @@ def _normalize_parallel(cfg: Dict[str, Any]) -> None:
         )
 
 
-def _normalize_ocr(cfg: Dict[str, Any]) -> None:
+def _normalize_ocr(cfg: dict[str, Any]) -> None:
     """OCR 설정 정규화"""
     ocr = cfg.get("ocr", {})
 
@@ -121,7 +121,7 @@ def _normalize_ocr(cfg: Dict[str, Any]) -> None:
     ocr.setdefault("max_pages", 30)
 
 
-def _normalize_cache(cfg: Dict[str, Any]) -> None:
+def _normalize_cache(cfg: dict[str, Any]) -> None:
     """캐시 설정 정규화"""
     cache = cfg.get("cache", {})
 
@@ -150,7 +150,7 @@ def _normalize_cache(cfg: Dict[str, Any]) -> None:
     )
 
 
-def _normalize_memory(cfg: Dict[str, Any]) -> None:
+def _normalize_memory(cfg: dict[str, Any]) -> None:
     """메모리 설정 정규화"""
     memory = cfg.get("memory", {})
 
@@ -182,7 +182,7 @@ def _normalize_memory(cfg: Dict[str, Any]) -> None:
         }
 
 
-def _normalize_documents(cfg: Dict[str, Any]) -> None:
+def _normalize_documents(cfg: dict[str, Any]) -> None:
     """문서 처리 설정 정규화"""
     docs = cfg.get("documents", {})
 
@@ -198,7 +198,7 @@ def _normalize_documents(cfg: Dict[str, Any]) -> None:
     docs.setdefault("max_file_size_mb", 50)
 
 
-def _normalize_logging(cfg: Dict[str, Any]) -> None:
+def _normalize_logging(cfg: dict[str, Any]) -> None:
     """로깅 설정 정규화"""
     logging = cfg.get("logging", {})
 

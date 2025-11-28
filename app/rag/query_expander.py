@@ -10,7 +10,7 @@ import threading
 import time
 import unicodedata
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, TypedDict
+from typing import Any, Optional, TypedDict
 
 import yaml
 
@@ -45,8 +45,8 @@ _TOKEN_RE = re.compile(r"[A-Za-z0-9\-_/]+|[가-힣]+", re.UNICODE)
 
 class Expansion(TypedDict):
     """쿼리 확장 결과 타입"""
-    keywords: List[str]
-    synonyms: Dict[str, List[str]]
+    keywords: list[str]
+    synonyms: dict[str, list[str]]
 
 
 def _extract_json_block(text: str) -> str:
@@ -99,7 +99,7 @@ def _normalize_token(token: str) -> str:
     return normalized
 
 
-def _variants(token: str) -> List[str]:
+def _variants(token: str) -> list[str]:
     """모델명/부품명 변형 생성 (하이픈/언더스코어/슬래시 제거)
 
     예: "LVM-180A" → ["lvm-180a", "lvm180a", "lvm 180a"]
@@ -125,7 +125,7 @@ def _variants(token: str) -> List[str]:
     return [v for v in variants if len(v) > 1]
 
 
-def _filter_tokens(tokens: List[str], stopwords: Set[str]) -> List[str]:
+def _filter_tokens(tokens: list[str], stopwords: set[str]) -> list[str]:
     """토큰 필터링 (정규화 + 불용어 + 조사 제거)
 
     중요: 도메인 키워드(DVR, NVR 등)는 보호
@@ -156,7 +156,7 @@ def _filter_tokens(tokens: List[str], stopwords: Set[str]) -> List[str]:
     return filtered
 
 
-def _quick_tokens(query: str) -> List[str]:
+def _quick_tokens(query: str) -> list[str]:
     """빠른 토큰화 (Fallback용, 정규식 기반)"""
     return _TOKEN_RE.findall(unicodedata.normalize("NFKC", query))
 
@@ -188,7 +188,7 @@ class _MemCache:
             ttl_sec: Time To Live (초), 기본 15분
         """
         self.ttl = ttl_sec
-        self._storage: Dict[str, tuple] = {}
+        self._storage: dict[str, tuple] = {}
         self._lock = threading.RLock()
 
     def _now(self) -> float:
@@ -200,7 +200,7 @@ class _MemCache:
         normalized = re.sub(r"\s+", " ", normalized)
         return normalized[:200]
 
-    def get(self, query: str) -> Optional[Dict[str, Any]]:
+    def get(self, query: str) -> Optional[dict[str, Any]]:
         """캐시에서 조회 (만료된 항목은 자동 제거)"""
         key = self._norm_key(query)
         with self._lock:
@@ -216,7 +216,7 @@ class _MemCache:
 
             return data
 
-    def set(self, query: str, data: Dict[str, Any]) -> None:
+    def set(self, query: str, data: dict[str, Any]) -> None:
         """캐시에 저장"""
         key = self._norm_key(query)
         with self._lock:
@@ -237,7 +237,7 @@ class QueryExpander:
             f"{len(self.domain_terms)}개 도메인 용어"
         )
 
-    def _load_search_stopwords(self) -> Set[str]:
+    def _load_search_stopwords(self) -> set[str]:
         """검색 불용어 로드"""
         try:
             # 환경변수 우선
@@ -251,7 +251,7 @@ class QueryExpander:
             logger.warning(f"⚠️ 검색 불용어 로드 실패, 기본값 사용: {e}")
             return {"및", "과", "해줘", "좀", "문서", "내용", "요약", "건"}
 
-    def _load_domain_terms(self) -> Set[str]:
+    def _load_domain_terms(self) -> set[str]:
         """도메인 특화 용어 로드 (방송장비 모델명 등)"""
         try:
             cfg_path = Path(os.getenv("FILTERS_CONFIG", str(CONFIG_PATH)))
@@ -272,7 +272,7 @@ class QueryExpander:
             logger.warning(f"⚠️ 도메인 용어 로드 실패: {e}")
             return set()
 
-    def expand_query(self, query: str) -> Dict[str, Any]:
+    def expand_query(self, query: str) -> dict[str, Any]:
         """사용자 질문에서 키워드 추출 및 확장
 
         Args:
@@ -331,7 +331,7 @@ class QueryExpander:
                     filtered_synonyms[key] = filtered_syns
 
             # 모든 키워드 수집 (필터링된 원본 + 동의어)
-            all_keywords: Set[str] = set(filtered_keywords)
+            all_keywords: set[str] = set(filtered_keywords)
             for syn_list in filtered_synonyms.values():
                 all_keywords.update(syn_list)
 
@@ -395,7 +395,7 @@ class QueryExpander:
             logger.warning(f"⚠️ Query expansion 실패, fallback 사용: {e}")
             return self._create_fallback_expansion(query)
 
-    def _create_fallback_expansion(self, query: str) -> Dict[str, Any]:
+    def _create_fallback_expansion(self, query: str) -> dict[str, Any]:
         """Fallback 쿼리 확장 (정규식 토큰화 + 필터링 + Variants)
 
         LLM 호출 실패 또는 JSON 파싱 실패 시 사용하는 단순 확장 로직.

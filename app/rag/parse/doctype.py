@@ -21,7 +21,7 @@ import threading
 import time
 import unicodedata
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import yaml
 
@@ -58,7 +58,7 @@ class DocumentTypeClassifier:
         }
 
     # ---------- 설정 로드/핫리로드 ----------
-    def _load_config(self) -> Dict[str, Any]:
+    def _load_config(self) -> dict[str, Any]:
         """설정 파일 로드 (mtime 추적)"""
         cfg_file = Path(self.config_path)
         if not cfg_file.exists():
@@ -94,7 +94,7 @@ class DocumentTypeClassifier:
             self.enabled = self.config.get("enable_doctype_classification", True)
             self._compiled = self._compile_rules(self.config.get("doctype", {}))
 
-    def _get_default_config(self) -> Dict[str, Any]:
+    def _get_default_config(self) -> dict[str, Any]:
         """기본 설정 반환 (음수 키워드, 가중치 포함)"""
         return {
             "enable_doctype_classification": True,
@@ -192,7 +192,7 @@ class DocumentTypeClassifier:
         return t.lower().strip()
 
     # ---------- 키워드 컴파일 ----------
-    def _compile_rules(self, doctype_cfg: Dict[str, Any]) -> Dict[str, Any]:
+    def _compile_rules(self, doctype_cfg: dict[str, Any]) -> dict[str, Any]:
         """
         키워드를 정규식으로 컴파일
 
@@ -238,8 +238,8 @@ class DocumentTypeClassifier:
 
     # ---------- 매칭 유틸 ----------
     def _match_all(
-        self, patterns: List[re.Pattern], text: str
-    ) -> List[Tuple[int, int, str]]:
+        self, patterns: list[re.Pattern], text: str
+    ) -> list[tuple[int, int, str]]:
         """
         모든 패턴 매칭 수행
 
@@ -252,7 +252,7 @@ class DocumentTypeClassifier:
                 hits.append((m.start(), m.end(), p.pattern))
         return hits
 
-    def classify(self, text: str, filename: str = "") -> Dict[str, Any]:
+    def classify(self, text: str, filename: str = "") -> dict[str, Any]:
         """
         문서 유형 분류
 
@@ -380,7 +380,7 @@ class DocumentTypeClassifier:
         if confidence < 0.5:
             self._metrics["low_confidence_count"] += 1
 
-    def get_metrics(self) -> Dict[str, Any]:
+    def get_metrics(self) -> dict[str, Any]:
         """분류 메트릭 반환"""
         return self._metrics.copy()
 
@@ -411,7 +411,7 @@ def get_classifier() -> DocumentTypeClassifier:
     return _classifier
 
 
-def classify_document(text: str, filename: str = "") -> Dict[str, Any]:
+def classify_document(text: str, filename: str = "") -> dict[str, Any]:
     """문서 유형 분류 (편의 함수)"""
     classifier = get_classifier()
     return classifier.classify(text, filename)

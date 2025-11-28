@@ -19,7 +19,7 @@ import os
 import re
 import threading
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Optional
 
 import yaml
 
@@ -45,7 +45,7 @@ class ResultsWithStats(list):
     score_stats 속성을 통해 점수 통계 정보도 제공합니다.
     """
 
-    def __init__(self, items: List[Dict[str, Any]], stats: Dict[str, float]):
+    def __init__(self, items: list[dict[str, Any]], stats: dict[str, float]):
         super().__init__(items)
         self.score_stats = stats
 
@@ -65,7 +65,7 @@ class HybridRetriever:
     enable_parallel: bool
     parallel_executor: Optional[ParallelSearchExecutor]
     metadata_db: MetadataDB
-    known_drafters: Set[str]
+    known_drafters: set[str]
     parser: QueryParser
     exact_match_enabled: bool
     exact_match: Optional[ExactMatchRetriever]
@@ -220,7 +220,7 @@ class HybridRetriever:
                     self._last_index_mtime = current_mtime
                     logger.info(f"✅ 인덱스 재로드 완료 ({len(self.bm25.documents)}개 문서)")
 
-    def _find_selected_document(self, selected_filename: str) -> Optional[Dict[str, Any]]:
+    def _find_selected_document(self, selected_filename: str) -> Optional[dict[str, Any]]:
         """
         선택된 문서를 MetadataDB에서 직접 검색 (SQL 레벨 필터링)
 
@@ -255,7 +255,7 @@ class HybridRetriever:
             logger.error(f"❌ 선택 문서 검색 실패: {e}")
             return None
 
-    def _search_fts(self, query: str, top_k: int) -> List[Dict[str, Any]]:
+    def _search_fts(self, query: str, top_k: int) -> list[dict[str, Any]]:
         """FTS (Full-Text Search) 검색 수행 with Query Expansion
 
         Args:
@@ -331,7 +331,7 @@ class HybridRetriever:
             logger.error(f"❌ FTS 검색 실패: {e}")
             return []
 
-    def _calculate_relevance_score(self, query: str, doc: Dict[str, Any]) -> float:
+    def _calculate_relevance_score(self, query: str, doc: dict[str, Any]) -> float:
         """쿼리와 문서 간 relevance 스코어 계산 (BM25 유사) + 파일명 매칭 강화
 
         Args:
@@ -405,7 +405,7 @@ class HybridRetriever:
 
         return max(0.0, min(ScoringConfig.MAX_FINAL_SCORE, final_score))
 
-    def search(self, query: str, top_k: int, mode: str = "chat", selected_filename: Optional[str] = None, strict_content: bool = False) -> List[Dict[str, Any]]:
+    def search(self, query: str, top_k: int, mode: str = "chat", selected_filename: Optional[str] = None, strict_content: bool = False) -> list[dict[str, Any]]:
         """검색 수행 v2.1
 
         Args:
@@ -785,7 +785,7 @@ class HybridRetriever:
             logger.error(traceback.format_exc())
             return []
 
-    def _apply_filename_bonus(self, query: str, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _apply_filename_bonus(self, query: str, results: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """파일명 유사도에 따라 점수 보너스 적용
 
         쿼리와 파일명이 매우 유사할 때 검색 순위를 높이기 위한 보정.
@@ -859,7 +859,7 @@ class HybridRetriever:
 
         return results
 
-    def get_metrics(self) -> Dict[str, Any]:
+    def get_metrics(self) -> dict[str, Any]:
         """검색 엔진 메트릭 조회 (v2.0 추가)
 
         Returns:

@@ -10,8 +10,9 @@ v2.0 변경사항:
 
 import logging
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Literal, Optional
+from typing import Literal, Optional
 
 import numpy as np
 import pytesseract

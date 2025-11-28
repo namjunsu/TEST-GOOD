@@ -33,7 +33,7 @@ import time
 from logging import Formatter, Logger, LogRecord, StreamHandler
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 # settings 모듈에서 LOG_DIR 가져오기 (fallback: 환경변수)
 try:
@@ -64,7 +64,7 @@ class JsonFormatter(Formatter):
     """
 
     def format(self, record: LogRecord) -> str:
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(record.created)),
             "level": record.levelname,
             "logger": record.name,

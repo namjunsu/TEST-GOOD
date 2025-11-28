@@ -17,7 +17,7 @@ v2.0 변경사항:
 import re
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import yaml
 
@@ -66,7 +66,7 @@ class TextCleaner:
             f"{len(self.protected)}개 보호 문자열"
         )
 
-    def _load_config(self, config_path: str) -> Dict[str, Any]:
+    def _load_config(self, config_path: str) -> dict[str, Any]:
         """설정 파일 로드
 
         Args:
@@ -95,7 +95,7 @@ class TextCleaner:
             logger.error(f"❌ 설정 로드 실패: {e}")
             return {}
 
-    def _compile_patterns(self) -> List[Tuple[re.Pattern, str]]:
+    def _compile_patterns(self) -> list[tuple[re.Pattern, str]]:
         """노이즈 패턴 컴파일 (플래그 지원)
 
         Returns:
@@ -126,7 +126,7 @@ class TextCleaner:
 
         return patterns
 
-    def _split_pages(self, text: str) -> List[List[str]]:
+    def _split_pages(self, text: str) -> list[list[str]]:
         """페이지 분할 (폼피드 또는 'Page/쪽' 패턴 기준)
 
         Args:
@@ -159,7 +159,7 @@ class TextCleaner:
         s = re.sub(r"[\s\-]+", " ", s).strip()
         return s
 
-    def clean(self, text: str) -> Tuple[str, Dict[str, Any]]:
+    def clean(self, text: str) -> tuple[str, dict[str, Any]]:
         """텍스트 노이즈 제거 v2.0
 
         Args:
@@ -177,8 +177,8 @@ class TextCleaner:
             return "", {}
 
         lines = text.split("\n")
-        noise_counts: Dict[str, Any] = {}
-        removed_samples: Dict[str, List[str]] = {}
+        noise_counts: dict[str, Any] = {}
+        removed_samples: dict[str, list[str]] = {}
 
         # 1. 패턴 기반 노이즈 제거 (보호 문자열 가드 포함)
         lines, pattern_counts, pattern_samples = self._remove_pattern_noise(lines)
@@ -213,8 +213,8 @@ class TextCleaner:
         return cleaned_text, noise_counts
 
     def _remove_pattern_noise(
-        self, lines: List[str]
-    ) -> Tuple[List[str], Dict[str, int], List[str]]:
+        self, lines: list[str]
+    ) -> tuple[list[str], dict[str, int], list[str]]:
         """패턴 기반 노이즈 제거 (보호 문자열 가드 포함)
 
         Args:
@@ -225,7 +225,7 @@ class TextCleaner:
         """
         counts = {desc: 0 for _, desc in self.noise_patterns}
         cleaned_lines = []
-        samples: List[str] = []
+        samples: list[str] = []
 
         for line in lines:
             is_noise = False
@@ -248,8 +248,8 @@ class TextCleaner:
         return cleaned_lines, counts, samples
 
     def _remove_repeated_lines(
-        self, lines: List[str]
-    ) -> Tuple[List[str], int, List[str]]:
+        self, lines: list[str]
+    ) -> tuple[list[str], int, list[str]]:
         """빈도 기반 반복 헤더/푸터 제거 (페이지 단위 스캔)
 
         3회 이상 반복되는 라인은 노이즈로 간주하고 제거
@@ -284,7 +284,7 @@ class TextCleaner:
         # 반복 라인 제거
         cleaned_lines = []
         removed_count = 0
-        samples: List[str] = []
+        samples: list[str] = []
 
         for line in lines:
             if self._normalize_line(line) in repeated:
@@ -297,8 +297,8 @@ class TextCleaner:
         return cleaned_lines, removed_count, samples
 
     def _deduplicate_consecutive_lines(
-        self, lines: List[str]
-    ) -> Tuple[List[str], int]:
+        self, lines: list[str]
+    ) -> tuple[list[str], int]:
         """연속된 중복 라인 제거
 
         동일한 라인이 연속해서 나타나면 max_duplicate_threshold개까지만 유지
@@ -331,7 +331,7 @@ class TextCleaner:
 
         return cleaned_lines, removed_count
 
-    def _normalize_blank_lines(self, lines: List[str]) -> List[str]:
+    def _normalize_blank_lines(self, lines: list[str]) -> list[str]:
         """연속된 빈 라인을 하나로 정리 (멱등성 보장)
 
         Args:
@@ -362,7 +362,7 @@ class TextCleaner:
 
         return cleaned_lines
 
-    def get_stats(self, noise_counts: Dict[str, Any]) -> str:
+    def get_stats(self, noise_counts: dict[str, Any]) -> str:
         """노이즈 제거 통계 문자열 생성
 
         Args:

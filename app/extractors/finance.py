@@ -13,7 +13,7 @@ LLM은 구조 재구성 및 인용만 담당, 계산은 하지 않음
 """
 
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from app.core.logging import get_logger
 
@@ -130,7 +130,7 @@ def normalize_mixed_currency(text: str) -> Optional[int]:
 # OCR 전처리 (원문/정규화문 2트랙)
 # ============================================================================
 
-def _preprocess_dual(text: str) -> Tuple[str, str]:
+def _preprocess_dual(text: str) -> tuple[str, str]:
     """OCR 텍스트를 원문/정규화문 2트랙으로 전처리
 
     Args:
@@ -213,7 +213,7 @@ ZERO_VAT_RE = re.compile(
 
 def _first_match_with_span(
     pattern: str, text: str
-) -> Optional[Tuple[str, Tuple[int, int], re.Match]]:
+) -> Optional[tuple[str, tuple[int, int], re.Match]]:
     """패턴 매칭 + span 정보 반환
 
     Args:
@@ -266,7 +266,7 @@ def _parse_num_and_unit(
 # 추출 메인 함수
 # ============================================================================
 
-def extract_financial_fields(text: str) -> Dict[str, Optional[int]]:
+def extract_financial_fields(text: str) -> dict[str, Optional[int]]:
     """텍스트에서 금액 필드 추출 (개선판: 혼합 통화, 곱셈, VAT 정책, 2트랙 탐색)
 
     Args:
@@ -294,7 +294,7 @@ def extract_financial_fields(text: str) -> Dict[str, Optional[int]]:
         >>> result["_meta"]["vat_mode"]
         'included'
     """
-    fields: Dict[str, Optional[int]] = {
+    fields: dict[str, Optional[int]] = {
         "unit_price": None,
         "qty": None,
         "amount": None,
@@ -307,7 +307,7 @@ def extract_financial_fields(text: str) -> Dict[str, Optional[int]]:
 
     def search_in_both(
         pattern: str
-    ) -> Optional[Tuple[str, Tuple[int, int], re.Match, bool]]:
+    ) -> Optional[tuple[str, tuple[int, int], re.Match, bool]]:
         """원문과 정규화문 모두에서 탐색 (정규화문 우선)"""
         for s, is_norm in ((norm, True), (raw, False)):
             res = _first_match_with_span(pattern, s)
@@ -317,7 +317,7 @@ def extract_financial_fields(text: str) -> Dict[str, Optional[int]]:
         return None
 
     # 필드별 1차 추출
-    spans: Dict[str, Tuple[int, int]] = {}
+    spans: dict[str, tuple[int, int]] = {}
 
     for field, patterns in FIELD_PATTERNS.items():
         for pat in patterns:
@@ -402,7 +402,7 @@ def extract_financial_fields(text: str) -> Dict[str, Optional[int]]:
 # 검증 함수 (VAT 정책 분기 포함)
 # ============================================================================
 
-def validate_financial_consistency(fields: Dict[str, Optional[int]]) -> Dict[str, Any]:
+def validate_financial_consistency(fields: dict[str, Optional[int]]) -> dict[str, Any]:
     """금액 필드 간 일관성 검증 (개선판: VAT 정책 분기)
 
     Args:
@@ -421,8 +421,8 @@ def validate_financial_consistency(fields: Dict[str, Optional[int]]) -> Dict[str
         - VAT 별도: amount + vat ≈ total (±1.5%)
         - VAT 10% 규칙: vat ≈ amount × 0.1 (±2%)
     """
-    errors: List[str] = []
-    warnings: List[str] = []
+    errors: list[str] = []
+    warnings: list[str] = []
 
     unit_price = fields.get("unit_price")
     qty = fields.get("qty")
@@ -510,7 +510,7 @@ def validate_financial_consistency(fields: Dict[str, Optional[int]]) -> Dict[str
 # 통합 API
 # ============================================================================
 
-def extract_and_validate(text: str) -> Dict[str, Any]:
+def extract_and_validate(text: str) -> dict[str, Any]:
     """금액 추출 + 검증을 한번에 수행
 
     Args:

@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import logging
 from enum import Enum
-from typing import Any, Dict
+from typing import Any
 
 # 표준 로거
 logger = logging.getLogger("app.core.errors")
@@ -122,7 +122,7 @@ class AppError(Exception):
             return f"{self.message} (상세: {self.details})"
         return self.message
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """직렬화 가능한 딕셔너리로 변환 (로깅/API 응답용)"""
         return {
             "type": self.__class__.__name__,

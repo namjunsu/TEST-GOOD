@@ -12,7 +12,7 @@ import sys
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Optional
 
 import networkx as nx
 
@@ -20,7 +20,7 @@ import networkx as nx
 class XRayAnalyzer:
     """Analyzes codebase to determine used/unused/reachable modules."""
 
-    def __init__(self, roots: List[str], entry_dirs: List[str]):
+    def __init__(self, roots: list[str], entry_dirs: list[str]):
         self.roots = [Path(r).resolve() for r in roots if Path(r).exists()]
         self.entry_dirs = entry_dirs
         self.base_path = Path.cwd()
@@ -67,7 +67,7 @@ class XRayAnalyzer:
         except Exception as e:
             print(f"Error loading coverage data: {e}", file=sys.stderr)
 
-    def find_entry_points(self) -> Set[str]:
+    def find_entry_points(self) -> set[str]:
         """Find all entry point modules."""
         entry_points = set()
 
@@ -178,7 +178,7 @@ class XRayAnalyzer:
 
         return None
 
-    def find_reachable_modules(self, entry_points: Set[str]) -> Set[str]:
+    def find_reachable_modules(self, entry_points: set[str]) -> set[str]:
         """Find all modules reachable from entry points."""
         reachable = set()
 
@@ -202,7 +202,7 @@ class XRayAnalyzer:
 
         return reachable
 
-    def classify_modules(self) -> Dict[str, str]:
+    def classify_modules(self) -> dict[str, str]:
         """Classify each module as USED, UNUSED, or REACHABLE."""
         classifications = {}
 
@@ -236,7 +236,7 @@ class XRayAnalyzer:
 
         return classifications
 
-    def generate_file_index(self, classifications: Dict[str, str]) -> str:
+    def generate_file_index(self, classifications: dict[str, str]) -> str:
         """Generate FILE_INDEX.md content."""
         lines = [
             "# File Index - RAG System X-Ray",
@@ -307,7 +307,7 @@ class XRayAnalyzer:
 
         return "\n".join(lines)
 
-    def generate_module_atlas(self, classifications: Dict[str, str]) -> str:
+    def generate_module_atlas(self, classifications: dict[str, str]) -> str:
         """Generate MODULE_ATLAS.md content."""
         lines = [
             "# Module Atlas - RAG System",

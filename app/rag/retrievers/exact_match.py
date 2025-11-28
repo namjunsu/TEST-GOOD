@@ -14,7 +14,7 @@ model_codes 테이블을 활용한 정확일치 검색
 """
 
 import time
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any
 
 from app.core.logging import get_logger
 from app.data.metadata_db import MetadataDB
@@ -29,13 +29,13 @@ except ImportError:
     logger.warning("⚠️ normalizer 모듈을 찾을 수 없습니다 (ExactMatchRetriever 비활성화)")
     NORMALIZER_AVAILABLE = False
 
-    def extract_codes(text: str, normalize_result: bool = True) -> List[str]:
+    def extract_codes(text: str, normalize_result: bool = True) -> list[str]:
         return []
 
     def normalize_code(code: str, uppercase: bool = True) -> str:
         return code.upper()
 
-    def generate_variants(code: str) -> List[str]:
+    def generate_variants(code: str) -> list[str]:
         return [code]
 
 
@@ -107,7 +107,7 @@ class ExactMatchRetriever:
             logger.debug(f"컬럼 확인 실패: {e}")
             return False
 
-    def search_codes(self, query: str) -> List[Tuple[int, float, str]]:
+    def search_codes(self, query: str) -> list[tuple[int, float, str]]:
         """코드 기반 정확일치 검색 v2.0
 
         Args:
@@ -167,7 +167,7 @@ class ExactMatchRetriever:
 
         return results
 
-    def _query_model_codes(self, variants: Set[str]) -> List[Tuple[int, float, str]]:
+    def _query_model_codes(self, variants: set[str]) -> list[tuple[int, float, str]]:
         """model_codes 테이블에서 정확일치 검색 v2.0
 
         배치 쿼리 + 경계 제약으로 라운드트립 최소화 및 오검출 방지
@@ -229,8 +229,8 @@ class ExactMatchRetriever:
             return []
 
     def _query_filename_matches(
-        self, variants: Set[str], original_codes: List[str]
-    ) -> List[Tuple[int, float, str]]:
+        self, variants: set[str], original_codes: list[str]
+    ) -> list[tuple[int, float, str]]:
         """파일명에서 코드 일치 검색 v2.0
 
         COLLATE NOCASE + UNION ALL 배치 쿼리로 인덱스 활용 및 라운드트립 절감
@@ -248,7 +248,7 @@ class ExactMatchRetriever:
 
         try:
             conn = self.db._get_conn()
-            results_map: Dict[int, Tuple[float, str]] = {}
+            results_map: dict[int, tuple[float, str]] = {}
 
             # 이스케이프 처리된 패턴 생성
             escaped_variants = [self._escape_like(v) for v in variants]
@@ -305,9 +305,9 @@ class ExactMatchRetriever:
 
     def _merge_results(
         self,
-        exact_matches: List[Tuple[int, float, str]],
-        filename_matches: List[Tuple[int, float, str]]
-    ) -> List[Tuple[int, float, str]]:
+        exact_matches: list[tuple[int, float, str]],
+        filename_matches: list[tuple[int, float, str]]
+    ) -> list[tuple[int, float, str]]:
         """검색 결과 병합 및 중복 제거
 
         - exact_code가 우선순위 (filename과 중복되면 exact_code 채택)
@@ -321,7 +321,7 @@ class ExactMatchRetriever:
             List of (doc_id, score, match_type) - doc_id 기준 정렬
         """
         # doc_id -> (score, match_type)
-        doc_scores: Dict[int, Tuple[float, str]] = {}
+        doc_scores: dict[int, tuple[float, str]] = {}
 
         # exact_code 먼저 추가 (최우선)
         for doc_id, score, match_type in exact_matches:
@@ -343,7 +343,7 @@ class ExactMatchRetriever:
 
         return results
 
-    def get_documents_by_ids(self, doc_ids: List[int]) -> List[Dict[str, Any]]:
+    def get_documents_by_ids(self, doc_ids: list[int]) -> list[dict[str, Any]]:
         """doc_id 리스트로 문서 메타데이터 조회
 
         Args:
@@ -391,7 +391,7 @@ class ExactMatchRetriever:
             logger.error(f"문서 조회 실패: {e}")
             return []
 
-    def search(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
+    def search(self, query: str, top_k: int = 10) -> list[dict[str, Any]]:
         """전체 검색 수행 (HybridRetriever 인터페이스 호환)
 
         Args:
@@ -463,7 +463,7 @@ class ExactMatchRetriever:
         logger.info(f"🎯 ExactMatch v2.0: {len(results)}건 반환 (score range: 0-10)")
         return results
 
-    def get_metrics(self) -> Dict[str, Any]:
+    def get_metrics(self) -> dict[str, Any]:
         """메트릭 조회
 
         Returns:

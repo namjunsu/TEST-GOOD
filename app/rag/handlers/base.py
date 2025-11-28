@@ -4,7 +4,7 @@
 """
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from app.core.logging import get_logger
 
@@ -21,11 +21,11 @@ class HandlerResponse:
         self,
         mode: str,
         text: str,
-        files: List[str],
+        files: list[str],
         count: int,
-        citations: Optional[List[Dict[str, Any]]] = None,
-        evidence: Optional[List[Dict[str, Any]]] = None,
-        status: Optional[Dict[str, Any]] = None,
+        citations: Optional[list[dict[str, Any]]] = None,
+        evidence: Optional[list[dict[str, Any]]] = None,
+        status: Optional[dict[str, Any]] = None,
         latency_ms: float = 0.0,
     ):
         self.mode = mode
@@ -41,7 +41,7 @@ class HandlerResponse:
         }
         self.latency_ms = latency_ms
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환 (기존 pipeline.py 응답 형식 호환)"""
         return {
             "mode": self.mode,
@@ -85,7 +85,7 @@ class BaseHandler(ABC):
         return self.pipeline.generator
 
     @abstractmethod
-    def handle(self, query: str, **kwargs) -> Dict[str, Any]:
+    def handle(self, query: str, **kwargs) -> dict[str, Any]:
         """쿼리 처리
 
         Args:
@@ -97,7 +97,7 @@ class BaseHandler(ABC):
         """
         pass
 
-    def _make_error_response(self, error: str) -> Dict[str, Any]:
+    def _make_error_response(self, error: str) -> dict[str, Any]:
         """에러 응답 생성"""
         return {
             "mode": self.mode,
@@ -113,7 +113,7 @@ class BaseHandler(ABC):
             },
         }
 
-    def _make_empty_response(self, message: str) -> Dict[str, Any]:
+    def _make_empty_response(self, message: str) -> dict[str, Any]:
         """빈 결과 응답 생성"""
         return {
             "mode": self.mode,

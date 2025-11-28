@@ -13,7 +13,6 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Set
 
 # 로깅 설정
 logging.basicConfig(
@@ -49,7 +48,7 @@ class AutoIndexWatcher:
         self.check_interval = check_interval
 
         # 이미 인덱싱된 파일 추적
-        self.indexed_files: Set[str] = set()
+        self.indexed_files: set[str] = set()
         self.file_hashes = {}  # 파일 해시 저장 (변경 감지용)
 
         # RAG 스토어 초기화
@@ -80,7 +79,7 @@ class AutoIndexWatcher:
             logger.warning(f"해시 계산 실패 {file_path.name}: {e}")
             return ""
 
-    def _scan_files(self) -> Set[str]:
+    def _scan_files(self) -> set[str]:
         """현재 존재하는 모든 PDF 파일 스캔"""
         pdf_files = set()
         for pdf_path in self.docs_dir.rglob("*.pdf"):

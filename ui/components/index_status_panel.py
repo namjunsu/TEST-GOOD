@@ -10,7 +10,7 @@
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import requests
 import streamlit as st
@@ -26,7 +26,7 @@ INGEST_STATUS_ICONS = {
 }
 
 
-def fetch_index_metrics(api_base_url: str, timeout: int = 5) -> Dict[str, Any]:
+def fetch_index_metrics(api_base_url: str, timeout: int = 5) -> dict[str, Any]:
     """인덱스 메트릭 조회 (테스트 가능한 순수 함수)
 
     Args:
@@ -75,7 +75,7 @@ def _format_last_reindex(timestamp: Optional[str]) -> str:
         return timestamp
 
 
-def _get_int_metric(metrics: Dict[str, Any], key: str, default: int = 0) -> int:
+def _get_int_metric(metrics: dict[str, Any], key: str, default: int = 0) -> int:
     """타입 안전한 정수 메트릭 추출
 
     Args:

@@ -20,7 +20,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional
 
 # 프로젝트 루트를 sys.path에 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -181,7 +181,7 @@ class DocumentIngester:
         n = re.sub(r"__+", "_", n)
         return n
 
-    def _extract_text_from_pdf(self, pdf_path: Path) -> Tuple[str, Dict[str, Any]]:
+    def _extract_text_from_pdf(self, pdf_path: Path) -> tuple[str, dict[str, Any]]:
         """PDF 텍스트 추출"""
         try:
             import pdfplumber
@@ -261,7 +261,7 @@ class DocumentIngester:
 
     def _is_duplicate(
         self, file_path: Path, file_hash: str, norm_filename: str
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         """중복 판정"""
         if self.dry_run or not self.db:
             return False, ""
@@ -280,7 +280,7 @@ class DocumentIngester:
 
         return False, ""
 
-    def process_file(self, pdf_path: Path) -> Dict[str, Any]:
+    def process_file(self, pdf_path: Path) -> dict[str, Any]:
         """단일 파일 처리"""
         start_time = time.time()
         result = {

@@ -15,7 +15,7 @@ import logging
 import threading
 import time
 from collections import OrderedDict
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional
 
 from app.rag.smart_cache_key import generate_smart_cache_key
 
@@ -35,7 +35,7 @@ class QueryCache:
         self.max_size = max_size
         self.ttl = ttl
         self._lock = threading.RLock()
-        self.cache: OrderedDict[str, Tuple[Any, float]] = OrderedDict()
+        self.cache: OrderedDict[str, tuple[Any, float]] = OrderedDict()
         self.stats = {
             "hits": 0,
             "misses": 0,
@@ -43,7 +43,7 @@ class QueryCache:
             "expired": 0
         }
         # 스탬피드 방지: 계산 중인 키 추적
-        self._inflight: Dict[str, threading.Event] = {}
+        self._inflight: dict[str, threading.Event] = {}
         # monotonic clock (wall-clock 대신)
         self._monotonic = time.monotonic
 
@@ -210,7 +210,7 @@ class QueryCache:
             self._inflight.clear()
             logger.info("Cache cleared")
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get cache statistics (thread-safe)"""
         with self._lock:
             total = self.stats["hits"] + self.stats["misses"]
@@ -276,7 +276,7 @@ def get_cached_result(query: str, mode: Optional[str] = None,
     return cache.get(query, mode, namespace)
 
 
-def get_cache_stats() -> Dict[str, Any]:
+def get_cache_stats() -> dict[str, Any]:
     """Get cache statistics"""
     cache = get_cache()
     return cache.get_stats()

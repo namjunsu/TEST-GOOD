@@ -19,57 +19,20 @@
 
 import os
 import re
-from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
 import yaml
 
 from app.core.logging import get_logger
+from app.rag.router_models import QueryMode, RouteDecision, ScoreStats
 from app.rag.routing_monitor import get_monitor
 from config.constants import RouterConfig
 
 logger = get_logger(__name__)
 
-
-@dataclass
-class ScoreStats:
-    """검색 결과 점수 통계"""
-    top1: float
-    top2: float
-    top3: float
-    delta12: float
-    delta13: float
-    ratio12: float  # top1 / max(top2, 1e-9)
-    hits: int
-
-
-@dataclass
-class RouteDecision:
-    """쿼리 라우팅 결정 (모드 + 의도 플래그)
-
-    2025-11-10: 모드와 의도를 분리하여 파이프라인 동작을 명확화
-    - mode: 4개 모드 (COST, DOCUMENT, SEARCH, QA) 유지
-    - intent flags: 각 모드 내에서 세부 동작 결정
-    - 예: SEARCH + list_intent=True → LLM 건너뛰고 목록 스키마 반환
-    """
-    mode: "QueryMode"
-    reason: str
-    confidence: float
-
-    # 의도 플래그
-    list_intent: bool = False        # 목록 반환 의도 (리스트, 목록, 전부, 모든)
-    content_intent: bool = False     # 내용 반환 의도 (요약, 미리보기, 내용)
-    cost_intent: bool = False        # 비용 조회 의도 (총액, 금액, 얼마)
-
-    # 추출된 파라미터 (필터링용)
-    drafter: Optional[str] = None    # 기안자 이름
-    year: Optional[int] = None       # 연도 (YYYY)
-    date_range: Optional[tuple[str, str]] = None  # 날짜 범위 (시작, 끝)
-
-    # 정렬 기준 (최신순, 오래된순 등)
-    sort_by: Optional[list[str]] = None  # ["date_desc"], ["date_asc"] 등
+# 호환성을 위한 re-export
+__all__ = ["QueryRouter", "QueryMode", "RouteDecision", "ScoreStats"]
 
 
 # 헬퍼 함수: 파일명 정규화 (공백/특수문자 제거)
@@ -91,27 +54,6 @@ def _score(qn: str, tn: str) -> float:
     diff = abs(len(qn) - len(tn))
     length_bonus = max(0.0, RouterConfig.LENGTH_BONUS_MAX - diff * RouterConfig.LENGTH_PENALTY_FACTOR)
     return min(1.0, base + length_bonus)
-
-
-class QueryMode(Enum):
-    """쿼리 모드 (단순화: 8개 → 5개)
-
-    2025-11-19: SEARCH_CONTENT_ONLY 추가
-    - 사용자가 "내용에 X 들어간 문서만" 요청 시 정밀 검색 모드
-    - QueryExpander, 파일명/메타데이터 가중치 비활성화
-    - BM25 기반 본문 일치만 반환
-
-    2025-11-07: 모드 구조 재설계
-    - DOC_ANCHORED 제거 (과도한 필드 추출 문제)
-    - PREVIEW + SUMMARY → DOCUMENT 통합
-    - LIST + SEARCH + LIST_FIRST → SEARCH 통합
-    """
-
-    COST = "cost"  # 비용 조회 (renamed from COST_SUM)
-    DOCUMENT = "document"  # 문서 내용/요약 (통합: PREVIEW + SUMMARY)
-    SEARCH = "search"  # 문서 검색 (통합: LIST + SEARCH + LIST_FIRST)
-    SEARCH_CONTENT_ONLY = "search_content_only"  # 정밀 내용 검색 (본문 일치만)
-    QA = "qa"  # 질답 모드 (RAG 파이프라인, 기본)
 
 
 class QueryRouter:

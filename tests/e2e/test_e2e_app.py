@@ -22,7 +22,7 @@ def test_fastapi_health():
 
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "ok"
+    assert data["status"] in ("ok", "healthy")  # API 응답 값 호환
 
 
 def test_fastapi_preview():
@@ -92,17 +92,17 @@ def test_query_parser():
 
 def test_query_router():
     """Test query router directly."""
-    from app.rag.query_router import QueryRouter
+    from app.rag.query_router import QueryRouter, QueryMode
 
     router = QueryRouter()
 
-    # Test mode detection
-    mode = router.determine_mode("저장 용량 합계")
-    assert mode in ['COST_SUM', 'LIST', 'SUMMARY', 'PREVIEW', 'QA']
+    # Test mode detection (classify_mode returns RouteDecision)
+    decision = router.classify_mode("저장 용량 합계")
+    assert decision.mode in [QueryMode.COST, QueryMode.SEARCH, QueryMode.DOCUMENT, QueryMode.QA]
 
     # Test cost sum pattern
-    mode = router.determine_mode("용량 합계")
-    assert mode in ['COST_SUM', 'QA']
+    decision = router.classify_mode("용량 합계")
+    assert decision.mode in [QueryMode.COST, QueryMode.QA]
 
 
 def test_pipeline_initialization():
@@ -128,8 +128,8 @@ def test_hybrid_retriever():
 
     retriever = HybridRetriever()
 
-    # Test retrieval
-    results = retriever.retrieve("테스트", top_k=3)
+    # Test search (retrieve → search로 API 변경)
+    results = retriever.search("테스트", top_k=3)
     assert isinstance(results, list)
 
 

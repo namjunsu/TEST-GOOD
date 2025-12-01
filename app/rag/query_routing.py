@@ -16,6 +16,15 @@ from typing import Any, Optional
 
 from app.config.settings import settings
 from app.core.logging import get_logger
+from app.rag.handlers.response import (
+    RE_MULTI_SPACE,
+    RE_PDF_SPACE,
+    RE_SIMPLE_MATH,
+    RE_UI_AUTHOR,
+    RE_UI_DATE,
+    RE_UI_TAG,
+    RE_YEAR_EXTRACT,
+)
 from app.rag.utils.text import get_query_token_count
 from app.rag.utils.text import norm_chunk_text as _norm_chunk_text
 from app.utils.sqlite_helpers import connect_metadata
@@ -76,20 +85,12 @@ def clean_ui_metadata(query: str) -> str:
     # 원본 보존 (디버깅용)
     original = query
 
-    # 패턴 1: 🏷 [텍스트] · 형태 제거
-    query = re.sub(r"🏷[^·]+·\s*", "", query)
-
-    # 패턴 2: 📅 [날짜] · 형태 제거
-    query = re.sub(r"📅[^·]+·\s*", "", query)
-
-    # 패턴 3: ✍ [텍스트] (마지막 항목, · 없음)
-    query = re.sub(r"✍[^·]+", "", query)
-
-    # 패턴 4: "pdf", "해 줘" 같은 불필요한 확장자 언급 제거
-    query = re.sub(r"\s+pdf\s+", " ", query)
-
-    # 연속 공백 정리
-    query = re.sub(r"\s+", " ", query).strip()
+    # 컴파일된 패턴 사용 (response.py에서 import)
+    query = RE_UI_TAG.sub("", query)
+    query = RE_UI_DATE.sub("", query)
+    query = RE_UI_AUTHOR.sub("", query)
+    query = RE_PDF_SPACE.sub(" ", query)
+    query = RE_MULTI_SPACE.sub(" ", query).strip()
 
     # 변경사항이 있으면 로그 출력
     if query != original:
@@ -200,9 +201,8 @@ def is_smalltalk(query: str) -> bool:
 def is_simple_math(query: str) -> bool:
     """단순 산술 질의 감지 (예: 1+1은?, 2*3=?)"""
     q_stripped = query.strip()
-    # 정규식: 숫자 연산자 숫자 (옵션: = 결과)
-    math_pattern = r"^\s*\d+\s*[\+\-\*/]\s*\d+\s*(=\s*\d+)?\s*[은?]*\s*$"
-    return bool(re.match(math_pattern, q_stripped))
+    # 컴파일된 패턴 사용 (response.py에서 import)
+    return bool(RE_SIMPLE_MATH.match(q_stripped))
 
 
 def has_domain_keyword(query: str) -> bool:
@@ -293,7 +293,7 @@ def _encode_file_ref(filename: str) -> Optional[str]:
             return f"doc:{token}"
 
         # 2. Fallback: docs 폴더 검색
-        year_match = re.search(r"(\d{4})-", filename)
+        year_match = RE_YEAR_EXTRACT.search(filename)
         if year_match:
             year = year_match.group(1)
             file_path = Path(f"docs/year_{year}") / filename

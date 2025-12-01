@@ -53,6 +53,23 @@ DOMAIN_KEYWORDS = {
     "최정은", "한건희", "김경현", "김수연", "김창수", "송경원",
 }
 
+# 컴파일된 정규식 패턴 (모듈 로드 시 1회 컴파일)
+RE_SMALLTALK = re.compile(
+    r"^(안녕|안녕하세요|안녕하십니까|감사합니다?|고마워요?|"
+    r"thanks|thank you|hi|hello|hey|bye|goodbye|잘가|안녕히)[.!?\s]*$"
+)
+RE_SIMPLE_MATH = re.compile(r"^\s*\d+\s*[\+\-\*/]\s*\d+\s*(=\s*\d+)?\s*[은?]*\s*$")
+RE_UI_TAG = re.compile(r"🏷[^·]+·\s*")
+RE_UI_DATE = re.compile(r"📅[^·]+·\s*")
+RE_UI_AUTHOR = re.compile(r"✍[^·]+")
+RE_PDF_SPACE = re.compile(r"\s+pdf\s+")
+RE_MULTI_SPACE = re.compile(r"\s+")
+RE_PAGE_TAG = re.compile(r"\[페이지\s*\d+\]")
+RE_OCR_TAG = re.compile(r"\[OCR[^\]]*\]")
+RE_DATE_PREFIX = re.compile(r"^\d{4}-\d{2}-\d{2}_")
+RE_PDF_EXT = re.compile(r"\.pdf$", re.IGNORECASE)
+RE_YEAR_EXTRACT = re.compile(r"(\d{4})-")
+
 
 # ============================================================================
 # 쿼리 분류 함수들
@@ -66,12 +83,8 @@ def is_smalltalk(query: str) -> bool:
     if s in SMALLTALK_PATTERNS:
         return True
 
-    # 2. 정규식 패턴
-    smalltalk_regex = (
-        r"^(안녕|안녕하세요|안녕하십니까|감사합니다?|고마워요?|"
-        r"thanks|thank you|hi|hello|hey|bye|goodbye|잘가|안녕히)[.!?\s]*$"
-    )
-    if re.fullmatch(smalltalk_regex, s):
+    # 2. 정규식 패턴 (컴파일된 RE_SMALLTALK 사용)
+    if RE_SMALLTALK.fullmatch(s):
         return True
 
     return False
@@ -80,8 +93,7 @@ def is_smalltalk(query: str) -> bool:
 def is_simple_math(query: str) -> bool:
     """단순 산술 질의 감지"""
     q_stripped = query.strip()
-    math_pattern = r"^\s*\d+\s*[\+\-\*/]\s*\d+\s*(=\s*\d+)?\s*[은?]*\s*$"
-    return bool(re.match(math_pattern, q_stripped))
+    return bool(RE_SIMPLE_MATH.match(q_stripped))
 
 
 def has_domain_keyword(query: str) -> bool:
@@ -126,12 +138,12 @@ def clean_ui_metadata(query: str) -> str:
     """UI에서 복사한 메타데이터 태그 제거"""
     original = query
 
-    # 패턴들 제거
-    query = re.sub(r"🏷[^·]+·\s*", "", query)
-    query = re.sub(r"📅[^·]+·\s*", "", query)
-    query = re.sub(r"✍[^·]+", "", query)
-    query = re.sub(r"\s+pdf\s+", " ", query)
-    query = re.sub(r"\s+", " ", query).strip()
+    # 컴파일된 패턴들로 제거
+    query = RE_UI_TAG.sub("", query)
+    query = RE_UI_DATE.sub("", query)
+    query = RE_UI_AUTHOR.sub("", query)
+    query = RE_PDF_SPACE.sub(" ", query)
+    query = RE_MULTI_SPACE.sub(" ", query).strip()
 
     if query != original:
         logger.info(
@@ -153,9 +165,9 @@ def normalize_chunk_text(result: dict[str, Any]) -> str:
 
 def clean_text_preview(text: str) -> str:
     """텍스트 미리보기에서 노이즈 제거"""
-    clean = re.sub(r"\[페이지\s*\d+\]", "", text)
-    clean = re.sub(r"\[OCR[^\]]*\]", "", clean)
-    clean = re.sub(r"\s+", " ", clean).strip()
+    clean = RE_PAGE_TAG.sub("", text)
+    clean = RE_OCR_TAG.sub("", clean)
+    clean = RE_MULTI_SPACE.sub(" ", clean).strip()
     return clean
 
 
@@ -165,14 +177,14 @@ def clean_text_preview(text: str) -> str:
 
 def format_title_from_filename(filename: str) -> str:
     """파일명에서 제목 추출"""
-    title = re.sub(r"^\d{4}-\d{2}-\d{2}_", "", filename)
-    title = re.sub(r"\.pdf$", "", title, flags=re.IGNORECASE)
+    title = RE_DATE_PREFIX.sub("", filename)
+    title = RE_PDF_EXT.sub("", title)
     return title.replace("_", " ")
 
 
 def build_file_path(filename: str) -> str:
     """파일명에서 경로 생성"""
-    year_match = re.search(r"(\d{4})-", filename)
+    year_match = RE_YEAR_EXTRACT.search(filename)
     if year_match:
         year = year_match.group(1)
         return f"docs/year_{year}/{filename}"
@@ -206,7 +218,7 @@ def encode_file_ref(filename: str) -> Optional[str]:
             return f"doc:{token}"
 
         # 2. Fallback: docs 폴더 검색
-        year_match = re.search(r"(\d{4})-", filename)
+        year_match = RE_YEAR_EXTRACT.search(filename)
         if year_match:
             year = year_match.group(1)
             file_path = Path(f"docs/year_{year}") / filename

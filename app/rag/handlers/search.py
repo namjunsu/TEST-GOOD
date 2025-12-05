@@ -537,7 +537,7 @@ class SearchHandler(BaseHandler):
             if doc["text_preview"]:
                 clean_text = clean_text_preview(doc["text_preview"])
                 if clean_text:
-                    preview = clean_text[:80]
+                    preview = clean_text[:200]
                     card_lines.append(f"   📝 {preview}...")
 
             cards.append("\n".join(card_lines))

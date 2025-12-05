@@ -1,0 +1,25 @@
+[Unit]
+Description=AI-CHAT FastAPI Backend
+After=network.target
+
+[Service]
+Type=simple
+User=wnstn4647
+Group=wnstn4647
+WorkingDirectory=/home/wnstn4647/AI-CHAT
+Environment="PATH=/home/wnstn4647/AI-CHAT/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/home/wnstn4647/AI-CHAT/.venv/bin/uvicorn app.api.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+# 로깅
+StandardOutput=append:/home/wnstn4647/AI-CHAT/logs/api.log
+StandardError=append:/home/wnstn4647/AI-CHAT/logs/api.log
+
+# 보안 강화
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/home/wnstn4647/AI-CHAT
+
+[Install]
+WantedBy=multi-user.target

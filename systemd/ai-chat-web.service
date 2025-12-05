@@ -1,0 +1,25 @@
+[Unit]
+Description=AI-CHAT Streamlit Web Interface
+After=network.target ai-chat-api.service
+
+[Service]
+Type=simple
+User=wnstn4647
+Group=wnstn4647
+WorkingDirectory=/home/wnstn4647/AI-CHAT
+Environment="PATH=/home/wnstn4647/AI-CHAT/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/home/wnstn4647/AI-CHAT/.venv/bin/streamlit run web_interface.py --server.port 8501 --server.address 0.0.0.0
+Restart=always
+RestartSec=5
+
+# 로깅
+StandardOutput=append:/home/wnstn4647/AI-CHAT/logs/web.log
+StandardError=append:/home/wnstn4647/AI-CHAT/logs/web.log
+
+# 보안 강화
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/home/wnstn4647/AI-CHAT
+
+[Install]
+WantedBy=multi-user.target

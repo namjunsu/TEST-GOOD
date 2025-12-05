@@ -357,23 +357,14 @@ class DocumentHandler(BaseHandler):
 
     def _route_document_query(self, query: str) -> dict[str, Any]:
         """문서 질의 라우팅 결정"""
-        try:
-            from app.rag.pipeline import route_query
-            routing = route_query(query)
-            return {
-                "detailed_mode": routing.get("detailed_mode", False),
-                "detected_section": routing.get("detected_section"),
-                "needs_summary": routing.get("needs_summary", False),
-                "max_tokens": routing.get("max_tokens", 800),
-            }
-        except ImportError:
-            # 폴백: 기본 라우팅
-            return {
-                "detailed_mode": "자세" in query or "상세" in query,
-                "detected_section": detect_section(query),
-                "needs_summary": "요약" in query or "정리" in query,
-                "max_tokens": 800,
-            }
+        from app.rag.query_routing import route_query
+        routing = route_query(query)
+        return {
+            "detailed_mode": routing.get("detailed_mode", False),
+            "detected_section": routing.get("detected_section"),
+            "needs_summary": routing.get("needs_summary", False),
+            "max_tokens": routing.get("max_tokens", 800),
+        }
 
     def _generate_answer(
         self,
@@ -397,19 +388,28 @@ class DocumentHandler(BaseHandler):
             )
         except Exception as e:
             logger.warning(f"⚠️ LLM 응답 생성 실패: {e}", exc_info=True)
-            # 요약 실패 시 원본 내용의 앞부분을 보여줌
-            preview = full_text[:2000].strip()
+            # 모드별 폴백 응답 차별화
             filename = metadata.get("filename", "알 수 없음")
             drafter = metadata.get("drafter") or "정보 없음"
             date = metadata.get("display_date") or metadata.get("date") or "정보 없음"
 
+            if routing.get("detailed_mode"):
+                # 자세히 모드: 더 긴 원본 제공
+                preview = full_text[:3000].strip()
+                return (
+                    f"**문서명**: {filename}\n"
+                    f"**기안자**: {drafter} | **날짜**: {date}\n\n"
+                    f"---\n\n"
+                    f"**원본 내용**:\n\n{preview}..."
+                )
+            # 일반 모드: 짧은 미리보기 + 안내
+            preview = full_text[:1500].strip()
             return (
-                f"**문서 요약을 생성하지 못했습니다.**\n\n"
                 f"**문서명**: {filename}\n"
-                f"**기안자**: {drafter}\n"
-                f"**날짜**: {date}\n\n"
+                f"**기안자**: {drafter} | **날짜**: {date}\n\n"
                 f"---\n\n"
-                f"**원본 내용 미리보기**:\n\n{preview}..."
+                f"**내용 미리보기**:\n\n{preview}...\n\n"
+                f"전체 내용은 '자세히 알려줘'로 요청하세요."
             )
 
     def _generate_llm_answer(
@@ -420,11 +420,25 @@ class DocumentHandler(BaseHandler):
         routing: dict[str, Any],
     ) -> str:
         """LLM을 통한 응답 생성"""
-        # LLM 접근 시도
-        if not (hasattr(self.generator, "rag") and hasattr(self.generator.rag, "llm")):
-            raise RuntimeError("LLM 접근 실패")
+        # LLM 접근 시도 (다양한 경로 지원)
+        llm = None
 
-        llm = self.generator.rag.llm
+        # 경로 1: generator.rag.llm (QuickFixGenerator)
+        if hasattr(self.generator, "rag") and self.generator.rag:
+            rag = self.generator.rag
+            # Lazy loading 보장
+            if hasattr(rag, "_ensure_llm_loaded"):
+                rag._ensure_llm_loaded()
+            if hasattr(rag, "llm") and rag.llm:
+                llm = rag.llm
+
+        # 경로 2: generator.llm (DummyGenerator)
+        if llm is None and hasattr(self.generator, "llm") and self.generator.llm:
+            llm = self.generator.llm
+
+        if llm is None:
+            logger.error(f"LLM 접근 실패: generator type={type(self.generator)}")
+            raise RuntimeError("LLM 접근 실패")
 
         # 프롬프트 생성
         llm_prompt, system_msg = self._build_llm_prompt(
@@ -440,10 +454,11 @@ class DocumentHandler(BaseHandler):
             routing=routing,
         )
 
-        # LLM 호출
+        # LLM 호출 (llama_cpp 직접 접근)
         from llama_cpp import Llama
-        if isinstance(llm.llm, Llama):
-            output = llm.llm.create_chat_completion(
+        llm_instance = getattr(llm, "llm", llm)  # llm.llm 또는 llm 직접
+        if isinstance(llm_instance, Llama):
+            output = llm_instance.create_chat_completion(
                 messages=[
                     {"role": "system", "content": system_msg},
                     {"role": "user", "content": llm_prompt},
@@ -459,7 +474,16 @@ class DocumentHandler(BaseHandler):
 
             return raw_result.strip()
 
-        raise RuntimeError(f"LLM 타입 불일치: {type(llm.llm)}")
+        # 폴백: generate_response 메서드 사용
+        if hasattr(llm, "generate_response"):
+            logger.info("LLM generate_response 폴백 사용")
+            chunks = [{"snippet": full_text[:8000], "content": full_text[:8000]}]
+            response = llm.generate_response(llm_prompt, chunks, max_retries=1)
+            if hasattr(response, "answer"):
+                return response.answer
+            return str(response)
+
+        raise RuntimeError(f"LLM 타입 불일치: {type(llm_instance)}")
 
     def _build_llm_prompt(
         self,

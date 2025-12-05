@@ -19,8 +19,12 @@ from typing import Any, Optional
 
 from app.core.logging import get_logger
 from app.utils.sqlite_helpers import connect_metadata  # v2.1: 공용 커넥터 사용
+from app.config.settings import settings  # v2.2: 설정에서 DB 경로 가져오기
 
 logger = get_logger(__name__)
+
+# v2.2: 프로젝트 루트 기준 절대 경로 (실행 위치 무관)
+_DEFAULT_DB_PATH = settings.DB_PATHS.get("metadata", str(settings.PROJECT_ROOT / "metadata.db"))
 
 
 class MetadataDB:
@@ -31,7 +35,7 @@ class MetadataDB:
     _local: threading.local
     _docs_root: Path
 
-    def __init__(self, db_path: str = "metadata.db") -> None:
+    def __init__(self, db_path: str = _DEFAULT_DB_PATH) -> None:
         self._db_path = db_path
         self._local = threading.local()
         self._docs_root = Path("docs").resolve()  # 문서 루트 경로

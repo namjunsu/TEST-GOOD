@@ -233,3 +233,219 @@ general_terms:
   ccu:
     - CCU
     - ccu
+
+# ========== 유지보수/작업 용어 ==========
+maintenance_terms:
+  수리:
+    - 수리
+    - 고장
+    - 보수
+    - 수선
+    - 정비
+    - 수리비
+
+  교체:
+    - 교체
+    - 교환
+    - 대체
+    - 리플레이스
+
+  폐기:
+    - 폐기
+    - 불용
+    - 처분
+    - 제거
+
+# ========== 장비 유형 ==========
+equipment_types:
+  카메라:
+    - 카메라
+    - Camera
+    - CAMERA
+    - camera
+    - 캠코더
+    - Camcorder
+
+  모니터:
+    - 모니터
+    - Monitor
+    - MONITOR
+    - monitor
+    - 디스플레이
+    - Display
+
+  마이크:
+    - 마이크
+    - Microphone
+    - MICROPHONE
+    - microphone
+    - Mic
+    - mic
+
+  스위처:
+    - 스위처
+    - Switcher
+    - SWITCHER
+    - switcher
+    - 스위쳐
+
+  믹서:
+    - 믹서
+    - Mixer
+    - MIXER
+    - mixer
+    - 오디오믹서
+    - Audio Mixer
+
+  조명:
+    - 조명
+    - Light
+    - LIGHT
+    - light
+    - Lighting
+    - 라이트
+
+  렌즈:
+    - 렌즈
+    - Lens
+    - LENS
+    - lens
+
+  삼각대:
+    - 삼각대
+    - Tripod
+    - TRIPOD
+    - tripod
+
+  케이블:
+    - 케이블
+    - Cable
+    - CABLE
+    - cable
+    - 케이블류
+
+  배터리:
+    - 배터리
+    - Battery
+    - BATTERY
+    - battery
+    - 건전지
+    - 밧데리
+    - 밧떼리
+
+  트라이포드:
+    - 트라이포드
+    - Tripod
+    - TRIPOD
+    - tripod
+    - 트라이포트
+    - 삼각대
+
+  헬리캠:
+    - 헬리캠
+    - 헬리콥터캠
+    - Helicam
+    - 드론캠
+    - Drone
+    - 드론
+
+  인터컴:
+    - 인터컴
+    - Intercom
+    - INTERCOM
+    - intercom
+    - 인터콤
+
+  안테나:
+    - 안테나
+    - Antenna
+    - ANTENNA
+    - antenna
+    - 앤테나
+
+  커넥터:
+    - 커넥터
+    - Connector
+    - CONNECTOR
+    - connector
+    - 컨넥터
+
+  컨버터:
+    - 컨버터
+    - Converter
+    - CONVERTER
+    - converter
+    - 변환기
+
+  스테디캠:
+    - 스테디캠
+    - Steadicam
+    - STEADICAM
+    - steadicam
+    - 짐벌
+    - Gimbal
+
+  지미집:
+    - 지미집
+    - Jimmy Jib
+    - JimmyJib
+    - 지미짚
+    - 크레인
+
+# ========== 방송 전문 용어 ==========
+broadcast_terms:
+  부조:
+    - 부조
+    - 부조정실
+    - 부조실
+    - Sub Control
+
+  주조:
+    - 주조
+    - 주조정실
+    - 주조실
+    - Master Control
+    - MCR
+
+  중계:
+    - 중계
+    - 중계차
+    - OB
+    - OB Van
+    - 야외중계
+
+  송출:
+    - 송출
+    - 송출실
+    - On-Air
+    - 온에어
+
+  인제스트:
+    - 인제스트
+    - Ingest
+    - INGEST
+    - 인제스터
+
+# ========== 커넥터/인터페이스 ==========
+connectors:
+  bnc:
+    - BNC
+    - bnc
+    - 비엔씨
+
+  xlr:
+    - XLR
+    - xlr
+    - 캐논커넥터
+
+  tally:
+    - Tally
+    - TALLY
+    - tally
+    - 탈리
+
+  ifb:
+    - IFB
+    - ifb
+    - 인이어
+    - In-Ear

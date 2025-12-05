@@ -368,6 +368,15 @@ class DocumentIngester:
                 except (IndexError, AttributeError):
                     logger.debug("작성일자 그룹 추출 실패")
 
+            # 작성일 추출 (검토서 양식: "작성일 2021. 06. 21.")
+            if "작성일자" not in korean_fields:
+                review_date_match = re.search(r"작성일\s+(\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.?)", raw_text)
+                if review_date_match:
+                    try:
+                        korean_fields["작성일"] = review_date_match.group(1)
+                    except (IndexError, AttributeError):
+                        logger.debug("작성일 그룹 추출 실패")
+
             # 기안자 추출 (다양한 구분자 허용: 공백, 탭, ㅣ, |, :, ：)
             drafter_match = re.search(r"기안자[\s\|\ㅣ:：\t]*([가-힣]{2,10})", raw_text)
             if drafter_match:

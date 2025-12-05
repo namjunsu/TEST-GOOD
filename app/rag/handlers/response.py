@@ -164,11 +164,72 @@ def normalize_chunk_text(result: dict[str, Any]) -> str:
 
 
 def clean_text_preview(text: str) -> str:
-    """텍스트 미리보기에서 노이즈 제거"""
+    """텍스트 미리보기에서 노이즈 제거 및 핵심 내용 추출"""
     clean = RE_PAGE_TAG.sub("", text)
     clean = RE_OCR_TAG.sub("", clean)
+
+    # 0. 검토서 양식: 첫 줄이 제목 (기술관리팀 보도기술관리파트 / 작성일 이전)
+    review_match = re.search(
+        r"^(.+?(?:검토|교체|분석|계획|방안|보고))\s*(?:기술관리팀|작성일|\d+\.\s*개요)",
+        clean
+    )
+    if review_match:
+        title = review_match.group(1).strip()
+        if len(title) > 5 and "기안서" not in title:
+            return title[:100]
+
+    # 1. "제목" 이후 실제 제목만 추출 (제목 끝 패턴으로 종료)
+    title_match = re.search(
+        r"제\s*목\s+(.+?(?:의\s*건|검토서?|요청서?|보고서?|계획서?|결과서?|현황|안내))",
+        clean
+    )
+    if title_match:
+        title = title_match.group(1).strip()
+        if len(title) > 5:
+            return title[:100]
+
+    # 2. "제목" 이후 숫자.내용 이전까지만 추출
+    title_match2 = re.search(r"제\s*목\s+(.+?)(?=\s*\d+\.\s*)", clean)
+    if title_match2:
+        title = title_match2.group(1).strip()
+        if len(title) > 5:
+            return title[:100]
+
+    # 3. 형식적 텍스트 패턴 제거 (fallback)
+    form_patterns = [
+        r"기안서\([^)]*\)",
+        r"장비구매/수리>?\s*기안서",
+        r"업무협조전",
+        r"CHANNEL\s*MEDIATECH",
+        r"Channel\s*MEDIATECH",
+        r"기술관리팀[-\s]*보도기술관리파트[-\s]*\d*",
+        r"문서번호[^제]*",
+        r"신청구분[^제]*",
+        r"기안부서[^제]*",
+        r"시행일자[^제]*",
+        r"기안자[^제]*",
+        r"기안일자[^제]*",
+        r"기안일[^제]*",
+        r"보존기간\s*\d+년",
+        r"파트장\s*팀장\s*대표이사",
+        r"결재\s*합의",
+        r"기결",
+        r"수신및참조자?[^제]*",
+        r"\d{4}[-./]\d{1,2}[-./]\d{1,2}\s*~?\s*\d{0,4}[-./]?\d{0,2}[-./]?\d{0,2}",
+        r"\d{1,2}:\d{2}",
+        r"[-\d]+00\d+",
+    ]
+
+    for pattern in form_patterns:
+        clean = re.sub(pattern, " ", clean, flags=re.IGNORECASE)
+
+    # 다중 공백 정리
     clean = RE_MULTI_SPACE.sub(" ", clean).strip()
-    return clean
+
+    # 앞부분 불필요한 문자 제거
+    clean = re.sub(r"^[\s\-\d./]+", "", clean)
+
+    return clean[:100] if len(clean) > 100 else clean
 
 
 # ============================================================================

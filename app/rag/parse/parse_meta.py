@@ -262,8 +262,8 @@ class MetaParser:
         if action_date:
             action_date = self._normalize_date(action_date)
 
-        # 파일명 힌트 (없을 때만)
-        if not (display_date and display_date != "정보 없음"):
+        # 파일명 힌트 (날짜 정보가 없거나 "정보 없음"일 때)
+        if not display_date or display_date.strip() == "" or display_date == "정보 없음":
             fname = metadata.get("filename") or ""
             import re
 
@@ -333,6 +333,15 @@ class MetaParser:
 
         # YYYY년 M월 D일 → YYYY-MM-DD
         m = re.search(r"(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일", s)
+        if m:
+            try:
+                y, mm, dd = m.groups()
+                return f"{y}-{mm.zfill(2)}-{dd.zfill(2)}"
+            except (IndexError, AttributeError, ValueError):
+                pass
+
+        # 2021. 06. 21. → 2021-06-21 (검토서 양식: 4자리 연도 + 공백 + 점)
+        m = re.search(r"\b(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?\s*$", s)
         if m:
             try:
                 y, mm, dd = m.groups()

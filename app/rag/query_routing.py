@@ -140,12 +140,38 @@ def route_query(query: str) -> dict[str, Any]:
         if any(k in nq for k in ["요약", "summary", "한줄", "한 문장"]):
             needs_summary = True
 
-    # 4) 리트리버 파라미터 (상세 모드 시 상향)
-    retriever_params = {
-        "top_k": 8 if detailed else 5,
-        "chunk_merge": True if detailed else False,
-        "max_context_tokens": 3200 if detailed else 2000,
-    }
+    # 4) 리트리버 파라미터 (모드별 최적화)
+    # - 금액/수치 질문: 관련 청크를 더 많이 가져와서 표 전체 확보
+    # - 요약: 문서 전체 맥락 필요
+    # - 일반 QA: 정확한 답변을 위해 청크 병합 활성화
+    is_numeric_query = any(k in nq for k in ["얼마", "금액", "비용", "합계", "총액", "단가"])
+
+    if detailed:
+        retriever_params = {
+            "top_k": 10,
+            "chunk_merge": True,
+            "max_context_tokens": 4000,
+        }
+    elif needs_summary:
+        retriever_params = {
+            "top_k": 8,
+            "chunk_merge": True,
+            "max_context_tokens": 3500,
+        }
+    elif is_numeric_query:
+        # 금액 질문: 표 전체를 가져오기 위해 청크 병합 필수
+        retriever_params = {
+            "top_k": 6,
+            "chunk_merge": True,
+            "max_context_tokens": 2500,
+        }
+    else:
+        # 일반 QA: 청크 병합으로 컨텍스트 연속성 보장
+        retriever_params = {
+            "top_k": 5,
+            "chunk_merge": True,
+            "max_context_tokens": 2000,
+        }
 
     # 5) 프롬프트/토큰 (settings 중앙 설정 사용)
     if detailed:

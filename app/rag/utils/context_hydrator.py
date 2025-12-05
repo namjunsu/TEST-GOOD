@@ -72,11 +72,17 @@ def hydrate_context(chunks: list[dict[str, Any]], max_len: int = 10000, mode: st
     }
 
     parts = []
+    seen_texts = set()  # 중복 제거용
 
-    # 1. 청크에서 텍스트 추출 (키 폴백 체인)
+    # 1. 청크에서 텍스트 추출 (키 폴백 체인 + 중복 제거)
     for chunk in chunks:
         text = _extract_text_from_chunk(chunk, metrics)
         if text:
+            # 중복 체크: 텍스트의 처음 200자를 해시로 사용
+            text_hash = text[:200]
+            if text_hash in seen_texts:
+                continue
+            seen_texts.add(text_hash)
             parts.append(text)
             metrics["chunks_used"] += 1
 

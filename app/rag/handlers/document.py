@@ -420,27 +420,7 @@ class DocumentHandler(BaseHandler):
         routing: dict[str, Any],
     ) -> str:
         """LLM을 통한 응답 생성"""
-        # LLM 접근 시도 (다양한 경로 지원)
-        llm = None
-
-        # 경로 1: generator.rag.llm (QuickFixGenerator)
-        if hasattr(self.generator, "rag") and self.generator.rag:
-            rag = self.generator.rag
-            # Lazy loading 보장
-            if hasattr(rag, "_ensure_llm_loaded"):
-                rag._ensure_llm_loaded()
-            if hasattr(rag, "llm") and rag.llm:
-                llm = rag.llm
-
-        # 경로 2: generator.llm (DummyGenerator)
-        if llm is None and hasattr(self.generator, "llm") and self.generator.llm:
-            llm = self.generator.llm
-
-        if llm is None:
-            logger.error(f"LLM 접근 실패: generator type={type(self.generator)}")
-            raise RuntimeError("LLM 접근 실패")
-
-        # 프롬프트 생성
+        # 프롬프트 생성 (먼저 준비)
         llm_prompt, system_msg = self._build_llm_prompt(
             query=query,
             full_text=full_text,
@@ -448,16 +428,64 @@ class DocumentHandler(BaseHandler):
             routing=routing,
         )
 
+        # 컨텍스트 준비 (8000자 제한)
+        context = full_text[:8000]
+
+        # 모드 결정
+        if routing.get("detailed_mode"):
+            mode = "rag"
+        elif routing.get("needs_summary"):
+            mode = "summarize"
+        else:
+            mode = "rag"
+
+        # ===== 경로 1: _LLMAdapter.generate_from_context() 사용 (권장) =====
+        if hasattr(self.generator, "rag") and self.generator.rag:
+            rag = self.generator.rag
+            if hasattr(rag, "generate_from_context"):
+                logger.info(f"🎯 _LLMAdapter.generate_from_context() 사용 (mode={mode})")
+                raw_result = rag.generate_from_context(
+                    query=llm_prompt,
+                    context=context,
+                    temperature=0.3,
+                    mode=mode,
+                )
+
+                # 에러 응답 체크
+                if raw_result.startswith("[E_GENERATE]"):
+                    raise RuntimeError(raw_result)
+
+                # 요약 모드 후처리
+                if routing.get("needs_summary"):
+                    return self._format_summary_output(raw_result, metadata)
+
+                return raw_result.strip()
+
+        # ===== 경로 2: llama_cpp.Llama 직접 접근 (폴백) =====
+        llm = None
+        if hasattr(self.generator, "rag") and self.generator.rag:
+            rag = self.generator.rag
+            if hasattr(rag, "llm") and rag.llm:
+                llm = rag.llm  # QwenLLM
+
+        if llm is None and hasattr(self.generator, "llm") and self.generator.llm:
+            llm = self.generator.llm
+
+        if llm is None:
+            logger.error(f"LLM 접근 실패: generator type={type(self.generator)}")
+            raise RuntimeError("LLM 접근 실패")
+
         # 토큰 제한 조정
         max_tokens = self._calculate_max_tokens(
             content_length=len(full_text),
             routing=routing,
         )
 
-        # LLM 호출 (llama_cpp 직접 접근)
+        # llama_cpp.Llama 접근 (QwenLLM.llm)
         from llama_cpp import Llama
-        llm_instance = getattr(llm, "llm", llm)  # llm.llm 또는 llm 직접
+        llm_instance = getattr(llm, "llm", llm)
         if isinstance(llm_instance, Llama):
+            logger.info("🔧 llama_cpp.Llama 직접 접근 (폴백)")
             output = llm_instance.create_chat_completion(
                 messages=[
                     {"role": "system", "content": system_msg},
@@ -468,17 +496,16 @@ class DocumentHandler(BaseHandler):
             )
             raw_result = output["choices"][0]["message"]["content"]
 
-            # 요약 모드 후처리
             if routing.get("needs_summary"):
                 return self._format_summary_output(raw_result, metadata)
 
             return raw_result.strip()
 
-        # 폴백: generate_response 메서드 사용
+        # ===== 경로 3: generate_response 메서드 사용 (최후 폴백) =====
         if hasattr(llm, "generate_response"):
-            logger.info("LLM generate_response 폴백 사용")
-            chunks = [{"snippet": full_text[:8000], "content": full_text[:8000]}]
-            response = llm.generate_response(llm_prompt, chunks, max_retries=1)
+            logger.info("🔧 LLM generate_response 폴백 사용")
+            chunks = [{"snippet": context, "content": context}]
+            response = llm.generate_response(llm_prompt, chunks, max_retries=1, mode=mode)
             if hasattr(response, "answer"):
                 return response.answer
             return str(response)

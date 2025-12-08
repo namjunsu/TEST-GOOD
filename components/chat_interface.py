@@ -296,11 +296,11 @@ def _normalize_rag_response(resp: Any) -> dict:
     # None 체크
     if resp is None:
         logger.warning("Received None response from RAG")
-        return {"text": "", "evidence": [], "status": {}, "diagnostics": {}}
+        return {"text": "", "evidence": [], "status": {}, "diagnostics": {}, "similar_documents": []}
 
     # 문자열인 경우
     if isinstance(resp, str):
-        return {"text": resp, "evidence": [], "status": {}, "diagnostics": {}}
+        return {"text": resp, "evidence": [], "status": {}, "diagnostics": {}, "similar_documents": []}
 
     # 객체인 경우 (RAGResponse 등)
     # text, answer 필드 모두 지원
@@ -316,11 +316,13 @@ def _normalize_rag_response(resp: Any) -> dict:
         )
         status = getattr(resp, "status", {})
         diagnostics = getattr(resp, "diagnostics", {})
+        similar_documents = getattr(resp, "similar_documents", []) or []
         return {
             "text": str(text),
             "evidence": evidence,
             "status": status,
             "diagnostics": diagnostics,
+            "similar_documents": similar_documents,
         }
 
     # dict인 경우
@@ -335,16 +337,18 @@ def _normalize_rag_response(resp: Any) -> dict:
         )
         status = resp.get("status", {})
         diagnostics = resp.get("diagnostics", {})
+        similar_documents = resp.get("similar_documents") or []
         return {
             "text": str(text),
             "evidence": evidence,
             "status": status,
             "diagnostics": diagnostics,
+            "similar_documents": similar_documents,
         }
 
     # 그 외 알 수 없는 타입
     logger.warning(f"Unknown response type: {type(resp)}")
-    return {"text": str(resp), "evidence": [], "status": {}, "diagnostics": {}}
+    return {"text": str(resp), "evidence": [], "status": {}, "diagnostics": {}, "similar_documents": []}
 
 
 def _initialize_chat_state() -> None:
@@ -558,6 +562,61 @@ def _display_evidence_section(evidence_list: list, msg_idx: int) -> None:
             st.markdown("---")
             remaining = len(evidence_list) - MAX_DISPLAY
             st.info(f"📄 {remaining}건의 문서가 더 있습니다. (현재 상위 {MAX_DISPLAY}건만 표시)")
+
+
+def _display_similar_documents_section(similar_docs: list, msg_idx: int) -> None:
+    """유사 문서 추천 섹션 표시 (2025-12-08)
+
+    검색 결과와 유사한 문서를 표시합니다.
+
+    Args:
+        similar_docs: 유사 문서 리스트 [{filename, title, similarity, date, ...}, ...]
+        msg_idx: 메시지 인덱스 (expander 상태 관리용)
+    """
+    if not similar_docs:
+        return
+
+    with st.expander(
+        f"🔗 유사 문서 추천 ({len(similar_docs)}건)",
+        expanded=False,
+    ):
+        for i, doc in enumerate(similar_docs, 1):
+            filename = doc.get("filename", "unknown")
+            title = doc.get("title", filename)
+            similarity = doc.get("similarity", 0)
+            date = doc.get("date", "")
+            drafter = doc.get("drafter", "")
+            category = doc.get("category", "")
+
+            # 유사도 백분율 계산
+            similarity_pct = int(similarity * 100)
+
+            # 간결한 정보 표시
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                st.markdown(f"**{i}. {title}**")
+                meta_parts = []
+                if date:
+                    meta_parts.append(f"📅 {date}")
+                if drafter:
+                    meta_parts.append(f"👤 {drafter}")
+                if category:
+                    meta_parts.append(f"📁 {category}")
+                if meta_parts:
+                    st.caption(" | ".join(meta_parts))
+
+            with col2:
+                # 유사도 표시 (색상으로 구분)
+                if similarity_pct >= 70:
+                    st.success(f"{similarity_pct}%")
+                elif similarity_pct >= 50:
+                    st.warning(f"{similarity_pct}%")
+                else:
+                    st.info(f"{similarity_pct}%")
+
+            # 구분선 (마지막 제외)
+            if i < len(similar_docs):
+                st.markdown("")
 
 
 def _validate_message_structure(message: Any) -> bool:
@@ -894,6 +953,11 @@ def _display_chat_history(messages: list[dict[str, str]]) -> None:
                     st.session_state.chat_options.get("show_evidence", True)):
                     _display_evidence_section(message["evidence"], msg_idx)
 
+                # 유사 문서 추천 표시 (2025-12-08)
+                if (message["role"] == "assistant" and
+                    message.get("similar_documents")):
+                    _display_similar_documents_section(message["similar_documents"], msg_idx)
+
         except Exception as e:
             logger.error(f"Error displaying message: {e}")
             # 표시 오류는 사용자에게 알리지 않고 로그만 남김
@@ -966,7 +1030,12 @@ def _generate_ai_response(
         return {"text": error_info["message"], "evidence": []}  # 에러 메시지 반환
 
 
-def _add_message(role: Literal["user", "assistant"], content: str, evidence: Optional[list] = None) -> None:
+def _add_message(
+    role: Literal["user", "assistant"],
+    content: str,
+    evidence: Optional[list] = None,
+    similar_documents: Optional[list] = None,
+) -> None:
     """메시지 추가
 
     세션 상태에 새로운 메시지를 추가합니다.
@@ -976,6 +1045,7 @@ def _add_message(role: Literal["user", "assistant"], content: str, evidence: Opt
         role: 메시지 역할 (user 또는 assistant)
         content: 메시지 내용
         evidence: 출처 문서 리스트 (선택사항)
+        similar_documents: 유사 문서 리스트 (선택사항, 2025-12-08)
     """
     message: ChatMessage = {
         "role": role,
@@ -986,6 +1056,10 @@ def _add_message(role: Literal["user", "assistant"], content: str, evidence: Opt
     # Evidence 추가 (있는 경우만)
     if evidence:
         message["evidence"] = evidence
+
+    # 유사 문서 추가 (있는 경우만, 2025-12-08)
+    if similar_documents:
+        message["similar_documents"] = similar_documents
 
     st.session_state.messages.append(message)
 
@@ -1131,6 +1205,11 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                         current_msg_idx = len(st.session_state.messages)
                         _display_evidence_section(response["evidence"], current_msg_idx)
 
+                    # 유사 문서 추천 표시 (2025-12-08)
+                    if response.get("similar_documents"):
+                        current_msg_idx = len(st.session_state.messages)
+                        _display_similar_documents_section(response["similar_documents"], current_msg_idx)
+
                     # 진단 패널 (DIAG_RAG=true일 때만 표시)
                     if DIAG_RAG and response.get("diagnostics"):
                         diag = response["diagnostics"]
@@ -1180,8 +1259,13 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                                     st.session_state.evidence_history.append(ev)
                         logger.info(f"📚 Evidence 히스토리 업데이트: 총 {len(st.session_state.evidence_history)}건")
 
-                    # 메시지 저장 (텍스트 + evidence)
-                    _add_message(ChatConfig.ROLE_ASSISTANT, response["text"], evidence=response.get("evidence"))
+                    # 메시지 저장 (텍스트 + evidence + similar_documents)
+                    _add_message(
+                        ChatConfig.ROLE_ASSISTANT,
+                        response["text"],
+                        evidence=response.get("evidence"),
+                        similar_documents=response.get("similar_documents"),
+                    )
                 else:
                     # 응답이 없으면 기본 에러 메시지
                     error_msg = ChatConfig.ERROR_GENERIC

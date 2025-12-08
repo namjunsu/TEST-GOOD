@@ -43,27 +43,36 @@ class QwenLLM(BaseRAGLLM):
     ANSWER_LANGUAGE = "한국어"
     CITATION_FORMAT = "[파일명.pdf]"
 
-    # 프롬프트 템플릿
+    # 프롬프트 템플릿 (2025-12-08: 답변 품질 개선 - 범위 제한 강화)
     IMPROVED_SYSTEM_PROMPT = f"""당신은 {SYSTEM_ROLE}입니다.
-주어진 문서 내용을 바탕으로 정확하고 구체적인 답변을 제공해야 합니다.
 
-중요 지침:
-1. 문서에서 직접 찾을 수 있는 정보만 제공하세요
-2. 숫자, 금액, 날짜는 정확하게 인용하세요
-3. 불확실한 정보는 "문서에서 확인할 수 없음"이라고 명시하세요
-4. 답변은 문서 내용을 기반으로 상세하고 완전하게 작성하세요
-5. 반드시 {ANSWER_LANGUAGE}로 답변하세요"""
+[핵심 원칙 - 반드시 지켜주세요]
+★ 질문이 요청한 범위만 답변하세요. 요청하지 않은 정보는 포함하지 마세요.
+  - "개요만" → 개요 섹션만 답변
+  - "비용만" → 비용 정보만 답변
+  - "무슨 내용이야?" → 3-5문장으로 핵심 요약만
+
+[답변 규칙]
+1. 첫 문장에서 질문의 핵심 답변을 제시하세요.
+2. 문서에 있는 정보만 사용하세요. 추측 금지.
+3. 숫자/금액/날짜는 정확하게 인용하세요.
+4. 출처: [파일명.pdf] 형식으로 표시하세요.
+5. 반드시 {ANSWER_LANGUAGE}로 답변하세요.
+
+[금지사항]
+- 질문 범위를 넘어선 추가 정보 금지
+- 문서 전체를 나열하는 것 금지
+- 과장이나 확대해석 금지"""
 
     IMPROVED_QUERY_TEMPLATE = """문서 내용:
 {context}
 
 질문: {query}
 
-위 문서를 바탕으로 질문에 대해 답변해주세요.
-- 관련 정보가 있다면 구체적인 내용을 포함하세요
-- 금액이 있다면 정확한 숫자를 제시하세요
-- 날짜가 있다면 명시하세요
-- 출처는 {CITATION_FORMAT} 형식으로 표시하세요
+★ 위 질문이 요청한 범위만 답변하세요. 요청하지 않은 정보는 포함하지 마세요.
+- 금액 질문 → 금액만 답변
+- 개요/요약 질문 → 3-5문장으로 핵심만
+- 특정 항목 질문 → 해당 항목만
 
 답변:""".replace("{CITATION_FORMAT}", CITATION_FORMAT)
 
@@ -470,12 +479,12 @@ A:"""
                          mode: str = "rag") -> RAGResponse:
         """RAG 응답 생성 (복합 질문 처리 및 적응형 길이 조정 통합)"""
 
-        # 모드별 토큰 예산 적용 (지연 최적화)
+        # 모드별 토큰 예산 적용 (2025-12-08: fallback 값을 .env와 동기화)
         mode_token_budgets = {
-            "chat": int(os.getenv("CHAT_MAX_TOKENS", "64")),
-            "rag": int(os.getenv("RAG_MAX_TOKENS", "160")),
-            "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", "1500")),
-            "summary": int(os.getenv("SUMMARY_MAX_TOKENS", "1500")),  # 상세 요약용
+            "chat": int(os.getenv("CHAT_MAX_TOKENS", "512")),      # 64 → 512
+            "rag": int(os.getenv("RAG_MAX_TOKENS", "3072")),       # 160 → 3072
+            "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", "2048")),
+            "summary": int(os.getenv("SUMMARY_MAX_TOKENS", "2048")),  # 상세 요약용
         }
         mode_max_tokens = mode_token_budgets.get(mode.lower(), self.config.max_tokens)
         self.logger.info(f"🎯 Mode={mode}, max_tokens={mode_max_tokens} (budget: {mode_token_budgets.get(mode.lower(), 'N/A')})")

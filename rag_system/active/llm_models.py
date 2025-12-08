@@ -61,14 +61,14 @@ class RAGResponse:
     adaptive_length_used: bool = False
 
 
-# 토큰 예산 단일 설정
+# 토큰 예산 단일 설정 (2025-12-08: 답변 품질 개선 - 토큰 증가)
 MODE_TOKEN_CONFIG = {
-    "chat": {"max": 64, "context": 256},
-    "rag": {"max": 160, "context": 800},
-    "summarize": {"max": 1200, "context": 4000},
-    "full_document": {"max": 1200, "context": 4000},
-    "conversational": {"max": 1500, "context": 4000},
-    "default": {"max": DEFAULT_MAX_TOKENS, "context": 2048},
+    "chat": {"max": 512, "context": 1024},       # 64 → 512 (일반 대화도 충분한 응답)
+    "rag": {"max": 3072, "context": 4000},       # 160 → 3072 (.env RAG_MAX_TOKENS와 동기화)
+    "summarize": {"max": 2048, "context": 4000}, # 1200 → 2048 (상세 요약)
+    "full_document": {"max": 2048, "context": 4000},
+    "conversational": {"max": 2048, "context": 4000},
+    "default": {"max": 1024, "context": 2048},   # 512 → 1024
 }
 
 

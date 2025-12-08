@@ -304,6 +304,10 @@ class QueryRouter:
         if not self.EXISTS_CHECK_PATTERN.search(query):
             return None
 
+        # 2025-12-08: "관련 문서 있어?" 패턴은 검색 의도이므로 SEARCH로 넘김
+        if self.SEARCH_INTENT_PATTERN.search(query):
+            return None  # _check_search_mode에서 처리
+
         if has_filename or has_doc_reference:
             logger.info("🎯 모드 결정: DOCUMENT (특정 문서 내용 확인)")
             reason = "exists_check_with_doc_reference"

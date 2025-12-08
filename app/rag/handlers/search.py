@@ -555,6 +555,16 @@ class SearchHandler(BaseHandler):
         # Evidence 생성
         evidence = self._build_evidence(doc_details)
 
+        # 📊 유사 문서 추천 (2025-12-08)
+        similar_documents = []
+        if filenames and hasattr(self.pipeline, '_similarity_service'):
+            try:
+                similar_documents = self.pipeline._similarity_service.find_similar_by_query(
+                    query, filenames[:3], top_k=3
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ 유사 문서 추천 실패 (무시): {e}")
+
         return {
             "mode": "SEARCH",
             "text": answer_text,
@@ -562,6 +572,7 @@ class SearchHandler(BaseHandler):
             "count": len(doc_details),
             "citations": evidence,
             "evidence": evidence,
+            "similar_documents": similar_documents,  # 📊 유사 문서 추천
             "status": {
                 "retrieved_count": len(doc_details),
                 "selected_count": len(doc_details),

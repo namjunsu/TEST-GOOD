@@ -49,6 +49,7 @@ from app.rag.query_routing import (
     has_domain_keyword,
 )
 from app.rag.utils.text import get_query_token_count
+from app.rag.similarity import DocumentSimilarity
 
 logger = get_logger(__name__)
 
@@ -105,6 +106,9 @@ class RAGPipeline:
         self._search_handler = SearchHandler(self)
         self._document_handler = DocumentHandler(self)
         self._cost_sum_handler = CostSumHandler(self)
+
+        # 📊 유사 문서 추천 서비스 (2025-12-08)
+        self._similarity_service = DocumentSimilarity(retriever=self.retriever)
 
         logger.info(f"RAG Pipeline initialized (known_drafters: {len(self.known_drafters)}명)")
 
@@ -965,10 +969,24 @@ class RAGPipeline:
                 f"total_ms={total_ms}",
             )
 
+            # 📊 유사 문서 추천 (2025-12-08)
+            similar_documents = []
+            if evidence and len(evidence) > 0:
+                try:
+                    primary_doc = evidence[0].get("meta", {}).get("filename") or evidence[0].get("doc_id", "")
+                    if primary_doc:
+                        reference_docs = [e.get("meta", {}).get("filename") or e.get("doc_id", "") for e in evidence]
+                        similar_documents = self._similarity_service.find_similar_by_query(
+                            query, reference_docs, top_k=3
+                        )
+                except Exception as e:
+                    logger.warning(f"⚠️ 유사 문서 추천 실패 (무시): {e}")
+
             result = {
                 "text": response.answer,
                 "citations": evidence,  # 🔴 표준 키 (필수)
                 "evidence": evidence,  # 하위 호환성 (동일 데이터)
+                "similar_documents": similar_documents,  # 📊 유사 문서 추천 (2025-12-08)
                 "status": status,  # UI에서 이것만 확인
                 "diagnostics": response.diagnostics if DIAG_RAG else {},
             }

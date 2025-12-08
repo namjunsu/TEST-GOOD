@@ -126,6 +126,36 @@ def extract_year_filter(query: str) -> Optional[str]:
     return None
 
 
+def is_readable_text(text: str) -> bool:
+    """텍스트가 읽을 만한 품질인지 확인 (OCR 품질 필터)
+
+    Args:
+        text: 검사할 텍스트
+
+    Returns:
+        품질이 좋으면 True, 저품질이면 False
+
+    Notes:
+        - 10자 미만은 의미 없음
+        - 특수문자 비율 20% 초과면 OCR 오류 가능성
+        - 한글 비율 30% 미만이면 깨진 텍스트
+    """
+    if not text or len(text) < 10:
+        return False
+
+    # 특수문자 비율 체크
+    special_chars = sum(1 for c in text if c in '\\/"\'{}[]|<>_')
+    if special_chars / len(text) > 0.2:
+        return False
+
+    # 한글 비율 체크 (최소 30%)
+    korean_chars = sum(1 for c in text if '\uac00' <= c <= '\ud7a3')
+    if korean_chars / len(text) < 0.3:
+        return False
+
+    return True
+
+
 def is_count_query(query: str) -> bool:
     """개수만 묻는 질의인지 확인
 
@@ -521,22 +551,34 @@ class SearchHandler(BaseHandler):
         filenames: list[str],
     ) -> dict[str, Any]:
         """검색 응답 생성"""
+        # 빈 값 체크용 상수
+        EMPTY_VALUES = {None, "", "None", "없음", "정보 없음", "기타"}
+
         # 카드 생성
         cards = []
         for i, doc in enumerate(doc_details, 1):
             title = format_title_from_filename(doc["filename"])
-
             card_lines = [f"{i}. **{title}**"]
-            card_lines.append(
-                f"   📋 {doc['doctype']} | 📅 {doc['date']} | ✍ {doc['drafter']}",
-            )
 
-            if doc["claimed_total"]:
+            # 메타데이터 조건부 표시 (빈 값 제외, 2025-12-08)
+            meta_parts = []
+            if doc.get("doctype") and doc["doctype"] not in EMPTY_VALUES:
+                meta_parts.append(f"📋 {doc['doctype']}")
+            if doc.get("date") and doc["date"] not in EMPTY_VALUES:
+                meta_parts.append(f"📅 {doc['date']}")
+            if doc.get("drafter") and doc["drafter"] not in EMPTY_VALUES:
+                meta_parts.append(f"✍ {doc['drafter']}")
+
+            if meta_parts:
+                card_lines.append("   " + " | ".join(meta_parts))
+
+            if doc.get("claimed_total"):
                 card_lines.append(f"   💰 {doc['claimed_total']:,}원")
 
-            if doc["text_preview"]:
+            # 텍스트 미리보기 (OCR 품질 필터링, 2025-12-08)
+            if doc.get("text_preview"):
                 clean_text = clean_text_preview(doc["text_preview"])
-                if clean_text:
+                if clean_text and is_readable_text(clean_text):
                     preview = clean_text[:200]
                     card_lines.append(f"   📝 {preview}...")
 
@@ -555,13 +597,43 @@ class SearchHandler(BaseHandler):
         # Evidence 생성
         evidence = self._build_evidence(doc_details)
 
-        # 📊 유사 문서 추천 (2025-12-08)
+        # 📊 유사 문서 추천 및 병합 (2025-12-08)
         similar_documents = []
+        merged_count = 0
         if filenames and hasattr(self.pipeline, '_similarity_service'):
             try:
-                similar_documents = self.pipeline._similarity_service.find_similar_by_query(
-                    query, filenames[:3], top_k=3
+                # 전체 출처 문서 제외하고 유사 문서 찾기
+                all_similar = self.pipeline._similarity_service.find_similar_by_query(
+                    query, filenames, top_k=5  # 전체 제외, 여유롭게 검색
                 )
+
+                # 유사도 70% 이상은 출처에 병합, 나머지는 유사 문서로 표시
+                for sim_doc in all_similar:
+                    similarity = sim_doc.get("similarity", 0)
+                    if similarity >= 0.7:
+                        # 고유사도 문서는 출처에 추가
+                        merged_count += 1
+                        merged_evidence = {
+                            "doc_id": sim_doc["filename"],
+                            "filename": sim_doc["filename"],
+                            "page": 1,
+                            "snippet": f"[유사도 {int(similarity * 100)}%] {sim_doc.get('title', '')}",
+                            "file_path": "",
+                            "meta": {
+                                "filename": sim_doc["filename"],
+                                "date": sim_doc.get("date", ""),
+                                "drafter": sim_doc.get("drafter", ""),
+                                "category": sim_doc.get("category", ""),
+                                "is_similar": True,  # 유사 문서 표시
+                            },
+                        }
+                        evidence.append(merged_evidence)
+                    else:
+                        similar_documents.append(sim_doc)
+
+                if merged_count > 0:
+                    logger.info(f"📊 유사 문서 {merged_count}건 출처에 병합됨")
+
             except Exception as e:
                 logger.warning(f"⚠️ 유사 문서 추천 실패 (무시): {e}")
 
@@ -572,11 +644,12 @@ class SearchHandler(BaseHandler):
             "count": len(doc_details),
             "citations": evidence,
             "evidence": evidence,
-            "similar_documents": similar_documents,  # 📊 유사 문서 추천
+            "similar_documents": similar_documents[:3],  # 📊 유사 문서 추천 (최대 3건)
             "status": {
                 "retrieved_count": len(doc_details),
                 "selected_count": len(doc_details),
                 "found": True,
+                "merged_similar": merged_count,  # 병합된 유사 문서 수
             },
         }
 

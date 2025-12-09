@@ -996,8 +996,8 @@ def _generate_ai_response(
         if not hasattr(rag_instance, "answer"):
             raise AttributeError("RAG instance has no 'answer' method")
 
-        # 옵션에서 top_k 가져오기
-        opts = st.session_state.chat_options
+        # 옵션에서 top_k 가져오기 (세션 상태 미초기화 대비)
+        opts = st.session_state.get("chat_options", {})
         top_k = opts.get("top_k", ChatConfig.DEFAULT_TOP_K)
 
         # 응답 생성 (다양한 타입 가능: RAGResponse 객체, dict, str 등)

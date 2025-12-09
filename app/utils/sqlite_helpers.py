@@ -66,10 +66,10 @@ def connect_metadata(
     )
 
     # PRAGMA 일괄 설정 (성능 + 안정성 최적화)
-    # WAL 모드: 동시성 개선 및 롤백 문제 방지
+    # DELETE 모드: 커밋 즉시 main DB에 반영 (WAL 롤백 문제 방지)
     # foreign_keys: 무결성 제약 조건 강제
     conn.executescript(f"""
-        PRAGMA journal_mode = WAL;
+        PRAGMA journal_mode = DELETE;
         PRAGMA synchronous = {sync_mode};
         PRAGMA busy_timeout = 5000;
         PRAGMA cache_size = -{cache_size};

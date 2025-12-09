@@ -113,7 +113,8 @@ class ChatConfig:
 
     # UI 문자열
     INPUT_PLACEHOLDER = "💬 무엇을 도와드릴까요?"
-    SPINNER_TEXT = "문서 검색 및 응답 생성 중… (캐시 확인 → 인덱스 검색 → 생성)"
+    SPINNER_SEARCH = "검색 중..."
+    SPINNER_GENERATE = "답변 생성 중..."
     DIVIDER = "---"
 
     # 에러 메시지 (사과 표현 제거, 운영 톤 통일)
@@ -582,7 +583,6 @@ def _display_similar_documents_section(similar_docs: list, msg_idx: int) -> None
     ):
         for i, doc in enumerate(similar_docs, 1):
             filename = doc.get("filename", "unknown")
-            title = doc.get("title", filename)
             similarity = doc.get("similarity", 0)
             date = doc.get("date", "")
             drafter = doc.get("drafter", "")
@@ -591,28 +591,32 @@ def _display_similar_documents_section(similar_docs: list, msg_idx: int) -> None
             # 유사도 백분율 계산
             similarity_pct = int(similarity * 100)
 
-            # 간결한 정보 표시
-            col1, col2 = st.columns([4, 1])
-            with col1:
-                st.markdown(f"**{i}. {title}**")
-                meta_parts = []
-                if date:
-                    meta_parts.append(f"📅 {date}")
-                if drafter:
-                    meta_parts.append(f"👤 {drafter}")
-                if category:
-                    meta_parts.append(f"📁 {category}")
-                if meta_parts:
-                    st.caption(" | ".join(meta_parts))
+            # 파일 경로 생성 (year 폴더 지원) - 출처 문서와 동일한 로직
+            import re
+            from app.config.settings import settings
 
-            with col2:
-                # 유사도 표시 (색상으로 구분)
-                if similarity_pct >= 70:
-                    st.success(f"{similarity_pct}%")
-                elif similarity_pct >= 50:
-                    st.warning(f"{similarity_pct}%")
-                else:
-                    st.info(f"{similarity_pct}%")
+            year_match = re.search(r"(\d{4})-", filename)
+            if year_match:
+                year = year_match.group(1)
+                file_path = settings.DOCS_DIR / f"year_{year}" / filename
+            else:
+                file_path = settings.DOCS_DIR / filename
+
+            # 유사도 정보를 summary에 포함
+            similarity_text = f"[유사도 {similarity_pct}%]"
+
+            # 카드 렌더링 (출처 문서와 동일한 방식)
+            render_doc_card(
+                index=i,
+                filename=filename,
+                file_path=file_path,
+                doctype=category,
+                display_date=date,
+                drafter=drafter,
+                summary=similarity_text,
+                show_preview_inline=False,
+                msg_idx=msg_idx + 1000,  # 출처 문서와 키 충돌 방지
+            )
 
             # 구분선 (마지막 제외)
             if i < len(similar_docs):
@@ -1168,14 +1172,35 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                         selected_filename = matched_filename
                         logger.info(f"📎 Evidence 히스토리에서 매칭: {selected_filename} (신뢰도={match_confidence:.2f})")
 
-            # AI 응답 생성
-            with st.spinner(ChatConfig.SPINNER_TEXT):
-                response = _generate_ai_response(
-                    enhanced_query,
-                    unified_rag_instance,
-                    message_placeholder,
-                    selected_filename=selected_filename,
-                )
+            # AI 응답 생성 (단계별 상태 표시)
+            with st.status(ChatConfig.SPINNER_SEARCH, expanded=False) as status:
+                import time
+                import threading
+
+                # 백그라운드에서 RAG 호출
+                result_container = {"response": None, "done": False}
+
+                def run_rag():
+                    result_container["response"] = _generate_ai_response(
+                        enhanced_query,
+                        unified_rag_instance,
+                        message_placeholder,
+                        selected_filename=selected_filename,
+                    )
+                    result_container["done"] = True
+
+                thread = threading.Thread(target=run_rag)
+                thread.start()
+
+                # 0.5초 후 "답변 생성 중"으로 전환
+                time.sleep(0.5)
+                if not result_container["done"]:
+                    status.update(label=ChatConfig.SPINNER_GENERATE)
+
+                # 완료 대기
+                thread.join()
+                response = result_container["response"]
+                status.update(label="완료", state="complete")
 
                 # 응답이 있으면 표시 및 저장
                 if response:

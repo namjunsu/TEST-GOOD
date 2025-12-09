@@ -9,6 +9,7 @@ docs/incoming/*.pdf를 스캔하여 메타DB 및 벡터 인덱스에 추가합�
     python scripts/ingest_from_docs.py --only "2025*"     # 패턴 매칭
     python scripts/ingest_from_docs.py --dry-run          # 실제 이동/업서트 없이 리포트만
     python scripts/ingest_from_docs.py --ocr              # OCR 활성화
+    python scripts/ingest_from_docs.py --drafter "홍길동" # 기안자 수동 지정
 """
 
 import argparse
@@ -106,6 +107,7 @@ class DocumentIngester:
         ocr_enabled: bool = False,  # Deprecated: use ocr_mode instead
         ocr_mode: Optional[str] = None,  # "off" | "fallback" | "force"
         dry_run: bool = False,
+        override_drafter: Optional[str] = None,  # 기안자 수동 지정
     ):
         self.incoming_dir = Path(incoming_dir)
         self.processed_dir = Path(processed_dir)
@@ -114,6 +116,7 @@ class DocumentIngester:
         self.extracted_dir = Path(extracted_dir)
         self.db_path = db_path
         self.dry_run = dry_run
+        self.override_drafter = override_drafter  # 기안자 수동 지정
 
         # OCR 모드 결정 (v1 스키마 지원)
         if ocr_mode is not None:
@@ -381,7 +384,10 @@ class DocumentIngester:
             drafter_match = re.search(r"기안자[\s\|\ㅣ:：\t]*([가-힣]{2,10})", raw_text)
             if drafter_match:
                 try:
-                    korean_fields["기안자"] = drafter_match.group(1)
+                    drafter_name = drafter_match.group(1)
+                    # 불용어 제외
+                    if drafter_name not in {"정보", "없음", "기타", "미상", "해당"}:
+                        korean_fields["drafter"] = drafter_name  # "기안자" → "drafter"로 키 통일
                 except (IndexError, AttributeError):
                     logger.debug("기안자 그룹 추출 실패")
 
@@ -444,9 +450,13 @@ class DocumentIngester:
             db_save_success = False
             # Determine year from display_date or filename (BEFORE try block)
             year = None
-            if parsed_meta.get("display_date"):
-                year = parsed_meta.get("display_date", "")[:4]
-            else:
+            display_date = parsed_meta.get("display_date", "")
+            # display_date가 유효한 날짜인지 확인 (숫자로 시작해야 함)
+            if display_date and display_date[0].isdigit():
+                year = display_date[:4]
+
+            # display_date에서 연도를 못 구했으면 파일명에서 추출
+            if not year or not year.isdigit():
                 # Extract year from filename (e.g., 2024-01-15_...)
                 import re
                 year_match = re.match(r"^(\d{4})", pdf_path.name)
@@ -479,11 +489,11 @@ class DocumentIngester:
                             else ""
                         ),
                         "category": parsed_meta.get("category", ""),
-                        "drafter": parsed_meta.get("drafter", ""),
+                        "drafter": self.override_drafter or parsed_meta.get("drafter", ""),
                         "amount": cost_data.get("total", 0) if cost_data else 0,
                         "file_size": pdf_meta.get("file_size", 0),
                         "page_count": pdf_meta.get("page_count", 0),
-                        "text_preview": cleaned_text[:500],
+                        "text_preview": cleaned_text,  # 전체 텍스트 저장 (LLM 요약용)
                         "keywords": [],
                         "doctype": doctype,
                         "display_date": parsed_meta.get("display_date", ""),
@@ -613,11 +623,24 @@ class DocumentIngester:
                 logger.info(f"    사유: {result['reason']}")
             logger.info(f"    경로: {' → '.join(result['actions'])}")
 
-        # 인덱스 재빌드 트리거 (필요 시)
+        # 인덱스 재빌드 자동 실행
         if not self.dry_run and self.stats["success"] > 0:
-            logger.info("\n🔄 인덱스 재빌드 트리거 (필요 시 수동 실행)")
-            logger.info("  - FAISS: python scripts/rebuild_rag_indexes.py")
-            logger.info("  - BM25: python scripts/quick_rebuild_bm25.py")
+            logger.info("\n🔄 검색 인덱스 자동 리빌드 시작...")
+            try:
+                import subprocess
+                result = subprocess.run(
+                    [sys.executable, "scripts/core/reindex_atomic.py"],
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                    cwd=Path(__file__).parent.parent.parent,
+                )
+                if result.returncode == 0:
+                    logger.info("✅ 검색 인덱스 리빌드 완료!")
+                else:
+                    logger.warning(f"⚠️ 인덱스 리빌드 실패: {result.stderr[:200]}")
+            except Exception as e:
+                logger.warning(f"⚠️ 인덱스 리빌드 실패: {e}")
 
         # 최종 통계
         self._print_summary()
@@ -696,6 +719,9 @@ def main():
     parser.add_argument(
         "--dry-run", action="store_true", help="실제 이동/업서트 없이 리포트만",
     )
+    parser.add_argument(
+        "--drafter", type=str, help="기안자 수동 지정 (파싱 결과 덮어쓰기)",
+    )
 
     args = parser.parse_args()
 
@@ -704,7 +730,10 @@ def main():
     ocr_enabled = args.ocr
 
     ingester = DocumentIngester(
-        ocr_mode=ocr_mode, ocr_enabled=ocr_enabled, dry_run=args.dry_run,
+        ocr_mode=ocr_mode,
+        ocr_enabled=ocr_enabled,
+        dry_run=args.dry_run,
+        override_drafter=args.drafter,
     )
 
     ingester.run(limit=args.limit, pattern=args.only)

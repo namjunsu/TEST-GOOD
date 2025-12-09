@@ -408,9 +408,12 @@ class QwenLLM(BaseRAGLLM):
 
             context_text += f"\n[{filename}]\n"
 
+            # 컨텍스트 최대 길이 (환경변수)
+            max_context_chars = int(os.getenv("MAX_CONTEXT_CHARS", "5000"))
+
             if is_items_query:
-                # 품목/금액 질문: 3000자까지 전부 사용 (필터링 X)
-                context_text += content[:3000]
+                # 품목/금액 질문: 전체 사용 (필터링 X)
+                context_text += content[:max_context_chars]
             else:
                 # 일반 질문: 중요 키워드 필터링
                 important_keywords = ["날짜", "금액", "구매", "목적", "제목", "수량", "모델", "기안"]
@@ -492,11 +495,10 @@ A:"""
         # 0단계: 같은 문서의 모든 청크 우선 선택 (중간 단계 접근법)
         context_chunks = self._prioritize_same_document_chunks(context_chunks, max_chunks=10)
 
-        # 1단계: 질문 분석 (향후 적응형 응답용 예비 변수)
-        _question_analysis = None  # noqa: F841 - 향후 사용 예정
+        # 적응형 길이 조정용
         length_recommendation = None
 
-        # 4단계: 기본 처리 모드 (적응형 길이 적용)
+        # 기본 처리 모드 (적응형 길이 적용)
         if self.config.enable_adaptive_length and length_recommendation:
             system_prompt = self._create_adaptive_system_prompt(length_recommendation)
         else:
@@ -524,19 +526,6 @@ A:"""
                     final_max_tokens = min(mode_max_tokens, adaptive_max_tokens)
                 else:
                     final_max_tokens = mode_max_tokens
-
-                # 🔒 ASSERTION: Ensure mode-aware budget is applied
-                expected_budgets = {
-                    "chat": int(os.getenv("CHAT_MAX_TOKENS", "64")),
-                    "rag": int(os.getenv("RAG_MAX_TOKENS", "160")),
-                    "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", "320")),
-                }
-                expected_budget = expected_budgets.get(mode.lower(), self.config.max_tokens)
-                if final_max_tokens != expected_budget and not (self.config.enable_adaptive_length and length_recommendation):
-                    self.logger.warning(
-                        f"⚠️ Token budget mismatch! mode={mode}, expected={expected_budget}, "
-                        f"got={final_max_tokens}. Using {final_max_tokens}.",
-                    )
 
                 # 생성
                 response = self.llm.create_chat_completion(
@@ -807,11 +796,12 @@ A:"""
 
 참고 문서 (단일 문서 모드):"""
 
+        max_context_chars = int(os.getenv("MAX_CONTEXT_CHARS", "5000"))
         for i, chunk in enumerate(context_chunks[:2], 1):  # 최대 2개만 사용
             filename = Path(self._get_chunk_source(chunk)).name
             # 폴백 체인: text → content → snippet → text_preview
             content = (chunk.get("text") or chunk.get("content") or
-                      chunk.get("snippet") or chunk.get("text_preview") or "")[:200]
+                      chunk.get("snippet") or chunk.get("text_preview") or "")[:max_context_chars]
             score = chunk.get("score", 0.0)
 
             enhanced_prompt += f"\n--- 청크 {i}: {filename} (점수: {score:.3f}) ---\n{content}..."
@@ -854,11 +844,12 @@ A:"""
 
 참고 문서:"""
 
+        max_context_chars = int(os.getenv("MAX_CONTEXT_CHARS", "5000"))
         for i, chunk in enumerate(context_chunks[:3], 1):
             filename = Path(self._get_chunk_source(chunk)).name
             # 폴백 체인: text → content → snippet → text_preview
             content = (chunk.get("text") or chunk.get("content") or
-                      chunk.get("snippet") or chunk.get("text_preview") or "")[:300]
+                      chunk.get("snippet") or chunk.get("text_preview") or "")[:max_context_chars]
             score = chunk.get("score", 0.0)
 
             enhanced_prompt += f"\n--- 문서 {i}: {filename} (점수: {score:.3f}) ---\n{content}..."
@@ -889,11 +880,12 @@ A:"""
 
 참고 문서:"""
 
+        max_context_chars = int(os.getenv("MAX_CONTEXT_CHARS", "5000"))
         for i, chunk in enumerate(context_chunks[:4], 1):  # 복합 질문은 최대 4개 문서
             filename = Path(self._get_chunk_source(chunk)).name
             # 폴백 체인: text → content → snippet → text_preview
             content = (chunk.get("text") or chunk.get("content") or
-                      chunk.get("snippet") or chunk.get("text_preview") or "")[:250]
+                      chunk.get("snippet") or chunk.get("text_preview") or "")[:max_context_chars]
             score = chunk.get("score", 0.0)
 
             enhanced_prompt += f"\n--- 문서 {i}: {filename} (점수: {score:.3f}) ---\n{content}..."
@@ -1024,8 +1016,6 @@ A:"""
 
     def _remove_foreign_text(self, text: str) -> str:
         """외국어 텍스트 제거 헬퍼 메서드"""
-        import re
-
         # 1. 중국어 문자 범위 (CJK 통합 한자 + 확장)
         chinese_pattern = r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]"
         # 2. 일본어 히라가나/카타카나
@@ -1190,9 +1180,9 @@ A:"""
         max_length = recommendation.get("max_length") if isinstance(recommendation, dict) else getattr(recommendation, "max_length", 200)
         adaptive_tokens = int(max_length * tokens_per_char * 1.2)
 
-        # 최소/최대 토큰 수 제한
-        min_tokens = 50
-        max_tokens = 800
+        # 최소/최대 토큰 수 제한 (환경변수 지원)
+        min_tokens = int(os.getenv("ADAPTIVE_MIN_TOKENS", "50"))
+        max_tokens = int(os.getenv("ADAPTIVE_MAX_TOKENS", "800"))
 
         return max(min_tokens, min(adaptive_tokens, max_tokens))
 
@@ -1373,7 +1363,7 @@ A:"""
                 response = self.llm.create_chat_completion(
                     messages=messages,
                     temperature=0.7,  # 더 자연스러운 응답
-                    max_tokens=1500,
+                    max_tokens=int(os.getenv("CONVERSATIONAL_MAX_TOKENS", "1500")),
                     top_p=0.9,
                     top_k=40,
                     repeat_penalty=1.1,
@@ -1489,18 +1479,18 @@ A:"""
 
 작업: 제공된 문서를 분석하여 한국어로 완전한 요약을 작성하세요.
 
-RULES:
-1. Extract ALL information from the document: names, dates, amounts, items
-2. Create a comprehensive Korean summary using the extracted information
-3. Never say "information not found" or "cannot confirm"
-4. Always include document citation in [filename.pdf] format
-5. Respond ONLY in Korean language
+규칙:
+1. 문서의 모든 정보를 추출하세요: 기안자, 날짜, 금액, 품목
+2. 추출한 정보로 완전한 한국어 요약을 작성하세요
+3. "정보를 찾을 수 없다" 또는 "확인 불가" 같은 표현 금지
+4. 반드시 [파일명.pdf] 형식으로 출처를 표시하세요
+5. 오직 한국어로만 답변하세요
 
-EXAMPLE:
-Document has: "기안자 남준수, 2025-06-24, 총액 4,985,500원"
-Response: "2025년 6월 24일 남준수가 기안한 문서로, 총 4,985,500원의 구매 건입니다. [filename.pdf]"
+예시:
+문서 내용: "기안자 남준수, 2025-06-24, 총액 4,985,500원"
+답변: "2025년 6월 24일 남준수가 기안한 문서로, 총 4,985,500원의 구매 건입니다. [filename.pdf]"
 
-Remember: Use the document content to create a useful Korean summary."""
+중요: 문서 내용을 활용하여 유용한 한국어 요약을 만드세요."""
 
                 messages = [
                     {"role": "system", "content": system_prompt},

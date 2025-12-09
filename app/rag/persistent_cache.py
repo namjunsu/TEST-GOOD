@@ -125,7 +125,7 @@ class PersistentCache:
             설정된 SQLite 연결
         """
         conn = sqlite3.connect(self.db_path, timeout=5.0, isolation_level=None)
-        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA journal_mode=DELETE;")
         conn.execute("PRAGMA synchronous=NORMAL;")
         conn.execute("PRAGMA temp_store=MEMORY;")
         conn.execute("PRAGMA mmap_size=268435456;")  # 256MB

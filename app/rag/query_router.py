@@ -86,8 +86,16 @@ class QueryRouter:
     )
 
     # 목록 검색 패턴 (연도/작성자 + 찾기)
+    # 2025-12-09: "알려" 제거 - 정보 질의("IP 알려줘")가 SEARCH로 오분류되는 문제 수정
     LIST_INTENT_PATTERN = re.compile(
-        r"(\d{4}년?|[가-힣]{2,4}(가|이)?|모든|모두|전체|전부|all).*(찾아|검색|리스트|목록|보여|알려|문서)",
+        r"(\d{4}년?|[가-힣]{2,4}(가|이)?|모든|모두|전체|전부|all).*(찾아|검색|리스트|목록|보여|문서)",
+        re.IGNORECASE,
+    )
+
+    # 정보 질의 패턴 (구체적 정보 + 질문형) - QA 모드로 라우팅
+    # 예: "DVR IP 알려줘", "비용 얼마야", "현황 어떻게 돼"
+    QA_QUESTION_PATTERN = re.compile(
+        r"(IP|주소|비용|금액|날짜|내용|정보|설명|현황|사양|스펙|가격|수량|규격|모델|상태|결과).*(알려|뭐야|뭔가요|어떻게|무엇|어떠|어때)",
         re.IGNORECASE,
     )
 
@@ -383,6 +391,34 @@ class QueryRouter:
             drafter=params.get("drafter"),
         )
 
+    def _check_qa_question(
+        self,
+        query: str,
+        params: dict[str, Any],
+    ) -> Optional[RouteDecision]:
+        """정보 질의 체크 (구체적 정보 + 질문형 → QA 모드)
+
+        "IP 알려줘", "정보 알려줘" 같은 질의를 QA 모드로 라우팅하여
+        문서 내용 기반 답변을 생성하도록 합니다.
+
+        Returns:
+            RouteDecision if matched, None otherwise
+        """
+        if not self.QA_QUESTION_PATTERN.search(query):
+            return None
+
+        logger.info("🎯 모드 결정: QA (정보 질의 감지 - 답변 생성)")
+        reason = "info_question_pattern"
+        self._log_routing_decision(query, QueryMode.QA, confidence=0.85, reason=reason)
+        return RouteDecision(
+            mode=QueryMode.QA,
+            reason=reason,
+            confidence=0.85,
+            content_intent=True,  # 내용 기반 답변 생성
+            year=params.get("year"),
+            drafter=params.get("drafter"),
+        )
+
     def _check_document_mode(
         self,
         query: str,
@@ -597,6 +633,7 @@ class QueryRouter:
             self._check_exists_intent(query, params, has_filename, has_doc_reference)
             or self._check_content_only(query, params)
             or self._check_cost_intent(query, params, intents)
+            or self._check_qa_question(query, params)  # 정보 질의 ("IP 알려줘") → QA 모드
             or self._check_document_mode(query, params, intents, has_filename, has_doc_reference, has_doc_type_keyword)
             or self._check_search_mode(query, params, intents, has_filename, has_doc_reference)
             or self._check_qa_intent(query, params, has_qa_intent)
@@ -746,7 +783,10 @@ class QueryRouter:
         # 검색 결과가 있고 낮은 신뢰도인 경우
         if retrieval_results and self._is_low_confidence(retrieval_results):
             # DOCUMENT 또는 QA → SEARCH로 하향 조정 (안전한 목록 반환)
-            if decision.mode in (QueryMode.DOCUMENT, QueryMode.QA):
+            # 단, info_question_pattern(정보 질의)은 하향 조정하지 않음 (사용자가 명시적으로 답변 요청)
+            if decision.reason == "info_question_pattern":
+                logger.info("ℹ️ 정보 질의 패턴 감지 → 하향 조정 스킵 (QA 유지)")
+            elif decision.mode in (QueryMode.DOCUMENT, QueryMode.QA):
                 logger.warning(
                     f"⚠️ 낮은 검색 신뢰도 감지 → {decision.mode.value} → SEARCH(list_intent=True) 하향 조정",
                 )

@@ -142,17 +142,51 @@ class DocumentSimilarity:
         if not reference_docs:
             return []
 
-        # 첫 번째 문서 기준으로 유사 문서 찾기
-        primary_doc = reference_docs[0]
-        similar_docs = self.find_similar_documents(primary_doc, top_k=top_k + len(reference_docs))
+        # 2025-12-09: 원래 쿼리로 직접 검색 (첫 번째 문서 키워드 대신)
+        # 이유: 문서 제목에서 키워드 추출 시 핵심 키워드가 누락될 수 있음
+        if not self._retriever:
+            logger.warning("⚠️ Retriever가 없어 유사 문서 검색 불가")
+            return []
 
-        # 이미 반환된 문서 제외
-        filtered = [
-            doc for doc in similar_docs
-            if doc["filename"] not in reference_docs
-        ]
+        try:
+            search_results = self._retriever.search(query, top_k=top_k + len(reference_docs) + 5)
 
-        return filtered[:top_k]
+            similar_docs = []
+            reference_set = set(reference_docs)
+
+            for result in search_results:
+                result_id = result.get("filename") or result.get("doc_id")
+
+                # 이미 반환된 문서 제외
+                if result_id in reference_set:
+                    continue
+
+                # 점수 정규화 (0-1)
+                score = result.get("score", 0)
+                normalized_score = min(1.0, score / 10.0) if score > 1 else score
+
+                if normalized_score >= self.min_similarity:
+                    # 문서 메타데이터 가져오기
+                    similar_doc = self._db.get_by_filename(result_id)
+                    if similar_doc:
+                        similar_docs.append({
+                            "filename": result_id,
+                            "title": similar_doc.get("title", result_id),
+                            "similarity": round(normalized_score, 3),
+                            "date": similar_doc.get("display_date") or similar_doc.get("date", ""),
+                            "drafter": similar_doc.get("drafter", ""),
+                            "category": similar_doc.get("category", ""),
+                        })
+
+                if len(similar_docs) >= top_k:
+                    break
+
+            logger.info(f"📊 쿼리 기반 유사 문서 {len(similar_docs)}건 발견: '{query[:30]}...'")
+            return similar_docs
+
+        except Exception as e:
+            logger.error(f"❌ 쿼리 기반 유사 문서 검색 실패: {e}", exc_info=True)
+            return []
 
     def _extract_keywords(self, doc: dict) -> str:
         """문서에서 검색용 키워드 추출

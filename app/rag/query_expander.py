@@ -244,7 +244,9 @@ class QueryExpander:
             cfg_path = Path(os.getenv("FILTERS_CONFIG", str(CONFIG_PATH)))
             with Path(cfg_path).open("r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
-            stopwords = set(config.get("search_stopwords", []))
+            # YAML 구조: search_stopwords.values 에서 실제 불용어 추출
+            search_cfg = config.get("search_stopwords", {})
+            stopwords = set(search_cfg.get("values", []))
             logger.info(f"📋 검색 불용어 {len(stopwords)}개 로드됨")
             return stopwords
         except Exception as e:
@@ -257,7 +259,9 @@ class QueryExpander:
             cfg_path = Path(os.getenv("FILTERS_CONFIG", str(CONFIG_PATH)))
             with Path(cfg_path).open("r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
-            terms = config.get("domain_terms", [])
+            # YAML 구조: domain_terms.base 에서 실제 용어 추출
+            domain_cfg = config.get("domain_terms", {})
+            terms = domain_cfg.get("base", [])
 
             # 정규화 + Variants 확장
             expanded = set()

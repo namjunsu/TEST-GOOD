@@ -14,6 +14,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from app.config.settings import settings
 from app.core.logging import get_logger
 from app.rag.retrievers.hybrid import HybridRetriever
 
@@ -160,7 +161,7 @@ def run_validation_suite(suite_path: str = "suites/model_codes.yaml") -> dict[st
 
     # DB 연결
     import sqlite3
-    db_conn = sqlite3.connect("metadata.db")
+    db_conn = sqlite3.connect(settings.DB_PATHS["metadata"])
 
     # 테스트 실행
     results = []

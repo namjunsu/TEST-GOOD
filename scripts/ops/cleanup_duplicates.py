@@ -14,6 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from app.config.settings import settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -28,9 +29,9 @@ def get_file_hash(file_path: Path) -> str:
     return hasher.hexdigest()[:8]
 
 
-def get_db_files(db_path: str = "metadata.db") -> set:
+def get_db_files(db_path: str = None) -> set:
     """DB에 등록된 파일 경로 목록"""
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path or settings.DB_PATHS["metadata"])
     cursor = conn.execute("SELECT path FROM documents")
     paths = {row[0] for row in cursor.fetchall()}
     conn.close()

@@ -16,6 +16,10 @@ from typing import Optional
 
 import requests
 
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from app.config.settings import settings
+
 
 class AnomalyDetector:
     """메타데이터 이상 감지기"""
@@ -63,7 +67,7 @@ class AnomalyDetector:
         anomalies = []
 
         # 1. DB 통계 확인
-        conn = sqlite3.connect("metadata.db")
+        conn = sqlite3.connect(settings.DB_PATHS["metadata"])
         cursor = conn.cursor()
 
         # 전체 문서 수
@@ -140,7 +144,7 @@ class AnomalyDetector:
     def _check_sync_status(self) -> Optional[dict]:
         """동기화 상태 확인"""
         # DB 문서 수
-        conn = sqlite3.connect("metadata.db")
+        conn = sqlite3.connect(settings.DB_PATHS["metadata"])
         cursor = conn.execute("SELECT COUNT(*) FROM documents")
         db_count = cursor.fetchone()[0]
         conn.close()

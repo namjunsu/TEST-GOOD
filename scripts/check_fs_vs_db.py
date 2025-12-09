@@ -18,6 +18,8 @@ from typing import Set, Dict, List
 # 프로젝트 루트 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from app.config.settings import settings
+
 
 def get_filesystem_files(year: str = None) -> Dict[str, Set[str]]:
     """파일 시스템에서 PDF 파일 목록 가져오기
@@ -54,7 +56,7 @@ def get_db_files(year: str = None) -> Dict[str, Set[str]]:
     Returns:
         {year: set of filenames}
     """
-    conn = sqlite3.connect("metadata.db")
+    conn = sqlite3.connect(settings.DB_PATHS["metadata"])
     cursor = conn.cursor()
 
     if year:

@@ -16,6 +16,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from app.config.settings import settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -30,7 +31,7 @@ class HealthChecker:
     def check_database(self):
         """DB 상태 체크"""
         try:
-            conn = sqlite3.connect("metadata.db", timeout=5)
+            conn = sqlite3.connect(settings.DB_PATHS["metadata"], timeout=5)
             cursor = conn.execute("SELECT COUNT(*) FROM documents")
             doc_count = cursor.fetchone()[0]
             conn.close()
@@ -38,7 +39,7 @@ class HealthChecker:
             self.ok_items.append(f"✅ DB 연결 정상 ({doc_count}개 문서)")
 
             # DB 크기 체크
-            db_path = Path("metadata.db")
+            db_path = Path(settings.DB_PATHS["metadata"])
             if db_path.exists():
                 db_size_mb = db_path.stat().st_size / (1024 * 1024)
                 if db_size_mb > 1000:  # 1GB 이상
@@ -57,7 +58,7 @@ class HealthChecker:
             total_pdfs = sum(len(list(d.glob("*.pdf"))) for d in year_dirs)
 
             # DB 문서 개수
-            conn = sqlite3.connect("metadata.db")
+            conn = sqlite3.connect(settings.DB_PATHS["metadata"])
             cursor = conn.execute("SELECT COUNT(*) FROM documents")
             db_count = cursor.fetchone()[0]
             conn.close()
@@ -101,7 +102,7 @@ class HealthChecker:
     def check_metadata_quality(self):
         """메타데이터 품질 체크"""
         try:
-            conn = sqlite3.connect("metadata.db")
+            conn = sqlite3.connect(settings.DB_PATHS["metadata"])
 
             # 기안자 추출률
             cursor = conn.execute("SELECT COUNT(*) FROM documents WHERE drafter IS NOT NULL")

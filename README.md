@@ -57,7 +57,8 @@ streamlit run web_interface.py --port 8501
 - **Architecture**: RAG (Retrieval-Augmented Generation)
 - **Language**: Korean document support with OCR
 - **Python**: 3.11+
-- **Last Updated**: 2024-11-24
+- **Files**: 43 MD, 14 SH, 207 PY
+- **Last Updated**: 2025-12-09
 
 ## 🎯 Query Modes
 
@@ -251,10 +252,11 @@ make pre-commit # Run all hooks
 
 ## 📊 System Status
 
-- **Active Files**: 28/131 Python files in use
+- **Active Files**: 207 Python files (정리 완료)
+- **Documentation**: 43 MD files (핵심 문서만 유지)
+- **Scripts**: 14 SH files (중복 제거)
 - **Test Coverage**: 8/8 smoke tests passing
 - **Code Quality**: Ruff + Black + Pre-commit configured
-- **Documentation**: Complete operational guides
 
 ## 🔒 Security
 
@@ -276,6 +278,6 @@ make pre-commit # Run all hooks
 
 ---
 
-**Version**: 2025.11.26
+**Version**: 2025.12.09
 **Status**: Production Ready
-**Last Updated**: 2025-11-26
+**Last Updated**: 2025-12-09

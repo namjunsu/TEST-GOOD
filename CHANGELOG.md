@@ -1,5 +1,69 @@
 # Changelog
 
+## [2025-12-09] 프로젝트 정리 - 불필요한 파일 139개 삭제
+
+**Impact**: 프로젝트 구조, 유지보수성
+**Status**: Completed
+
+### Summary
+프로젝트 파일 정리를 통해 중복/오래된 문서, 스크립트, 보고서 파일 139개를 삭제하여 코드베이스를 간소화했습니다.
+
+### 정리 결과
+
+| 유형 | 이전 | 이후 | 변화 |
+|------|------|------|------|
+| MD 파일 | 119개 | 43개 | -76개 (-64%) |
+| SH 스크립트 | 26개 | 14개 | -12개 (-46%) |
+| PY 스크립트 | 217개 | 207개 | -10개 (-5%) |
+
+### 삭제된 항목
+
+#### 문서 폴더 (60개)
+- `docs/archive/` - 10월 작업 보고서 (26개)
+- `docs/archive_old/` - 중복 검증 로그 (20개)
+- `docs/archive_reports/` - 완료된 버그픽스 보고서 (14개)
+
+#### docs/dev/ 정리 (16개)
+- 중복 가이드: `문서_추가_완벽_가이드.md`, `신규_문서_추가_가이드.md`
+- 세션 요약: `세션_요약_20251124_*.md` (3개)
+- 완료된 작업: `P0_COMPLETION_SUMMARY.md`, `P1_COMPLETION_SUMMARY.md` 등
+
+#### 중복 SH 스크립트 (12개)
+- `run_rag.sh` (경로 오류)
+- `scripts/start.sh`, `ops/start_services.sh` (start_ai_chat.sh 중복)
+- `scripts/verify_*.sh` (검증 완료)
+
+#### 개발용 Python 스크립트 (10개)
+- `scripts/xray_*.py` - 일회성 분석 스크립트
+- `scripts/generate_*.py` - 코드 생성 스크립트
+- `scripts/build_codemap.py` - 개발 도구
+
+#### reports/ 비-MD 파일 (60개+)
+- JSON, CSV, log, txt 파일 전체 삭제
+- MD 보고서 11개만 유지
+
+### 유지된 핵심 문서
+
+#### docs/ 루트 (12개)
+- ARCHITECTURE.md, SYSTEM_OVERVIEW.md, RUNBOOK.md
+- OPERATIONS.md, RAG_V2_IMPLEMENTATION.md
+- ASKABLE_QUERIES.md, CHATGPT_PROJECT_CONTEXT.md 등
+
+#### docs/dev/ (8개)
+- FEATURES_AND_SCRIPTS.md, SYSTEM_ARCHITECTURE_2025.md
+- SECURITY_POLICY.md, MODEL_UPGRADE_AND_MIGRATION.md
+- OCR_UPGRADE_GUIDE.md, DOCUMENT_INGESTION_GUIDE.md
+- INDEX_ARCHITECTURE.md, METADATA_SYNC_GUIDE.md
+
+### 유지된 핵심 스크립트 (14개)
+- `start_ai_chat.sh` - 메인 실행 스크립트
+- `add_document.sh` - 문서 추가
+- `scripts/cron_wrapper.sh` - 크론 래퍼
+- `scripts/setup_cron_jobs.sh` - 크론 설정
+- `scripts/ops/*.sh` - 운영 스크립트
+
+---
+
 ## [2024-11-24-3] Complete OCR Reprocessing - 100% Text Extraction
 
 **Impact**: Text Extraction, Search Quality

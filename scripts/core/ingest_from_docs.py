@@ -440,11 +440,16 @@ class DocumentIngester:
                         result["actions"].append(f"sum_match=False ({items_sum:,}≠{claimed_total:,})")
             # 라인아이템 없으면 sum_match는 None 유지
 
-            # 8. 텍스트 저장
+            # 8. 텍스트 저장 (기존 파일 보호)
             if not self.dry_run:
                 extracted_file = self.extracted_dir / f"{pdf_path.stem}.txt"
-                extracted_file.write_text(cleaned_text, encoding="utf-8")
-                result["actions"].append(f"saved→{extracted_file.name}")
+                if extracted_file.exists():
+                    # 기존 텍스트 파일 보호 - 덮어쓰기 금지
+                    logger.info(f"텍스트 파일 이미 존재, 스킵: {extracted_file.name}")
+                    result["actions"].append(f"txt_exists_skipped→{extracted_file.name}")
+                else:
+                    extracted_file.write_text(cleaned_text, encoding="utf-8")
+                    result["actions"].append(f"saved→{extracted_file.name}")
 
             # 9. 메타DB 업서트 (실패 시 파일 이동 금지)
             db_save_success = False

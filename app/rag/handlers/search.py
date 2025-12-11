@@ -48,10 +48,33 @@ CONTENT_STOP_WORDS = [
 # 조사 (단어 경계에서만 제거)
 POSTPOSITIONS = [" 에 ", " 에서 ", " 이 ", " 가 ", " 을 ", " 를 "]
 
-# 자주 등장하는 기안자 목록
-COMMON_DRAFTERS = [
-    "남준수", "최새름", "유인혁", "이의주", "강병규", "박연수", "이호영", "이승헌",
-]
+# 기안자 목록 캐시 (앱 시작 시 DB에서 로드)
+_DRAFTERS_CACHE: list[str] | None = None
+
+
+def get_common_drafters() -> list[str]:
+    """DB에서 기안자 목록을 동적으로 로드 (캐싱 적용)"""
+    global _DRAFTERS_CACHE
+    if _DRAFTERS_CACHE is not None:
+        return _DRAFTERS_CACHE
+
+    try:
+        conn = sqlite3.connect("metadata.db")
+        rows = conn.execute(
+            "SELECT DISTINCT drafter FROM documents WHERE drafter IS NOT NULL AND drafter != ''"
+        ).fetchall()
+        conn.close()
+        _DRAFTERS_CACHE = [row[0] for row in rows if row[0]]
+        logger.info(f"기안자 목록 로드: {len(_DRAFTERS_CACHE)}명")
+    except Exception as e:
+        logger.warning(f"기안자 목록 로드 실패, 폴백 사용: {e}")
+        # 폴백: 기본 목록
+        _DRAFTERS_CACHE = [
+            "유인혁", "최새름", "하승범", "신규호", "노규민", "남준수",
+            "이권형", "이승현", "윤상현", "장다운", "정다운", "김승룡",
+            "총무팀", "강병규", "박연수", "이호영", "이승헌", "이의주",
+        ]
+    return _DRAFTERS_CACHE
 
 # 개수 질의 키워드
 COUNT_KEYWORDS = ["몇개", "몆개", "몇 개", "몆 개", "개수", "총", "몇", "몆"]
@@ -102,7 +125,7 @@ def extract_drafter_filter(query: str) -> Optional[str]:
     Returns:
         추출된 기안자명. 없으면 None
     """
-    for name in COMMON_DRAFTERS:
+    for name in get_common_drafters():
         if name in query:
             logger.info(f"🔍 기안자 필터 적용: {name}")
             return name

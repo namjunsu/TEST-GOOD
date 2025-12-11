@@ -25,6 +25,7 @@ sys.path.insert(0, str(project_root))
 import app.config.settings as config  # config 모듈 이름으로도 사용 (하위 호환성)
 from app.config.settings import settings  # 중앙 설정 객체
 from app.rag.pipeline import RAGPipeline  # 파사드 패턴: 단일 진입점
+from components.admin_panel import render_admin_panel  # 관리자 패널 컴포넌트
 from components.chat_interface import render_chat_interface  # 채팅 인터페이스 컴포넌트
 from components.document_preview import render_document_preview  # 문서 미리보기 컴포넌트
 from components.pdf_viewer import show_pdf_preview  # PDF 뷰어 컴포넌트
@@ -367,9 +368,21 @@ def main():
             # 로딩 컨테이너 비우기
             loading_container.empty()
 
-    # 사이드바 - 문서 라이브러리 (컴포넌트)
+    # 사이드바 - 문서 라이브러리 + 관리자 모드 토글
     with st.sidebar:
-        render_sidebar_library(st.session_state.rag)
+        # 관리자 모드 토글 (사이드바 상단)
+        st.divider()
+        admin_mode = st.toggle("⚙️ 관리자 모드", value=st.session_state.get("admin_mode", False), key="admin_toggle")
+        st.session_state.admin_mode = admin_mode
+        st.divider()
+
+        if not admin_mode:
+            render_sidebar_library(st.session_state.rag)
+
+    # ===== 관리자 모드 =====
+    if st.session_state.get("admin_mode", False):
+        render_admin_panel()
+        return  # 관리자 모드에서는 채팅 UI 표시 안함
 
     # ===== 메인 화면: AI 채팅 =====
     # UnifiedRAG 초기화 (자동 모드)

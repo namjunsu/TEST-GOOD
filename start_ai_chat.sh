@@ -168,7 +168,7 @@ if [[ "$RETRIEVER_BACKEND" == "bm25" && "${SKIP_BM25_GUARD:-0}" != "1" ]]; then
   if [[ ! -f "${BM25_INDEX_PATH}" ]]; then
     printf "\r\033[K"
     log WARN "BM25 인덱스가 없어 재인덱싱을 수행합니다"
-    if run_with_spinner "BM25 인덱스 생성 중..." python scripts/quick_rebuild_bm25.py; then
+    if run_with_spinner "BM25 인덱스 생성 중..." python scripts/data/indexing/rebuild_bm25.py; then
       log SUCCESS "BM25 인덱스 생성 완료"
     else
       log ERROR "재인덱싱 실패"
@@ -203,7 +203,7 @@ PYCHECK
 
   if [[ $rc -eq 2 ]]; then
     log WARN "인덱스 드리프트 감지 → 재인덱싱"
-    if run_with_spinner "BM25 재인덱싱 중..." python scripts/quick_rebuild_bm25.py; then
+    if run_with_spinner "BM25 재인덱싱 중..." python scripts/data/indexing/rebuild_bm25.py; then
       log SUCCESS "BM25 재인덱싱 완료"
     else
       log ERROR "재인덱싱 실패"

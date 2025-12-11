@@ -333,21 +333,13 @@ class DocumentIngester:
             result["actions"].append(f"doctype={doctype}")
 
             # 6. 메타데이터 파싱
-            # MetaParser를 사용한 메타데이터 추출
-            parsed_meta = self.meta_parser.parse(
-                metadata={},
-                title=pdf_path.stem,
-                content=cleaned_text[:1000],
-            )
-
-            # TableParser를 사용한 비용 정보 추출
-            cost_data = self.table_parser.extract_cost_table(raw_text)
-
-            # 한글 필드명 직접 추출 (기안서 프린트뷰 전용)
+            # 6.1 한글 필드명 직접 추출 (기안서/검토서/보고서 양식)
             import re
-            korean_fields = {}
+            korean_fields = {"filename": pdf_path.name}
 
-            # 시행일자 추출
+            # === 날짜 추출 (우선순위: 시행일자 > 기안일자 > 작성일자 > 작성일 > 파일명) ===
+
+            # 시행일자 추출 (기안서)
             action_date_match = re.search(r"시행일자\s+(\d{4}[-./]\d{1,2}[-./]\d{1,2}(?:\s*~\s*\d{4}[-./]\d{1,2}[-./]\d{1,2})?)", raw_text)
             if action_date_match:
                 try:
@@ -355,7 +347,7 @@ class DocumentIngester:
                 except (IndexError, AttributeError):
                     logger.debug("시행일자 그룹 추출 실패")
 
-            # 기안일자 추출
+            # 기안일자 추출 (기안서)
             draft_date_match = re.search(r"기안일자\s+(\d{4}[-./]\d{1,2}[-./]\d{1,2}(?:\s+\d{1,2}:\d{2})?)", raw_text)
             if draft_date_match:
                 try:
@@ -363,7 +355,7 @@ class DocumentIngester:
                 except (IndexError, AttributeError):
                     logger.debug("기안일자 그룹 추출 실패")
 
-            # 작성일자 추출
+            # 작성일자 추출 (보고서)
             created_date_match = re.search(r"작성일자\s+(\d{4}[-./]\d{1,2}[-./]\d{1,2})", raw_text)
             if created_date_match:
                 try:
@@ -371,25 +363,88 @@ class DocumentIngester:
                 except (IndexError, AttributeError):
                     logger.debug("작성일자 그룹 추출 실패")
 
-            # 작성일 추출 (검토서 양식: "작성일 2021. 06. 21.")
+            # 작성일 추출 (검토서 양식: "작성일 2021. 06. 21." 또는 "작성일: 2021-06-21")
             if "작성일자" not in korean_fields:
-                review_date_match = re.search(r"작성일\s+(\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.?)", raw_text)
-                if review_date_match:
-                    try:
-                        korean_fields["작성일"] = review_date_match.group(1)
-                    except (IndexError, AttributeError):
-                        logger.debug("작성일 그룹 추출 실패")
+                review_date_patterns = [
+                    r"작성일\s*[:\s]\s*(\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.?)",  # 2021. 06. 21.
+                    r"작성일\s*[:\s]\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2})",  # 2021-06-21
+                ]
+                for pattern in review_date_patterns:
+                    review_date_match = re.search(pattern, raw_text)
+                    if review_date_match:
+                        try:
+                            korean_fields["작성일"] = review_date_match.group(1)
+                            break
+                        except (IndexError, AttributeError):
+                            logger.debug("작성일 그룹 추출 실패")
 
-            # 기안자 추출 (다양한 구분자 허용: 공백, 탭, ㅣ, |, :, ：)
-            drafter_match = re.search(r"기안자[\s\|\ㅣ:：\t]*([가-힣]{2,10})", raw_text)
+            # 보고일 추출 (보고서)
+            if not any(k in korean_fields for k in ["시행일자", "기안일자", "작성일자", "작성일"]):
+                report_date_match = re.search(r"보고일\s*[:\s]\s*(\d{4}[-./]\d{1,2}[-./]\d{1,2})", raw_text)
+                if report_date_match:
+                    try:
+                        korean_fields["보고일자"] = report_date_match.group(1)
+                    except (IndexError, AttributeError):
+                        logger.debug("보고일자 그룹 추출 실패")
+
+            # 파일명에서 날짜 폴백 (YYYY-MM-DD 또는 YYYY_MM_DD)
+            if not any(k in korean_fields for k in ["시행일자", "기안일자", "작성일자", "작성일", "보고일자"]):
+                filename_date_match = re.match(r"^(\d{4})[-_]?(\d{1,2})[-_]?(\d{1,2})", pdf_path.name)
+                if filename_date_match:
+                    try:
+                        y, m, d = filename_date_match.groups()
+                        korean_fields["파일명날짜"] = f"{y}-{m.zfill(2)}-{d.zfill(2)}"
+                        logger.debug(f"파일명에서 날짜 추출: {korean_fields['파일명날짜']}")
+                    except (IndexError, AttributeError):
+                        logger.debug("파일명 날짜 그룹 추출 실패")
+
+            # === 작성자 추출 (우선순위: 기안자 > 작성자 > 검토자 > 담당자) ===
+
+            # 기안자 추출 (기안서)
+            drafter_match = re.search(r"기안자[\s\|\ㅣ:：\t]*([가-힣]{2,4})", raw_text)
             if drafter_match:
                 try:
                     drafter_name = drafter_match.group(1)
                     # 불용어 제외
-                    if drafter_name not in {"정보", "없음", "기타", "미상", "해당"}:
-                        korean_fields["drafter"] = drafter_name  # "기안자" → "drafter"로 키 통일
+                    if drafter_name not in {"정보", "없음", "기타", "미상", "해당", "합계", "비용", "내용"}:
+                        korean_fields["drafter"] = drafter_name
                 except (IndexError, AttributeError):
                     logger.debug("기안자 그룹 추출 실패")
+
+            # 작성자 추출 (검토서/보고서)
+            if "drafter" not in korean_fields:
+                author_match = re.search(r"작성자[\s\|\ㅣ:：\t]*([가-힣]{2,4})", raw_text)
+                if author_match:
+                    try:
+                        author_name = author_match.group(1)
+                        if author_name not in {"정보", "없음", "기타", "미상", "해당", "합계", "비용", "내용"}:
+                            korean_fields["drafter"] = author_name
+                    except (IndexError, AttributeError):
+                        logger.debug("작성자 그룹 추출 실패")
+
+            # 검토자 추출 (검토서)
+            if "drafter" not in korean_fields:
+                reviewer_match = re.search(r"검토자[\s\|\ㅣ:：\t]*([가-힣]{2,4})", raw_text)
+                if reviewer_match:
+                    try:
+                        reviewer_name = reviewer_match.group(1)
+                        if reviewer_name not in {"정보", "없음", "기타", "미상", "해당", "합계", "비용", "내용"}:
+                            korean_fields["drafter"] = reviewer_name
+                    except (IndexError, AttributeError):
+                        logger.debug("검토자 그룹 추출 실패")
+
+            # 담당자 추출 (폴백)
+            if "drafter" not in korean_fields:
+                manager_match = re.search(r"담당자[\s\|\ㅣ:：\t]*([가-힣]{2,4})", raw_text)
+                if manager_match:
+                    try:
+                        manager_name = manager_match.group(1)
+                        if manager_name not in {"정보", "없음", "기타", "미상", "해당", "합계", "비용", "내용"}:
+                            korean_fields["drafter"] = manager_name
+                    except (IndexError, AttributeError):
+                        logger.debug("담당자 그룹 추출 실패")
+
+            # === 부서 추출 ===
 
             # 기안부서 추출
             dept_match = re.search(r"기안부서\s+([^\n]+)", raw_text)
@@ -399,10 +454,31 @@ class DocumentIngester:
                 except (IndexError, AttributeError):
                     logger.debug("기안부서 그룹 추출 실패")
 
-            # parsed_meta에 한글 필드 병합
-            if korean_fields:
-                parsed_meta.update(korean_fields)
+            # 소속 추출 (검토서/보고서)
+            if "기안부서" not in korean_fields:
+                dept_match2 = re.search(r"소속[\s:：]*([^\n]+)", raw_text)
+                if dept_match2:
+                    try:
+                        korean_fields["기안부서"] = dept_match2.group(1).strip()
+                    except (IndexError, AttributeError):
+                        logger.debug("소속 그룹 추출 실패")
+
+            # 6.2 MetaParser를 사용한 메타데이터 표준화 (한글 필드 포함)
+            parsed_meta = self.meta_parser.parse(
+                metadata=korean_fields,  # 한글 필드를 전달
+                title=pdf_path.stem,
+                content=cleaned_text[:1000],
+            )
+
+            # 한글 필드 중 누락된 것 다시 병합 (MetaParser가 덮어쓰지 않은 경우)
+            for key in ["drafter", "기안부서"]:
+                if key in korean_fields and (key not in parsed_meta or parsed_meta.get(key) == "정보 없음"):
+                    parsed_meta[key] = korean_fields[key]
+
             result["actions"].append("meta_parsed")
+
+            # TableParser를 사용한 비용 정보 추출
+            cost_data = self.table_parser.extract_cost_table(raw_text)
 
             # 7. 표 파싱 (비용표)
             tables = self.table_parser.parse(raw_text)
@@ -477,13 +553,9 @@ class DocumentIngester:
                     else:
                         final_path = self.processed_dir / pdf_path.name
 
-                    # Convert to relative path from docs/
-                    docs_dir_abs = (Path.cwd() / "docs").resolve()
-                    final_path_abs = (Path.cwd() / final_path).resolve()
-                    relative_path = str(final_path_abs.relative_to(docs_dir_abs))
-
+                    # 경로는 docs/year_YYYY/파일명.pdf 형식으로 저장 (기존 데이터와 일관성)
                     doc_metadata = {
-                        "path": relative_path,
+                        "path": str(final_path),
                         "filename": pdf_path.name,
                         "title": parsed_meta.get("title", pdf_path.stem),
                         "date": parsed_meta.get("display_date", ""),
@@ -539,6 +611,18 @@ class DocumentIngester:
 
                         if existing_hash is not None and existing_hash == file_hash:
                             logger.warning(f"중복 파일 (동일 해시), incoming만 삭제: {dest}")
+                            # DB 경로를 year 폴더 경로로 업데이트
+                            if self.db:
+                                try:
+                                    self.db._get_conn().execute(
+                                        "UPDATE documents SET path = ? WHERE filename = ?",
+                                        (str(dest), pdf_path.name),
+                                    )
+                                    self.db._get_conn().commit()
+                                    logger.info(f"DB 경로 업데이트: {pdf_path.name} → {dest}")
+                                    result["actions"].append(f"→db_path_updated({dest})")
+                                except Exception as e:
+                                    logger.error(f"DB 경로 업데이트 실패: {e}")
                             pdf_path.unlink(missing_ok=True)
                             result["actions"].append("→already_exists_same_hash_skipped")
                         else:

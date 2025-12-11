@@ -11,7 +11,7 @@ Strangler Fig 패턴:
 
 import re
 import sqlite3
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, TypedDict
 
 from app.core.errors import SearchError
 from app.core.logging import get_logger
@@ -47,6 +47,46 @@ CONTENT_STOP_WORDS = [
 
 # 조사 (단어 경계에서만 제거)
 POSTPOSITIONS = [" 에 ", " 에서 ", " 이 ", " 가 ", " 을 ", " 를 "]
+
+# 빈 값으로 간주할 값들 (UI 표시 시 필터링)
+EMPTY_VALUES = frozenset({None, "", "None", "없음", "정보 없음", "기타", "작성자 미상", "날짜 없음"})
+
+
+# ============================================================================
+# 타입 정의
+# ============================================================================
+
+class DocDetail(TypedDict, total=False):
+    """문서 상세 정보 타입"""
+    filename: str
+    drafter: str
+    date: str
+    doctype: str
+    claimed_total: int | None
+    text_preview: str
+    title: str
+    category: str
+    path: str
+
+
+class SearchStatus(TypedDict):
+    """검색 상태 타입"""
+    retrieved_count: int
+    selected_count: int
+    found: bool
+    merged_similar: int  # 선택적
+
+
+class EvidenceItem(TypedDict, total=False):
+    """증거 항목 타입"""
+    doc_id: str
+    filename: str
+    file_path: str
+    page: int
+    snippet: str
+    ref: str | None
+    meta: dict[str, Any]
+
 
 # 기안자 목록 캐시 (앱 시작 시 DB에서 로드)
 _DRAFTERS_CACHE: list[str] | None = None
@@ -574,9 +614,6 @@ class SearchHandler(BaseHandler):
         filenames: list[str],
     ) -> dict[str, Any]:
         """검색 응답 생성"""
-        # 빈 값 체크용 상수
-        EMPTY_VALUES = {None, "", "None", "없음", "정보 없음", "기타"}
-
         # 카드 생성 (2025-12-11: 깔끔한 형식으로 개선)
         cards = []
         for i, doc in enumerate(doc_details, 1):
@@ -674,7 +711,6 @@ class SearchHandler(BaseHandler):
     ) -> dict[str, Any]:
         """정밀 검색 응답 생성 (2025-12-11: 깔끔한 형식으로 개선)"""
         response_text = f"📄 **'{keywords}' 내용 포함 문서 ({len(doc_details)}건)**\n\n"
-        EMPTY_VALUES = {None, "", "None", "없음", "정보 없음", "기타"}
 
         for i, doc in enumerate(doc_details, 1):
             title = format_title_from_filename(doc.get("filename", ""))
@@ -902,7 +938,7 @@ class CostSumHandler(BaseHandler):
                 title = format_title_from_filename(filename)
 
                 answer_text += f"{i}. {title}: ₩{claimed_total:,}\n"
-                answer_text += f"   📅 {doc.get('display_date') or doc.get('date') or '날짜 없음'} | ✍ {doc.get('drafter') or '정보 없음'}\n"
+                answer_text += f"   📅 {doc.get('display_date') or doc.get('date') or '날짜 없음'} | 👤 {doc.get('drafter') or '정보 없음'}\n"
 
                 filenames.append(filename)
                 evidence.append({

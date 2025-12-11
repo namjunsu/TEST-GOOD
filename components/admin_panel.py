@@ -172,37 +172,65 @@ def render_upload_section():
     if uploaded_files:
         st.info(f"📁 {len(uploaded_files)}개 파일 선택됨")
 
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            # 파일 목록 표시
+        # 파일 목록 표시
+        with st.expander("선택된 파일 목록", expanded=False):
             for f in uploaded_files:
                 st.text(f"• {f.name} ({f.size / 1024:.1f} KB)")
 
-        with col2:
-            if st.button("📥 업로드 시작", type="primary", use_container_width=True):
-                progress = st.progress(0)
-                status = st.empty()
+        # 옵션
+        auto_ingest = st.checkbox("✅ 업로드 후 자동으로 시스템에 등록", value=True,
+                                   help="체크하면 업로드 완료 후 자동으로 인제스트 실행")
 
-                success_count = 0
-                for i, uploaded_file in enumerate(uploaded_files):
-                    status.text(f"업로드 중: {uploaded_file.name}")
+        if st.button("📥 업로드 시작", type="primary", use_container_width=True):
+            progress = st.progress(0)
+            status = st.empty()
 
-                    # incoming 폴더에 저장
-                    dest_path = INCOMING_DIR / uploaded_file.name
-                    with open(dest_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
+            success_count = 0
+            for i, uploaded_file in enumerate(uploaded_files):
+                status.text(f"업로드 중: {uploaded_file.name}")
 
-                    success_count += 1
-                    progress.progress((i + 1) / len(uploaded_files))
+                # incoming 폴더에 저장
+                dest_path = INCOMING_DIR / uploaded_file.name
+                with open(dest_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
 
-                status.empty()
-                progress.empty()
+                success_count += 1
+                progress.progress((i + 1) / len(uploaded_files))
 
-                if success_count == len(uploaded_files):
-                    st.success(f"✅ {success_count}개 파일 업로드 완료 (docs/incoming/)")
-                    st.info("💡 '인제스트 실행' 버튼을 눌러 시스템에 등록하세요")
+            if success_count == len(uploaded_files):
+                st.success(f"✅ {success_count}개 파일 업로드 완료")
+
+                # 자동 인제스트
+                if auto_ingest:
+                    status.text("📥 시스템에 등록 중...")
+                    progress.progress(0)
+                    ingest_success, ingest_output = run_ingest()
+                    progress.progress(50)
+
+                    if ingest_success:
+                        # BM25 재빌드도 자동 실행
+                        status.text("🔍 검색 인덱스 업데이트 중...")
+                        bm25_success, bm25_output = run_rebuild_bm25()
+                        progress.progress(100)
+
+                        if bm25_success:
+                            st.success("✅ 시스템 등록 완료! 검색 가능합니다.")
+                        else:
+                            st.warning("⚠️ 인제스트 완료, 인덱스 재빌드 실패")
+                            with st.expander("인덱스 로그"):
+                                st.code(bm25_output)
+                    else:
+                        st.error("❌ 인제스트 실패")
+                        with st.expander("오류 로그"):
+                            st.code(ingest_output)
                 else:
-                    st.warning(f"⚠️ {success_count}/{len(uploaded_files)}개 업로드 성공")
+                    st.info("💡 '인덱싱' 탭에서 '인제스트 실행' 버튼을 눌러주세요")
+
+            else:
+                st.warning(f"⚠️ {success_count}/{len(uploaded_files)}개 업로드 성공")
+
+            status.empty()
+            progress.empty()
 
     # incoming 폴더 현황
     incoming_files = list(INCOMING_DIR.glob("*.pdf")) + list(INCOMING_DIR.glob("*.PDF"))
@@ -294,55 +322,64 @@ def render_document_list():
     # 문서 카드 렌더링
     for doc in page_docs:
         with st.container(border=True):
-            col1, col2, col3 = st.columns([4, 2, 1])
+            # 편집/삭제 모드가 아닐 때 기본 표시
+            if not st.session_state.get(f"editing_{doc['id']}", False) and not st.session_state.get(f"confirm_del_{doc['id']}", False):
+                col1, col2, col3 = st.columns([5, 1, 1])
 
-            with col1:
-                st.markdown(f"**{doc['filename'][:60]}**{'...' if len(doc['filename']) > 60 else ''}")
-                st.caption(f"📅 {doc.get('date', '날짜 없음')} | 👤 {doc.get('drafter', '정보 없음')}")
+                with col1:
+                    st.markdown(f"**{doc['filename'][:70]}**{'...' if len(doc['filename']) > 70 else ''}")
+                    st.caption(f"📅 {doc.get('date', '날짜 없음')} | 👤 {doc.get('drafter', '정보 없음')}")
 
-            with col2:
-                # 편집 버튼
-                if st.button("✏️ 편집", key=f"edit_{doc['id']}", use_container_width=True):
-                    st.session_state[f"editing_{doc['id']}"] = True
-                    st.rerun()
+                with col2:
+                    if st.button("✏️", key=f"edit_{doc['id']}", help="편집", use_container_width=True):
+                        st.session_state[f"editing_{doc['id']}"] = True
+                        st.rerun()
 
-            with col3:
-                # 삭제 버튼
-                if st.button("🗑️", key=f"del_{doc['id']}", help="문서 삭제"):
-                    st.session_state[f"confirm_del_{doc['id']}"] = True
-                    st.rerun()
+                with col3:
+                    if st.button("🗑️", key=f"del_{doc['id']}", help="삭제", use_container_width=True):
+                        st.session_state[f"confirm_del_{doc['id']}"] = True
+                        st.rerun()
 
             # 편집 폼
-            if st.session_state.get(f"editing_{doc['id']}", False):
+            elif st.session_state.get(f"editing_{doc['id']}", False):
+                st.markdown(f"**✏️ 편집: {doc['filename'][:50]}...**")
                 with st.form(key=f"edit_form_{doc['id']}"):
-                    new_drafter = st.text_input("기안자", value=doc.get("drafter", ""))
-                    new_date = st.text_input("날짜", value=doc.get("date", ""))
-                    new_doctype = st.text_input("문서유형", value=doc.get("doctype", ""))
+                    col_a, col_b, col_c = st.columns(3)
+                    with col_a:
+                        new_drafter = st.text_input("기안자", value=doc.get("drafter", ""))
+                    with col_b:
+                        new_date = st.text_input("날짜 (YYYY-MM-DD)", value=doc.get("date", ""))
+                    with col_c:
+                        new_doctype = st.text_input("문서유형", value=doc.get("doctype", ""))
 
                     col_save, col_cancel = st.columns(2)
                     with col_save:
-                        if st.form_submit_button("💾 저장", type="primary"):
+                        if st.form_submit_button("💾 저장", type="primary", use_container_width=True):
                             if update_document_metadata(doc["id"], new_drafter, new_date, new_doctype):
                                 st.success("저장 완료")
                                 del st.session_state[f"editing_{doc['id']}"]
                                 st.rerun()
                     with col_cancel:
-                        if st.form_submit_button("취소"):
+                        if st.form_submit_button("❌ 취소", use_container_width=True):
                             del st.session_state[f"editing_{doc['id']}"]
                             st.rerun()
 
-            # 삭제 확인
-            if st.session_state.get(f"confirm_del_{doc['id']}", False):
-                st.warning(f"⚠️ '{doc['filename']}'을(를) 정말 삭제하시겠습니까?")
+            # 삭제 확인 (강화)
+            elif st.session_state.get(f"confirm_del_{doc['id']}", False):
+                st.error(f"🗑️ **삭제 확인**")
+                st.write(f"다음 문서를 삭제합니다:")
+                st.code(doc['filename'])
+                st.warning("⚠️ PDF 파일과 텍스트 파일이 모두 삭제됩니다. 이 작업은 되돌릴 수 없습니다.")
+
                 col_yes, col_no = st.columns(2)
                 with col_yes:
-                    if st.button("🗑️ 삭제", key=f"confirm_yes_{doc['id']}", type="primary"):
+                    if st.button("🗑️ 삭제 확인", key=f"confirm_yes_{doc['id']}", type="primary", use_container_width=True):
                         if delete_document(doc["id"], doc["filename"], doc.get("path", "")):
                             st.success("삭제 완료")
                             del st.session_state[f"confirm_del_{doc['id']}"]
                             st.rerun()
                 with col_no:
-                    if st.button("취소", key=f"confirm_no_{doc['id']}"):
+                    if st.button("↩️ 취소", key=f"confirm_no_{doc['id']}", use_container_width=True):
                         del st.session_state[f"confirm_del_{doc['id']}"]
                         st.rerun()
 

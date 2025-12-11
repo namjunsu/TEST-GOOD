@@ -64,9 +64,10 @@ class MetaParser:
         metadata_config = self.config.get("metadata", {}) or {}
 
         # 날짜 우선순위 (config에서 로드, 없으면 기본값)
+        # 파일명날짜는 최후 폴백으로 추가
         self.date_priority = metadata_config.get(
             "date_priority",
-            ["시행일자", "기안일자", "작성일자", "보고일자", "회의일자"],
+            ["시행일자", "기안일자", "작성일자", "작성일", "보고일자", "회의일자", "파일명날짜"],
         )
 
         # 작성자 필드 우선순위

@@ -412,26 +412,28 @@ def build_evidence_list(
 def format_search_card(
     index: int,
     filename: str,
-    drafter: str = "작성자 미상",
-    date: str = "날짜 없음",
-    doctype: str = "문서",
+    drafter: str = "",
+    date: str = "",
+    doctype: str = "",
     claimed_total: int = None,
     text_preview: str = "",
 ) -> str:
-    """검색 결과 카드 포맷팅"""
+    """검색 결과 카드 포맷팅 (2025-12-11: 깔끔한 형식으로 개선)"""
     title = format_title_from_filename(filename)
+    lines = [f"{index}. {title}"]
 
-    lines = [f"{index}. **{title}**"]
-    lines.append(f"   📋 {doctype} | 📅 {date} | ✍ {drafter}")
-
+    # 메타데이터 한 줄로 표시 (날짜 | 기안자 | 금액)
+    EMPTY_VALUES = {None, "", "None", "없음", "정보 없음", "기타", "작성자 미상", "날짜 없음"}
+    meta_parts = []
+    if date and date not in EMPTY_VALUES:
+        meta_parts.append(f"📅 {date}")
+    if drafter and drafter not in EMPTY_VALUES:
+        meta_parts.append(f"👤 {drafter}")
     if claimed_total:
-        lines.append(f"   💰 {claimed_total:,}원")
+        meta_parts.append(f"💰 {claimed_total:,}원")
 
-    if text_preview:
-        clean_text = clean_text_preview(text_preview)
-        if clean_text:
-            preview = clean_text[:80]
-            lines.append(f"   📝 {preview}...")
+    if meta_parts:
+        lines.append("   " + " | ".join(meta_parts))
 
     return "\n".join(lines)
 

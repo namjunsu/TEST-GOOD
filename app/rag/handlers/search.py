@@ -554,33 +554,23 @@ class SearchHandler(BaseHandler):
         # 빈 값 체크용 상수
         EMPTY_VALUES = {None, "", "None", "없음", "정보 없음", "기타"}
 
-        # 카드 생성
+        # 카드 생성 (2025-12-11: 깔끔한 형식으로 개선)
         cards = []
         for i, doc in enumerate(doc_details, 1):
             title = format_title_from_filename(doc["filename"])
-            card_lines = [f"{i}. **{title}**"]
+            card_lines = [f"{i}. {title}"]
 
-            # 메타데이터 조건부 표시 (빈 값 제외, 2025-12-08)
+            # 메타데이터 한 줄로 표시 (날짜 | 기안자 | 금액)
             meta_parts = []
-            if doc.get("doctype") and doc["doctype"] not in EMPTY_VALUES:
-                meta_parts.append(f"📋 {doc['doctype']}")
             if doc.get("date") and doc["date"] not in EMPTY_VALUES:
                 meta_parts.append(f"📅 {doc['date']}")
             if doc.get("drafter") and doc["drafter"] not in EMPTY_VALUES:
-                meta_parts.append(f"✍ {doc['drafter']}")
+                meta_parts.append(f"👤 {doc['drafter']}")
+            if doc.get("claimed_total"):
+                meta_parts.append(f"💰 {doc['claimed_total']:,}원")
 
             if meta_parts:
                 card_lines.append("   " + " | ".join(meta_parts))
-
-            if doc.get("claimed_total"):
-                card_lines.append(f"   💰 {doc['claimed_total']:,}원")
-
-            # 텍스트 미리보기 (OCR 품질 필터링, 2025-12-08)
-            if doc.get("text_preview"):
-                clean_text = clean_text_preview(doc["text_preview"])
-                if clean_text and is_readable_text(clean_text):
-                    preview = clean_text[:200]
-                    card_lines.append(f"   📝 {preview}...")
 
             cards.append("\n".join(card_lines))
 
@@ -659,31 +649,25 @@ class SearchHandler(BaseHandler):
         doc_details: list[dict[str, Any]],
         filenames: list[str],
     ) -> dict[str, Any]:
-        """정밀 검색 응답 생성"""
+        """정밀 검색 응답 생성 (2025-12-11: 깔끔한 형식으로 개선)"""
         response_text = f"📄 **'{keywords}' 내용 포함 문서 ({len(doc_details)}건)**\n\n"
+        EMPTY_VALUES = {None, "", "None", "없음", "정보 없음", "기타"}
 
         for i, doc in enumerate(doc_details, 1):
-            title = doc["title"] or doc["filename"]
-            category_emoji = "📋" if "기안서" in doc["category"] else "📄"
-            drafter_str = f"✍ {doc['drafter']}" if doc["drafter"] else ""
-            date_str = f"📅 {doc['date']}" if doc["date"] else ""
+            title = format_title_from_filename(doc.get("filename", ""))
 
-            meta_parts = [
-                p for p in [category_emoji + " " + doc["category"], date_str, drafter_str]
-                if p
-            ]
-            meta_line = " | ".join(meta_parts)
+            # 메타데이터 한 줄로 표시 (날짜 | 기안자 | 금액)
+            meta_parts = []
+            if doc.get("date") and doc["date"] not in EMPTY_VALUES:
+                meta_parts.append(f"📅 {doc['date']}")
+            if doc.get("drafter") and doc["drafter"] not in EMPTY_VALUES:
+                meta_parts.append(f"👤 {doc['drafter']}")
+            if doc.get("claimed_total"):
+                meta_parts.append(f"💰 {doc['claimed_total']:,}원")
 
-            response_text += f"**{i}.** {title}\n"
-            if meta_line:
-                response_text += f"   {meta_line}\n"
-
-            if doc["claimed_total"]:
-                response_text += f"   💰 {doc['claimed_total']:,}원\n"
-
-            if doc["text_preview"]:
-                response_text += f"   📝 {doc['text_preview']}...\n"
-
+            response_text += f"{i}. {title}\n"
+            if meta_parts:
+                response_text += "   " + " | ".join(meta_parts) + "\n"
             response_text += "\n"
 
         # Citations 생성

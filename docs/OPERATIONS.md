@@ -1,1021 +1,655 @@
-# AI-CHAT Operations Guide
+# AI-CHAT 운영 가이드
 
-**Version**: v2025.10.31-ops-baseline
-**Environment**: WSL2, Python 3.12, RTX 4060
-**Last Updated**: 2025-10-31
-
----
-
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Architecture](#architecture)
-3. [Environment Variables Reference](#environment-variables-reference)
-4. [Installation & Setup](#installation--setup)
-5. [Start/Stop Procedures](#startstop-procedures)
-6. [Health Checks](#health-checks)
-7. [Log Management](#log-management)
-8. [Indexing Operations](#indexing-operations)
-9. [Monitoring & Metrics](#monitoring--metrics)
-10. [Validation Routines](#validation-routines)
-11. [Backup & Recovery](#backup--recovery)
-12. [Service Level Objectives (SLO)](#service-level-objectives-slo)
-13. [Troubleshooting](#troubleshooting)
+**최종 업데이트**: 2025-12-11
+**시스템**: RAG 기반 문서 Q&A 시스템
+**환경**: WSL2, Python 3.12, RTX 4060
 
 ---
 
-## Overview
+## 목차
 
-AI-CHAT is a RAG-based document Q&A system with:
-- **Backend**: FastAPI (port 7860) serving `/ask`, `/metrics`, `/reindex` endpoints
-- **Frontend**: Streamlit (port 8501) for user interaction
-- **Storage**: SQLite databases (metadata.db, everything_index.db)
-- **LLM**: llama-cpp-python with GGUF model support
-- **Embeddings**: sentence-transformers for vector search
-- **Search**: FAISS for similarity search + BM25 for keyword matching
-
-### Key Features
-
-- Automatic document ingestion from `docs/` directory
-- Hybrid retrieval (semantic + keyword)
-- Multi-mode responses (QA, SUMMARY, AUTO)
-- Automatic chat format detection
-- Preview & pagination in UI
-- Reindex mutex for concurrency safety
-- Structured logging with rotation
+1. [시스템 개요](#1-시스템-개요)
+2. [빠른 시작](#2-빠른-시작)
+3. [문서 관리](#3-문서-관리)
+4. [환경 설정](#4-환경-설정)
+5. [서비스 운영](#5-서비스-운영)
+6. [모니터링](#6-모니터링)
+7. [백업 및 복구](#7-백업-및-복구)
+8. [트러블슈팅](#8-트러블슈팅)
+9. [보안 설정](#9-보안-설정)
+10. [SLO 및 품질 가드](#10-slo-및-품질-가드)
 
 ---
 
-## Architecture
+## 1. 시스템 개요
+
+### 1.1 아키텍처
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        User Interface                        │
-│                  Streamlit (port 8501)                       │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      Backend API                             │
-│                  FastAPI (port 7860)                         │
-│  ┌─────────────────┬─────────────────┬─────────────────┐    │
-│  │   /ask          │   /metrics      │   /reindex      │    │
-│  └─────────────────┴─────────────────┴─────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
-                              │
-          ┌───────────────────┼───────────────────┐
-          ▼                   ▼                   ▼
-┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
-│  RAG Pipeline    │ │   Indexing       │ │   LLM Wrapper    │
-│  - Stage 0       │ │   - Auto-scan    │ │   - Chat format  │
-│  - Stage 1       │ │   - Mutex lock   │ │   - Context mgmt │
-│  - Rerank (RRF)  │ │   - DB VACUUM    │ │   - Streaming    │
-└──────────────────┘ └──────────────────┘ └──────────────────┘
-          │                   │                   │
-          ▼                   ▼                   ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Storage Layer                             │
-│  ┌─────────────────────────┬─────────────────────────────┐  │
-│  │   metadata.db           │   everything_index.db       │  │
-│  │   (file metadata)       │   (chunk vectors + BM25)    │  │
-│  └─────────────────────────┴─────────────────────────────┘  │
-│                                                              │
-│                 File System: docs/                           │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         RAG 시스템 데이터 흐름                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+    ┌──────────────┐
+    │   원본 PDF    │  ← 진실의 원천 (Source of Truth)
+    │  docs/year_* │     469개 PDF 파일
+    └──────┬───────┘
+           │
+           │ (1) 텍스트 추출 (pdfplumber + OCR)
+           ▼
+    ┌──────────────┐
+    │ 추출된 텍스트  │  ← 검색용 텍스트
+    │data/extracted│     469개 .txt 파일
+    └──────┬───────┘
+           │
+           │ (2) 메타데이터 파싱
+           ▼
+    ┌──────────────┐
+    │ 메타데이터 DB  │  ← 필터링/목록 표시용
+    │  metadata.db │     날짜, 작성자, 카테고리 등
+    └──────┬───────┘
+           │
+           │ (3) 인덱싱
+           ▼
+    ┌──────────────┐
+    │  BM25 인덱스  │  ← 키워드 검색용
+    │  var/index/  │     토큰화된 검색 인덱스
+    └──────────────┘
 ```
 
-### Component Responsibilities
+### 1.2 디렉토리 구조
 
-| Component | Purpose | Location |
-|-----------|---------|----------|
-| **FastAPI** | REST API, request routing | `app/api/main.py` |
-| **Streamlit** | User interface, file preview | `web_interface.py` |
-| **RAG Pipeline** | Hybrid retrieval, reranking | `app/rag/pipeline.py` |
-| **LLM Wrapper** | LLM inference, chat handling | `rag_system/llm_wrapper.py` |
-| **Auto Indexer** | Background file scanning | `scripts/utils/auto_indexer.py` |
-| **Logging** | Structured logs, rotation | `app/logging/config.py` |
+```
+AI-CHAT/
+├── docs/                      # 원본 PDF 문서
+│   ├── year_2020~2025/       # 연도별 폴더
+│   ├── incoming/             # 신규 문서 대기 폴더
+│   └── quarantine/           # 삭제된 문서 백업
+│
+├── data/
+│   └── extracted/            # 텍스트 추출 파일 (.txt)
+│
+├── metadata.db               # 메타데이터 DB (SQLite)
+│
+├── var/
+│   └── index/                # BM25 검색 인덱스
+│       └── bm25_index.pkl
+│
+├── scripts/
+│   ├── ops/                  # 운영 스크립트
+│   │   ├── add_docs.sh       # 문서 추가
+│   │   ├── delete_doc.sh     # 문서 삭제
+│   │   ├── list_docs.sh      # 문서 목록
+│   │   ├── set_meta.sh       # 메타데이터 수정
+│   │   └── healthcheck.py    # 헬스체크
+│   └── core/                 # 핵심 스크립트
+│       ├── ingest_from_docs.py
+│       └── reindex_atomic.py
+│
+└── app/                      # 애플리케이션 코드
+    ├── api/                  # FastAPI 백엔드
+    └── rag/                  # RAG 파이프라인
+```
+
+### 1.3 핵심 컴포넌트
+
+| 컴포넌트 | 역할 | 위치 |
+|----------|------|------|
+| **원본 PDF** | 진실의 원천, 보존 목적 | `docs/year_*/*.pdf` |
+| **추출 텍스트** | AI가 읽고 검색하는 텍스트 | `data/extracted/*.txt` |
+| **메타데이터 DB** | 날짜, 작성자 등 필터링용 | `metadata.db` |
+| **BM25 인덱스** | 키워드 검색용 인덱스 | `var/index/bm25_index.pkl` |
+| **FastAPI** | REST API (port 7860) | `app/api/main.py` |
+| **Streamlit** | 웹 UI (port 8501) | `web_interface.py` |
 
 ---
 
-## Environment Variables Reference
+## 2. 빠른 시작
 
-See `.env.sample` for complete template. Key variables:
-
-### Model Configuration
+### 2.1 서비스 시작
 
 ```bash
-# Chat format auto-detection (recommended: auto)
-CHAT_FORMAT=auto
-
-# Path to GGUF model file
-MODEL_PATH=./models/your-model.gguf
-```
-
-### Directories
-
-```bash
-# Documents directory (auto-indexed)
-DOCS_DIR=docs
-
-# Data directory for internal files
-DATA_DIR=data
-
-# Incoming directory for new uploads
-INCOMING_DIR=incoming
-```
-
-### Logging
-
-```bash
-# Log output directory
-LOG_DIR=logs
-
-# Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
-LOG_LEVEL=INFO
-```
-
-### Alerts
-
-```bash
-# Dry-run mode for alerts (true = no actual sending)
-ALERTS_DRY_RUN=true
-
-# Slack webhook URL for alerts
-SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
-```
-
-### Advanced
-
-```bash
-# Server ports (defaults)
-API_PORT=7860
-UI_PORT=8501
-
-# RAG parameters
-TOP_K=5
-CHUNK_SIZE=1000
-CHUNK_OVERLAP=200
-
-# Model parameters
-TEMPERATURE=0.7
-MAX_TOKENS=2048
-CONTEXT_LENGTH=4096
-```
-
-**IMPORTANT**: Never commit `.env` to version control. Keep `.env.sample` updated with new variables.
-
----
-
-## Installation & Setup
-
-### Prerequisites
-
-- WSL2 (Ubuntu 22.04+)
-- Python 3.12+
-- NVIDIA GPU with CUDA support (recommended: RTX 4060+)
-- 16GB+ RAM
-- 20GB+ disk space
-
-### Initial Setup
-
-```bash
-# 1. Clone repository
-git clone <repo-url> /home/wnstn4647/AI-CHAT
-cd /home/wnstn4647/AI-CHAT
-
-# 2. Create virtual environment
-python3.12 -m venv .venv
-source .venv/bin/activate
-
-# 3. Install dependencies
-pip install --upgrade pip
-pip install -r requirements.txt
-
-# 4. Configure environment
-cp .env.sample .env
-nano .env  # Edit: MODEL_PATH, DOCS_DIR, etc.
-
-# 5. Download GGUF model
-mkdir -p models
-# Place your .gguf model in models/ directory
-
-# 6. Initialize databases
-python scripts/utils/auto_indexer.py --force-rebuild
-
-# 7. Install pre-commit hooks
-make install
-pre-commit install
-
-# 8. Verify installation
-make verify
-```
-
-### Verification
-
-```bash
-# Check dependencies
-pip-audit  # Should show 0 vulnerabilities
-
-# Check databases
-sqlite3 metadata.db "PRAGMA integrity_check;"
-sqlite3 everything_index.db "PRAGMA integrity_check;"
-
-# Check metrics
-curl -s http://localhost:7860/metrics | jq '.'
-# Expected: stale_index_entries=0, fs_file_count≈index_file_count
-```
-
----
-
-## Start/Stop Procedures
-
-### Start Services
-
-#### Option 1: Using start script (recommended)
-
-```bash
-# Start backend + auto-indexer
+# 백엔드 + 자동 인덱서 시작
 bash start_ai_chat.sh
-# Prompts: "Drop and rebuild index? (y/n)" → answer 'n' for normal start
 
-# In separate terminal, start UI
+# 별도 터미널에서 UI 시작
 streamlit run web_interface.py --server.port 8501 --server.headless true
 ```
 
-#### Option 2: Manual start
+### 2.2 서비스 종료
 
 ```bash
-# 1. Start backend
-source .venv/bin/activate
-uvicorn app.api.main:app --host 0.0.0.0 --port 7860
-
-# 2. Start auto-indexer (background)
-nohup python scripts/utils/auto_indexer.py > logs/auto_indexer.log 2>&1 &
-
-# 3. Start Streamlit
-streamlit run web_interface.py --server.port 8501
-```
-
-### Stop Services
-
-```bash
-# Stop all AI-CHAT processes
 pkill -f "uvicorn app.api.main"
 pkill -f "streamlit run web_interface"
 pkill -f "auto_indexer.py"
-
-# Verify stopped
-pgrep -a -f "ai-chat|uvicorn|streamlit" | grep -v grep
-# Should return nothing
 ```
 
-### Restart Services
+### 2.3 상태 확인
 
 ```bash
-# Safe restart (preserves index)
-pkill -f "uvicorn app.api.main"
-sleep 2
-bash start_ai_chat.sh  # Answer 'n' to rebuild prompt
+# 문서 통계
+./scripts/ops/list_docs.sh --stats
+
+# 헬스체크
+./scripts/ops/healthcheck.py
+
+# API 헬스
+curl -s http://localhost:7860/_healthz
 ```
 
 ---
 
-## Health Checks
+## 3. 문서 관리
 
-### Backend API Health
+### 3.1 문서 추가
 
 ```bash
-# Health endpoint
+# 단일 파일 추가
+./scripts/ops/add_docs.sh /path/to/document.pdf
+
+# 여러 파일 추가
+./scripts/ops/add_docs.sh /path/to/*.pdf
+
+# incoming 폴더의 모든 파일 처리
+cp /path/to/*.pdf docs/incoming/
+./scripts/ops/add_docs.sh
+```
+
+**파일명 규칙 (권장)**:
+```
+YYYY-MM-DD_제목_부가정보.pdf
+
+예시:
+2024-01-15_UPS장비구매_기안서.pdf
+2024-03-20_서버실_공조기_점검보고서.pdf
+```
+
+### 3.2 문서 삭제
+
+```bash
+# 파일명으로 삭제 (백업 유지)
+./scripts/ops/delete_doc.sh "2024-01-15_장비구매.pdf"
+
+# ID로 삭제
+./scripts/ops/delete_doc.sh --id 123
+
+# 검색 후 삭제
+./scripts/ops/delete_doc.sh --search "UPS 구매"
+
+# 완전 삭제 (복구 불가)
+./scripts/ops/delete_doc.sh --id 123 --no-backup --force
+```
+
+**삭제된 문서 복구**:
+```bash
+mv docs/quarantine/document.pdf docs/incoming/
+./scripts/ops/add_docs.sh
+```
+
+### 3.3 문서 목록 조회
+
+```bash
+# 최근 문서 50개
+./scripts/ops/list_docs.sh
+
+# 전체 목록
+./scripts/ops/list_docs.sh --all
+
+# 연도별 필터
+./scripts/ops/list_docs.sh --year 2024
+
+# 작성자별 필터
+./scripts/ops/list_docs.sh --drafter 하승범
+
+# 키워드 검색
+./scripts/ops/list_docs.sh --search "UPS"
+
+# 통계 보기
+./scripts/ops/list_docs.sh --stats
+
+# 메타데이터 누락 문서
+./scripts/ops/list_docs.sh --missing
+```
+
+### 3.4 메타데이터 수정
+
+```bash
+# 날짜 수정
+./scripts/ops/set_meta.sh --id 123 --date 2024-01-15
+
+# 작성자 수정
+./scripts/ops/set_meta.sh --id 123 --drafter 하승범
+
+# 카테고리 수정
+./scripts/ops/set_meta.sh --id 123 --category review
+
+# 여러 항목 동시 수정
+./scripts/ops/set_meta.sh --id 123 --date 2024-01-15 --drafter 하승범 --category report
+
+# 텍스트에서 메타데이터 재추출
+./scripts/ops/set_meta.sh --reparse 123
+
+# 전체 문서 재추출
+./scripts/ops/set_meta.sh --reparse-all
+```
+
+**카테고리 종류**:
+
+| 코드 | 설명 |
+|------|------|
+| proposal | 기안서 |
+| review | 검토서 |
+| report | 보고서 |
+| minutes | 회의록 |
+| disposal | 폐기/불용 |
+| other | 기타 |
+
+### 3.5 인덱스 재생성
+
+```bash
+# 자동 인덱서가 10초마다 변경 감지
+# 수동 재생성이 필요한 경우:
+.venv/bin/python3 scripts/core/reindex_atomic.py --source ./docs --swap-to ./var/index
+```
+
+---
+
+## 4. 환경 설정
+
+### 4.1 필수 환경변수 (.env)
+
+```bash
+# ============================================================================
+# 운용 모드 설정
+# ============================================================================
+MODE=AUTO                    # AUTO | SUMMARIZE | CHAT
+RAG_MIN_SCORE=0.35          # RAG 모드 진입 임계값 (0.25~0.50)
+DOC_TOPK=3                  # 상위 문서 개수
+REQUIRE_CITATIONS=true      # 출처 인용 강제
+ALLOW_UNGROUNDED_CHAT=true  # 근거 없을 때 일반 대화 허용
+
+# ============================================================================
+# 모델 설정
+# ============================================================================
+MODEL_PATH=./models/your-model.gguf
+CHAT_FORMAT=auto            # auto | llama-2 | qwen | chatml
+N_CTX=4096                  # 컨텍스트 크기
+N_GPU_LAYERS=-1             # -1: 전체 GPU, 양수: 부분 GPU
+
+# ============================================================================
+# LLM 생성 파라미터
+# ============================================================================
+LLM_TEMPERATURE=0.1
+LLM_MAX_TOKENS=2048
+MAX_LLM_RETRY=1
+
+# ============================================================================
+# 검색 설정
+# ============================================================================
+SEARCH_BM25_WEIGHT=0.99     # BM25 가중치 (OCR 텍스트는 키워드 기반이 정확)
+SEARCH_VECTOR_WEIGHT=0.01   # 벡터 검색 가중치
+SEARCH_TOP_K=5              # 검색 결과 개수
+
+# ============================================================================
+# 디렉토리 설정
+# ============================================================================
+DOCS_DIR=docs
+DATA_DIR=data
+INCOMING_DIR=incoming
+LOG_DIR=logs
+LOG_LEVEL=INFO
+
+# ============================================================================
+# 서버 포트
+# ============================================================================
+API_PORT=7860
+UI_PORT=8501
+```
+
+### 4.2 RAG_MIN_SCORE 가이드
+
+| 값 | 효과 |
+|----|------|
+| 0.25 | 매우 관대 (약한 연관성도 RAG) |
+| **0.35 (권장)** | 균형 (중간 연관성 이상 RAG) |
+| 0.50 | 엄격 (강한 연관성만 RAG) |
+
+---
+
+## 5. 서비스 운영
+
+### 5.1 시작/종료
+
+**시작 (스크립트 사용)**:
+```bash
+bash start_ai_chat.sh
+# "Drop and rebuild index? (y/n)" → 평상시 'n'
+
+# UI는 별도 터미널에서
+streamlit run web_interface.py --server.port 8501
+```
+
+**수동 시작**:
+```bash
+source .venv/bin/activate
+uvicorn app.api.main:app --host 0.0.0.0 --port 7860 &
+nohup python scripts/utils/auto_indexer.py > logs/auto_indexer.log 2>&1 &
+streamlit run web_interface.py --server.port 8501
+```
+
+**종료**:
+```bash
+pkill -f "uvicorn app.api.main"
+pkill -f "streamlit run web_interface"
+pkill -f "auto_indexer.py"
+```
+
+### 5.2 헬스체크
+
+```bash
+# API 헬스
 curl -s http://localhost:7860/_healthz
 # Expected: {"status": "ok"}
 
-# Metrics endpoint
-curl -s http://localhost:7860/metrics
-# Expected: JSON with stale_index_entries, fs_file_count, etc.
-```
-
-### Database Health
-
-```bash
-# Integrity check
+# DB 무결성
 sqlite3 metadata.db "PRAGMA integrity_check;"
-sqlite3 everything_index.db "PRAGMA integrity_check;"
 # Expected: "ok"
 
-# File count consistency
-curl -s http://localhost:7860/metrics | jq '{stale: .stale_index_entries, fs: .fs_file_count, idx: .index_file_count}'
-# Expected: stale=0, fs≈idx
-```
-
-### Reindex Mutex Health
-
-```bash
-# Check lock file
-ls -la var/reindexing.lock 2>/dev/null
-# Expected: File NOT FOUND (no reindex in progress)
-
-# If lock exists for >30min, investigate:
-ps aux | grep auto_indexer
-# If process is dead, remove stale lock:
-rm var/reindexing.lock
-```
-
-### Service Status
-
-```bash
-# Check running processes
+# 프로세스 확인
 pgrep -a -f "uvicorn|streamlit|auto_indexer"
 
-# Check ports
+# 포트 확인
 ss -tulpn | grep -E '7860|8501'
-# Expected:
-# tcp   LISTEN  0.0.0.0:7860 (uvicorn)
-# tcp   LISTEN  0.0.0.0:8501 (streamlit)
 ```
 
----
+### 5.3 로그 관리
 
-## Log Management
+**로그 위치**:
 
-### Log Locations
+| 파일 | 용도 | 로테이션 |
+|------|------|----------|
+| `logs/ai-chat.log` | 전체 로그 (INFO+) | 일별, 7일 보존 |
+| `logs/ai-chat-error.log` | 에러만 (ERROR+) | 일별, 7일 보존 |
+| `logs/auto_indexer.log` | 백그라운드 인덱싱 | 수동 |
 
-| Log File | Purpose | Rotation |
-|----------|---------|----------|
-| `logs/ai-chat.log` | All logs (INFO+) | Daily, 7-day retention |
-| `logs/ai-chat-error.log` | Errors only (ERROR+) | Daily, 7-day retention |
-| `logs/auto_indexer.log` | Background indexing | Manual rotation |
-| `/tmp/backend_*.log` | Temporary startup logs | Session-based |
-
-### Log Schema
-
-**Standard format** (non-structured):
-```
-[HH:MM:SS] LEVEL     logger_name: message
-```
-
-**Structured format** (JSON, when enabled):
-```json
-{
-  "ts": "2025-10-31T12:34:56.789",
-  "level": "INFO",
-  "logger": "app.rag.pipeline",
-  "message": "Query processed",
-  "trace_id": "abc123...",
-  "req_id": "xyz789",
-  "mode": "QA",
-  "has_code": true,
-  "stage0_count": 10,
-  "stage1_count": 5,
-  "latency_ms": 8500,
-  "coverage": 0.95
-}
-```
-
-### Log Rotation
-
-Configured in `app/logging/config.py`:
-- **When**: Midnight (daily)
-- **Retention**: 7 days (7 backups)
-- **Format**: `ai-chat.log.YYYY-MM-DD`
-
-### Viewing Logs
-
+**로그 확인**:
 ```bash
-# Real-time tail
+# 실시간 로그
 tail -f logs/ai-chat.log
 
-# Filter by level
+# 에러만 보기
 grep "ERROR" logs/ai-chat.log
 
-# Filter by trace_id (for structured logs)
-jq 'select(.trace_id=="abc123")' logs/ai-chat.log
-
-# Recent errors
+# 최근 에러 100줄
 tail -100 logs/ai-chat-error.log
 ```
 
-### Log Analysis
-
-```bash
-# Count requests by mode
-jq -r '.mode' logs/ai-chat.log | sort | uniq -c
-
-# Average latency
-jq -r '.latency_ms' logs/ai-chat.log | awk '{s+=$1; n++} END {print s/n}'
-
-# Coverage p95
-jq -r '.coverage' logs/ai-chat.log | sort -n | awk 'BEGIN{c=0} {a[c++]=$1} END {print a[int(c*0.95)]}'
-```
-
 ---
 
-## Indexing Operations
+## 6. 모니터링
 
-### Automatic Indexing
+### 6.1 /metrics 엔드포인트
 
-**Background service** (`scripts/utils/auto_indexer.py`):
-- Scans `DOCS_DIR` every 10 seconds
-- Detects new/modified/deleted files
-- Updates `metadata.db` and `everything_index.db`
-- Uses Mutex lock (`var/reindexing.lock`) for concurrency safety
-
-**Health metrics**:
 ```bash
-curl -s http://localhost:7860/metrics | jq '{
-  stale: .stale_index_entries,
-  fs: .fs_file_count,
-  idx: .index_file_count,
-  last_reindex: .last_full_reindex_ts
-}'
+curl -s http://localhost:7860/metrics | jq '.'
 ```
 
-### Manual Reindex (Drop & Rebuild)
+**주요 지표**:
 
-**Safe mode** (recommended):
+| 지표 | 설명 | 목표 | 경보 임계값 |
+|------|------|------|------------|
+| `stale_index_entries` | 인덱스-파일 불일치 | 0 | > 0 |
+| `fs_file_count` | 파일 시스템 문서 수 | - | - |
+| `index_file_count` | 인덱스 문서 수 | ≈ fs_file_count | 차이 > 5 |
+| `json_parse_failure_rate` | JSON 파싱 실패율 | < 1.5% | > 2% |
+| `coverage_p50` | 검색 커버리지 중앙값 | > 0.80 | < 0.80 |
+
+### 6.2 GPU 모니터링
+
 ```bash
-# Via start script
-bash start_ai_chat.sh
-# Answer 'y' to rebuild prompt
-
-# Or via UI
-# Streamlit sidebar → "Drop & Rebuild Index" button
-```
-
-**Command-line**:
-```bash
-# Full rebuild
-python scripts/utils/auto_indexer.py --force-rebuild
-
-# With mutex check
-if [ ! -f var/reindexing.lock ]; then
-    python scripts/utils/auto_indexer.py --force-rebuild
-else
-    echo "Reindex already in progress"
-fi
-```
-
-### Partial Reindex (Incremental)
-
-**Add new files**:
-```bash
-# 1. Copy files to DOCS_DIR
-cp new_docs/*.pdf docs/year_2025/
-
-# 2. Auto-indexer detects within 10s
-# Monitor logs:
-tail -f logs/ai-chat.log | grep "New file detected"
-```
-
-**Remove files**:
-```bash
-# 1. Delete files from DOCS_DIR
-rm docs/year_2025/obsolete.pdf
-
-# 2. Auto-indexer purges from index within 10s
-# Verify:
-curl -s http://localhost:7860/metrics | jq '.stale_index_entries'
-# Expected: 0
-```
-
-### Mutex Verification
-
-**Check mutex state**:
-```bash
-# Lock file should NOT exist during normal operation
-ls -la var/reindexing.lock 2>/dev/null && echo "REINDEXING" || echo "IDLE"
-
-# If lock is stale (>30min old):
-find var/reindexing.lock -mmin +30 2>/dev/null
-# If found, check if indexer is actually running:
-ps aux | grep auto_indexer
-# If not running, remove stale lock:
-rm var/reindexing.lock
-```
-
-### Database Optimization
-
-**VACUUM** (reduce bloat):
-```bash
-# Backup first
-cp metadata.db metadata.db.backup
-cp everything_index.db everything_index.db.backup
-
-# Run VACUUM
-sqlite3 metadata.db "VACUUM; ANALYZE;"
-sqlite3 everything_index.db "VACUUM; ANALYZE;"
-
-# Verify size reduction
-du -h metadata.db* everything_index.db*
-```
-
-**Frequency**: Monthly or after large bulk deletes
-
----
-
-## Monitoring & Metrics
-
-### /metrics Endpoint
-
-**Schema**:
-```json
-{
-  "stale_index_entries": 0,
-  "fs_file_count": 488,
-  "index_file_count": 488,
-  "last_full_reindex_ts": "2025-10-31T14:52:08",
-  "json_parse_failure_rate": 0.02,
-  "coverage_p50": 0.85,
-  "coverage_p95": 0.95,
-  "stage0_hit_rate": 0.92,
-  "reindex_mutex_state": "idle",
-  "ui_action_count": {
-    "preview": 145,
-    "list": 89,
-    "summary": 34
-  }
-}
-```
-
-**Key Metrics**:
-
-| Metric | Description | Target | Alert If |
-|--------|-------------|--------|----------|
-| `stale_index_entries` | Files in index but missing on disk | 0 | > 0 |
-| `fs_file_count` | Files in DOCS_DIR | - | - |
-| `index_file_count` | Files indexed | ≈ fs_file_count | Diff > 5 |
-| `last_full_reindex_ts` | Last full rebuild timestamp | - | > 7 days old |
-| `json_parse_failure_rate` | Schema failure rate | < 0.015 | > 0.02 |
-| `coverage_p50` | Median coverage | > 0.80 | < 0.80 |
-| `coverage_p95` | 95th percentile coverage | > 0.90 | < 0.90 |
-| `stage0_hit_rate` | Retrieval success rate | > 0.85 | < 0.85 |
-| `reindex_mutex_state` | Mutex lock status | "idle" | "locked" > 30min |
-
-### Alert Hooks
-
-**Configuration** (`app/alerts.py`):
-```python
-# Alert conditions
-ALERT_CONDITIONS = {
-    'stale_index': lambda m: m['stale_index_entries'] > 0,
-    'coverage_degraded': lambda m: m['coverage_p50'] < 0.80,
-    'json_failures': lambda m: m['json_parse_failure_rate'] > 0.02,
-    'mutex_stuck': lambda m: m['reindex_mutex_state'] == 'locked' and is_stale_lock(),
-}
-
-# Alert destinations
-if not ALERTS_DRY_RUN:
-    send_slack_alert(SLACK_WEBHOOK_URL, message)
-```
-
-**Testing alerts**:
-```bash
-# Dry-run mode (logs only)
-export ALERTS_DRY_RUN=true
-python -c "from app.alerts import check_and_alert; check_and_alert()"
-
-# Production mode
-export ALERTS_DRY_RUN=false
-export SLACK_WEBHOOK_URL=https://hooks.slack.com/...
-python -c "from app.alerts import check_and_alert; check_and_alert()"
-```
-
-### Performance Monitoring
-
-**Response time**:
-```bash
-# /metrics endpoint latency (target: <50ms)
-time curl -s http://localhost:7860/metrics > /dev/null
-
-# /ask endpoint latency (logged in structured logs)
-jq -r '.latency_ms' logs/ai-chat.log | awk '{s+=$1; n++} END {print "Avg: " s/n " ms"}'
-```
-
-**GPU usage**:
-```bash
-# Real-time monitoring
+# 실시간 모니터링
 watch -n 1 nvidia-smi
 
-# Log GPU stats
+# GPU 사용량 기록
 nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader,nounits
 ```
 
 ---
 
-## Validation Routines
+## 7. 백업 및 복구
 
-### RAG Pipeline Validation
+### 7.1 백업 대상
 
-**Purpose**: Verify RAG quality metrics (Hit@K, MRR@K, citation rate, schema compliance)
+1. `metadata.db` - 문서 메타데이터 (필수)
+2. `var/index/` - BM25 인덱스 (재생성 가능)
+3. `.env` - 설정 (필수, 보안 주의)
+4. `docs/` - 원본 문서 (별도 백업 시)
+5. `data/extracted/` - 추출 텍스트 (재생성 가능)
 
-**Run validation**:
+### 7.2 백업 실행
+
 ```bash
-# Full validation suite
-python scripts/validate_rag.py \
-    --results reports/askable_queries_validation_*.json \
-    --output reports/RAG_QA_REPORT.md
+# DB 백업 스크립트 (권장: 주 1회)
+./scripts/ops/backup_db.py
 
-# Expected AC:
-# - Hit@3 ≥ 0.90
-# - MRR@10 ≥ 0.80
-# - Citation Rate = 1.00
-# - Schema Failure ≤ 1.5%
-# - Parsing Coverage ≥ 90%
-```
-
-**Frequency**: Weekly (automated via cron/systemd timer)
-
-**Outputs**:
-- `reports/RAG_QA_REPORT_YYYYMMDD.md` - Human-readable summary
-- `reports/RAG_QA_REPORT_YYYYMMDD.json` - Machine-readable metrics
-
-### Code Query Validation
-
-**Purpose**: Test code-related queries with special handling
-
-**Run validation**:
-```bash
-# Test code queries
-python scripts/validate_codes.py
-
-# Expected:
-# - has_code detection accuracy
-# - Code snippet extraction
-# - Citation enforcement
-```
-
-**Frequency**: After code query feature changes
-
-### Askable Queries Validation
-
-**Purpose**: End-to-end validation with real user queries
-
-**Run validation**:
-```bash
-# Set environment
-set -a && source .env && set +a
-
-# Run validation
-python scripts/validate_askable_queries.py
-
-# Expected: 95%+ success rate
-```
-
-**Frequency**: Before releases, monthly
-
-**Outputs**:
-- `reports/askable_queries_validation_YYYYMMDD_HHMMSS.md`
-- `reports/askable_queries_validation_YYYYMMDD_HHMMSS.json`
-
----
-
-## Backup & Recovery
-
-### Backup Strategy
-
-**What to backup**:
-1. `metadata.db` - File metadata, doc-level info
-2. `everything_index.db` - Chunk vectors, BM25 index
-3. `.env` - Configuration (CRITICAL: keep secure)
-4. `docs/` - Source documents (if not backed up elsewhere)
-
-**Backup frequency**:
-- Databases: Daily (automated)
-- Config: On change
-- Documents: Continuous (if using as source of truth)
-
-### Backup Procedures
-
-**Manual backup**:
-```bash
-# Create backup directory
+# 수동 백업
 mkdir -p backups/$(date +%Y%m%d)
-
-# Backup databases
-cp metadata.db backups/$(date +%Y%m%d)/metadata.db
-cp everything_index.db backups/$(date +%Y%m%d)/everything_index.db
-
-# Backup config
-cp .env backups/$(date +%Y%m%d)/.env
-
-# Optional: Backup documents
-tar -czf backups/$(date +%Y%m%d)/docs.tar.gz docs/
+cp metadata.db backups/$(date +%Y%m%d)/
+cp -r var/index backups/$(date +%Y%m%d)/
+cp .env backups/$(date +%Y%m%d)/
 ```
 
-**Automated backup** (cron):
-```bash
-# Add to crontab: daily at 2AM
-0 2 * * * /home/wnstn4647/AI-CHAT/scripts/backup_daily.sh
-```
+### 7.3 복구
 
-**Create `scripts/backup_daily.sh`**:
+**백업에서 복구**:
 ```bash
-#!/bin/bash
-BACKUP_DIR=/mnt/backups/ai-chat/$(date +%Y%m%d)
-mkdir -p $BACKUP_DIR
-cp /home/wnstn4647/AI-CHAT/metadata.db $BACKUP_DIR/
-cp /home/wnstn4647/AI-CHAT/everything_index.db $BACKUP_DIR/
-cp /home/wnstn4647/AI-CHAT/.env $BACKUP_DIR/
-find /mnt/backups/ai-chat -type d -mtime +30 -exec rm -rf {} \;  # 30-day retention
-```
-
-### Recovery Procedures
-
-**Restore from backup**:
-```bash
-# 1. Stop services
+# 1. 서비스 종료
 pkill -f "uvicorn|streamlit|auto_indexer"
 
-# 2. Verify backup integrity
-sqlite3 backups/20251031/metadata.db "PRAGMA integrity_check;"
-sqlite3 backups/20251031/everything_index.db "PRAGMA integrity_check;"
+# 2. 백업 복원
+cp backups/20251211/metadata.db metadata.db
 
-# 3. Restore databases
-cp backups/20251031/metadata.db metadata.db
-cp backups/20251031/everything_index.db everything_index.db
-
-# 4. Verify metrics
-source .venv/bin/activate
-uvicorn app.api.main:app --host 0.0.0.0 --port 7860 &
-sleep 5
-curl -s http://localhost:7860/metrics | jq '{stale: .stale_index_entries, fs: .fs_file_count, idx: .index_file_count}'
-
-# 5. If metrics look good, restart services
+# 3. 서비스 시작
 bash start_ai_chat.sh
 ```
 
-**Rebuild from scratch** (if backup corrupted):
+**전체 재구축 (백업 없을 때)**:
 ```bash
-# 1. Remove corrupted databases
-rm metadata.db everything_index.db
-
-# 2. Full rebuild (requires docs/ to be intact)
-python scripts/utils/auto_indexer.py --force-rebuild
-
-# 3. Verify
-curl -s http://localhost:7860/metrics | jq '.'
+# 원본 PDF만 있으면 가능
+rm metadata.db
+rm -rf var/index/*
+.venv/bin/python3 scripts/core/ingest_from_docs.py --source docs/
+.venv/bin/python3 scripts/core/reindex_atomic.py --source ./docs --swap-to ./var/index
 ```
 
 ---
 
-## Service Level Objectives (SLO)
+## 8. 트러블슈팅
 
-### RAG Quality SLOs
+### 8.1 검색이 안 될 때
 
-| Metric | Target | Measurement | Alert Threshold |
-|--------|--------|-------------|-----------------|
-| **Hit@3** | ≥ 0.90 | Weekly validation | < 0.85 |
-| **MRR@10** | ≥ 0.80 | Weekly validation | < 0.75 |
-| **Citation Rate** | = 1.00 | Per query | < 0.95 |
-| **JSON Schema Failure** | ≤ 1.5% | Per query | > 2.0% |
-| **Parsing Coverage** | ≥ 90% | Per query | < 85% |
-
-### Performance SLOs
-
-| Metric | Target | Measurement | Alert Threshold |
-|--------|--------|-------------|-----------------|
-| **P50 Latency** | < 5s | Per query (logs) | > 8s |
-| **P95 Latency** | < 12s | Per query (logs) | > 15s |
-| **/metrics Response** | < 50ms | Health check | > 100ms |
-| **Index Consistency** | 0 stale | `/metrics` | > 0 |
-
-### Availability SLOs
-
-| Metric | Target | Measurement | Alert Threshold |
-|--------|--------|-------------|-----------------|
-| **Uptime** | 99.5% | Monthly | < 99.0% |
-| **Reindex Success** | 100% | Per reindex | Failure |
-| **Auto-indexer Lag** | < 30s | File detection | > 60s |
-
-### Quality Gates (Pre-Release)
-
-Before merging to `main`:
-- [ ] `pip-audit` → 0 vulnerabilities
-- [ ] `pre-commit run -a` → All pass
-- [ ] `scripts/validate_rag.py` → All AC met
-- [ ] `curl http://localhost:7860/metrics` → `stale_index_entries=0`
-- [ ] Manual UI/UX checklist → 100% pass
-
----
-
-## Troubleshooting
-
-### Issue: stale_index_entries > 0
-
-**Symptoms**: `/metrics` shows `stale_index_entries > 0`
-
-**Diagnosis**:
 ```bash
-# Check what files are stale
-sqlite3 metadata.db "SELECT filepath FROM files WHERE filepath NOT IN (SELECT filepath FROM files WHERE EXISTS (SELECT 1 FROM files WHERE filepath LIKE '%' || name));"
+# 1. 인덱스 재생성
+.venv/bin/python3 scripts/core/reindex_atomic.py --source ./docs --swap-to ./var/index
+
+# 2. Streamlit 재시작
+pkill -f streamlit
+streamlit run app/main.py
 ```
 
-**Fix**:
+### 8.2 문서가 목록에 안 보일 때
+
 ```bash
-# Option 1: Wait for auto-purge (next scan cycle)
-tail -f logs/ai-chat.log | grep "purge"
+# 1. metadata.db에 있는지 확인
+./scripts/ops/list_docs.sh --search "파일명"
 
-# Option 2: Manual purge
-python -c "from scripts.utils.auto_indexer import purge_missing_files; purge_missing_files()"
-
-# Option 3: Full rebuild
-python scripts/utils/auto_indexer.py --force-rebuild
+# 2. 없으면 다시 인제스트
+cp docs/year_YYYY/파일명.pdf docs/incoming/
+./scripts/ops/add_docs.sh
 ```
 
----
+### 8.3 메타데이터가 잘못 추출됐을 때
 
-### Issue: Mutex lock stuck
-
-**Symptoms**: `var/reindexing.lock` exists for >30min, UI blocks reindex
-
-**Diagnosis**:
 ```bash
-# Check lock age
-find var/reindexing.lock -mmin +30
+# 수동으로 수정
+./scripts/ops/set_meta.sh --id 123 --date 2024-01-15 --drafter 하승범
+```
 
-# Check if indexer is running
+### 8.4 텍스트 추출 품질이 낮을 때
+
+```bash
+# 1. data/extracted/에서 해당 .txt 파일 직접 편집
+vim data/extracted/2024-01-15_문서명.txt
+
+# 2. 메타데이터 재추출
+./scripts/ops/set_meta.sh --reparse 123
+
+# 3. 인덱스 재생성
+.venv/bin/python3 scripts/core/reindex_atomic.py --source ./docs --swap-to ./var/index
+```
+
+### 8.5 stale_index_entries > 0
+
+```bash
+# 자동 정리 대기 (10초) 또는 수동 재인덱싱
+.venv/bin/python3 scripts/core/reindex_atomic.py --source ./docs --swap-to ./var/index
+```
+
+### 8.6 Mutex lock stuck
+
+```bash
+# 락 파일 확인
+ls -la var/reindexing.lock
+
+# 프로세스 확인
 ps aux | grep auto_indexer
-```
 
-**Fix**:
-```bash
-# If indexer is NOT running, remove stale lock
+# 프로세스 없으면 락 파일 삭제
 rm var/reindexing.lock
-
-# If indexer IS running but stuck, kill and remove lock
-pkill -f auto_indexer
-rm var/reindexing.lock
-
-# Verify metrics
-curl -s http://localhost:7860/metrics | jq '.reindex_mutex_state'
 ```
 
----
+### 8.7 응답 시간이 느릴 때
 
-### Issue: JSON schema failures > 2%
-
-**Symptoms**: High `json_parse_failure_rate` in `/metrics`
-
-**Diagnosis**:
 ```bash
-# Check recent failures
-grep "JSON parse failure" logs/ai-chat.log | tail -20
+# 검색 결과 개수 감소
+SEARCH_TOP_K=3
+DOC_TOPK=2
 
-# Check which queries fail
-jq -r 'select(.message | contains("fallback")) | .query' logs/ai-chat.log
-```
+# LLM max_tokens 감소
+LLM_MAX_TOKENS=1024
 
-**Fix**:
-1. Review failure patterns (specific query types?)
-2. Check if LLM model is appropriate for structured output
-3. Consider increasing `TEMPERATURE` (lower = more deterministic)
-4. Update prompt templates in `app/rag/summary_templates.py`
-
----
-
-### Issue: Coverage degraded (p50 < 0.80)
-
-**Symptoms**: Low `coverage_p50` in `/metrics`, poor answer quality
-
-**Diagnosis**:
-```bash
-# Check stage0 retrieval counts
-jq -r 'select(.stage0_count) | .stage0_count' logs/ai-chat.log | awk '{s+=$1; n++} END {print "Avg stage0: " s/n}'
-
-# Check if embeddings are working
-python -c "from rag_system.embedder import embed_text; print(embed_text('test')[:5])"
-```
-
-**Fix**:
-1. Verify embedding model is loaded correctly
-2. Check FAISS index integrity: `ls -lh everything_index.db`
-3. Consider increasing `TOP_K` in `.env`
-4. Rebuild index if corrupted: `python scripts/utils/auto_indexer.py --force-rebuild`
-
----
-
-### Issue: High latency (p95 > 15s)
-
-**Symptoms**: Slow responses, user complaints
-
-**Diagnosis**:
-```bash
-# Check latency distribution
-jq -r '.latency_ms' logs/ai-chat.log | sort -n | awk '{a[NR]=$1} END {print "P50: " a[int(NR*0.5)] " P95: " a[int(NR*0.95)]}'
-
-# Check GPU usage
+# GPU 사용 확인
 nvidia-smi
 ```
 
-**Fix**:
-1. GPU not used: Check CUDA installation, `nvidia-smi`
-2. Model too large: Switch to smaller quantization (Q4_K_M → Q4_0)
-3. Context too long: Reduce `CONTEXT_LENGTH`, `MAX_TOKENS` in `.env`
-4. Too many chunks: Lower `TOP_K`, optimize stage1 filtering
+### 8.8 GPU 메모리 부족
 
----
-
-### Issue: Backend won't start
-
-**Symptoms**: `curl http://localhost:7860/_healthz` fails
-
-**Diagnosis**:
 ```bash
-# Check logs
-tail -100 logs/ai-chat-error.log
+# 컨텍스트 크기 감소
+N_CTX=4096
 
-# Check port in use
-ss -tulpn | grep 7860
-
-# Check model file
-ls -lh $MODEL_PATH
+# GPU 레이어 부분 사용
+N_GPU_LAYERS=20  # -1 대신 구체적 숫자
 ```
 
-**Fix**:
+### 8.9 일반적인 에러 코드
+
+| 에러 | 원인 | 해결 |
+|------|------|------|
+| `FileNotFoundError: metadata.db` | DB 미초기화 | `ingest_from_docs.py` 실행 |
+| `database is locked` | 동시 접근 | 프로세스 종료 후 WAL 파일 삭제 |
+| `CUDA out of memory` | 모델 크기 초과 | N_CTX, N_GPU_LAYERS 조정 |
+| `JSONDecodeError` | 스키마 파싱 실패 | 로그 확인, 폴백 처리됨 |
+
+---
+
+## 9. 보안 설정
+
+### 9.1 API 인증 (프로덕션 필수)
+
 ```bash
-# Port already in use
-pkill -f "uvicorn.*7860"
-# Or change port: uvicorn app.api.main:app --port 7861
+# .env
+API_KEY=your-secret-key-here  # 32자 이상
+API_KEY_HEADER=X-API-Key
+```
 
-# Model not found
-# Update MODEL_PATH in .env to correct path
+### 9.2 네트워크 보안
 
-# Database locked
-rm metadata.db-shm metadata.db-wal
-sqlite3 metadata.db "PRAGMA wal_checkpoint(TRUNCATE);"
+```bash
+# 내부 바인딩만 (외부 노출 금지)
+FASTAPI_HOST=127.0.0.1
+FASTAPI_PORT=7860
+STREAMLIT_HOST=127.0.0.1
+STREAMLIT_PORT=8501
+
+# 외부 노출은 Nginx 리버스 프록시 + TLS 사용
+```
+
+### 9.3 레이트 리미트
+
+```bash
+RATE_LIMIT_PER_MINUTE=10
+RATE_LIMIT_PER_HOUR=100
+MAX_CONCURRENT_REQUESTS=4
+```
+
+### 9.4 보안 체크리스트
+
+- [ ] API_KEY를 Git에 커밋하지 않음
+- [ ] .env 파일 권한 0600
+- [ ] Nginx TLS 인증서 적용
+- [ ] 로그에 API_KEY 노출 방지
+
+---
+
+## 10. SLO 및 품질 가드
+
+### 10.1 Service Level Objectives
+
+| 지표 | 목표 | 경보 임계값 |
+|------|------|------------|
+| **p95 응답시간** | < 5초 | > 8초 |
+| **RAG 인용률** | > 95% | < 80% |
+| **오류율** | < 1% | > 5% |
+| **인덱스 일관성** | 0 stale | > 0 |
+
+### 10.2 품질 가드
+
+**점수 게이팅**:
+```python
+# 모든 문서 점수가 RAG_MIN_SCORE 미만 → 문서근거 차단
+if max(scores) < RAG_MIN_SCORE:
+    if ALLOW_UNGROUNDED_CHAT:
+        return chat_response()
+    else:
+        return "근거 없음"
+```
+
+**출처 강제**:
+```bash
+REQUIRE_CITATIONS=true  # RAG 모드에서 출처 누락 시 재시도
 ```
 
 ---
 
-### Issue: UI shows "파일을 찾을 수 없습니다"
+## 자주 묻는 질문
 
-**Symptoms**: Preview button fails, error message in UI
+### Q: 새 문서를 추가했는데 검색이 안 돼요
+A: 인덱스 재생성이 필요합니다. `add_docs.sh` 스크립트를 사용하면 자동으로 처리됩니다.
 
-**Diagnosis**:
-```bash
-# Check file actually exists
-ls -la docs/year_2025/filename.pdf
+### Q: 문서를 삭제했는데 검색에 계속 나와요
+A: `delete_doc.sh` 스크립트가 인덱스 재생성까지 자동으로 처리합니다.
 
-# Check file permissions
-stat docs/year_2025/filename.pdf
-```
+### Q: 작성자/날짜가 "정보 없음"으로 표시돼요
+A: `set_meta.sh --id 123 --drafter 하승범` 으로 수동 입력하세요.
 
-**Fix**:
-```bash
-# If file missing, restore from backup or remove from index
-# If permissions wrong:
-chmod 644 docs/year_2025/filename.pdf
+### Q: 검토서/보고서 양식의 문서도 자동 추출되나요?
+A: 네, 기안서 외에 검토서(작성자/작성일), 보고서(보고자/보고일) 양식도 지원합니다.
 
-# Force reindex to sync
-python scripts/utils/auto_indexer.py --force-rebuild
-```
+### Q: 원본 PDF만 있으면 복구 가능한가요?
+A: 네, 원본 PDF만 있으면 나머지(텍스트, 메타데이터, 인덱스)는 모두 재생성 가능합니다.
 
 ---
 
-### Issue: Validation failure (Hit@3 < 0.90)
-
-**Symptoms**: Weekly validation reports failing SLOs
-
-**Diagnosis**:
-```bash
-# Run detailed validation
-python scripts/validate_rag.py \
-    --results reports/askable_queries_validation_*.json \
-    --output /tmp/debug_validation.md
-
-# Review failures
-grep "FAIL" /tmp/debug_validation.md
-```
-
-**Fix**:
-1. **Retrieval issue**: Check embeddings, increase TOP_K
-2. **Ranking issue**: Tune RRF weights in `app/rag/pipeline.py`
-3. **Document quality**: Review failing queries, add missing docs
-4. **Model issue**: Consider fine-tuning or model upgrade
-
----
-
-### Common Error Codes
-
-| Error | Cause | Fix |
-|-------|-------|-----|
-| `FileNotFoundError: metadata.db` | DB not initialized | Run `auto_indexer.py --force-rebuild` |
-| `sqlite3.OperationalError: database is locked` | Concurrent access | Stop all processes, remove WAL files |
-| `ModuleNotFoundError: llama_cpp` | Missing dependency | `pip install llama-cpp-python` |
-| `CUDA out of memory` | Model too large | Reduce context length or use CPU |
-| `JSONDecodeError` | Schema parsing failure | Logged as warning, fallback to free-form |
-
----
-
-## Support & Contacts
-
-- **Documentation**: `docs/` directory
-- **Reports**: `reports/` directory
-- **Scripts**: `scripts/` directory
-- **Issue Tracking**: GitHub Issues (if applicable)
-- **On-call**: TBD
-
----
-
-**Generated**: 2025-10-31
-**Version**: v2025.10.31-ops-baseline
-**Maintainer**: AI-CHAT Operations Team
+**문서 버전**: 3.0.0 (통합본)
+**마지막 업데이트**: 2025-12-11

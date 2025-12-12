@@ -11,6 +11,7 @@ Strangler Fig 패턴:
 
 import hashlib
 import re
+import sqlite3
 from pathlib import Path
 from typing import Any, Optional
 
@@ -297,8 +298,14 @@ def encode_file_ref(filename: str) -> Optional[str]:
                     token = hashlib.sha1(filename.encode()).hexdigest()[:ResponseBuilderConfig.FILE_REF_TOKEN_LEN]
                     return f"doc:{token}"
 
+    except sqlite3.OperationalError as e:
+        logger.warning(f"⚠️ DB 일시 오류 (ref 토큰): {filename} - {e}")
+    except sqlite3.Error as e:
+        logger.error(f"❌ DB 오류 (ref 토큰): {filename} - {e}", exc_info=True)
+    except OSError as e:
+        logger.warning(f"⚠️ 파일 시스템 오류 (ref 토큰): {filename} - {e}")
     except Exception as e:
-        logger.warning(f"ref 토큰 생성 실패: {filename} - {e}")
+        logger.exception(f"❌ ref 토큰 생성 예상치 못한 오류: {filename} - {type(e).__name__}")
 
     return None
 
@@ -388,8 +395,10 @@ def build_evidence_list(
                 if chunks:
                     chunk_text = normalize_chunk_text(chunks[0])
                     snippet = chunk_text[:ResponseBuilderConfig.EVIDENCE_SNIPPET_MAX_LEN] if chunk_text else ""
-            except Exception as e:
+            except (AttributeError, KeyError) as e:
                 logger.debug(f"⚠️ BM25 청크 폴백 실패 ({filename}): {e}")
+            except Exception as e:
+                logger.warning(f"⚠️ BM25 청크 폴백 예상치 못한 오류 ({filename}): {type(e).__name__}")
 
         if not snippet:
             snippet = title[:ResponseBuilderConfig.FALLBACK_TITLE_MAX_LEN]

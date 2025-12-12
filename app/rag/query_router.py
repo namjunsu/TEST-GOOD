@@ -216,8 +216,14 @@ class QueryRouter:
             logger.info(f"✓ 설정 로드: {config_path} (schema v{config.get('schema_version', 0)})")
             return config
 
+        except yaml.YAMLError as e:
+            logger.error(f"❌ YAML 파싱 오류: {e}")
+            return {}
+        except OSError as e:
+            logger.error(f"❌ 설정 파일 읽기 오류: {e}")
+            return {}
         except Exception as e:
-            logger.error(f"❌ 설정 로드 실패: {e}")
+            logger.exception(f"❌ 설정 로드 예상치 못한 오류: {type(e).__name__}")
             return {}
 
     def _is_low_confidence(self, retrieval_results: Any) -> bool:
@@ -261,9 +267,12 @@ class QueryRouter:
                 reason=reason,
                 confidence=confidence,
             )
+        except (AttributeError, TypeError) as e:
+            # 모니터 객체 또는 메서드 오류 (모니터링 실패가 라우팅을 막으면 안 됨)
+            logger.warning(f"⚠️ 라우팅 모니터링 오류: {e}")
         except Exception as e:
-            # 모니터링 실패가 라우팅을 막으면 안 됨
-            logger.error(f"라우팅 모니터링 실패: {e}")
+            # 예상치 못한 오류도 무시 (모니터링 실패가 라우팅을 막으면 안 됨)
+            logger.warning(f"⚠️ 라우팅 모니터링 예상치 못한 오류: {type(e).__name__}")
 
     def _detect_intents(self, query: str) -> dict[str, bool]:
         """의도 신호 감지 (Phase 1: 중복 제거 및 단일화)
@@ -581,8 +590,12 @@ class QueryRouter:
                     else:
                         params["year"] = int(year_str)
                 return params
+            except (AttributeError, KeyError) as e:
+                logger.debug(f"QueryParser 결과 접근 오류, 기본 추출 사용: {e}")
+            except ValueError as e:
+                logger.warning(f"⚠️ QueryParser 값 파싱 오류: {e}")
             except Exception as e:
-                logger.warning(f"QueryParser 사용 실패, 기본 추출 사용: {e}")
+                logger.warning(f"⚠️ QueryParser 예상치 못한 오류, 기본 추출 사용: {type(e).__name__}")
 
         # 기본 추출 로직 (레거시)
         params = {}

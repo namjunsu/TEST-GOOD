@@ -66,9 +66,13 @@ class CostSumHandler(BaseHandler):
             logger.error(f"❌ 금액 파싱 오류: {e}", exc_info=True)
             return self._make_error_response("금액 정보 파싱 중 오류가 발생했습니다.")
 
+        except (AttributeError, KeyError) as e:
+            logger.error(f"❌ 검색 결과 구조 오류: {e}", exc_info=True)
+            return self._make_error_response("검색 결과 처리 중 데이터 구조 오류가 발생했습니다.")
+
         except Exception as e:
-            logger.error(f"❌ 비용 질의 처리 실패: {e}", exc_info=True)
-            return self._make_error_response(f"비용 정보 조회 중 오류가 발생했습니다: {e!s}")
+            logger.exception(f"❌ 비용 질의 예상치 못한 오류: {type(e).__name__}")
+            return self._make_error_response(f"비용 정보 조회 중 예상치 못한 오류가 발생했습니다.")
 
     def _collect_cost_docs(
         self, search_results: list[dict[str, Any]]

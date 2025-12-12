@@ -9,11 +9,30 @@
 의존성: contracts (Protocol), logger
 """
 
+from dataclasses import dataclass
 from typing import Any, Optional
 
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+# ============================================================================
+# 상수 설정
+# ============================================================================
+
+
+@dataclass(frozen=True)
+class AdapterConfig:
+    """어댑터 설정 상수"""
+
+    # Snippet 길이 설정
+    SNIPPET_MIN_LENGTH: int = 50
+    SNIPPET_MAX_LENGTH: int = 500
+
+    # 에러 메시지 (중립 톤)
+    ERROR_GENERATOR_DISABLED: str = "[E_GENERATE] 현재 생성기가 비활성 상태입니다."
+    ERROR_RAG_UNAVAILABLE: str = "[E_GENERATE] RAG 시스템을 사용할 수 없습니다."
 
 
 # ============================================================================
@@ -52,7 +71,7 @@ class _DummyGenerator:
 
     def generate(self, query: str, context: str, temperature: float, mode: str = "rag") -> str:
         logger.warning("Dummy generator: 기본 응답 반환")
-        return "[E_GENERATE] 현재 생성기가 비활성 상태입니다."
+        return AdapterConfig.ERROR_GENERATOR_DISABLED
 
 
 # ============================================================================
@@ -98,64 +117,87 @@ class _LLMAdapter:
 
 
 class _QuickFixGenerator:
-    """QuickFixRAG 래퍼 (기존 구현 활용)"""
+    """QuickFixRAG 래퍼 (기존 구현 활용)
+
+    생성 전략 우선순위:
+    1. generate_from_context (직접 컨텍스트 기반)
+    2. llm.generate_response (내부 LLM 직접 접근)
+    3. answer (폴백, 재검색 포함)
+    """
 
     def __init__(self, rag: Any) -> None:
         self.rag = rag
-        self.compressed_chunks: Optional[list[dict[str, Any]]] = None  # Store chunks for LLM
+        self.compressed_chunks: Optional[list[dict[str, Any]]] = None
 
     def generate(self, query: str, context: str, temperature: float, mode: str = "rag") -> str:
-        # 재검색 금지. 컨텍스트 기반 생성으로 우선 시도.
+        """답변 생성 (재검색 금지, 컨텍스트 기반 우선)"""
         try:
-            # 1) QuickFixRAG에 전용 메서드가 있으면 사용
-            if hasattr(self.rag, "generate_from_context"):
-                return self.rag.generate_from_context(
-                    query, context, temperature=temperature, mode=mode,
-                )
+            # Strategy 1: 전용 메서드 사용
+            result = self._try_generate_from_context(query, context, temperature, mode)
+            if result is not None:
+                return result
 
-            # 2) 내부 LLM 직접 접근 경로가 있으면 사용
-            # 🔥 CRITICAL: LLM lazy loading - ensure LLM is loaded before checking
-            if hasattr(self.rag, "_ensure_llm_loaded"):
-                self.rag._ensure_llm_loaded()
+            # Strategy 2: 내부 LLM 직접 접근
+            result = self._try_direct_llm(query, context, mode)
+            if result is not None:
+                return result
 
-            if hasattr(self.rag, "llm") and hasattr(self.rag.llm, "generate_response"):
-                # CRITICAL: generate_response expects List[Dict], not str
-                # Convert context string back to chunks format
-                if self.compressed_chunks:
-                    # Use stored compressed chunks (preferred)
-                    logger.debug(
-                        f"Using {len(self.compressed_chunks)} compressed chunks for generation (mode={mode})",
-                    )
-                    response = self.rag.llm.generate_response(
-                        query, self.compressed_chunks, max_retries=1, mode=mode,
-                    )
-                else:
-                    # Fallback: convert context string to minimal chunks
-                    logger.warning(
-                        "No compressed_chunks available, converting context string",
-                    )
-                    snippets = context.split("\n\n")
-                    chunks = [
-                        {"snippet": s, "content": s} for s in snippets if s.strip()
-                    ]
-                    response = self.rag.llm.generate_response(
-                        query, chunks, max_retries=1, mode=mode,
-                    )
+            # Strategy 3: 폴백 (재검색 포함)
+            return self._fallback_answer(query)
 
-                # Extract answer from RAGResponse object
-                if hasattr(response, "answer"):
-                    return response.answer
-                return str(response)
-
-            # 3) 폴백: 재검색이 포함된 answer는 최후 수단으로만
-            logger.warning("generate_from_context 미지원 → 폴백(answer) 사용")
-            if self.rag is None:
-                logger.error("LegacyAdapter: QuickFixRAG가 없어 답변 생성 불가")
-                return "죄송합니다. 현재 답변 생성 기능이 비활성화되어 있습니다."
-            return self.rag.answer(query, use_llm_summary=True)
         except Exception as e:
             logger.error(f"Generation 실패: {e}", exc_info=True)
             return f"[E_GENERATE] {e!s}"
+
+    def _try_generate_from_context(
+        self, query: str, context: str, temperature: float, mode: str
+    ) -> Optional[str]:
+        """Strategy 1: generate_from_context 메서드 시도"""
+        if hasattr(self.rag, "generate_from_context"):
+            return self.rag.generate_from_context(
+                query, context, temperature=temperature, mode=mode
+            )
+        return None
+
+    def _try_direct_llm(self, query: str, context: str, mode: str) -> Optional[str]:
+        """Strategy 2: 내부 LLM 직접 접근"""
+        # Lazy loading 보장
+        if hasattr(self.rag, "_ensure_llm_loaded"):
+            self.rag._ensure_llm_loaded()
+
+        if not (hasattr(self.rag, "llm") and hasattr(self.rag.llm, "generate_response")):
+            return None
+
+        # 청크 준비
+        chunks = self._prepare_chunks(context)
+        logger.debug(f"Using {len(chunks)} chunks for generation (mode={mode})")
+
+        response = self.rag.llm.generate_response(query, chunks, max_retries=1, mode=mode)
+
+        # RAGResponse에서 answer 추출
+        if hasattr(response, "answer"):
+            return response.answer
+        return str(response)
+
+    def _prepare_chunks(self, context: str) -> list[dict[str, Any]]:
+        """LLM용 청크 준비"""
+        if self.compressed_chunks:
+            return self.compressed_chunks
+
+        # 폴백: context 문자열을 청크로 변환
+        logger.warning("No compressed_chunks available, converting context string")
+        snippets = context.split("\n\n")
+        return [{"snippet": s, "content": s} for s in snippets if s.strip()]
+
+    def _fallback_answer(self, query: str) -> str:
+        """Strategy 3: 폴백 (재검색 포함)"""
+        logger.warning("generate_from_context 미지원 → 폴백(answer) 사용")
+
+        if self.rag is None:
+            logger.error("QuickFixRAG 없음: 답변 생성 불가")
+            return AdapterConfig.ERROR_RAG_UNAVAILABLE
+
+        return self.rag.answer(query, use_llm_summary=True)
 
 
 class _V2RetrieverAdapter:
@@ -164,107 +206,21 @@ class _V2RetrieverAdapter:
     HybridRetrieverV2의 결과 형식 {"fused_results": [...]}를
     v1 인터페이스 형식 [...] 으로 변환.
 
-    v2 results 구조:
-        {
-            "fused_results": [
-                {"id": "doc_4094", "score": 0.123, "filename": "...", ...},
-                ...
-            ]
-        }
-
-    v1 expected 구조:
-        [
-            {"doc_id": "doc_4094", "snippet": "...", "page": 1, ...},
-            ...
-        ]
+    v2 results: {"fused_results": [{"id": ..., "score": ..., ...}, ...]}
+    v1 expected: [{"doc_id": ..., "snippet": ..., "page": 1, ...}, ...]
     """
 
     def __init__(self, v2_retriever: Any) -> None:
-        """
-        Args:
-            v2_retriever: HybridRetrieverV2 instance
-        """
         self.v2_retriever = v2_retriever
-        self.db = v2_retriever.db  # MetadataDB for content fetching
+        self.db = v2_retriever.db
 
     def search(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
-        """Search using v2 retriever, convert to v1 format
-
-        Args:
-            query: Search query
-            top_k: Number of results
-
-        Returns:
-            List of dicts in v1 format with keys:
-            - doc_id: Document ID
-            - snippet: Text snippet
-            - page: Page number (default 1)
-            - score: Relevance score
-            - meta: Metadata dict
-        """
+        """V2 검색 후 V1 형식으로 변환"""
         try:
-            # Call v2 retriever
             v2_result = self.v2_retriever.search(query, top_k=top_k)
             fused_results = v2_result.get("fused_results", [])
 
-            # Convert to v1 format
-            v1_results = []
-            for doc in fused_results:
-                doc_id = doc.get("id", "unknown")
-
-                # 🔥 CRITICAL: snippet 우선순위
-                # 1) 검색 결과에 직접 포함된 snippet/content
-                # 2) DB 조회 (get_content)
-                # 3) 제목/파일명 기반 폴백
-
-                snippet = ""
-
-                # Priority 1: fused_results에 이미 포함된 데이터
-                if "snippet" in doc:
-                    snippet = doc["snippet"]
-                elif "content" in doc:
-                    snippet = doc["content"][:500]
-
-                # Priority 2: DB 조회 (app/rag/db.MetadataDB.get_content)
-                if not snippet or len(snippet) < 50:
-                    content = self.db.get_content(doc_id)
-                    if content and len(content) >= 50:
-                        snippet = content[:500]
-
-                # Priority 3: 메타데이터 폴백
-                if not snippet or len(snippet) < 50:
-                    fallback_parts = []
-                    if doc.get("title"):
-                        fallback_parts.append(f"제목: {doc['title']}")
-                    if doc.get("filename"):
-                        fallback_parts.append(f"파일: {doc['filename']}")
-                    if doc.get("date"):
-                        fallback_parts.append(f"날짜: {doc['date']}")
-
-                    snippet = (
-                        " | ".join(fallback_parts)
-                        if fallback_parts
-                        else f"문서 ID: {doc_id}"
-                    )
-                    logger.warning(
-                        f"V2 Adapter: doc_id={doc_id} snippet 결손, 메타데이터 폴백 사용",
-                    )
-
-                v1_results.append(
-                    {
-                        "doc_id": doc_id,
-                        "snippet": snippet,
-                        "page": 1,  # v2에서는 page 정보 없음, 기본 1
-                        "score": doc.get("score", 0.0),
-                        "meta": {
-                            "doc_id": doc_id,
-                            "filename": doc.get("filename", ""),
-                            "title": doc.get("title", ""),
-                            "date": doc.get("date", ""),
-                            "page": 1,
-                        },
-                    },
-                )
+            v1_results = [self._convert_doc(doc) for doc in fused_results]
 
             logger.info(f"V2 Adapter: {len(v1_results)} results converted")
             return v1_results
@@ -273,18 +229,77 @@ class _V2RetrieverAdapter:
             logger.error(f"V2 Adapter search failed: {e}", exc_info=True)
             return []
 
+    def _convert_doc(self, doc: dict[str, Any]) -> dict[str, Any]:
+        """단일 문서를 V1 형식으로 변환"""
+        doc_id = doc.get("id", "unknown")
+        snippet = self._resolve_snippet(doc, doc_id)
+
+        return {
+            "doc_id": doc_id,
+            "snippet": snippet,
+            "page": 1,
+            "score": doc.get("score", 0.0),
+            "meta": {
+                "doc_id": doc_id,
+                "filename": doc.get("filename", ""),
+                "title": doc.get("title", ""),
+                "date": doc.get("date", ""),
+                "page": 1,
+            },
+        }
+
+    def _resolve_snippet(self, doc: dict[str, Any], doc_id: str) -> str:
+        """Snippet 해결 (우선순위: 직접 포함 → DB 조회 → 메타데이터 폴백)"""
+        max_len = AdapterConfig.SNIPPET_MAX_LENGTH
+        min_len = AdapterConfig.SNIPPET_MIN_LENGTH
+
+        # Priority 1: 검색 결과에 직접 포함
+        snippet = doc.get("snippet") or ""
+        if not snippet and "content" in doc:
+            snippet = doc["content"][:max_len]
+
+        # Priority 2: DB 조회
+        if len(snippet) < min_len:
+            content = self.db.get_content(doc_id)
+            if content and len(content) >= min_len:
+                snippet = content[:max_len]
+
+        # Priority 3: 메타데이터 폴백
+        if len(snippet) < min_len:
+            snippet = self._build_metadata_fallback(doc, doc_id)
+
+        return snippet
+
+    def _build_metadata_fallback(self, doc: dict[str, Any], doc_id: str) -> str:
+        """메타데이터 기반 폴백 snippet 생성"""
+        parts = []
+        if doc.get("title"):
+            parts.append(f"제목: {doc['title']}")
+        if doc.get("filename"):
+            parts.append(f"파일: {doc['filename']}")
+        if doc.get("date"):
+            parts.append(f"날짜: {doc['date']}")
+
+        if parts:
+            logger.warning(f"V2 Adapter: doc_id={doc_id} snippet 결손, 메타데이터 폴백")
+            return " | ".join(parts)
+
+        return f"문서 ID: {doc_id}"
+
     def warmup(self) -> None:
-        """워밍업 (v2는 필요 시 자동 로드)"""
+        """워밍업 (V2는 필요 시 자동 로드)"""
         logger.info("V2 Adapter warmup (no-op)")
 
 
 __all__ = [
+    # 설정
+    "AdapterConfig",
+    # 폴백 구현
     "_DummyGenerator",
-    # 폴백
     "_DummyRetriever",
+    "_NoOpCompressor",
     # 어댑터
     "_LLMAdapter",
-    "_NoOpCompressor",
     "_QuickFixGenerator",
     "_V2RetrieverAdapter",
 ]

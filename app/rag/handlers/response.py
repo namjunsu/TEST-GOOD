@@ -17,6 +17,7 @@ from typing import Any, Optional
 from app.core.logging import get_logger
 from app.rag.utils.text import get_query_token_count
 from app.utils.sqlite_helpers import connect_metadata
+from config.constants import ResponseBuilderConfig
 
 logger = get_logger(__name__)
 
@@ -122,9 +123,9 @@ def force_chat_mode(query: str) -> tuple:
     if is_simple_math(query):
         return True, "simple_math"
 
-    # 3. 짧은 질의 (토큰 < 3) - 단, 도메인 키워드가 있으면 제외
+    # 3. 짧은 질의 - 단, 도메인 키워드가 있으면 제외
     tokens = get_query_token_count(query)
-    if tokens < 3 and not has_domain_keyword(query):
+    if tokens < ResponseBuilderConfig.SHORT_QUERY_TOKEN_THRESHOLD and not has_domain_keyword(query):
         return True, "short_query"
 
     return False, ""
@@ -176,7 +177,7 @@ def clean_text_preview(text: str) -> str:
     if review_match:
         title = review_match.group(1).strip()
         if len(title) > 5 and "기안서" not in title:
-            return title[:100]
+            return title[:ResponseBuilderConfig.TEXT_PREVIEW_MAX_LEN]
 
     # 1. "제목" 이후 실제 제목만 추출 (제목 끝 패턴으로 종료)
     title_match = re.search(
@@ -186,14 +187,14 @@ def clean_text_preview(text: str) -> str:
     if title_match:
         title = title_match.group(1).strip()
         if len(title) > 5:
-            return title[:100]
+            return title[:ResponseBuilderConfig.TEXT_PREVIEW_MAX_LEN]
 
     # 2. "제목" 이후 숫자.내용 이전까지만 추출
     title_match2 = re.search(r"제\s*목\s+(.+?)(?=\s*\d+\.\s*)", clean)
     if title_match2:
         title = title_match2.group(1).strip()
         if len(title) > 5:
-            return title[:100]
+            return title[:ResponseBuilderConfig.TEXT_PREVIEW_MAX_LEN]
 
     # 3. 형식적 텍스트 패턴 제거 (fallback)
     form_patterns = [
@@ -229,7 +230,8 @@ def clean_text_preview(text: str) -> str:
     # 앞부분 불필요한 문자 제거
     clean = re.sub(r"^[\s\-\d./]+", "", clean)
 
-    return clean[:100] if len(clean) > 100 else clean
+    max_len = ResponseBuilderConfig.TEXT_PREVIEW_MAX_LEN
+    return clean[:max_len] if len(clean) > max_len else clean
 
 
 # ============================================================================
@@ -275,7 +277,7 @@ def encode_file_ref(filename: str) -> Optional[str]:
             result = cursor.fetchone()
 
         if result and result[0]:
-            token = hashlib.sha1(filename.encode()).hexdigest()[:10]
+            token = hashlib.sha1(filename.encode()).hexdigest()[:ResponseBuilderConfig.FILE_REF_TOKEN_LEN]
             return f"doc:{token}"
 
         # 2. Fallback: docs 폴더 검색
@@ -284,7 +286,7 @@ def encode_file_ref(filename: str) -> Optional[str]:
             year = year_match.group(1)
             file_path = Path(f"docs/year_{year}") / filename
             if file_path.exists():
-                token = hashlib.sha1(filename.encode()).hexdigest()[:10]
+                token = hashlib.sha1(filename.encode()).hexdigest()[:ResponseBuilderConfig.FILE_REF_TOKEN_LEN]
                 return f"doc:{token}"
 
         # 3. Fallback2: docs 폴더 전체 검색
@@ -292,7 +294,7 @@ def encode_file_ref(filename: str) -> Optional[str]:
         if docs_dir.exists():
             for file_path in docs_dir.rglob(filename):
                 if file_path.is_file():
-                    token = hashlib.sha1(filename.encode()).hexdigest()[:10]
+                    token = hashlib.sha1(filename.encode()).hexdigest()[:ResponseBuilderConfig.FILE_REF_TOKEN_LEN]
                     return f"doc:{token}"
 
     except Exception as e:
@@ -314,7 +316,7 @@ def get_keyword_coverage(query: str, results: list[dict]) -> int:
         return 0
 
     found_keywords = set()
-    for result in results[:10]:
+    for result in results[:ResponseBuilderConfig.KEYWORD_COVERAGE_MAX_RESULTS]:
         chunk_text = normalize_chunk_text(result)
         for kw in query_keywords:
             if kw in chunk_text:
@@ -346,7 +348,7 @@ def build_evidence_item(
         "filename": filename,
         "file_path": file_path,
         "page": page,
-        "snippet": snippet[:400] if snippet else "",
+        "snippet": snippet[:ResponseBuilderConfig.EVIDENCE_SNIPPET_MAX_LEN] if snippet else "",
         "ref": ref,
         "meta": {
             "filename": filename,
@@ -385,12 +387,12 @@ def build_evidence_list(
                 chunks = retriever.search(filename, top_k=1)
                 if chunks:
                     chunk_text = normalize_chunk_text(chunks[0])
-                    snippet = chunk_text[:400] if chunk_text else ""
+                    snippet = chunk_text[:ResponseBuilderConfig.EVIDENCE_SNIPPET_MAX_LEN] if chunk_text else ""
             except Exception as e:
                 logger.debug(f"⚠️ BM25 청크 폴백 실패 ({filename}): {e}")
 
         if not snippet:
-            snippet = title[:160]
+            snippet = title[:ResponseBuilderConfig.FALLBACK_TITLE_MAX_LEN]
 
         evidence.append(build_evidence_item(
             filename=filename,
@@ -458,10 +460,11 @@ def format_search_results(
         cards.append(card)
 
     if is_count_query:
+        card_limit = ResponseBuilderConfig.COUNT_QUERY_CARD_LIMIT
         text = f"**'{keywords}' 관련 문서는 총 {len(doc_details)}개**입니다.\n\n"
-        text += "\n\n".join(cards[:10])
-        if len(cards) > 10:
-            text += f"\n\n... 외 {len(cards) - 10}개 문서"
+        text += "\n\n".join(cards[:card_limit])
+        if len(cards) > card_limit:
+            text += f"\n\n... 외 {len(cards) - card_limit}개 문서"
     else:
         text = f"📄 **'{keywords}' 관련 문서 ({len(doc_details)}건)**\n\n"
         text += "\n\n".join(cards)

@@ -291,6 +291,30 @@ class DBConfig:
 
 
 @dataclass(frozen=True)
+class ResponseBuilderConfig:
+    """응답 빌더 관련 상수 (handlers/response.py용)"""
+
+    # 쿼리 분류
+    SHORT_QUERY_TOKEN_THRESHOLD: int = 3    # 짧은 질의 판별 토큰 임계값
+
+    # 키워드 분석
+    KEYWORD_COVERAGE_MAX_RESULTS: int = 10  # 키워드 커버리지 검사 최대 결과 수
+
+    # Evidence 포맷팅
+    EVIDENCE_SNIPPET_MAX_LEN: int = 400     # Evidence 스니펫 최대 길이
+    FALLBACK_TITLE_MAX_LEN: int = 160       # 폴백 스니펫용 제목 최대 길이
+
+    # 텍스트 미리보기
+    TEXT_PREVIEW_MAX_LEN: int = 100         # clean_text_preview 결과 길이
+
+    # 카드 표시
+    COUNT_QUERY_CARD_LIMIT: int = 10        # 카운트 쿼리 시 표시 카드 수
+
+    # 파일 참조 토큰
+    FILE_REF_TOKEN_LEN: int = 10            # 파일 ref 토큰 해시 길이
+
+
+@dataclass(frozen=True)
 class FinanceExtractorConfig:
     """금액 추출기 관련 상수 (extractors/finance.py용)"""
 
@@ -406,6 +430,7 @@ __all__ = [
     "MetaParserConfig",
     "OCRConfig",
     "PipelineConfig",
+    "ResponseBuilderConfig",
     "RouterConfig",
     "ScoringConfig",
     "SearchConfig",

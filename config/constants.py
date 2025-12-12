@@ -136,6 +136,15 @@ class HandlerConfig:
     # 검색 문서 수
     BULK_SEARCH_TOP_K: int = 200   # 전체/목록 검색 시 top_k
     NORMAL_SEARCH_TOP_K: int = 10  # 일반 검색 시 top_k
+    COST_SEARCH_TOP_K: int = 15    # 비용 조회 시 top_k
+
+    # 텍스트 품질 검사 임계값
+    MIN_TEXT_LENGTH: int = 10               # 최소 텍스트 길이
+    MAX_SPECIAL_CHAR_RATIO: float = 0.2     # 특수문자 비율 상한
+    MIN_KOREAN_CHAR_RATIO: float = 0.3      # 한글 비율 하한
+
+    # 응답 제한
+    MAX_COST_DOCS_DISPLAY: int = 10         # 비용 응답 시 최대 표시 문서 수
 
 
 @dataclass(frozen=True)

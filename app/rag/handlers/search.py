@@ -1,7 +1,9 @@
 """검색 핸들러 모듈
 
-SEARCH, SEARCH_CONTENT_ONLY, COST_SUM 모드를 처리하는 핸들러.
-pipeline.py의 _answer_search, _answer_search_content_only, _answer_cost_sum을 위임받아 처리.
+SEARCH, SEARCH_CONTENT_ONLY 모드를 처리하는 핸들러.
+pipeline.py의 _answer_search, _answer_search_content_only를 위임받아 처리.
+
+COST_SUM 모드는 cost_sum.py로 분리됨 (SRP 적용).
 
 Strangler Fig 패턴:
     1단계: pipeline.py의 메서드들이 이 핸들러를 호출
@@ -199,21 +201,21 @@ def is_readable_text(text: str) -> bool:
         품질이 좋으면 True, 저품질이면 False
 
     Notes:
-        - 10자 미만은 의미 없음
-        - 특수문자 비율 20% 초과면 OCR 오류 가능성
-        - 한글 비율 30% 미만이면 깨진 텍스트
+        - MIN_TEXT_LENGTH 미만은 의미 없음
+        - MAX_SPECIAL_CHAR_RATIO 초과면 OCR 오류 가능성
+        - MIN_KOREAN_CHAR_RATIO 미만이면 깨진 텍스트
     """
-    if not text or len(text) < 10:
+    if not text or len(text) < HandlerConfig.MIN_TEXT_LENGTH:
         return False
 
     # 특수문자 비율 체크
     special_chars = sum(1 for c in text if c in '\\/"\'{}[]|<>_')
-    if special_chars / len(text) > 0.2:
+    if special_chars / len(text) > HandlerConfig.MAX_SPECIAL_CHAR_RATIO:
         return False
 
-    # 한글 비율 체크 (최소 30%)
+    # 한글 비율 체크
     korean_chars = sum(1 for c in text if '\uac00' <= c <= '\ud7a3')
-    if korean_chars / len(text) < 0.3:
+    if korean_chars / len(text) < HandlerConfig.MIN_KOREAN_CHAR_RATIO:
         return False
 
     return True
@@ -802,174 +804,3 @@ class SearchHandler(BaseHandler):
             })
 
         return evidence
-
-
-class CostSumHandler(BaseHandler):
-    """비용 합계 핸들러
-
-    COST_SUM 모드를 처리합니다.
-    DB의 claimed_total 컬럼을 활용하여 비용 합계를 조회합니다.
-    """
-
-    mode = "COST_SUM"
-
-    def __init__(self, pipeline: "RAGPipeline"):
-        super().__init__(pipeline)
-        self._db = MetadataDB()
-
-    def handle(self, query: str, **kwargs) -> dict[str, Any]:
-        """COST_SUM 모드 쿼리 처리"""
-        try:
-            # 1. 검색으로 후보 문서 찾기
-            search_results = self.retriever.search(query, top_k=15)
-
-            if not search_results:
-                logger.warning(f"비용 질의 검색 실패: {query}")
-                return {
-                    "mode": self.mode,
-                    "text": "관련 문서를 찾을 수 없습니다.",
-                    "files": [],
-                    "count": 0,
-                    "citations": [],
-                    "evidence": [],
-                    "status": {
-                        "retrieved_count": 0,
-                        "selected_count": 0,
-                        "found": False,
-                    },
-                }
-
-            # 2. DB에서 claimed_total 수집
-            cost_docs = []
-            for result in search_results:
-                filename = result.get("meta", {}).get("filename") or result.get("doc_id", "")
-                if not filename:
-                    continue
-
-                doc = self._db.get_by_filename(filename)
-                if doc and doc.get("claimed_total"):
-                    cost_docs.append((doc["claimed_total"], doc, filename))
-
-            if not cost_docs:
-                logger.warning("검색된 문서에 비용 정보 없음")
-                return {
-                    "mode": self.mode,
-                    "text": "검색된 문서에 비용 합계 정보가 없습니다.",
-                    "files": [],
-                    "count": 0,
-                    "citations": [],
-                    "evidence": [],
-                    "status": {
-                        "retrieved_count": len(search_results),
-                        "selected_count": 0,
-                        "found": False,
-                    },
-                }
-
-            # 3. 금액 내림차순 정렬
-            cost_docs.sort(key=lambda x: x[0], reverse=True)
-
-            # 4. 응답 생성
-            return self._build_cost_response(cost_docs, len(search_results))
-
-        except sqlite3.Error as e:
-            logger.error(f"❌ DB 오류: {e}", exc_info=True)
-            return self._make_error_response("비용 조회 중 데이터베이스 오류가 발생했습니다.")
-
-        except ValueError as e:
-            logger.error(f"❌ 금액 파싱 오류: {e}", exc_info=True)
-            return self._make_error_response("금액 정보 파싱 중 오류가 발생했습니다.")
-
-        except Exception as e:
-            logger.error(f"❌ 비용 질의 처리 실패: {e}", exc_info=True)
-            return self._make_error_response(f"비용 정보 조회 중 오류가 발생했습니다: {e!s}")
-
-    def _build_cost_response(
-        self,
-        cost_docs: list[tuple],
-        retrieved_count: int,
-    ) -> dict[str, Any]:
-        """비용 응답 생성"""
-        total_sum = sum(doc[0] for doc in cost_docs)
-        evidence = []
-        filenames = []
-
-        if len(cost_docs) == 1:
-            # 단일 문서
-            claimed_total, doc, filename = cost_docs[0]
-            text_preview = doc.get("text_preview", "")
-            vat_status = "VAT 별도" if "VAT" in text_preview or "부가세" in text_preview else "VAT 포함 추정"
-
-            sum_match = doc.get("sum_match")
-            if sum_match is None:
-                verification = "sum_match=없음"
-            elif sum_match:
-                verification = "sum_match=일치 ✅"
-            else:
-                verification = "sum_match=불일치 ⚠️"
-
-            answer_text = f"💰 합계: **₩{claimed_total:,}** ({vat_status})\n"
-            answer_text += f"출처: {filename} | 날짜: {doc.get('display_date') or doc.get('date') or '정보 없음'} | 기안자: {doc.get('drafter') or '정보 없음'}\n"
-            answer_text += f"검증: {verification}"
-
-            filenames = [filename]
-            evidence = [{
-                "doc_id": filename,
-                "filename": filename,
-                "page": 1,
-                "snippet": f"비용 합계: ₩{claimed_total:,}",
-                "ref": None,
-                "meta": {
-                    "filename": filename,
-                    "drafter": doc.get("drafter"),
-                    "date": doc.get("display_date") or doc.get("date"),
-                    "claimed_total": claimed_total,
-                },
-            }]
-
-            logger.info(f"💰 비용 질의 성공 (단일): {filename} → ₩{claimed_total:,}")
-
-        else:
-            # 복수 문서
-            answer_text = f"💰 **총 {len(cost_docs)}건 문서 비용 합계: ₩{total_sum:,}**\n\n"
-            answer_text += "**상세 내역:**\n"
-
-            for i, (claimed_total, doc, filename) in enumerate(cost_docs[:10], 1):
-                title = format_title_from_filename(filename)
-
-                answer_text += f"{i}. {title}: ₩{claimed_total:,}\n"
-                answer_text += f"   📅 {doc.get('display_date') or doc.get('date') or '날짜 없음'} | 👤 {doc.get('drafter') or '정보 없음'}\n"
-
-                filenames.append(filename)
-                evidence.append({
-                    "doc_id": filename,
-                    "filename": filename,
-                    "page": 1,
-                    "snippet": f"비용 합계: ₩{claimed_total:,}",
-                    "ref": None,
-                    "meta": {
-                        "filename": filename,
-                        "drafter": doc.get("drafter"),
-                        "date": doc.get("display_date") or doc.get("date"),
-                        "claimed_total": claimed_total,
-                    },
-                })
-
-            if len(cost_docs) > 10:
-                answer_text += f"\n... 외 {len(cost_docs) - 10}건 (합계에 포함)"
-
-            logger.info(f"💰 비용 질의 성공 (복수): {len(cost_docs)}건 → 총 ₩{total_sum:,}")
-
-        return {
-            "mode": self.mode,
-            "text": answer_text,
-            "files": filenames,
-            "count": len(cost_docs),
-            "citations": evidence,
-            "evidence": evidence,
-            "status": {
-                "retrieved_count": retrieved_count,
-                "selected_count": len(cost_docs),
-                "found": True,
-            },
-        }

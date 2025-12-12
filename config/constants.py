@@ -117,6 +117,17 @@ class RouterConfig:
     # 후보 선택 임계값
     SINGLE_CANDIDATE_THRESHOLD: float = 0.66  # 단일 후보 확정 점수
 
+    # 라우팅 신뢰도 (높음 → 낮음)
+    CONF_VERY_HIGH: float = 0.98   # SEARCH_CONTENT_ONLY (정밀 내용 검색)
+    CONF_HIGH: float = 0.95        # COST, DOCUMENT (존재 확인/상세)
+    CONF_MEDIUM_HIGH: float = 0.9  # DOCUMENT, SEARCH (list_intent), QA (존재 확인)
+    CONF_MEDIUM: float = 0.85      # QA (info_question), SEARCH (search_intent)
+    CONF_QA_KEYWORD: float = 0.8   # QA (키워드 감지)
+    CONF_DOC_REF_ONLY: float = 0.7  # SEARCH (문서 참조만)
+    CONF_LOW_CONF_MAX: float = 0.65  # low-conf 하향 조정 최대값
+    CONF_FALLBACK: float = 0.6     # DOCUMENT (doc_reference_only)
+    CONF_DEFAULT: float = 0.5      # QA (기본)
+
 
 @dataclass(frozen=True)
 class HandlerConfig:

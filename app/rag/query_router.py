@@ -35,27 +35,6 @@ logger = get_logger(__name__)
 __all__ = ["QueryRouter", "QueryMode", "RouteDecision", "ScoreStats"]
 
 
-# 헬퍼 함수: 파일명 정규화 (공백/특수문자 제거)
-def _norm(s: str) -> str:
-    """문자열 정규화: 소문자 + 공백/특수문자 제거"""
-    s = s.lower()
-    s = s.replace("&", "and")
-    s = re.sub(r"[\s_·,:()\\[\\\]-]+", "", s)
-    return s
-
-
-# 헬퍼 함수: 파일명 유사도 스코어
-def _score(qn: str, tn: str) -> float:
-    """부분 포함 + 길이 근접 혼합 스코어 (0~1)"""
-    if qn in tn or tn in qn:
-        base = RouterConfig.PARTIAL_MATCH_BASE
-    else:
-        base = 0.0
-    diff = abs(len(qn) - len(tn))
-    length_bonus = max(0.0, RouterConfig.LENGTH_BONUS_MAX - diff * RouterConfig.LENGTH_PENALTY_FACTOR)
-    return min(1.0, base + length_bonus)
-
-
 class QueryRouter:
     """쿼리 모드 라우터"""
 
@@ -147,6 +126,29 @@ class QueryRouter:
         r"(이\s?문서|해당\s?문서|이\s?파일|그\s?문서)",
         re.IGNORECASE,
     )
+
+    # =========================================================================
+    # 유틸리티 메서드 (파일명 정규화 및 유사도 계산)
+    # =========================================================================
+
+    @staticmethod
+    def _norm(s: str) -> str:
+        """문자열 정규화: 소문자 + 공백/특수문자 제거"""
+        s = s.lower()
+        s = s.replace("&", "and")
+        s = re.sub(r"[\s_·,:()\\[\\\]-]+", "", s)
+        return s
+
+    @staticmethod
+    def _score(qn: str, tn: str) -> float:
+        """부분 포함 + 길이 근접 혼합 스코어 (0~1)"""
+        if qn in tn or tn in qn:
+            base = RouterConfig.PARTIAL_MATCH_BASE
+        else:
+            base = 0.0
+        diff = abs(len(qn) - len(tn))
+        length_bonus = max(0.0, RouterConfig.LENGTH_BONUS_MAX - diff * RouterConfig.LENGTH_PENALTY_FACTOR)
+        return min(1.0, base + length_bonus)
 
     def __init__(
         self,
@@ -320,22 +322,22 @@ class QueryRouter:
         if has_filename or has_doc_reference:
             logger.info("🎯 모드 결정: DOCUMENT (특정 문서 내용 확인)")
             reason = "exists_check_with_doc_reference"
-            self._log_routing_decision(query, QueryMode.DOCUMENT, confidence=0.95, reason=reason)
+            self._log_routing_decision(query, QueryMode.DOCUMENT, confidence=RouterConfig.CONF_HIGH, reason=reason)
             return RouteDecision(
                 mode=QueryMode.DOCUMENT,
                 reason=reason,
-                confidence=0.95,
+                confidence=RouterConfig.CONF_HIGH,
                 content_intent=True,
                 year=params.get("year"),
                 drafter=params.get("drafter"),
             )
         logger.info("🎯 모드 결정: QA (존재 확인 질의)")
         reason = "exists_check_query"
-        self._log_routing_decision(query, QueryMode.QA, confidence=0.9, reason=reason)
+        self._log_routing_decision(query, QueryMode.QA, confidence=RouterConfig.CONF_MEDIUM_HIGH, reason=reason)
         return RouteDecision(
             mode=QueryMode.QA,
             reason=reason,
-            confidence=0.9,
+            confidence=RouterConfig.CONF_MEDIUM_HIGH,
             content_intent=True,
             year=params.get("year"),
             drafter=params.get("drafter"),
@@ -356,11 +358,11 @@ class QueryRouter:
 
         logger.info("🎯 모드 결정: SEARCH_CONTENT_ONLY (정밀 내용 검색 감지)")
         reason = "content_only_pattern_matched"
-        self._log_routing_decision(query, QueryMode.SEARCH_CONTENT_ONLY, confidence=0.98, reason=reason)
+        self._log_routing_decision(query, QueryMode.SEARCH_CONTENT_ONLY, confidence=RouterConfig.CONF_VERY_HIGH, reason=reason)
         return RouteDecision(
             mode=QueryMode.SEARCH_CONTENT_ONLY,
             reason=reason,
-            confidence=0.98,
+            confidence=RouterConfig.CONF_VERY_HIGH,
             list_intent=True,
             year=params.get("year"),
             drafter=params.get("drafter"),
@@ -382,11 +384,11 @@ class QueryRouter:
 
         logger.info("🎯 모드 결정: COST (비용 질의 감지)")
         reason = self.get_routing_reason(query)
-        self._log_routing_decision(query, QueryMode.COST, confidence=0.95, reason=reason)
+        self._log_routing_decision(query, QueryMode.COST, confidence=RouterConfig.CONF_HIGH, reason=reason)
         return RouteDecision(
             mode=QueryMode.COST,
             reason=reason,
-            confidence=0.95,
+            confidence=RouterConfig.CONF_HIGH,
             cost_intent=True,
             year=params.get("year"),
             drafter=params.get("drafter"),
@@ -410,11 +412,11 @@ class QueryRouter:
 
         logger.info("🎯 모드 결정: QA (정보 질의 감지 - 답변 생성)")
         reason = "info_question_pattern"
-        self._log_routing_decision(query, QueryMode.QA, confidence=0.85, reason=reason)
+        self._log_routing_decision(query, QueryMode.QA, confidence=RouterConfig.CONF_MEDIUM, reason=reason)
         return RouteDecision(
             mode=QueryMode.QA,
             reason=reason,
-            confidence=0.85,
+            confidence=RouterConfig.CONF_MEDIUM,
             content_intent=True,  # 내용 기반 답변 생성
             year=params.get("year"),
             drafter=params.get("drafter"),
@@ -440,11 +442,11 @@ class QueryRouter:
         if has_doc_context and intents["content"]:
             logger.info("🎯 모드 결정: DOCUMENT (문서 내용/요약)")
             reason = self.get_routing_reason(query)
-            self._log_routing_decision(query, QueryMode.DOCUMENT, confidence=0.9, reason=reason)
+            self._log_routing_decision(query, QueryMode.DOCUMENT, confidence=RouterConfig.CONF_MEDIUM_HIGH, reason=reason)
             return RouteDecision(
                 mode=QueryMode.DOCUMENT,
                 reason=reason,
-                confidence=0.9,
+                confidence=RouterConfig.CONF_MEDIUM_HIGH,
                 content_intent=True,
                 year=params.get("year"),
                 drafter=params.get("drafter"),
@@ -455,11 +457,11 @@ class QueryRouter:
         if is_detailed_mode(query) and has_doc_context:
             logger.info("🎯 모드 결정: DOCUMENT (상세 내용 요청)")
             reason = "detailed_mode_with_doc_reference"
-            self._log_routing_decision(query, QueryMode.DOCUMENT, confidence=0.95, reason=reason)
+            self._log_routing_decision(query, QueryMode.DOCUMENT, confidence=RouterConfig.CONF_HIGH, reason=reason)
             return RouteDecision(
                 mode=QueryMode.DOCUMENT,
                 reason=reason,
-                confidence=0.95,
+                confidence=RouterConfig.CONF_HIGH,
                 content_intent=True,
                 year=params.get("year"),
                 drafter=params.get("drafter"),
@@ -484,11 +486,11 @@ class QueryRouter:
         if intents["list"]:
             logger.info("🎯 모드 결정: SEARCH (문서 검색)")
             reason = self.get_routing_reason(query)
-            self._log_routing_decision(query, QueryMode.SEARCH, confidence=0.9, reason=reason)
+            self._log_routing_decision(query, QueryMode.SEARCH, confidence=RouterConfig.CONF_MEDIUM_HIGH, reason=reason)
             return RouteDecision(
                 mode=QueryMode.SEARCH,
                 reason=reason,
-                confidence=0.9,
+                confidence=RouterConfig.CONF_MEDIUM_HIGH,
                 list_intent=True,
                 year=params.get("year"),
                 drafter=params.get("drafter"),
@@ -498,11 +500,11 @@ class QueryRouter:
         if has_filename or has_doc_reference:
             logger.info("🎯 모드 결정: SEARCH (문서 참조 감지, 목록 우선)")
             reason = self.get_routing_reason(query)
-            self._log_routing_decision(query, QueryMode.SEARCH, confidence=0.7, reason=reason)
+            self._log_routing_decision(query, QueryMode.SEARCH, confidence=RouterConfig.CONF_DOC_REF_ONLY, reason=reason)
             return RouteDecision(
                 mode=QueryMode.SEARCH,
                 reason=reason,
-                confidence=0.7,
+                confidence=RouterConfig.CONF_DOC_REF_ONLY,
                 list_intent=True,
                 year=params.get("year"),
                 drafter=params.get("drafter"),
@@ -526,11 +528,11 @@ class QueryRouter:
 
         logger.info("🎯 모드 결정: QA (의도 키워드 감지)")
         reason = self.get_routing_reason(query)
-        self._log_routing_decision(query, QueryMode.QA, confidence=0.8, reason=reason)
+        self._log_routing_decision(query, QueryMode.QA, confidence=RouterConfig.CONF_QA_KEYWORD, reason=reason)
         return RouteDecision(
             mode=QueryMode.QA,
             reason=reason,
-            confidence=0.8,
+            confidence=RouterConfig.CONF_QA_KEYWORD,
             year=params.get("year"),
             drafter=params.get("drafter"),
         )
@@ -539,11 +541,11 @@ class QueryRouter:
         """기본 QA 모드 반환"""
         logger.info("🎯 모드 결정: QA (기본)")
         reason = "default_qa"
-        self._log_routing_decision(query, QueryMode.QA, confidence=0.5, reason=reason)
+        self._log_routing_decision(query, QueryMode.QA, confidence=RouterConfig.CONF_DEFAULT, reason=reason)
         return RouteDecision(
             mode=QueryMode.QA,
             reason=reason,
-            confidence=0.5,
+            confidence=RouterConfig.CONF_DEFAULT,
             year=params.get("year"),
             drafter=params.get("drafter"),
         )
@@ -646,6 +648,8 @@ class QueryRouter:
     def get_routing_reason(self, query: str) -> str:
         """모드 라우팅 이유 반환 (로깅용)
 
+        _detect_intents()를 재사용하여 중복 패턴 매칭 제거.
+
         Args:
             query: 사용자 질의
 
@@ -653,51 +657,29 @@ class QueryRouter:
             라우팅 이유 문자열
         """
         query_lower = query.lower()
-
-        has_cost_intent = self.COST_INTENT_PATTERN.search(query) is not None
-        has_list_intent = self.LIST_INTENT_PATTERN.search(query) is not None
-        has_summary_intent = self.SUMMARY_INTENT_PATTERN.search(query) is not None
-        has_doc_reference = self.DOC_REFERENCE_PATTERN.search(query) is not None
-        has_qa_intent = any(keyword in query_lower for keyword in self.qa_keywords)
-        has_filename = self.filename_re.search(query) is not None
-        has_preview_intent = any(
-            keyword in query_lower for keyword in self.preview_keywords
-        )
-
-        detected_qa_keywords = [kw for kw in self.qa_keywords if kw in query_lower]
-        detected_preview_keywords = [
-            kw for kw in self.preview_keywords if kw in query_lower
-        ]
-
+        intents = self._detect_intents(query)
         reason_parts = []
 
-        if has_cost_intent:
+        # 의도 플래그 기반 이유 추가
+        if intents["cost"]:
             reason_parts.append("cost_intent")
-
-        if has_list_intent:
+        if intents["list"]:
             reason_parts.append("list_intent")
+        if intents["content"]:
+            reason_parts.append("content_intent")
 
-        if has_summary_intent:
-            reason_parts.append("summary_intent")
-
-        if has_doc_reference:
+        # 문서 참조 체크
+        if self.DOC_REFERENCE_PATTERN.search(query):
             reason_parts.append("doc_reference")
-
-        if has_filename:
+        if self.filename_re.search(query):
             reason_parts.append("filename_detected")
 
-        if has_qa_intent:
-            reason_parts.append(f"qa_keywords({','.join(detected_qa_keywords)})")
+        # 키워드 감지 (상세 정보)
+        detected_qa = [kw for kw in self.qa_keywords if kw in query_lower]
+        if detected_qa:
+            reason_parts.append(f"qa_keywords({','.join(detected_qa)})")
 
-        if has_preview_intent:
-            reason_parts.append(
-                f"preview_keywords({','.join(detected_preview_keywords)})",
-            )
-
-        if not reason_parts:
-            reason_parts.append("default_qa")
-
-        return "|".join(reason_parts)
+        return "|".join(reason_parts) if reason_parts else "default_qa"
 
     def suggest_alternative_modes(self, query: str) -> list[tuple[QueryMode, float, str]]:
         """낮은 신뢰도일 때 대체 모드 제안
@@ -714,14 +696,14 @@ class QueryRouter:
         # 각 모드별 신뢰도 계산
         # 1. COST 모드 체크
         if self.COST_INTENT_PATTERN.search(query):
-            suggestions.append((QueryMode.COST, 0.95, "cost_intent"))
+            suggestions.append((QueryMode.COST, RouterConfig.CONF_HIGH, "cost_intent"))
 
         # 2. SEARCH 모드 체크
         has_list = self.LIST_INTENT_PATTERN.search(query) is not None
         has_search = self.SEARCH_INTENT_PATTERN.search(query) is not None
 
         if has_list or has_search:
-            conf = 0.9 if has_list else 0.85
+            conf = RouterConfig.CONF_MEDIUM_HIGH if has_list else RouterConfig.CONF_MEDIUM
             reason = "list_intent" if has_list else "search_intent"
             suggestions.append((QueryMode.SEARCH, conf, reason))
 
@@ -732,18 +714,18 @@ class QueryRouter:
         has_content = "내용" in query_lower or "미리보기" in query_lower
 
         if (has_filename or has_doc_ref) and (has_summary or has_content):
-            suggestions.append((QueryMode.DOCUMENT, 0.9, "doc_reference+content"))
+            suggestions.append((QueryMode.DOCUMENT, RouterConfig.CONF_MEDIUM_HIGH, "doc_reference+content"))
         elif has_filename or has_doc_ref:
-            suggestions.append((QueryMode.DOCUMENT, 0.6, "doc_reference_only"))
+            suggestions.append((QueryMode.DOCUMENT, RouterConfig.CONF_FALLBACK, "doc_reference_only"))
 
         # 4. QA 모드 체크
         has_qa = any(keyword in query_lower for keyword in self.qa_keywords)
         if has_qa:
-            suggestions.append((QueryMode.QA, 0.8, "qa_keywords"))
+            suggestions.append((QueryMode.QA, RouterConfig.CONF_QA_KEYWORD, "qa_keywords"))
 
         # 5. 제안이 없으면 QA를 기본으로
         if not suggestions:
-            suggestions.append((QueryMode.QA, 0.5, "default"))
+            suggestions.append((QueryMode.QA, RouterConfig.CONF_DEFAULT, "default"))
 
         # 신뢰도 높은 순으로 정렬
         suggestions.sort(key=lambda x: x[1], reverse=True)
@@ -794,7 +776,7 @@ class QueryRouter:
                 return RouteDecision(
                     mode=QueryMode.SEARCH,
                     reason=f"low_conf_from_{decision.mode.value}",
-                    confidence=min(decision.confidence, 0.65),
+                    confidence=min(decision.confidence, RouterConfig.CONF_LOW_CONF_MAX),
                     list_intent=True,
                     year=decision.year,
                     drafter=decision.drafter,
@@ -823,18 +805,18 @@ class QueryRouter:
 
         if wants_content and hits:
             # 쿼리 정규화
-            qn = _norm(q)
+            qn = self._norm(q)
 
             # 검색 결과를 스코어로 정렬
             ranked = sorted(
                 hits,
-                key=lambda h: _score(qn, _norm(h.get("title") or h.get("filename", ""))),
+                key=lambda h: self._score(qn, self._norm(h.get("title") or h.get("filename", ""))),
                 reverse=True,
             )[:2]  # 상위 2개만
 
             if ranked:
                 top = ranked[0]
-                top_score = _score(qn, _norm(top.get("title") or top.get("filename", "")))
+                top_score = self._score(qn, self._norm(top.get("title") or top.get("filename", "")))
 
                 # 단일 후보 확정 조건: 1개만 있거나, 상위 스코어가 임계값 이상
                 if len(ranked) == 1 or top_score >= RouterConfig.SINGLE_CANDIDATE_THRESHOLD:

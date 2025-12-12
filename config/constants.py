@@ -167,6 +167,11 @@ class RouterConfig:
 
     # 후보 선택 임계값
     SINGLE_CANDIDATE_THRESHOLD: float = 0.66  # 단일 후보 확정 점수
+    TOP_CANDIDATES_COUNT: int = 2             # 상위 후보 선택 개수
+
+    # Low-confidence 가드레일 기본값
+    LOW_CONF_DELTA_DEFAULT: float = 0.05      # delta12 임계값 기본값
+    LOW_CONF_MIN_HITS_DEFAULT: int = 1        # 최소 hits 기본값
 
     # 라우팅 신뢰도 (높음 → 낮음)
     CONF_VERY_HIGH: float = 0.98   # SEARCH_CONTENT_ONLY (정밀 내용 검색)
@@ -663,6 +668,24 @@ class DocumentUtilsConfig:
 
 
 @dataclass(frozen=True)
+class AlertsConfig:
+    """알림 시스템 관련 상수 (alerts.py용)"""
+
+    # 타임아웃 및 재시도
+    TIMEOUT_SEC: float = 5.0                 # Webhook 타임아웃 (초)
+    MAX_RETRIES: int = 3                     # 최대 재시도 횟수
+    BACKOFF_BASE: float = 0.6                # 지수 백오프 시작 (초)
+
+    # 메시지 길이 제한
+    MAX_BODY_CHARS: int = 12000              # Slack 메시지 최대 길이
+    MAX_JSON_SNIPPET: int = 4000             # JSON 스니펫 최대 길이
+
+    # 마스킹 설정
+    MASK_MIN_LENGTH: int = 6                 # 마스킹 적용 최소 길이
+    MASK_VISIBLE_CHARS: int = 3              # 마스킹 시 앞뒤 노출 문자 수
+
+
+@dataclass(frozen=True)
 class PipelineConfig:
     """RAG 파이프라인 관련 상수"""
 
@@ -670,6 +693,14 @@ class PipelineConfig:
     CONTEXT_MAX_LENGTH: int = 10000          # hydrate_context max_len
     SNIPPET_PREVIEW_LENGTH: int = 400        # 스니펫 미리보기 길이
     FALLBACK_SNIPPET_LENGTH: int = 800       # 폴백 스니펫 길이
+
+    # 기본 검색 설정
+    DEFAULT_TOP_K: int = 5                   # query() 기본 top_k
+    DEFAULT_COMPRESSION_RATIO: float = 0.7   # 기본 압축 비율
+
+    # 로그 미리보기 설정
+    LOG_TOP_RESULTS_COUNT: int = 10          # 검색 결과 로그 상위 N개
+    LOG_SNIPPET_PREVIEW_LEN: int = 60        # 로그용 스니펫 미리보기 길이
 
     # 성능 가드 임계값 (초)
     SLOW_QUERY_CRITICAL: float = 10.0        # 심각한 슬로 쿼리
@@ -710,6 +741,7 @@ def get_llm_config() -> dict:
 
 
 __all__ = [
+    "AlertsConfig",
     "AmountParserConfig",
     "AnchorScorerConfig",
     "APIConfig",

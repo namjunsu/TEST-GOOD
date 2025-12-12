@@ -23,15 +23,17 @@ import urllib.error
 import urllib.request
 from typing import Any, Optional
 
+from config.constants import AlertsConfig
+
 logger = logging.getLogger(__name__)
 
 DRY_RUN = os.getenv("ALERTS_DRY_RUN", "true").lower() == "true"
 SLACK_WEBHOOK = os.getenv("SLACK_WEBHOOK_URL", "")
-ALERT_TIMEOUT_SEC = float(os.getenv("ALERT_TIMEOUT_SEC", "5"))
-MAX_BODY_CHARS = int(os.getenv("ALERT_MAX_BODY_CHARS", "12000"))  # Slack 제한 대비 여유
-MAX_JSON_SNIPPET = int(os.getenv("ALERT_MAX_JSON_SNIPPET", "4000"))
-MAX_RETRIES = int(os.getenv("ALERT_MAX_RETRIES", "3"))
-BACKOFF_BASE = float(os.getenv("ALERT_BACKOFF_BASE", "0.6"))  # 지수 백오프 시작
+ALERT_TIMEOUT_SEC = float(os.getenv("ALERT_TIMEOUT_SEC", str(AlertsConfig.TIMEOUT_SEC)))
+MAX_BODY_CHARS = int(os.getenv("ALERT_MAX_BODY_CHARS", str(AlertsConfig.MAX_BODY_CHARS)))
+MAX_JSON_SNIPPET = int(os.getenv("ALERT_MAX_JSON_SNIPPET", str(AlertsConfig.MAX_JSON_SNIPPET)))
+MAX_RETRIES = int(os.getenv("ALERT_MAX_RETRIES", str(AlertsConfig.MAX_RETRIES)))
+BACKOFF_BASE = float(os.getenv("ALERT_BACKOFF_BASE", str(AlertsConfig.BACKOFF_BASE)))
 SERVICE_NAME = os.getenv("SERVICE_NAME", "ai-chat-rag")
 ENV = os.getenv("ENV", "dev")
 
@@ -66,13 +68,14 @@ def _mask_value(val: str) -> str:
         val: 원본 값
 
     Returns:
-        마스킹된 값 (앞뒤 3자 + ****)
+        마스킹된 값 (앞뒤 N자 + ****)
     """
     if not isinstance(val, str):
         return val
-    if len(val) <= 6:
+    if len(val) <= AlertsConfig.MASK_MIN_LENGTH:
         return "****"
-    return val[:3] + "****" + val[-3:]
+    n = AlertsConfig.MASK_VISIBLE_CHARS
+    return val[:n] + "****" + val[-n:]
 
 
 def _mask_sensitive(obj: Any) -> Any:

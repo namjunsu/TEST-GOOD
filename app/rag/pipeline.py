@@ -149,8 +149,8 @@ class RAGPipeline:
     def query(
         self,
         query: str,
-        top_k: int = 5,
-        compression_ratio: float = 0.7,
+        top_k: int = PipelineConfig.DEFAULT_TOP_K,
+        compression_ratio: float = PipelineConfig.DEFAULT_COMPRESSION_RATIO,
         _use_hyde: bool = False,  # Reserved for future HyDE implementation
         temperature: float = 0.1,
         selected_filename: Optional[str] = None,
@@ -289,10 +289,10 @@ class RAGPipeline:
     ) -> None:
         """검색 결과 Top-N 진단 로그"""
         logger.info(f"RETRIEVE_TOPN mode={mode}")
-        for i, doc in enumerate(results[:10], 1):
+        for i, doc in enumerate(results[:PipelineConfig.LOG_TOP_RESULTS_COUNT], 1):
             score = doc.get("score", 0.0)
             doc_id = doc.get("doc_id", "unknown")
-            snippet_preview = doc.get("snippet", "")[:60].replace("\n", " ")
+            snippet_preview = doc.get("snippet", "")[:PipelineConfig.LOG_SNIPPET_PREVIEW_LEN].replace("\n", " ")
             logger.info(f"  #{i} score={score:.4f} doc={doc_id} preview={snippet_preview}...")
 
     def _handle_no_results(
@@ -427,7 +427,7 @@ class RAGPipeline:
                 "page": c.get("page", 1),
                 "snippet": (
                     c.get("text") or c.get("snippet") or c.get("content") or ""
-                )[:400],
+                )[:PipelineConfig.SNIPPET_PREVIEW_LENGTH],
                 "ref": ref,  # 🔴 base64 인코딩된 파일 경로
                 "preview_url": c.get("preview_url"),
                 "download_url": c.get("download_url"),
@@ -611,7 +611,7 @@ class RAGPipeline:
 
             # ✅ P0: 파일명 직접 언급 패턴 감지 (레거시 호환, PREVIEW 모드 외)
         # 일반 쿼리는 기존 로직 사용
-        response = self.query(query, top_k=top_k or 5, selected_filename=selected_filename)
+        response = self.query(query, top_k=top_k or PipelineConfig.DEFAULT_TOP_K, selected_filename=selected_filename)
 
         if response.success:
             # 검색/압축에서 넘어온 정규화 청크 사용 (실제 page/snippet/meta 노출)
@@ -635,14 +635,14 @@ class RAGPipeline:
                     {
                         "doc_id": r.get("doc_id") or r.get("chunk_id", "unknown"),
                         "page": 0,  # 검색 결과는 페이지 정보 없음
-                        "snippet": r.get("snippet") or r.get("text_preview", "")[:400],  # 500 → 400 (스니펫 일관성)
+                        "snippet": r.get("snippet") or r.get("text_preview", "")[:PipelineConfig.SNIPPET_PREVIEW_LENGTH],
                         "meta": {
                             "doc_id": r.get("doc_id") or r.get("chunk_id", "unknown"),
                             "filename": r.get("filename", ""),
                             "page": 0,
                         },
                     }
-                    for r in response.raw_results[:3]
+                    for r in response.raw_results[:PipelineConfig.EVIDENCE_FALLBACK_COUNT]
                 ]
                 evidence_injected = True
 

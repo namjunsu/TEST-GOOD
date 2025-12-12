@@ -179,8 +179,8 @@ class QueryRouter:
         self.query_parser = query_parser
 
         # Low-confidence 가드레일 설정 (환경 변수)
-        self.low_conf_delta = float(os.getenv("LOW_CONF_DELTA", "0.05"))
-        self.low_conf_min_hits = int(os.getenv("LOW_CONF_MIN_HITS", "1"))
+        self.low_conf_delta = float(os.getenv("LOW_CONF_DELTA", str(RouterConfig.LOW_CONF_DELTA_DEFAULT)))
+        self.low_conf_min_hits = int(os.getenv("LOW_CONF_MIN_HITS", str(RouterConfig.LOW_CONF_MIN_HITS_DEFAULT)))
 
         # 라우팅 모니터 초기화
         self.monitor = get_monitor()
@@ -812,7 +812,7 @@ class QueryRouter:
                 hits,
                 key=lambda h: self._score(qn, self._norm(h.get("title") or h.get("filename", ""))),
                 reverse=True,
-            )[:2]  # 상위 2개만
+            )[:RouterConfig.TOP_CANDIDATES_COUNT]  # 상위 후보만
 
             if ranked:
                 top = ranked[0]

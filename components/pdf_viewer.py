@@ -3,41 +3,30 @@ PDF Viewer Component
 Modular PDF viewing with multiple rendering modes
 """
 
+from __future__ import annotations
+
 import base64
-import hashlib
 import io
-import os
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import streamlit as st
 
-# 환경 변수로 용량 상한 제어 (기본 64MB)
-MAX_DL_MB = float(os.getenv("MAX_PREVIEW_DL_MB", "64"))
-MAX_DL_BYTES = int(MAX_DL_MB * 1024 * 1024)
+from utils.pdf_utils import (
+    MAX_PDF_BYTES,
+    MAX_PDF_MB,
+    generate_file_hash,
+    load_pdf_bytes_with_limit,
+)
 
-
-def _hash_key(*parts: str) -> str:
-    """세션 키를 위한 해시 생성 (경로 길이 문제 해결)"""
-    h = hashlib.md5(("|".join(parts)).encode("utf-8", "ignore")).hexdigest()
-    return h[:12]
-
-
-@st.cache_data(ttl=300, show_spinner=False)
-def _cached_read_bytes(path: str, max_bytes: int) -> Optional[bytes]:
-    """PDF 파일을 캐시와 함께 로드 (용량 제한 포함)"""
-    p = Path(path)
-    if not p.exists() or not p.is_file():
-        return None
-    if p.stat().st_size > max_bytes:
-        return None
-    return p.read_bytes()
+if TYPE_CHECKING:
+    pass
 
 
 @st.cache_data(ttl=600, show_spinner=False)
-def _cached_page_png(path: str, mtime: float, page_index: int, zoom: float) -> Optional[bytes]:
+def _cached_page_png(path: str, mtime: float, page_index: int, zoom: float) -> bytes | None:
     """페이지를 PNG로 렌더링하여 캐시 (색공간 안전 처리)"""
     try:
         import fitz
@@ -76,7 +65,7 @@ class PDFInfo:
 
     path: Path
     size_mb: float
-    total_pages: Optional[int] = None
+    total_pages: int | None = None
 
     @property
     def name(self) -> str:
@@ -117,7 +106,7 @@ class PDFViewer:
             self.file_path = file_path_obj
 
         self.height = height
-        self.info: Optional[PDFInfo] = None
+        self.info: PDFInfo | None = None
 
         # 라이브러리 가용성 체크
         self.pymupdf_available = self._check_pymupdf()
@@ -141,7 +130,7 @@ class PDFViewer:
         except ImportError:
             return False
 
-    def _get_pdf_info(self) -> Optional[PDFInfo]:
+    def _get_pdf_info(self) -> PDFInfo | None:
         """PDF 파일 정보 가져오기"""
         if not self.file_path.exists():
             st.error(f"⚠️ 파일을 찾을 수 없습니다: {self.file_path.name}")
@@ -185,21 +174,21 @@ class PDFViewer:
             st.markdown(f"**💾 {info.size_mb:.1f}MB**")
 
         with col3:
-            data = _cached_read_bytes(str(self.file_path), MAX_DL_BYTES)
+            data = load_pdf_bytes_with_limit(str(self.file_path), MAX_PDF_BYTES)
             if data is None:
                 st.button(
                     "📥 다운로드",
                     disabled=True,
-                    key=f"dl_disabled_{_hash_key(str(self.file_path))}",
+                    key=f"dl_disabled_{generate_file_hash(str(self.file_path))}",
                 )
-                st.caption(f"({MAX_DL_MB:.0f}MB 초과 또는 접근 불가)")
+                st.caption(f"({MAX_PDF_MB:.0f}MB 초과 또는 접근 불가)")
             else:
                 st.download_button(
                     label="📥 다운로드",
                     data=data,
                     file_name=info.name,
                     mime="application/pdf",
-                    key=f"dl_{_hash_key(str(self.file_path))}",
+                    key=f"dl_{generate_file_hash(str(self.file_path))}",
                 )
 
         st.markdown("---")
@@ -249,11 +238,11 @@ class PDFViewer:
                 f"⚠️ 큰 파일({info.size_mb:.1f}MB)은 "
                 "페이지별 이미지 모드를 사용해주세요",
             )
-            st.info("🖼️ 위에서 '페이지별 이미지' 모드를 선택하시면 " "PDF를 볼 수 있습니다")
+            st.info("🖼️ 위에서 '페이지별 이미지' 모드를 선택하시면 PDF를 볼 수 있습니다")
             return False
 
         try:
-            data = _cached_read_bytes(str(self.file_path), MAX_DL_BYTES)
+            data = load_pdf_bytes_with_limit(str(self.file_path), MAX_PDF_BYTES)
             if not data:
                 st.warning("⚠️ 원본 로딩 불가 → 이미지/텍스트 모드를 사용하세요")
                 return False
@@ -292,7 +281,7 @@ class PDFViewer:
                 total_pages = doc.page_count
 
                 # 세션 상태로 현재 페이지 관리 (해시 키 사용)
-                page_key = f"page_{_hash_key(str(self.file_path))}"
+                page_key = f"page_{generate_file_hash(str(self.file_path))}"
                 if page_key not in st.session_state:
                     st.session_state[page_key] = 1
 
@@ -307,7 +296,7 @@ class PDFViewer:
                             min_value=1,
                             max_value=total_pages,
                             value=current_page,
-                            key=f"slider_{_hash_key(str(self.file_path))}",
+                            key=f"slider_{generate_file_hash(str(self.file_path))}",
                             help="슬라이더를 움직여 페이지를 이동하세요",
                         )
                         if new_page != current_page:
@@ -354,7 +343,7 @@ class PDFViewer:
                     with col2:
                         if st.button(
                             "◀ 이전",
-                            key=f"prev_{_hash_key(str(self.file_path))}",
+                            key=f"prev_{generate_file_hash(str(self.file_path))}",
                             disabled=(current_page == 1),
                         ):
                             st.session_state[page_key] = max(1, current_page - 1)
@@ -368,7 +357,7 @@ class PDFViewer:
                     with col4:
                         if st.button(
                             "다음 ▶",
-                            key=f"next_{_hash_key(str(self.file_path))}",
+                            key=f"next_{generate_file_hash(str(self.file_path))}",
                             disabled=(current_page == total_pages),
                         ):
                             st.session_state[page_key] = min(total_pages, current_page + 1)
@@ -403,7 +392,7 @@ class PDFViewer:
                         min_value=1,
                         max_value=total_pages,
                         value=1,
-                        key=f"text_page_{_hash_key(str(self.file_path))}",
+                        key=f"text_page_{generate_file_hash(str(self.file_path))}",
                     )
                 else:
                     page_num = 1
@@ -426,7 +415,7 @@ class PDFViewer:
                                 "전체 텍스트",
                                 text,
                                 height=400,
-                                key=f"text_full_{_hash_key(str(self.file_path))}",
+                                key=f"text_full_{generate_file_hash(str(self.file_path))}",
                             )
                     return True
                 # OCR 시도
@@ -474,7 +463,7 @@ class PDFViewer:
                             "전체 OCR 텍스트",
                             ocr_text,
                             height=400,
-                            key=f"ocr_content_{_hash_key(str(self.file_path))}",
+                            key=f"ocr_content_{generate_file_hash(str(self.file_path))}",
                         )
                 return True
             # 실패 메시지
@@ -530,7 +519,7 @@ class PDFViewer:
                 "보기 모드 선택",
                 mode_values,
                 index=default_index,
-                key=f"view_mode_{_hash_key(str(self.file_path))}",
+                key=f"view_mode_{generate_file_hash(str(self.file_path))}",
                 horizontal=True,
             )
 
@@ -562,19 +551,19 @@ class PDFViewer:
     def _render_fallback_download(self) -> None:
         """오류 발생 시 대체 다운로드 버튼"""
         try:
-            data = _cached_read_bytes(str(self.file_path), MAX_DL_BYTES)
+            data = load_pdf_bytes_with_limit(str(self.file_path), MAX_PDF_BYTES)
             if data:
                 st.download_button(
                     label="📥 PDF 다운로드 (미리보기 실패)",
                     data=data,
                     file_name=self.file_path.name,
                     mime="application/pdf",
-                    key=f"fallback_dl_{_hash_key(str(self.file_path))}",
+                    key=f"fallback_dl_{generate_file_hash(str(self.file_path))}",
                     help="미리보기는 실패했지만 파일을 다운로드할 수 있습니다",
                 )
                 st.info("💡 미리보기가 실패해도 다운로드하여 로컬에서 확인 가능합니다")
             else:
-                st.error(f"⚠️ 파일이 너무 크거나 접근할 수 없습니다 (>{MAX_DL_MB:.0f}MB)")
+                st.error(f"⚠️ 파일이 너무 크거나 접근할 수 없습니다 (>{MAX_PDF_MB:.0f}MB)")
 
         except Exception as dl_error:
             st.error(f"다운로드도 실패: {dl_error}")

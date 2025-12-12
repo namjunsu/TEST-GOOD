@@ -3,37 +3,29 @@ Document Preview Component
 선택된 문서의 미리보기 및 질문 기능을 제공하는 컴포넌트
 """
 
-import hashlib
-import os
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import streamlit as st
 
 from utils.path_validator import validate_and_resolve_path
+from utils.pdf_utils import (
+    MAX_PDF_BYTES,
+    MAX_PDF_MB,
+    generate_file_hash,
+    load_pdf_bytes_with_limit,
+)
 
-# 환경 변수로 용량 상한 제어 (기본 64MB)
-MAX_DL_MB = int(os.getenv("MAX_PREVIEW_DL_MB", "64"))
-MAX_PREVIEW_BYTES = MAX_DL_MB * 1024 * 1024
+if TYPE_CHECKING:
+    pass
 
 
 def _doc_safe_get(doc: dict[str, Any], key: str, default: str = "미상") -> str:
     """문서 딕셔너리에서 안전하게 값 추출"""
     v = doc.get(key)
     return str(v) if v not in (None, "", "None") else default
-
-
-@st.cache_data(show_spinner=False, ttl=300)
-def _load_pdf_bytes(file_path: str, max_bytes: int) -> Optional[bytes]:
-    """PDF 파일을 캐시와 함께 로드 (용량 제한 포함)"""
-    p = Path(file_path)
-    if not p.exists() or not p.is_file():
-        return None
-    size = p.stat().st_size
-    if size > max_bytes:
-        return None
-    with p.open("rb") as f:
-        return f.read()
 
 
 def render_document_preview(rag_instance: Any, config_module: Any) -> None:
@@ -68,15 +60,15 @@ def render_document_preview(rag_instance: Any, config_module: Any) -> None:
     filename = _doc_safe_get(doc, "filename", "document.pdf")
 
     # 경로 1회 검증 후 재사용
-    resolved_path: Optional[Path] = validate_and_resolve_path(
+    resolved_path: Path | None = validate_and_resolve_path(
         file_path_str=doc.get("path"),
         base_dir=Path(settings.DOCS_DIR).parent,
         fallback_filename=f"docs/{filename}" if filename else None,
     )
 
     # 문서별 상태 키(미리보기 토글). 파일 경로/파일명 해시로 고유화
-    id_seed = (str(resolved_path) if resolved_path else filename).encode("utf-8", "ignore")
-    doc_key = hashlib.md5(id_seed).hexdigest()[:10]
+    id_seed = str(resolved_path) if resolved_path else filename
+    doc_key = generate_file_hash(id_seed, length=10)
     preview_state_key = f"pdf_preview_shown__{doc_key}"
 
     if preview_state_key not in st.session_state:
@@ -93,7 +85,7 @@ def render_document_preview(rag_instance: Any, config_module: Any) -> None:
     with col3:
         if resolved_path and resolved_path.exists():
             # 대용량 차단 + 캐시 로드
-            pdf_bytes = _load_pdf_bytes(str(resolved_path), MAX_PREVIEW_BYTES)
+            pdf_bytes = load_pdf_bytes_with_limit(str(resolved_path), MAX_PDF_BYTES)
             if pdf_bytes is not None:
                 st.download_button(
                     label="📥 다운로드",
@@ -104,7 +96,7 @@ def render_document_preview(rag_instance: Any, config_module: Any) -> None:
                     use_container_width=True,
                 )
             else:
-                st.warning(f"⚠️ 파일이 너무 크거나 접근할 수 없습니다 (>{MAX_DL_MB}MB)")
+                st.warning(f"⚠️ 파일이 너무 크거나 접근할 수 없습니다 (>{MAX_PDF_MB:.0f}MB)")
         else:
             st.warning("⚠️ 파일을 찾을 수 없거나 접근이 거부되었습니다")
 

@@ -10,13 +10,43 @@ PDF 유틸리티 함수
 - 심볼릭 링크 우회 차단
 """
 
+from __future__ import annotations
+
+import hashlib
 import logging
+import os
+import re
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import streamlit as st
 
+if TYPE_CHECKING:
+    pass
+
 logger = logging.getLogger(__name__)
+
+# ============================================================================
+# 상수 (프로젝트 전역 사용)
+# ============================================================================
+
+MAX_PDF_MB = float(os.getenv("MAX_PREVIEW_DL_MB", "64"))
+MAX_PDF_BYTES = int(MAX_PDF_MB * 1024 * 1024)
+
+
+def generate_file_hash(path_or_name: str, length: int = 12) -> str:
+    """파일 경로/이름에서 해시 키 생성 (세션 상태 키용)
+
+    Args:
+        path_or_name: 파일 경로 또는 이름
+        length: 해시 길이 (기본 12)
+
+    Returns:
+        str: MD5 해시의 앞 N자리
+    """
+    h = hashlib.md5(path_or_name.encode("utf-8", "ignore")).hexdigest()
+    return h[:length]
+
 
 # 문서 루트 (settings에서 가져오기, 없으면 fallback)
 try:
@@ -105,10 +135,33 @@ def load_pdf_bytes(path_str: str) -> bytes:
     return safe_file_path.read_bytes()
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def load_pdf_bytes_with_limit(path_str: str, max_bytes: int | None = None) -> bytes | None:
+    """PDF 파일을 용량 제한과 함께 로드 (캐싱 적용)
+
+    Args:
+        path_str: PDF 파일 경로
+        max_bytes: 최대 바이트 수 (None이면 MAX_PDF_BYTES 사용)
+
+    Returns:
+        bytes | None: PDF 바이트 또는 None (제한 초과/오류 시)
+    """
+    limit = max_bytes if max_bytes is not None else MAX_PDF_BYTES
+    p = Path(path_str)
+
+    if not p.exists() or not p.is_file():
+        return None
+
+    if p.stat().st_size > limit:
+        return None
+
+    return p.read_bytes()
+
+
 def download_pdf_button(
     file_path: str,
     label: str = "⬇ 원본 다운로드",
-    key: Optional[str] = None,
+    key: str | None = None,
     width: str = "stretch",  # 'stretch' or 'content'
     icon_only: bool = False,
 ) -> bool:
@@ -222,8 +275,6 @@ def validate_year_folder(year: str) -> bool:
         bool: 유효한 연도 폴더인지 여부
     """
     # year_YYYY 또는 YYYY 형태 허용
-    import re
-
     if re.match(r"^(year_)?\d{4}$", year):
         year_path = DOCS_ROOT / year
         return year_path.exists() and year_path.is_dir()
@@ -231,7 +282,7 @@ def validate_year_folder(year: str) -> bool:
     return False
 
 
-def list_pdf_files(subdirectory: Optional[str] = None) -> list[Path]:
+def list_pdf_files(subdirectory: str | None = None) -> list[Path]:
     """DOCS_ROOT 내 PDF 파일 목록 반환 (안전한 탐색)
 
     Args:

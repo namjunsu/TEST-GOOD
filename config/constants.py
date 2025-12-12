@@ -398,6 +398,26 @@ class QueryExpanderConfig:
 
 
 @dataclass(frozen=True)
+class PersistentCacheConfig:
+    """영구 캐시 관련 상수 (persistent_cache.py용)"""
+
+    # TTL 설정
+    DEFAULT_TTL_SEC: int = 7200              # 기본 TTL (2시간)
+
+    # DB 크기 제한
+    MAX_DB_SIZE_MB: int = 256                # DB 최대 크기 (MB)
+    MMAP_SIZE_BYTES: int = 268435456         # mmap 크기 (256MB)
+
+    # 정리 설정
+    CLEANUP_PROBABILITY: float = 0.01        # 정리 확률 (1%)
+    LRU_EVICT_BATCH_SIZE: int = 1000         # LRU 축출 배치 크기
+
+    # SQLite 타임아웃
+    CONNECT_TIMEOUT_SEC: float = 5.0         # 연결 타임아웃 (초)
+    BUSY_TIMEOUT_MS: int = 5000              # busy 타임아웃 (ms)
+
+
+@dataclass(frozen=True)
 class PipelineConfig:
     """RAG 파이프라인 관련 상수"""
 
@@ -458,6 +478,7 @@ __all__ = [
     "MergeExtractorConfig",
     "MetaParserConfig",
     "OCRConfig",
+    "PersistentCacheConfig",
     "PipelineConfig",
     "QueryExpanderConfig",
     "ResponseBuilderConfig",

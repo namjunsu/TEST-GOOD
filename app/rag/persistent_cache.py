@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from app.rag.smart_cache_key import generate_smart_cache_key
+from config.constants import PersistentCacheConfig
 
 logger = logging.getLogger(__name__)
 
@@ -80,10 +81,10 @@ class PersistentCache:
     def __init__(
         self,
         db_path: str = "var/cache/query_cache.db",
-        ttl: int = 7200,
+        ttl: int = PersistentCacheConfig.DEFAULT_TTL_SEC,
         ttl_mode: str = "sliding",  # "absolute" | "sliding"
-        max_db_mb: int = 256,  # 파일 상한 (MB)
-        cleanup_prob: float = 0.01,  # set() 호출 시 확률적 정리
+        max_db_mb: int = PersistentCacheConfig.MAX_DB_SIZE_MB,  # 파일 상한 (MB)
+        cleanup_prob: float = PersistentCacheConfig.CLEANUP_PROBABILITY,  # set() 호출 시 확률적 정리
         compress: bool = True,
         key_func: Optional[Callable[[str, Optional[str]], str]] = None,
     ):
@@ -124,12 +125,16 @@ class PersistentCache:
         Returns:
             설정된 SQLite 연결
         """
-        conn = sqlite3.connect(self.db_path, timeout=5.0, isolation_level=None)
+        conn = sqlite3.connect(
+            self.db_path,
+            timeout=PersistentCacheConfig.CONNECT_TIMEOUT_SEC,
+            isolation_level=None,
+        )
         conn.execute("PRAGMA journal_mode=DELETE;")
         conn.execute("PRAGMA synchronous=NORMAL;")
         conn.execute("PRAGMA temp_store=MEMORY;")
-        conn.execute("PRAGMA mmap_size=268435456;")  # 256MB
-        conn.execute("PRAGMA busy_timeout=5000;")
+        conn.execute(f"PRAGMA mmap_size={PersistentCacheConfig.MMAP_SIZE_BYTES};")
+        conn.execute(f"PRAGMA busy_timeout={PersistentCacheConfig.BUSY_TIMEOUT_MS};")
         return conn
 
     def _init_db(self) -> None:
@@ -309,9 +314,9 @@ class PersistentCache:
             cur = conn.cursor()
             # 오래된 것부터 제거
             cur.execute(
-                """
+                f"""
                 SELECT cache_key FROM query_cache
-                ORDER BY accessed_at ASC LIMIT 1000
+                ORDER BY accessed_at ASC LIMIT {PersistentCacheConfig.LRU_EVICT_BATCH_SIZE}
             """,
             )
             keys = [k for (k,) in cur.fetchall()]
@@ -387,10 +392,10 @@ def get_persistent_cache() -> PersistentCache:
     if _persistent_cache_instance is None:
         _persistent_cache_instance = PersistentCache(
             db_path="var/cache/query_cache.db",
-            ttl=7200,  # 2 hours
+            ttl=PersistentCacheConfig.DEFAULT_TTL_SEC,
             ttl_mode="sliding",  # 슬라이딩 TTL 권장
-            max_db_mb=256,
-            cleanup_prob=0.01,
+            max_db_mb=PersistentCacheConfig.MAX_DB_SIZE_MB,
+            cleanup_prob=PersistentCacheConfig.CLEANUP_PROBABILITY,
             compress=True,
         )
     return _persistent_cache_instance

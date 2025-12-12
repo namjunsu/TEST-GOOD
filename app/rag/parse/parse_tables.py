@@ -25,6 +25,7 @@ from typing import Any, Optional
 import yaml
 
 from app.core.logging import get_logger
+from config.constants import TableParserConfig
 
 logger = get_logger(__name__)
 
@@ -254,9 +255,9 @@ class TableParser:
             r"(비고|규격|사양)",
         ]
 
-        for i, line in enumerate(lines[:300]):  # 앞쪽만 스캔
+        for i, line in enumerate(lines[:TableParserConfig.HEADER_SCAN_LINES]):
             cells = self._tokenize_row(line)
-            if not (2 <= len(cells) <= 10):
+            if not (TableParserConfig.HEADER_MIN_CELLS <= len(cells) <= TableParserConfig.HEADER_MAX_CELLS):
                 continue
 
             score = 0.0
@@ -271,7 +272,7 @@ class TableParser:
                     sim = SequenceMatcher(None, cell, key).ratio()
                     score = max(score, sim)
 
-            if score >= 0.7:
+            if score >= TableParserConfig.HEADER_SIMILARITY_THRESHOLD:
                 candidates.append((i, cells, score))
 
         if not candidates:
@@ -447,7 +448,7 @@ class TableParser:
         items: list[dict[str, Any]],
         claimed_total: Optional[int] = None,
         vat: Optional[int] = None,
-        rel_tol: float = 0.01,
+        rel_tol: float = TableParserConfig.DEFAULT_REL_TOLERANCE,
     ) -> tuple[bool, int, Optional[int]]:
         """합계 검증 (절대/상대 허용치 + VAT 교차 검증)
 

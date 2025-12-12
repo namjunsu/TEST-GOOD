@@ -291,6 +291,20 @@ class DBConfig:
 
 
 @dataclass(frozen=True)
+class TableParserConfig:
+    """표 파서 관련 상수 (parse_tables.py용)"""
+
+    # 헤더 탐색
+    HEADER_SCAN_LINES: int = 300             # 헤더 스캔 범위 (앞쪽 N줄)
+    HEADER_MIN_CELLS: int = 2                # 헤더 최소 셀 개수
+    HEADER_MAX_CELLS: int = 10               # 헤더 최대 셀 개수
+    HEADER_SIMILARITY_THRESHOLD: float = 0.7 # 헤더 감지 유사도 임계값
+
+    # 합계 검증
+    DEFAULT_REL_TOLERANCE: float = 0.01      # 상대 허용치 기본값 (1%)
+
+
+@dataclass(frozen=True)
 class SummaryTemplateConfig:
     """요약 템플릿 관련 상수 (summary_templates.py용)"""
 
@@ -370,6 +384,7 @@ __all__ = [
     "ScoringConfig",
     "SearchConfig",
     "SummaryTemplateConfig",
+    "TableParserConfig",
     "get_llm_config",
     "get_search_config",
 ]

@@ -141,6 +141,25 @@ class CacheConfig:
 
 
 @dataclass(frozen=True)
+class HybridSearchConfig:
+    """하이브리드 검색 Stage 관련 상수"""
+
+    # FTS 검색 설정
+    FTS_SUFFICIENT_RATIO: float = 0.5      # FTS 결과가 목표의 50% 이상이면 충분
+    FTS_OVERSAMPLE_FACTOR: int = 2         # FTS 검색 시 top_k * 2 로 오버샘플링
+
+    # DOC_ANCHORED 모드 설정
+    DOC_ANCHORED_SEARCH_K: int = 50        # DOC_ANCHORED 모드 검색 후보 수
+    DOC_ANCHORED_FALLBACK_MULTIPLIER: int = 3  # 필터링 결과 없을 때 원본 배수
+
+    # BM25 보충 설정
+    BM25_SUPPLEMENT_THRESHOLD: float = 0.5  # FTS 결과가 이 비율 미만이면 BM25 보충
+
+    # 선택 문서 스코어
+    SELECTED_DOC_SCORE: float = 99.9       # 선택된 문서 강제 스코어
+
+
+@dataclass(frozen=True)
 class DBConfig:
     """데이터베이스 관련 상수"""
 
@@ -180,6 +199,7 @@ __all__ = [
     "CacheConfig",
     "DBConfig",
     "HandlerConfig",
+    "HybridSearchConfig",
     "LLMConfig",
     "OCRConfig",
     "RouterConfig",

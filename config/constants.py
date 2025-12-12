@@ -103,6 +103,27 @@ class MetricsConfig:
 
 
 @dataclass(frozen=True)
+class RoutingMonitorConfig:
+    """라우팅 모니터 관련 상수 (routing_monitor.py용)"""
+
+    # 쿼리 길이 제한
+    QUERY_MAX_LENGTH: int = 200
+    QUERY_LOG_PREVIEW_LENGTH: int = 50
+
+    # 신뢰도 임계값
+    LOW_CONFIDENCE_WARN: float = 0.5
+    LOW_CONFIDENCE_FILTER: float = 0.7
+
+    # 결과 제한
+    LOW_CONF_RESULT_LIMIT: int = 10
+    MOST_COMMON_LIMIT: int = 20
+
+    # 분석 기간 및 기본값
+    ANALYSIS_DAYS: int = 7
+    MIN_OCCURRENCES_DEFAULT: int = 5
+
+
+@dataclass(frozen=True)
 class OCRConfig:
     """OCR 처리 관련 상수"""
 
@@ -616,6 +637,7 @@ __all__ = [
     "QueryRoutingConfig",
     "ResponseBuilderConfig",
     "RouterConfig",
+    "RoutingMonitorConfig",
     "ScoringConfig",
     "SearchConfig",
     "SummaryTemplateConfig",

@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from app.core.logging import get_logger
+from config.constants import RoutingMonitorConfig
 
 logger = get_logger(__name__)
 
@@ -59,7 +60,7 @@ class RoutingMonitor:
         """
         decision = RoutingDecision(
             timestamp=datetime.now().isoformat(),
-            query=query[:200],  # 길이 제한
+            query=query[:RoutingMonitorConfig.QUERY_MAX_LENGTH],
             mode=mode,
             reason=reason,
             confidence=confidence,
@@ -73,10 +74,11 @@ class RoutingMonitor:
             logger.error(f"라우팅 로그 기록 실패: {e}")
 
         # 낮은 신뢰도 경고
-        if confidence < 0.5:
+        if confidence < RoutingMonitorConfig.LOW_CONFIDENCE_WARN:
+            preview_len = RoutingMonitorConfig.QUERY_LOG_PREVIEW_LENGTH
             logger.warning(
                 f"⚠️ 낮은 신뢰도 라우팅: confidence={confidence:.2f}, "
-                f"mode={mode}, query='{query[:50]}...'",
+                f"mode={mode}, query='{query[:preview_len]}...'",
             )
 
     def get_daily_stats(self) -> dict[str, Any]:
@@ -100,6 +102,7 @@ class RoutingMonitor:
             avg_confidence = sum(d["confidence"] for d in decisions) / len(decisions)
 
             # 낮은 신뢰도 질의
+            low_conf_threshold = RoutingMonitorConfig.LOW_CONFIDENCE_FILTER
             low_conf_queries = [
                 {
                     "query": d["query"],
@@ -107,22 +110,25 @@ class RoutingMonitor:
                     "confidence": d["confidence"],
                 }
                 for d in decisions
-                if d["confidence"] < 0.7
+                if d["confidence"] < low_conf_threshold
             ]
 
+            result_limit = RoutingMonitorConfig.LOW_CONF_RESULT_LIMIT
             return {
                 "total": len(decisions),
                 "mode_distribution": dict(mode_counts),
                 "avg_confidence": round(avg_confidence, 3),
                 "low_confidence_count": len(low_conf_queries),
-                "low_confidence_queries": low_conf_queries[:10],  # 최대 10개
+                "low_confidence_queries": low_conf_queries[:result_limit],
             }
 
         except Exception as e:
             logger.error(f"통계 조회 실패: {e}")
             return {"error": str(e)}
 
-    def suggest_patterns(self, min_occurrences: int = 5) -> list[dict[str, Any]]:
+    def suggest_patterns(
+        self, min_occurrences: int = RoutingMonitorConfig.MIN_OCCURRENCES_DEFAULT,
+    ) -> list[dict[str, Any]]:
         """반복되는 질의에서 패턴 제안
 
         Args:
@@ -135,9 +141,9 @@ class RoutingMonitor:
         suggestions = []
 
         try:
-            # 최근 7일 로그 수집
+            # 최근 N일 로그 수집
             all_queries = []
-            for i in range(7):
+            for i in range(RoutingMonitorConfig.ANALYSIS_DAYS):
                 date = datetime.now().date() - __import__("datetime").timedelta(days=i)
                 log_file = self.log_dir / f"routing_{date}.jsonl"
 
@@ -154,7 +160,7 @@ class RoutingMonitor:
             query_counts = Counter(qa_queries)
 
             # 자주 나오는 질의 제안
-            for query, count in query_counts.most_common(20):
+            for query, count in query_counts.most_common(RoutingMonitorConfig.MOST_COMMON_LIMIT):
                 if count >= min_occurrences:
                     suggestions.append({
                         "query": query,

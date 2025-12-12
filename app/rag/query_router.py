@@ -407,16 +407,25 @@ class QueryRouter:
         self,
         query: str,
         params: dict[str, Any],
+        has_doc_reference: bool = False,
     ) -> Optional[RouteDecision]:
         """정보 질의 체크 (구체적 정보 + 질문형 → QA 모드)
 
         "IP 알려줘", "정보 알려줘" 같은 질의를 QA 모드로 라우팅하여
         문서 내용 기반 답변을 생성하도록 합니다.
 
+        단, "해당 문서", "이 문서" 같은 문서 참조가 있으면 DOCUMENT 모드가
+        더 적합하므로 스킵합니다.
+
         Returns:
             RouteDecision if matched, None otherwise
         """
         if not self.QA_QUESTION_PATTERN.search(query):
+            return None
+
+        # 문서 참조가 있으면 DOCUMENT 모드가 더 적합 → 스킵
+        if has_doc_reference:
+            logger.debug("ℹ️ 정보 질의 패턴 감지, 문서 참조 있음 → DOCUMENT 모드로 전환")
             return None
 
         logger.info("🎯 모드 결정: QA (정보 질의 감지 - 답변 생성)")
@@ -649,7 +658,7 @@ class QueryRouter:
             self._check_exists_intent(query, params, has_filename, has_doc_reference)
             or self._check_content_only(query, params)
             or self._check_cost_intent(query, params, intents)
-            or self._check_qa_question(query, params)  # 정보 질의 ("IP 알려줘") → QA 모드
+            or self._check_qa_question(query, params, has_doc_reference)  # 정보 질의 ("IP 알려줘") → QA 모드 (문서 참조 없을 때만)
             or self._check_document_mode(query, params, intents, has_filename, has_doc_reference, has_doc_type_keyword)
             or self._check_search_mode(query, params, intents, has_filename, has_doc_reference)
             or self._check_qa_intent(query, params, has_qa_intent)

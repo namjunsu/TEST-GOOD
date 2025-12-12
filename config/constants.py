@@ -513,11 +513,15 @@ class SummaryTemplateConfig:
 
 @dataclass(frozen=True)
 class MergeExtractorConfig:
-    """필드 병합기 관련 상수 (extractors/merge.py용)"""
+    """필드 병합기 관련 상수 (extractors/merge.py, device_fields.py용)"""
 
     # reason 문장 길이 필터
     REASON_MIN_LENGTH: int = 8               # 사유 최소 길이
     REASON_MAX_LENGTH: int = 240             # 사유 최대 길이
+    REASON_OPTIMAL_LENGTH: int = 160         # 사유 최적 길이 (스코어링용)
+
+    # 문장 분할 최소 길이
+    SENTENCE_MIN_LENGTH: int = 3             # 최소 문장 길이 (문장 분할 필터)
 
     # duration_years 범위
     DURATION_YEARS_MIN: int = 1              # 사용 기간 최솟값 (년)

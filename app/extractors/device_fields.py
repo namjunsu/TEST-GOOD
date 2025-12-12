@@ -16,6 +16,8 @@ from __future__ import annotations
 import re
 from typing import Any, Optional
 
+from config.constants import MergeExtractorConfig
+
 # ============================================================================
 # 정규식 패턴
 # ============================================================================
@@ -134,7 +136,8 @@ def _split_sentences(text: str) -> list[str]:
     # 마침표/물음표/느낌표/줄바꿈 기준으로 분할
     # look-behind 대신 단순 split 후 필터링
     sentences = re.split(r"[\.!?\n]+", text)
-    return [s.strip() for s in sentences if s.strip() and len(s.strip()) > 3]
+    min_len = MergeExtractorConfig.SENTENCE_MIN_LENGTH
+    return [s.strip() for s in sentences if s.strip() and len(s.strip()) > min_len]
 
 
 def _score_reason_sentence(sentence: str) -> float:
@@ -149,8 +152,9 @@ def _score_reason_sentence(sentence: str) -> float:
     # 키워드 히트 수
     keyword_hits = sum(1 for k in REASON_KEYS if k in sentence)
 
-    # 길이 적정성 (8~240자, 최적 길이: 80~160)
-    length_score = min(len(sentence), 160) / 160.0
+    # 길이 적정성 (최적 길이 기준으로 스코어링)
+    optimal_len = MergeExtractorConfig.REASON_OPTIMAL_LENGTH
+    length_score = min(len(sentence), optimal_len) / optimal_len
 
     return keyword_hits * 2.0 + length_score
 
@@ -167,9 +171,10 @@ def _extract_reason(text: str) -> Optional[str]:
     sentences = _split_sentences(text)
 
     # 키워드 포함 문장 필터링 (너무 짧거나 긴 문장 제외)
+    cfg = MergeExtractorConfig
     candidates = [
         s for s in sentences
-        if any(k in s for k in REASON_KEYS) and 8 <= len(s) <= 240
+        if any(k in s for k in REASON_KEYS) and cfg.REASON_MIN_LENGTH <= len(s) <= cfg.REASON_MAX_LENGTH
     ]
 
     if candidates:
@@ -180,7 +185,7 @@ def _extract_reason(text: str) -> Optional[str]:
     # Fallback: 줄 단위 검색
     for line in text.splitlines():
         line = line.strip()
-        if any(k in line for k in REASON_KEYS) and 8 <= len(line) <= 240:
+        if any(k in line for k in REASON_KEYS) and cfg.REASON_MIN_LENGTH <= len(line) <= cfg.REASON_MAX_LENGTH:
             return line
 
     return None

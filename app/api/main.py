@@ -14,12 +14,11 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 from urllib.parse import quote
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
-from typing import Any
-
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -32,6 +31,7 @@ from app.config.settings import settings
 
 # 로깅 설정 임포트
 from app.logging.config import RequestContext, get_logger, setup_logging
+from config.constants import APIConfig
 
 # 로깅 초기화 (환경변수 기반)
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
@@ -62,7 +62,7 @@ app.add_middleware(
 )
 
 # GZip 압축 (1KB 이상 응답에 적용)
-app.add_middleware(GZipMiddleware, minimum_size=1024)
+app.add_middleware(GZipMiddleware, minimum_size=APIConfig.GZIP_MINIMUM_SIZE)
 
 
 # Startup 이벤트
@@ -295,8 +295,8 @@ def log_file_access(filename: str, action: str, query: str = "") -> None:
 
         log_file = log_dir / "file_access.jsonl"
 
-        # 로그 로테이션: 10MB 초과 시 타임스탬프 파일로 백업
-        if log_file.exists() and log_file.stat().st_size > 10 * 1024 * 1024:
+        # 로그 로테이션: 임계값 초과 시 타임스탬프 파일로 백업
+        if log_file.exists() and log_file.stat().st_size > APIConfig.LOG_ROTATION_SIZE_BYTES:
             ts = datetime.now().strftime("%Y%m%d%H%M%S")
             log_file.rename(log_dir / f"file_access.{ts}.jsonl")
 
@@ -659,18 +659,17 @@ def get_metrics() -> dict[str, Any]:
     try:
         from app.alerts import send_warning
 
-        threshold_gap = 5
         fs_count = metrics.get("fs_file_count", 0)
         idx_count = metrics.get("index_file_count", 0)
         stale = metrics.get("stale_index_entries", 0)
 
         # 임계치 초과 시 알림
-        if stale > 0 or abs(fs_count - idx_count) > threshold_gap:
+        if stale > 0 or abs(fs_count - idx_count) > APIConfig.INDEX_SANITY_THRESHOLD_GAP:
             send_warning("인덱스 정합성 경고", {
                 "fs_file_count": fs_count,
                 "index_file_count": idx_count,
                 "stale_index_entries": stale,
-                "threshold_gap": threshold_gap,
+                "threshold_gap": APIConfig.INDEX_SANITY_THRESHOLD_GAP,
             })
     except Exception as e:
         print(f"알림 전송 실패: {e}")
@@ -763,4 +762,4 @@ def debug_llm() -> dict[str, Any]:
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=7860)
+    uvicorn.run(app, host="0.0.0.0", port=APIConfig.DEFAULT_PORT)

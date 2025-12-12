@@ -188,6 +188,23 @@ class CacheConfig:
 
 
 @dataclass(frozen=True)
+class APIConfig:
+    """API 서버 관련 상수 (api/main.py용)"""
+
+    # GZip 압축 설정
+    GZIP_MINIMUM_SIZE: int = 1024           # 1KB 이상 응답에 압축 적용
+
+    # 로그 로테이션 설정
+    LOG_ROTATION_SIZE_BYTES: int = 10485760  # 10MB (10 * 1024 * 1024)
+
+    # 인덱스 위생 임계값
+    INDEX_SANITY_THRESHOLD_GAP: int = 5     # fs/index 카운트 차이 허용치
+
+    # 서버 설정
+    DEFAULT_PORT: int = 7860                # 기본 포트
+
+
+@dataclass(frozen=True)
 class HybridSearchConfig:
     """하이브리드 검색 Stage 관련 상수"""
 
@@ -321,6 +338,7 @@ def get_llm_config() -> dict:
 
 
 __all__ = [
+    "APIConfig",
     "CacheConfig",
     "DBConfig",
     "DocumentHandlerConfig",

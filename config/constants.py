@@ -448,6 +448,28 @@ class DoctypeConfig:
 
 
 @dataclass(frozen=True)
+class QueryRoutingConfig:
+    """쿼리 라우팅 관련 상수 (query_routing.py용)"""
+
+    # 리트리버 파라미터 (모드별)
+    DETAILED_TOP_K: int = 10                 # detailed 모드 top_k
+    DETAILED_MAX_CONTEXT: int = 4000         # detailed 모드 max_context_tokens
+    SUMMARY_TOP_K: int = 8                   # summary 모드 top_k
+    SUMMARY_MAX_CONTEXT: int = 3500          # summary 모드 max_context_tokens
+    NUMERIC_TOP_K: int = 6                   # numeric 모드 top_k
+    NUMERIC_MAX_CONTEXT: int = 2500          # numeric 모드 max_context_tokens
+    DEFAULT_TOP_K: int = 5                   # 기본 QA 모드 top_k
+    DEFAULT_MAX_CONTEXT: int = 2000          # 기본 QA 모드 max_context_tokens
+
+    # 쿼리 판단 임계값
+    SHORT_QUERY_TOKEN_THRESHOLD: int = 3     # 짧은 쿼리 토큰 임계값
+    KEYWORD_COVERAGE_LIMIT: int = 10         # 키워드 커버리지 상위 결과 수
+
+    # 해시 토큰 설정
+    FILE_REF_HASH_LENGTH: int = 10           # 파일 참조 해시 토큰 길이
+
+
+@dataclass(frozen=True)
 class PipelineConfig:
     """RAG 파이프라인 관련 상수"""
 
@@ -513,6 +535,7 @@ __all__ = [
     "PersistentCacheConfig",
     "PipelineConfig",
     "QueryExpanderConfig",
+    "QueryRoutingConfig",
     "ResponseBuilderConfig",
     "RouterConfig",
     "ScoringConfig",

@@ -29,6 +29,7 @@ from app.rag.utils.text import get_query_token_count
 from app.rag.utils.text import norm_chunk_text as _norm_chunk_text
 from app.utils.sqlite_helpers import connect_metadata
 from app.utils.text_normalizer import detect_section, is_detailed_mode, normalize_query
+from config.constants import QueryRoutingConfig
 
 logger = get_logger(__name__)
 
@@ -148,29 +149,29 @@ def route_query(query: str) -> dict[str, Any]:
 
     if detailed:
         retriever_params = {
-            "top_k": 10,
+            "top_k": QueryRoutingConfig.DETAILED_TOP_K,
             "chunk_merge": True,
-            "max_context_tokens": 4000,
+            "max_context_tokens": QueryRoutingConfig.DETAILED_MAX_CONTEXT,
         }
     elif needs_summary:
         retriever_params = {
-            "top_k": 8,
+            "top_k": QueryRoutingConfig.SUMMARY_TOP_K,
             "chunk_merge": True,
-            "max_context_tokens": 3500,
+            "max_context_tokens": QueryRoutingConfig.SUMMARY_MAX_CONTEXT,
         }
     elif is_numeric_query:
         # 금액 질문: 표 전체를 가져오기 위해 청크 병합 필수
         retriever_params = {
-            "top_k": 6,
+            "top_k": QueryRoutingConfig.NUMERIC_TOP_K,
             "chunk_merge": True,
-            "max_context_tokens": 2500,
+            "max_context_tokens": QueryRoutingConfig.NUMERIC_MAX_CONTEXT,
         }
     else:
         # 일반 QA: 청크 병합으로 컨텍스트 연속성 보장
         retriever_params = {
-            "top_k": 5,
+            "top_k": QueryRoutingConfig.DEFAULT_TOP_K,
             "chunk_merge": True,
-            "max_context_tokens": 2000,
+            "max_context_tokens": QueryRoutingConfig.DEFAULT_MAX_CONTEXT,
         }
 
     # 5) 프롬프트/토큰 (settings 중앙 설정 사용)
@@ -217,7 +218,10 @@ def is_smalltalk(query: str) -> bool:
         return True
 
     # 2. 정규식 패턴 (스몰토크만 포함, 구두점 허용)
-    smalltalk_regex = r"^(안녕|안녕하세요|안녕하십니까|감사합니다?|고마워요?|thanks|thank you|hi|hello|hey|bye|goodbye|잘가|안녕히)[.!?\s]*$"
+    smalltalk_regex = (
+        r"^(안녕|안녕하세요|안녕하십니까|감사합니다?|고마워요?|thanks|thank you|"
+        r"hi|hello|hey|bye|goodbye|잘가|안녕히)[.!?\s]*$"
+    )
     if re.fullmatch(smalltalk_regex, s):
         return True
 
@@ -257,9 +261,9 @@ def get_keyword_coverage(query: str, results: list) -> int:
     if not query_keywords:
         return 0
 
-    # 검색 결과 청크에서 발견된 키워드 (상위 10개)
+    # 검색 결과 청크에서 발견된 키워드 (상위 N개)
     found_keywords = set()
-    for result in results[:10]:
+    for result in results[:QueryRoutingConfig.KEYWORD_COVERAGE_LIMIT]:
         chunk_text = _norm_chunk_text(result)
         for kw in query_keywords:
             if kw in chunk_text:
@@ -282,9 +286,9 @@ def force_chat_mode(query: str) -> tuple[bool, str]:
     if is_simple_math(query):
         return True, "simple_math"
 
-    # 3. 짧은 질의 (토큰 < 3) - 단, 도메인 키워드가 있으면 제외
+    # 3. 짧은 질의 (토큰 < N) - 단, 도메인 키워드가 있으면 제외
     tokens = get_query_token_count(query)
-    if tokens < 3 and not has_domain_keyword(query):
+    if tokens < QueryRoutingConfig.SHORT_QUERY_TOKEN_THRESHOLD and not has_domain_keyword(query):
         return True, "short_query"
 
     return False, ""
@@ -314,8 +318,8 @@ def _encode_file_ref(filename: str) -> Optional[str]:
             result = cursor.fetchone()
 
         if result and result[0]:
-            # 해시 토큰 생성 (filename 기준, 10자 단축)
-            token = hashlib.sha1(filename.encode()).hexdigest()[:10]
+            # 해시 토큰 생성 (filename 기준, N자 단축)
+            token = hashlib.sha1(filename.encode()).hexdigest()[:QueryRoutingConfig.FILE_REF_HASH_LENGTH]
             return f"doc:{token}"
 
         # 2. Fallback: docs 폴더 검색
@@ -324,7 +328,7 @@ def _encode_file_ref(filename: str) -> Optional[str]:
             year = year_match.group(1)
             file_path = Path(f"docs/year_{year}") / filename
             if file_path.exists():
-                token = hashlib.sha1(filename.encode()).hexdigest()[:10]
+                token = hashlib.sha1(filename.encode()).hexdigest()[:QueryRoutingConfig.FILE_REF_HASH_LENGTH]
                 return f"doc:{token}"
 
         # 3. Fallback2: docs 폴더 전체 검색
@@ -332,7 +336,7 @@ def _encode_file_ref(filename: str) -> Optional[str]:
         if docs_dir.exists():
             for file_path in docs_dir.rglob(filename):
                 if file_path.is_file():
-                    token = hashlib.sha1(filename.encode()).hexdigest()[:10]
+                    token = hashlib.sha1(filename.encode()).hexdigest()[:QueryRoutingConfig.FILE_REF_HASH_LENGTH]
                     return f"doc:{token}"
 
     except Exception as e:

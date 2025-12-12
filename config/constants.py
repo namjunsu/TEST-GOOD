@@ -383,6 +383,21 @@ class MergeExtractorConfig:
 
 
 @dataclass(frozen=True)
+class QueryExpanderConfig:
+    """쿼리 확장기 관련 상수 (query_expander.py용)"""
+
+    # 프롬프트 인젝션 방지
+    MAX_QUERY_LENGTH: int = 500              # 질의 길이 제한
+
+    # 캐시 설정
+    CACHE_TTL_SEC: int = 900                 # 캐시 TTL (15분)
+    CACHE_KEY_MAX_LENGTH: int = 200          # 캐시 키 최대 길이
+
+    # FTS 쿼리 생성
+    MAX_FTS_TERMS: int = 24                  # FTS 쿼리 용어 제한
+
+
+@dataclass(frozen=True)
 class PipelineConfig:
     """RAG 파이프라인 관련 상수"""
 
@@ -444,6 +459,7 @@ __all__ = [
     "MetaParserConfig",
     "OCRConfig",
     "PipelineConfig",
+    "QueryExpanderConfig",
     "ResponseBuilderConfig",
     "RouterConfig",
     "ScoringConfig",

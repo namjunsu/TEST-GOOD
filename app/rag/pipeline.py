@@ -331,9 +331,9 @@ class RAGPipeline:
         compressed = self.compressor.compress(results, compression_ratio)
         metrics["compress_time"] = time.perf_counter() - compress_start
 
-        # Generator에 청크 주입
+        # Generator에 청크 주입 (런타임 속성, 프로토콜 외부)
         if hasattr(self.generator, "compressed_chunks"):
-            self.generator.compressed_chunks = compressed
+            self.generator.compressed_chunks = compressed  # type: ignore[attr-defined]
 
         if DIAG_RAG:
             diagnostics["after_compress_k"] = len(compressed)
@@ -542,7 +542,9 @@ class RAGPipeline:
                         normalized_title = candidate_title.replace("_", " ").replace("&", "").strip()
 
                         # DB에서 제목 유사도 검색 (LIKE 패턴)
-                        conn = db.conn
+                        conn = getattr(db, "conn", None)  # type: ignore[attr-defined]
+                        if conn is None:
+                            raise AttributeError("MetadataDB has no connection")
                         cursor = conn.cursor()
                         query_sql = """
                             SELECT filename, title FROM documents
@@ -754,9 +756,11 @@ class RAGPipeline:
         """문서 내용 조회 - DocumentHandler로 위임 (Strangler Fig 패턴)"""
         return self._document_handler.handle(query, selected_filename=selected_filename)
 
-    def _safe_fname(self, meta: dict = None, doc_path: str = None) -> str:
+    def _safe_fname(
+        self, meta: Optional[dict[str, Any]] = None, doc_path: Optional[str] = None
+    ) -> str:
         """파일명 안전 추출 (DocumentUtils 위임)"""
-        return self._doc_utils.safe_fname(meta, doc_path)
+        return self._doc_utils.safe_fname(meta or {}, doc_path or "")
 
     def _make_chunks_for_doc(self, filename: str) -> list:
         """특정 문서의 청크만 로드 (DocumentUtils 위임)"""

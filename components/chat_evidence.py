@@ -83,21 +83,36 @@ def extract_evidence_metadata(ev: dict | Any) -> dict:
         dict: {doc_id, filename, snippet, file_path_str, meta}
     """
     if isinstance(ev, dict):
+        meta = ev.get("meta", {})
+        # filename을 여러 소스에서 찾기 (우선순위: filename > meta.filename > doc_id)
+        filename = (
+            ev.get("filename")
+            or (meta.get("filename") if isinstance(meta, dict) else None)
+            or ev.get("doc_id")
+            or "unknown"
+        )
         return {
             "doc_id": ev.get("doc_id") or ev.get("chunk_id", "unknown"),
-            "filename": ev.get("filename", "unknown"),
+            "filename": filename,
             "snippet": ev.get("snippet") or ev.get("content", "") or ev.get("text", ""),
-            "file_path_str": ev.get("file_path"),
-            "meta": ev.get("meta", {}),
+            "file_path_str": ev.get("file_path") or ev.get("path"),
+            "meta": meta,
         }
 
     # 객체인 경우
+    meta = getattr(ev, "meta", {})
+    filename = (
+        getattr(ev, "filename", None)
+        or (meta.get("filename") if isinstance(meta, dict) else None)
+        or getattr(ev, "doc_id", None)
+        or "unknown"
+    )
     return {
         "doc_id": getattr(ev, "doc_id", None) or getattr(ev, "chunk_id", "unknown"),
-        "filename": getattr(ev, "filename", "unknown"),
+        "filename": filename,
         "snippet": getattr(ev, "snippet", None) or getattr(ev, "content", "") or getattr(ev, "text", ""),
-        "file_path_str": getattr(ev, "file_path", None),
-        "meta": getattr(ev, "meta", {}),
+        "file_path_str": getattr(ev, "file_path", None) or getattr(ev, "path", None),
+        "meta": meta,
     }
 
 
@@ -158,8 +173,15 @@ def render_doc_card(
 
     st.markdown(list_line)
 
-    # 액션 버튼
-    if file_path:
+    # 액션 버튼 - 파일이 실제로 존재하고 유효한 PDF인 경우만 표시
+    file_exists = (
+        file_path is not None
+        and filename != "unknown"
+        and file_path.suffix.lower() == ".pdf"
+        and file_path.exists()
+    )
+
+    if file_exists:
         col1, col2, col3 = st.columns([1, 1, 8])
 
         with col1:
@@ -186,8 +208,6 @@ def render_doc_card(
                 height=500,
                 show_download_fallback=True,
             )
-    else:
-        st.caption("⚠️ 파일 경로 없음")
 
 
 def display_evidence_section(evidence_list: list, msg_idx: int) -> None:

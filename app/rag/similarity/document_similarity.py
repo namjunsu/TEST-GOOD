@@ -121,8 +121,11 @@ class DocumentSimilarity:
             logger.info(f"📊 유사 문서 {len(similar_docs)}건 발견: {doc_id}")
             return similar_docs
 
+        except (AttributeError, KeyError) as e:
+            logger.warning(f"⚠️ 유사 문서 검색 - 데이터 접근 오류: {e}")
+            return []
         except Exception as e:
-            logger.error(f"❌ 유사 문서 검색 실패: {e}", exc_info=True)
+            logger.exception(f"❌ 유사 문서 검색 예상치 못한 오류: {type(e).__name__}")
             return []
 
     def find_similar_by_query(
@@ -192,8 +195,11 @@ class DocumentSimilarity:
             logger.info(f"📊 쿼리 기반 유사 문서 {len(similar_docs)}건 발견: '{query[:30]}...'")
             return similar_docs
 
+        except (AttributeError, KeyError) as e:
+            logger.warning(f"⚠️ 쿼리 기반 유사 문서 검색 - 데이터 접근 오류: {e}")
+            return []
         except Exception as e:
-            logger.error(f"❌ 쿼리 기반 유사 문서 검색 실패: {e}", exc_info=True)
+            logger.exception(f"❌ 쿼리 기반 유사 문서 검색 예상치 못한 오류: {type(e).__name__}")
             return []
 
     def _extract_keywords(self, doc: dict) -> str:

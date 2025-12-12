@@ -63,8 +63,10 @@ class DocumentUtils:
                 full_text = txt_path.read_text(encoding="utf-8", errors="ignore")
                 logger.info(f"📄 DOC_ANCHORED: {filename} 전체 텍스트 로드 ({len(full_text)}자)")
                 return full_text[:DocumentUtilsConfig.FULL_TEXT_MAX_LENGTH]
-            except Exception as e:
-                logger.warning(f"⚠️ 전체 텍스트 로드 실패: {e}")
+            except OSError as e:
+                logger.warning(f"⚠️ 전체 텍스트 파일 읽기 실패: {e}")
+            except UnicodeDecodeError as e:
+                logger.warning(f"⚠️ 전체 텍스트 인코딩 오류: {e}")
 
         return snippet
 
@@ -161,10 +163,11 @@ class DocumentUtils:
 
             return chunks
 
+        except (AttributeError, KeyError) as e:
+            logger.error(f"❌ 문서 청크 로드 - 인덱스 접근 오류: {e}")
+            return []
         except Exception as e:
-            logger.error(f"❌ 문서 청크 로드 실패: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
+            logger.exception(f"❌ 문서 청크 로드 예상치 못한 오류: {type(e).__name__}")
             return []
 
     def extract_with_ocr(self, pdf_path: str, start_page: int, total_pages: int) -> str:
@@ -196,8 +199,10 @@ class DocumentUtils:
                     page_text = pytesseract.image_to_string(img, lang="kor+eng")
                     text += page_text + "\n"
                     logger.info(f"✓ OCR (pytesseract) 페이지 {start_page + i + 1}: {len(page_text)}자")
+                except OSError as e:
+                    logger.warning(f"⚠️ pytesseract 이미지 처리 오류 (페이지 {start_page + i + 1}): {e}")
                 except Exception as e:
-                    logger.warning(f"⚠️ pytesseract 실패 (페이지 {start_page + i + 1}): {e}")
+                    logger.warning(f"⚠️ pytesseract 실패 (페이지 {start_page + i + 1}): {type(e).__name__}")
 
             if len(text.strip()) > DocumentUtilsConfig.OCR_MIN_VALID_LENGTH:
                 return text
@@ -222,12 +227,21 @@ class DocumentUtils:
 
                 return text
 
+            except ImportError:
+                logger.warning("⚠️ paddleocr 미설치")
+                return ""
             except Exception as e:
-                logger.warning(f"⚠️ paddleocr 실패: {e}")
+                logger.warning(f"⚠️ paddleocr 실패: {type(e).__name__}")
                 return ""
 
+        except ImportError:
+            logger.warning("⚠️ pytesseract 또는 pdf2image 미설치")
+            return ""
+        except OSError as e:
+            logger.error(f"❌ OCR PDF 파일 접근 오류: {e}")
+            return ""
         except Exception as e:
-            logger.error(f"❌ OCR 추출 실패: {e}")
+            logger.exception(f"❌ OCR 추출 예상치 못한 오류: {type(e).__name__}")
             return ""
 
     def gather_summary_context(
@@ -315,8 +329,10 @@ class DocumentUtils:
 
                 if sorted_hits:
                     logger.info(f"✓ RAG 청크 {len(sorted_hits)}개 추출 (우선순위: {len(priority_hits)}개)")
+        except (AttributeError, KeyError) as e:
+            logger.warning(f"⚠️ RAG 청크 추출 - 데이터 접근 오류: {e}")
         except Exception as e:
-            logger.warning(f"⚠️ RAG 청크 추출 실패: {e}")
+            logger.warning(f"⚠️ RAG 청크 추출 예상치 못한 오류: {type(e).__name__}")
 
         # 결합 및 길이 제한 (약 3k 토큰)
         context = "\n\n".join(parts)[:DocumentUtilsConfig.CONTEXT_MAX_LENGTH]

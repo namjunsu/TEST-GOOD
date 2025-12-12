@@ -339,8 +339,12 @@ def _encode_file_ref(filename: str) -> Optional[str]:
                     token = hashlib.sha1(filename.encode()).hexdigest()[:QueryRoutingConfig.FILE_REF_HASH_LENGTH]
                     return f"doc:{token}"
 
+    except sqlite3.Error as e:
+        logger.warning(f"⚠️ ref 토큰 DB 오류: {filename} - {e}")
+    except OSError as e:
+        logger.warning(f"⚠️ ref 토큰 파일 접근 오류: {filename} - {e}")
     except Exception as e:
-        logger.warning(f"ref 토큰 생성 실패: {filename} - {e}")
+        logger.warning(f"⚠️ ref 토큰 생성 예상치 못한 오류: {filename} - {type(e).__name__}")
 
     return None
 

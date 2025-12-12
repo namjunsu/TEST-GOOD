@@ -55,8 +55,12 @@ def _load_yaml_config() -> dict:
             with Path(CONFIG_PATH).open("r", encoding="utf-8") as f:
                 cfg = yaml.safe_load(f) or {}
             return cfg
+    except yaml.YAMLError as e:
+        logger.warning(f"⚠️ filters.yaml YAML 파싱 실패: {e}")
+    except OSError as e:
+        logger.warning(f"⚠️ filters.yaml 파일 읽기 실패: {e}")
     except Exception as e:
-        logger.warning(f"filters.yaml 로드 실패: {e}")
+        logger.warning(f"⚠️ filters.yaml 로드 예상치 못한 오류: {type(e).__name__}")
     return {}
 
 

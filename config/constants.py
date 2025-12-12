@@ -291,6 +291,17 @@ class DBConfig:
 
 
 @dataclass(frozen=True)
+class MetaParserConfig:
+    """메타데이터 파서 관련 상수 (parse_meta.py용)"""
+
+    # 설정 핫리로드
+    CONFIG_RELOAD_SECS: int = 10            # 설정 재로드 체크 주기 (초)
+
+    # 카테고리 분류
+    CATEGORY_BODY_SAMPLE_LEN: int = 500     # 본문 분류 시 분석할 길이
+
+
+@dataclass(frozen=True)
 class TableParserConfig:
     """표 파서 관련 상수 (parse_tables.py용)"""
 
@@ -378,6 +389,7 @@ __all__ = [
     "HybridRetrieverConfig",
     "HybridSearchConfig",
     "LLMConfig",
+    "MetaParserConfig",
     "OCRConfig",
     "PipelineConfig",
     "RouterConfig",

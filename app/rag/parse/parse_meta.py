@@ -25,6 +25,7 @@ from typing import Any
 import yaml
 
 from app.core.logging import get_logger
+from config.constants import MetaParserConfig
 
 logger = get_logger(__name__)
 
@@ -35,7 +36,7 @@ class MetaParser:
     def __init__(
         self,
         config_path: str = "config/document_processing.yaml",
-        reload_secs: int = 10,
+        reload_secs: int = MetaParserConfig.CONFIG_RELOAD_SECS,
     ):
         """초기화
 
@@ -415,7 +416,7 @@ class MetaParser:
         """
         search_text_title = (title or "").lower()
         search_text_file = (filename or "").lower()
-        search_text_body = (content or "")[:500].lower()
+        search_text_body = (content or "")[:MetaParserConfig.CATEGORY_BODY_SAMPLE_LEN].lower()
 
         matched: list[tuple[str, str, str]] = []  # (category, source, keyword)
 

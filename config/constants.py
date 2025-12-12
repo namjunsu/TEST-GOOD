@@ -434,6 +434,20 @@ class ContextHydratorConfig:
 
 
 @dataclass(frozen=True)
+class DoctypeConfig:
+    """문서 유형 분류기 관련 상수 (doctype.py용)"""
+
+    # 핫리로드 설정
+    HOT_RELOAD_INTERVAL_SEC: int = 10        # 설정 파일 재로드 체크 간격 (초)
+
+    # Confidence 임계값
+    LOW_CONFIDENCE_THRESHOLD: float = 0.5    # low confidence 판정 기준
+
+    # 기본 우선순위
+    DEFAULT_PRIORITY: int = 999              # 우선순위 미지정 시 기본값
+
+
+@dataclass(frozen=True)
 class PipelineConfig:
     """RAG 파이프라인 관련 상수"""
 
@@ -485,6 +499,7 @@ __all__ = [
     "CacheConfig",
     "ContextHydratorConfig",
     "DBConfig",
+    "DoctypeConfig",
     "DocumentHandlerConfig",
     "ExactMatchConfig",
     "FinanceExtractorConfig",

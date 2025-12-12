@@ -25,6 +25,8 @@ from typing import Any
 
 import yaml
 
+from config.constants import DoctypeConfig
+
 
 class DocumentTypeClassifier:
     """문서 유형 분류기 v2.0"""
@@ -32,7 +34,7 @@ class DocumentTypeClassifier:
     def __init__(
         self,
         config_path: str = "config/document_processing.yaml",
-        reload_secs: int = 10,
+        reload_secs: int = DoctypeConfig.HOT_RELOAD_INTERVAL_SEC,
     ):
         """
         Args:
@@ -230,7 +232,7 @@ class DocumentTypeClassifier:
             compiled[name] = {
                 "keywords": kws,
                 "neg_keywords": neg,
-                "priority": info.get("priority", 999),
+                "priority": info.get("priority", DoctypeConfig.DEFAULT_PRIORITY),
                 "weight": float(info.get("weight", 1.0)),
             }
 
@@ -377,7 +379,7 @@ class DocumentTypeClassifier:
         self._metrics["avg_confidence"] = (prev_avg * (total - 1) + confidence) / total
 
         # Low confidence 카운트
-        if confidence < 0.5:
+        if confidence < DoctypeConfig.LOW_CONFIDENCE_THRESHOLD:
             self._metrics["low_confidence_count"] += 1
 
     def get_metrics(self) -> dict[str, Any]:

@@ -331,6 +331,55 @@ class HybridRetriever:
             logger.error(f"❌ FTS 검색 실패: {e}")
             return []
 
+    def _enrich_with_bm25_content(self, fts_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """FTS 결과에 BM25 인덱스의 전체 content 보강 (2025-12-12)
+
+        FTS는 text_preview (500자)만 반환하므로, BM25 인덱스에서
+        전체 content를 가져와 snippet을 보강합니다.
+
+        Args:
+            fts_results: FTS 검색 결과 리스트
+
+        Returns:
+            content가 보강된 결과 리스트
+        """
+        if not fts_results or not self.bm25:
+            return fts_results
+
+        try:
+            # BM25 인덱스에서 filename → content 매핑 생성
+            # BM25Store 구조: documents는 텍스트 리스트, metadata는 별도 리스트
+            bm25_content_map = {}
+            for idx, content in enumerate(self.bm25.documents):
+                if idx < len(self.bm25.metadata):
+                    meta = self.bm25.metadata[idx]
+                    filename = meta.get("filename") if isinstance(meta, dict) else None
+                    if filename and content:
+                        bm25_content_map[filename] = content
+
+            # FTS 결과에 content 보강
+            enriched_count = 0
+            for result in fts_results:
+                filename = result.get("filename")
+                if filename and filename in bm25_content_map:
+                    bm25_content = bm25_content_map[filename]
+                    current_snippet = result.get("snippet", "")
+
+                    # BM25 content가 더 길면 교체
+                    if len(bm25_content) > len(current_snippet):
+                        result["snippet"] = bm25_content[:self.snippet_max_length]
+                        result["content"] = bm25_content  # 전체 content도 추가
+                        enriched_count += 1
+
+            if enriched_count > 0:
+                logger.info(f"📝 FTS 결과 content 보강: {enriched_count}/{len(fts_results)}개 문서")
+
+            return fts_results
+
+        except Exception as e:
+            logger.warning(f"⚠️ FTS content 보강 실패: {e}")
+            return fts_results
+
     def _calculate_relevance_score(self, query: str, doc: dict[str, Any]) -> float:
         """쿼리와 문서 간 relevance 스코어 계산 (BM25 유사) + 파일명 매칭 강화
 
@@ -595,7 +644,11 @@ class HybridRetriever:
                         result["score"] = self._calculate_relevance_score(query, result)
                     summary = [f"{r.get('filename', '?')[:20]}={r.get('score', 0):.2f}" for r in fts_results[:3]]
                     logger.info(f"📊 FTS 재스코어링 완료: {summary}")
-                    bm25_results = []  # BM25 생략
+
+                    # 🔧 FTS 결과에 BM25 content 보강 (2025-12-12: text_preview 500자 제한 해결)
+                    fts_results = self._enrich_with_bm25_content(fts_results)
+
+                    bm25_results = []  # BM25 검색은 생략하지만 content는 보강됨
                     selected_doc = None
                 else:
                     # FTS 결과 부족, BM25로 보충

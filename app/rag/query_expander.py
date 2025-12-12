@@ -250,8 +250,14 @@ class QueryExpander:
             stopwords = set(search_cfg.get("values", []))
             logger.info(f"📋 검색 불용어 {len(stopwords)}개 로드됨")
             return stopwords
+        except yaml.YAMLError as e:
+            logger.warning(f"⚠️ 검색 불용어 YAML 파싱 실패, 기본값 사용: {e}")
+            return {"및", "과", "해줘", "좀", "문서", "내용", "요약", "건"}
+        except OSError as e:
+            logger.warning(f"⚠️ 검색 불용어 파일 읽기 실패, 기본값 사용: {e}")
+            return {"및", "과", "해줘", "좀", "문서", "내용", "요약", "건"}
         except Exception as e:
-            logger.warning(f"⚠️ 검색 불용어 로드 실패, 기본값 사용: {e}")
+            logger.warning(f"⚠️ 검색 불용어 로드 예상치 못한 오류, 기본값 사용: {type(e).__name__}")
             return {"및", "과", "해줘", "좀", "문서", "내용", "요약", "건"}
 
     def _load_domain_terms(self) -> set[str]:
@@ -273,8 +279,14 @@ class QueryExpander:
 
             logger.info(f"📋 도메인 용어 {len(terms)}개 → {len(expanded)}개 (variants 포함)")
             return expanded
+        except yaml.YAMLError as e:
+            logger.warning(f"⚠️ 도메인 용어 YAML 파싱 실패: {e}")
+            return set()
+        except OSError as e:
+            logger.warning(f"⚠️ 도메인 용어 파일 읽기 실패: {e}")
+            return set()
         except Exception as e:
-            logger.warning(f"⚠️ 도메인 용어 로드 실패: {e}")
+            logger.warning(f"⚠️ 도메인 용어 로드 예상치 못한 오류: {type(e).__name__}")
             return set()
 
     def expand_query(self, query: str) -> dict[str, Any]:
@@ -396,8 +408,11 @@ class QueryExpander:
                 logger.debug(f"LLM response: {response.answer[:500]}")
             return self._create_fallback_expansion(query)
 
+        except (AttributeError, KeyError, TypeError) as e:
+            logger.warning(f"⚠️ Query expansion 응답 처리 오류, fallback 사용: {e}")
+            return self._create_fallback_expansion(query)
         except Exception as e:
-            logger.warning(f"⚠️ Query expansion 실패, fallback 사용: {e}")
+            logger.warning(f"⚠️ Query expansion 예상치 못한 오류, fallback 사용: {type(e).__name__}")
             return self._create_fallback_expansion(query)
 
     def _create_fallback_expansion(self, query: str) -> dict[str, Any]:

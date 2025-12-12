@@ -227,8 +227,12 @@ class MetadataDB:
                     cur.execute("ALTER TABLE documents ADD COLUMN sum_match BOOLEAN")
                     logger.info("✓ sum_match 컬럼 추가")
 
+        except sqlite3.OperationalError as e:
+            logger.warning(f"⚠️ 스키마 마이그레이션 DB 오류 (이미 존재할 수 있음): {e}")
+        except OSError as e:
+            logger.error(f"❌ 스키마 마이그레이션 파일 오류: {e}")
         except Exception as e:
-            logger.error(f"스키마 마이그레이션 실패: {e}")
+            logger.exception(f"❌ 스키마 마이그레이션 예상치 못한 오류: {type(e).__name__}")
 
     def add_document(self, metadata: dict[str, Any]) -> int:
         """문서 메타데이터 추가"""
@@ -269,8 +273,17 @@ class MetadataDB:
                 )
                 return cur.lastrowid
 
+        except sqlite3.IntegrityError as e:
+            logger.warning(f"⚠️ 문서 추가 무결성 오류 (중복?): {e}")
+            return -1
+        except sqlite3.OperationalError as e:
+            logger.error(f"❌ 문서 추가 DB 오류: {e}")
+            return -1
+        except (KeyError, TypeError) as e:
+            logger.error(f"❌ 문서 추가 메타데이터 오류: {e}")
+            return -1
         except Exception as e:
-            logger.error(f"문서 추가 실패: {e}")
+            logger.exception(f"❌ 문서 추가 예상치 못한 오류: {type(e).__name__}")
             return -1
 
     def search_by_year(self, year: str) -> list[dict[str, Any]]:
@@ -530,12 +543,21 @@ class MetadataDB:
                     logger.debug(f"페이지 추출 성공: {doc_id} page={page}, len={len(text)}")
                     return text.strip()
 
+            except ImportError:
+                logger.warning("⚠️ pdfplumber 미설치, PDF 페이지 추출 불가")
+                return None
             except Exception as e:
-                logger.error(f"PDF 페이지 추출 실패: {pdf_path} page={page}, error={e}")
+                logger.error(f"❌ PDF 페이지 추출 실패: {pdf_path} page={page}, error={e}")
                 return None
 
+        except sqlite3.Error as e:
+            logger.error(f"❌ get_page_text DB 오류: doc_id={doc_id}, error={e}")
+            return None
+        except OSError as e:
+            logger.warning(f"⚠️ get_page_text 파일 접근 오류: doc_id={doc_id}, error={e}")
+            return None
         except Exception as e:
-            logger.error(f"get_page_text 실패: doc_id={doc_id}, page={page}, error={e}")
+            logger.exception(f"❌ get_page_text 예상치 못한 오류: {type(e).__name__}")
             return None
 
     def update_document(self, filename: str, **kwargs: Any) -> Optional[int]:
@@ -646,8 +668,11 @@ class MetadataDB:
             drafters = {row["drafter"] for row in cursor.fetchall()}
             logger.info(f"✅ 고유 기안자 {len(drafters)}명 로드")
             return drafters
+        except sqlite3.Error as e:
+            logger.error(f"❌ 기안자 목록 조회 DB 오류: {e}")
+            return set()
         except Exception as e:
-            logger.error(f"기안자 목록 조회 실패: {e}")
+            logger.exception(f"❌ 기안자 목록 조회 예상치 못한 오류: {type(e).__name__}")
             return set()
 
     def close(self) -> None:
@@ -685,8 +710,11 @@ class MetadataDB:
             result = cursor.fetchone()
             return result["count"] if result else 0
 
+        except sqlite3.Error as e:
+            logger.error(f"❌ 고유 문서 카운트 DB 오류: {e}")
+            return 0
         except Exception as e:
-            logger.error(f"고유 문서 카운트 실패: {e}")
+            logger.exception(f"❌ 고유 문서 카운트 예상치 못한 오류: {type(e).__name__}")
             return 0
 
     def count_by_extension(self) -> dict:
@@ -744,8 +772,14 @@ class MetadataDB:
 
             return counts
 
+        except sqlite3.Error as e:
+            logger.error(f"❌ 확장자별 카운트 DB 오류: {e}")
+            return {"pdf": 0, "txt": 0, "others": 0}
+        except (OSError, json.JSONDecodeError) as e:
+            logger.warning(f"⚠️ 확장자별 카운트 파일 오류: {e}")
+            return {"pdf": 0, "txt": 0, "others": 0}
         except Exception as e:
-            logger.error(f"확장자별 카운트 실패: {e}")
+            logger.exception(f"❌ 확장자별 카운트 예상치 못한 오류: {type(e).__name__}")
             return {"pdf": 0, "txt": 0, "others": 0}
 
     def count_search_index(self) -> int:
@@ -779,9 +813,14 @@ class MetadataDB:
             # everything_index.db가 없으면 metadata.db 사용
             return self.count_unique_documents()
 
+        except sqlite3.Error as e:
+            logger.error(f"❌ 검색 인덱스 카운트 DB 오류: {e}")
+            return self.count_unique_documents()
+        except (ImportError, KeyError, AttributeError) as e:
+            logger.warning(f"⚠️ 검색 인덱스 설정 오류, 폴백 사용: {e}")
+            return self.count_unique_documents()
         except Exception as e:
-            logger.error(f"검색 인덱스 카운트 실패: {e}")
-            # 폴백: metadata.db의 고유 문서 수 반환
+            logger.exception(f"❌ 검색 인덱스 카운트 예상치 못한 오류: {type(e).__name__}")
             return self.count_unique_documents()
 
     def __enter__(self) -> "MetadataDB":

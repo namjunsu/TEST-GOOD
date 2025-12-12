@@ -138,9 +138,13 @@ class ParallelSearchExecutor:
                         res = fut.result(timeout=per_task_timeout)
                         results[name] = res
                         logger.debug(f"✅ Done: {name}")
+                    except TimeoutError as e:
+                        errors[name] = f"Timeout: {e}"
+                        logger.warning(f"⏳ Timeout: {name}")
+                        results[name] = []
                     except Exception as e:
                         errors[name] = repr(e)
-                        logger.error(f"❌ Failed: {name} - {e}")
+                        logger.error(f"❌ Failed: {name} - {type(e).__name__}: {e}")
                         results[name] = []
                     finally:
                         done.add(fut)
@@ -200,9 +204,12 @@ class ParallelSearchExecutor:
             try:
                 result = future.result()
                 result_sets.append(set(result))
+            except TimeoutError as e:
+                name = futures[future]
+                logger.warning(f"⏳ Filter timeout: {name}")
             except Exception as e:
                 name = futures[future]
-                logger.error(f"❌ Filter failed: {name} - {e}")
+                logger.error(f"❌ Filter failed: {name} - {type(e).__name__}: {e}")
 
         # Intersection of all filter results
         if not result_sets:
@@ -300,17 +307,24 @@ def parallel_search_with_fallback(
     try:
         result = winner.result()
         logger.debug(f"🏆 Winner: {winner_label}")
+    except TimeoutError as e:
+        logger.warning(f"⏳ Winner ({winner_label}) timed out: {e}")
+        result = None
     except Exception as e:
-        logger.warning(f"⚠️ Winner ({winner_label}) failed: {e}")
-        # 승자가 실패했으면, 대기 중인 작업 결과 시도
+        logger.warning(f"⚠️ Winner ({winner_label}) failed: {type(e).__name__}: {e}")
+        result = None
+
+    # 승자가 실패했으면, 대기 중인 작업 결과 시도
+    if result is None:
         for p in pending:
             try:
                 fallback_result = p.result(timeout=timeout)
                 logger.info("🔄 Fallback succeeded after primary failure")
                 return fallback_result or []
+            except TimeoutError:
+                logger.warning("⏳ Fallback also timed out")
             except Exception as e2:
-                logger.error(f"❌ Fallback also failed: {e2}")
-                return []
+                logger.error(f"❌ Fallback also failed: {type(e2).__name__}: {e2}")
         return []
 
     # 패자 취소 시도

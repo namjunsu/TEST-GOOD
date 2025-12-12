@@ -201,6 +201,23 @@ class AnchorScorerConfig:
 
 
 @dataclass(frozen=True)
+class DocumentSimilarityConfig:
+    """문서 유사도 관련 상수 (document_similarity.py용)"""
+
+    # 기본 설정
+    DEFAULT_MIN_SIMILARITY: float = 0.3
+    DEFAULT_MAX_RESULTS: int = 5
+
+    # 검색 설정
+    SEARCH_BUFFER: int = 5  # top_k + SEARCH_BUFFER로 여유분 검색
+    SCORE_NORMALIZE_DIVISOR: float = 10.0  # BM25 점수 정규화
+
+    # 키워드 추출
+    TEXT_PREVIEW_LENGTH: int = 200
+    MAX_KEYWORD_COUNT: int = 5
+
+
+@dataclass(frozen=True)
 class HandlerConfig:
     """핸들러 관련 상수 (handlers/search.py용)"""
 
@@ -663,6 +680,7 @@ __all__ = [
     "ContextHydratorConfig",
     "DBConfig",
     "DoctypeConfig",
+    "DocumentSimilarityConfig",
     "DocumentUtilsConfig",
     "DocumentHandlerConfig",
     "ExactMatchConfig",

@@ -7,11 +7,11 @@ sentence-transformers 없이 기존 BM25 인덱스를 활용합니다.
 """
 
 import os
-from functools import lru_cache
 from typing import Any, Optional
 
 from app.core.logging import get_logger
 from app.data.metadata_db import MetadataDB
+from config.constants import DocumentSimilarityConfig
 
 logger = get_logger(__name__)
 
@@ -33,8 +33,10 @@ class DocumentSimilarity:
         self._cache: dict[str, list[dict]] = {}
 
         # 설정
-        self.min_similarity = float(os.getenv("SIMILARITY_MIN_SCORE", "0.3"))
-        self.max_results = int(os.getenv("SIMILARITY_MAX_RESULTS", "5"))
+        default_min = str(DocumentSimilarityConfig.DEFAULT_MIN_SIMILARITY)
+        default_max = str(DocumentSimilarityConfig.DEFAULT_MAX_RESULTS)
+        self.min_similarity = float(os.getenv("SIMILARITY_MIN_SCORE", default_min))
+        self.max_results = int(os.getenv("SIMILARITY_MAX_RESULTS", default_max))
 
         logger.info(f"📊 DocumentSimilarity 초기화: min_score={self.min_similarity}, max_results={self.max_results}")
 
@@ -80,7 +82,8 @@ class DocumentSimilarity:
                 logger.warning("⚠️ Retriever가 없어 유사 문서 검색 불가")
                 return []
 
-            search_results = self._retriever.search(keywords, top_k=top_k + 5)
+            search_buffer = DocumentSimilarityConfig.SEARCH_BUFFER
+            search_results = self._retriever.search(keywords, top_k=top_k + search_buffer)
 
             # 4. 결과 필터링 및 정리
             similar_docs = []
@@ -93,7 +96,8 @@ class DocumentSimilarity:
 
                 # 점수 정규화 (0-1)
                 score = result.get("score", 0)
-                normalized_score = min(1.0, score / 10.0) if score > 1 else score
+                divisor = DocumentSimilarityConfig.SCORE_NORMALIZE_DIVISOR
+                normalized_score = min(1.0, score / divisor) if score > 1 else score
 
                 if normalized_score >= self.min_similarity:
                     # 문서 메타데이터 가져오기
@@ -149,7 +153,10 @@ class DocumentSimilarity:
             return []
 
         try:
-            search_results = self._retriever.search(query, top_k=top_k + len(reference_docs) + 5)
+            search_buffer = DocumentSimilarityConfig.SEARCH_BUFFER
+            search_results = self._retriever.search(
+                query, top_k=top_k + len(reference_docs) + search_buffer,
+            )
 
             similar_docs = []
             reference_set = set(reference_docs)
@@ -163,7 +170,8 @@ class DocumentSimilarity:
 
                 # 점수 정규화 (0-1)
                 score = result.get("score", 0)
-                normalized_score = min(1.0, score / 10.0) if score > 1 else score
+                divisor = DocumentSimilarityConfig.SCORE_NORMALIZE_DIVISOR
+                normalized_score = min(1.0, score / divisor) if score > 1 else score
 
                 if normalized_score >= self.min_similarity:
                     # 문서 메타데이터 가져오기
@@ -214,15 +222,17 @@ class DocumentSimilarity:
         if category and category not in ["기타", "일반"]:
             parts.append(category)
 
-        # 텍스트 미리보기에서 핵심 단어 추출 (처음 200자)
-        preview = doc.get("text_preview", "")[:200]
+        # 텍스트 미리보기에서 핵심 단어 추출
+        preview_len = DocumentSimilarityConfig.TEXT_PREVIEW_LENGTH
+        preview = doc.get("text_preview", "")[:preview_len]
         if preview:
             # 의미 있는 단어만 추출 (2자 이상 한글)
             import re
             words = re.findall(r"[가-힣]{2,}", preview)
             # 불용어 제거
             stopwords = {"있음", "없음", "있는", "없는", "하는", "되는", "위한", "대한", "따른"}
-            words = [w for w in words if w not in stopwords][:5]
+            max_kw = DocumentSimilarityConfig.MAX_KEYWORD_COUNT
+            words = [w for w in words if w not in stopwords][:max_kw]
             parts.extend(words)
 
         return " ".join(parts)

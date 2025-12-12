@@ -346,7 +346,7 @@ class TableParserConfig:
     HEADER_SCAN_LINES: int = 300             # 헤더 스캔 범위 (앞쪽 N줄)
     HEADER_MIN_CELLS: int = 2                # 헤더 최소 셀 개수
     HEADER_MAX_CELLS: int = 10               # 헤더 최대 셀 개수
-    HEADER_SIMILARITY_THRESHOLD: float = 0.7 # 헤더 감지 유사도 임계값
+    HEADER_SIMILARITY_THRESHOLD: float = 0.7  # 헤더 감지 유사도 임계값
 
     # 합계 검증
     DEFAULT_REL_TOLERANCE: float = 0.01      # 상대 허용치 기본값 (1%)
@@ -367,6 +367,19 @@ class SummaryTemplateConfig:
     # 출력 포맷팅 제한
     MAX_COMPARE_ALTERNATIVES: int = 4       # 비교 대안 최대 표시 개수
     MAX_EVIDENCE_DISPLAY: int = 2           # 증거 최대 표시 개수
+
+
+@dataclass(frozen=True)
+class MergeExtractorConfig:
+    """필드 병합기 관련 상수 (extractors/merge.py용)"""
+
+    # reason 문장 길이 필터
+    REASON_MIN_LENGTH: int = 8               # 사유 최소 길이
+    REASON_MAX_LENGTH: int = 240             # 사유 최대 길이
+
+    # duration_years 범위
+    DURATION_YEARS_MIN: int = 1              # 사용 기간 최솟값 (년)
+    DURATION_YEARS_MAX: int = 30             # 사용 기간 최댓값 (년)
 
 
 @dataclass(frozen=True)
@@ -427,6 +440,7 @@ __all__ = [
     "HybridRetrieverConfig",
     "HybridSearchConfig",
     "LLMConfig",
+    "MergeExtractorConfig",
     "MetaParserConfig",
     "OCRConfig",
     "PipelineConfig",

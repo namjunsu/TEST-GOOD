@@ -16,6 +16,7 @@ import re
 from typing import Any, Optional
 
 from app.core.logging import get_logger
+from config.constants import MergeExtractorConfig
 
 logger = get_logger(__name__)
 
@@ -200,9 +201,11 @@ def _normalize_reason(v: Optional[str]) -> Optional[str]:
 
     s = v.strip()
 
-    # 길이 필터 (8~240자)
-    if not (8 <= len(s) <= 240):
-        logger.debug(f"사유 문장 길이 필터: len={len(s)}, 허용 범위=8~240")
+    # 길이 필터
+    min_len = MergeExtractorConfig.REASON_MIN_LENGTH
+    max_len = MergeExtractorConfig.REASON_MAX_LENGTH
+    if not (min_len <= len(s) <= max_len):
+        logger.debug(f"사유 문장 길이 필터: len={len(s)}, 허용 범위={min_len}~{max_len}")
         return None
 
     return s
@@ -234,9 +237,11 @@ def _cast_years(v: Any) -> Optional[int]:
         # 문자열은 strip 후 int 변환
         i = int(str(v).strip())
 
-        # 범위 검증 (1~30년)
-        if not (1 <= i <= 30):
-            logger.debug(f"사용 기간 범위 초과: {i}년, 허용=1~30")
+        # 범위 검증
+        min_years = MergeExtractorConfig.DURATION_YEARS_MIN
+        max_years = MergeExtractorConfig.DURATION_YEARS_MAX
+        if not (min_years <= i <= max_years):
+            logger.debug(f"사용 기간 범위 초과: {i}년, 허용={min_years}~{max_years}")
             return None
 
         return i

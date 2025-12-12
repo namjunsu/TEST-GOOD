@@ -16,6 +16,7 @@ Example:
 """
 
 import re
+import sqlite3
 import time
 from typing import Any, Optional
 
@@ -360,7 +361,7 @@ class RAGPipeline:
         # Context Hydrator (폴백 보장)
         try:
             from app.rag.utils.context_hydrator import hydrate_context
-        except Exception as e:
+        except ImportError as e:
             logger.warning(f"⚠️ hydrate_context import 실패, 폴백 사용: {e}")
             hydrate_context = self._fallback_hydrate_context
 
@@ -564,8 +565,10 @@ class RAGPipeline:
                         if result:
                             selected_filename = result[0]
                             logger.info(f"📌 쿼리에서 문서명 추출: '{candidate_title}' → '{selected_filename}'")
-                    except Exception as e:
-                        logger.warning(f"문서명 추출 중 오류 (무시): {e}")
+                    except sqlite3.OperationalError as e:
+                        logger.debug(f"문서명 추출 중 DB 일시 오류 (무시): {e}")
+                    except sqlite3.Error as e:
+                        logger.warning(f"⚠️ 문서명 추출 중 DB 오류 (무시): {e}")
 
             # 🎯 모드 라우팅: Q&A 의도 키워드가 있으면 파일명이 있어도 Q&A 모드 우선
             route_decision = self.query_router.classify_mode(actual_query)
@@ -689,8 +692,10 @@ class RAGPipeline:
                         similar_documents = self._similarity_service.find_similar_by_query(
                             query, reference_docs, top_k=3
                         )
+                except (AttributeError, KeyError) as e:
+                    logger.debug(f"유사 문서 추천 데이터 접근 오류 (무시): {e}")
                 except Exception as e:
-                    logger.warning(f"⚠️ 유사 문서 추천 실패 (무시): {e}")
+                    logger.warning(f"⚠️ 유사 문서 추천 예상치 못한 오류 (무시): {type(e).__name__}")
 
             result = {
                 "text": response.answer,

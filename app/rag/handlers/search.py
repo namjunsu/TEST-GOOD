@@ -23,7 +23,6 @@ from config.constants import HandlerConfig
 from .base import BaseHandler
 from .response import (
     build_file_path,
-    clean_text_preview,
     format_title_from_filename,
 )
 
@@ -117,6 +116,7 @@ def get_common_drafters() -> list[str]:
             "총무팀", "강병규", "박연수", "이호영", "이승헌", "이의주",
         ]
     return _DRAFTERS_CACHE
+
 
 # 개수 질의 키워드
 COUNT_KEYWORDS = ["몇개", "몆개", "몇 개", "몆 개", "개수", "총", "몇", "몆"]
@@ -214,7 +214,7 @@ def is_readable_text(text: str) -> bool:
         return False
 
     # 한글 비율 체크
-    korean_chars = sum(1 for c in text if '\uac00' <= c <= '\ud7a3')
+    korean_chars = sum(1 for c in text if "\uac00" <= c <= "\ud7a3")
     if korean_chars / len(text) < HandlerConfig.MIN_KOREAN_CHAR_RATIO:
         return False
 
@@ -652,7 +652,7 @@ class SearchHandler(BaseHandler):
         # 📊 유사 문서 추천 및 병합 (2025-12-08)
         similar_documents = []
         merged_count = 0
-        if filenames and hasattr(self.pipeline, '_similarity_service'):
+        if filenames and hasattr(self.pipeline, "_similarity_service"):
             try:
                 # 전체 출처 문서 제외하고 유사 문서 찾기
                 all_similar = self.pipeline._similarity_service.find_similar_by_query(

@@ -14,6 +14,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from config.constants import SearchQualityLoggerConfig
+
 
 class SearchQualityLogger:
     """검색 품질 로깅"""
@@ -56,14 +58,16 @@ class SearchQualityLogger:
         if metadata:
             log_entry.update(metadata)
 
-        # 상위 3개 결과 요약
+        # 상위 결과 요약
         if results:
+            fname_max = SearchQualityLoggerConfig.FILENAME_MAX_LENGTH
+            top_limit = SearchQualityLoggerConfig.TOP_RESULTS_LIMIT
             log_entry["top3"] = [
                 {
-                    "filename": r.get("filename", "Unknown")[:50],
+                    "filename": r.get("filename", "Unknown")[:fname_max],
                     "score": round(r.get("score", 0.0), 2),
                 }
-                for r in results[:3]
+                for r in results[:top_limit]
             ]
 
         # JSONL 파일에 추가
@@ -89,18 +93,23 @@ class SearchQualityLogger:
         if hits == 0:
             return "NO_RESULTS"
 
-        # 고신뢰도: top1 > 5.0 and delta12 > 1.0
-        if top1 > 5.0 and delta12 > 1.0:
+        # 고신뢰도
+        high_top1 = SearchQualityLoggerConfig.HIGH_CONF_TOP1_THRESHOLD
+        high_delta = SearchQualityLoggerConfig.HIGH_CONF_DELTA12_THRESHOLD
+        if top1 > high_top1 and delta12 > high_delta:
             return "HIGH_CONFIDENCE"
 
-        # 중신뢰도: top1 > 2.0
-        if top1 > 2.0:
+        # 중신뢰도
+        medium_top1 = SearchQualityLoggerConfig.MEDIUM_CONF_TOP1_THRESHOLD
+        if top1 > medium_top1:
             return "MEDIUM_CONFIDENCE"
 
         # 저신뢰도: 나머지
         return "LOW_CONFIDENCE"
 
-    def get_recent_logs(self, n: int = 100) -> list[dict[str, Any]]:
+    def get_recent_logs(
+        self, n: int = SearchQualityLoggerConfig.DEFAULT_RECENT_LOGS,
+    ) -> list[dict[str, Any]]:
         """최근 로그 조회
 
         Args:
@@ -123,7 +132,9 @@ class SearchQualityLogger:
         # 최근 n개 반환
         return logs[-n:]
 
-    def get_quality_stats(self, n: int = 1000) -> dict[str, Any]:
+    def get_quality_stats(
+        self, n: int = SearchQualityLoggerConfig.DEFAULT_STATS_LOGS,
+    ) -> dict[str, Any]:
         """품질 통계 분석
 
         Args:

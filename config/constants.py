@@ -124,6 +124,24 @@ class RoutingMonitorConfig:
 
 
 @dataclass(frozen=True)
+class SearchQualityLoggerConfig:
+    """검색 품질 로거 관련 상수 (search_quality_logger.py용)"""
+
+    # 출력 제한
+    FILENAME_MAX_LENGTH: int = 50
+    TOP_RESULTS_LIMIT: int = 3
+
+    # 품질 평가 임계값
+    HIGH_CONF_TOP1_THRESHOLD: float = 5.0
+    HIGH_CONF_DELTA12_THRESHOLD: float = 1.0
+    MEDIUM_CONF_TOP1_THRESHOLD: float = 2.0
+
+    # 로그 조회 기본값
+    DEFAULT_RECENT_LOGS: int = 100
+    DEFAULT_STATS_LOGS: int = 1000
+
+
+@dataclass(frozen=True)
 class OCRConfig:
     """OCR 처리 관련 상수"""
 
@@ -647,6 +665,7 @@ __all__ = [
     "RoutingMonitorConfig",
     "ScoringConfig",
     "SearchConfig",
+    "SearchQualityLoggerConfig",
     "SummaryTemplateConfig",
     "TableParserConfig",
     "get_llm_config",

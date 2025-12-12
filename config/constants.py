@@ -224,6 +224,9 @@ class CacheConfig:
     QUERY_CACHE_GLOBAL_TTL: int = 7200  # 글로벌 인스턴스 TTL (2시간)
     INFLIGHT_WAIT_TIMEOUT: float = 10.0  # 스탬피드 대기 타임아웃
 
+    # SmartCacheKey 설정 (smart_cache_key.py)
+    CACHE_KEY_HASH_LENGTH: int = 16  # SHA256 해시의 앞 N자리
+
 
 @dataclass(frozen=True)
 class APIConfig:

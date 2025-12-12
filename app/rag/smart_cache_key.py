@@ -7,6 +7,8 @@ import hashlib
 import re
 from datetime import datetime, timedelta
 
+from config.constants import CacheConfig
+
 # 동의어 매핑
 SYNONYMS: dict[str, set[str]] = {
     "얼마": {"가격", "비용", "금액", "price", "cost"},
@@ -130,7 +132,7 @@ def generate_smart_cache_key(query: str, mode: str | None = None) -> str:
         normalized = f"{mode}:{normalized}"
 
     # 해시 생성 (짧은 키)
-    return hashlib.sha256(normalized.encode()).hexdigest()[:16]
+    return hashlib.sha256(normalized.encode()).hexdigest()[:CacheConfig.CACHE_KEY_HASH_LENGTH]
 
 
 # 테스트용

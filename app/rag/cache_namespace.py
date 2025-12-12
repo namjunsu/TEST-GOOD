@@ -18,6 +18,8 @@ import os
 from pathlib import Path
 from typing import Optional
 
+from config.constants import CacheConfig
+
 # ---- 내부 유틸 --------------------------------------------------------------
 
 
@@ -39,8 +41,8 @@ def _stat_signature(p: Path) -> str:
 
 
 def _sha8(s: str) -> str:
-    """문자열의 SHA256 해시 8자리 반환"""
-    return hashlib.sha256(s.encode("utf-8")).hexdigest()[:8]
+    """문자열의 SHA256 해시 짧은 버전 반환"""
+    return hashlib.sha256(s.encode("utf-8")).hexdigest()[:CacheConfig.NAMESPACE_HASH_SHORT]
 
 
 # ---- 공개 API ---------------------------------------------------------------
@@ -74,7 +76,8 @@ def _router_keywords_signature() -> str:
         return "nokey"
     try:
         data = cfg.read_bytes()
-        return _sha8(f"{cfg.name}:{len(data)}:{hashlib.sha256(data).hexdigest()[:16]}")
+        content_hash = hashlib.sha256(data).hexdigest()[:CacheConfig.NAMESPACE_HASH_MEDIUM]
+        return _sha8(f"{cfg.name}:{len(data)}:{content_hash}")
     except Exception:
         return "nokey"
 

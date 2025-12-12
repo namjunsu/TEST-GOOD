@@ -227,6 +227,10 @@ class CacheConfig:
     # SmartCacheKey 설정 (smart_cache_key.py)
     CACHE_KEY_HASH_LENGTH: int = 16  # SHA256 해시의 앞 N자리
 
+    # CacheNamespace 설정 (cache_namespace.py)
+    NAMESPACE_HASH_SHORT: int = 8   # 짧은 해시 (시그니처용)
+    NAMESPACE_HASH_MEDIUM: int = 16  # 중간 해시 (파일 내용용)
+
 
 @dataclass(frozen=True)
 class APIConfig:

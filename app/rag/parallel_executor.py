@@ -204,7 +204,7 @@ class ParallelSearchExecutor:
             try:
                 result = future.result()
                 result_sets.append(set(result))
-            except TimeoutError as e:
+            except TimeoutError:
                 name = futures[future]
                 logger.warning(f"⏳ Filter timeout: {name}")
             except Exception as e:

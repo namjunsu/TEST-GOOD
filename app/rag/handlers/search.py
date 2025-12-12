@@ -437,7 +437,7 @@ class SearchHandler(BaseHandler):
                 return self._make_error_response("검색 기능을 사용할 수 없습니다.")
 
             search_results = self.retriever.search(
-                expanded_query, top_k=50, strict_content=True,
+                expanded_query, top_k=HandlerConfig.CONTENT_ONLY_TOP_K, strict_content=True,
             )
 
             if not search_results:
@@ -457,7 +457,7 @@ class SearchHandler(BaseHandler):
 
             # 4. 파일명 추출 및 메타데이터 조회
             filenames = self._extract_unique_filenames(search_results)
-            doc_details = self._get_content_only_details(filenames[:10])
+            doc_details = self._get_content_only_details(filenames[:HandlerConfig.CONTENT_ONLY_RESULT_LIMIT])
 
             # 5. 응답 생성
             return self._build_content_only_response(keywords, doc_details, filenames)
@@ -566,7 +566,7 @@ class SearchHandler(BaseHandler):
                     "date": doc.get("display_date") or doc.get("date", "날짜 없음"),
                     "doctype": doc.get("doctype", "문서"),
                     "claimed_total": doc.get("claimed_total"),
-                    "text_preview": doc.get("text_preview", "")[:400],
+                    "text_preview": doc.get("text_preview", "")[:HandlerConfig.TEXT_PREVIEW_MAX],
                 })
             elif not drafter_filter:
                 # 필터 없을 때만 메타데이터 없는 문서 포함
@@ -602,7 +602,7 @@ class SearchHandler(BaseHandler):
                     "date": doc.get("display_date") or doc.get("date", "날짜 없음"),
                     "drafter": doc.get("drafter", "작성자 미상"),
                     "claimed_total": doc.get("claimed_total", 0),
-                    "text_preview": doc.get("text_preview", "")[:100],
+                    "text_preview": doc.get("text_preview", "")[:HandlerConfig.TEXT_PREVIEW_SHORT],
                     "path": doc.get("path", ""),
                 })
 
@@ -639,9 +639,9 @@ class SearchHandler(BaseHandler):
         # 응답 텍스트 생성
         if is_count_query(query):
             answer_text = f"**'{keywords}' 관련 문서는 총 {len(doc_details)}개**입니다.\n\n"
-            answer_text += "\n\n".join(cards[:10])
-            if len(cards) > 10:
-                answer_text += f"\n\n... 외 {len(cards) - 10}개 문서"
+            answer_text += "\n\n".join(cards[:HandlerConfig.COUNT_QUERY_DISPLAY_LIMIT])
+            if len(cards) > HandlerConfig.COUNT_QUERY_DISPLAY_LIMIT:
+                answer_text += f"\n\n... 외 {len(cards) - HandlerConfig.COUNT_QUERY_DISPLAY_LIMIT}개 문서"
         else:
             answer_text = f"📄 **'{keywords}' 관련 문서 ({len(doc_details)}건)**\n\n"
             answer_text += "\n\n".join(cards)
@@ -656,13 +656,13 @@ class SearchHandler(BaseHandler):
             try:
                 # 전체 출처 문서 제외하고 유사 문서 찾기
                 all_similar = self.pipeline._similarity_service.find_similar_by_query(
-                    query, filenames, top_k=5  # 전체 제외, 여유롭게 검색
+                    query, filenames, top_k=HandlerConfig.SIMILAR_SEARCH_TOP_K
                 )
 
-                # 유사도 70% 이상은 출처에 병합, 나머지는 유사 문서로 표시
+                # 유사도 임계값 이상은 출처에 병합, 나머지는 유사 문서로 표시
                 for sim_doc in all_similar:
                     similarity = sim_doc.get("similarity", 0)
-                    if similarity >= 0.7:
+                    if similarity >= HandlerConfig.SIMILAR_MERGE_THRESHOLD:
                         # 고유사도 문서는 출처에 추가
                         merged_count += 1
                         merged_evidence = {
@@ -696,7 +696,7 @@ class SearchHandler(BaseHandler):
             "count": len(doc_details),
             "citations": evidence,
             "evidence": evidence,
-            "similar_documents": similar_documents[:3],  # 📊 유사 문서 추천 (최대 3건)
+            "similar_documents": similar_documents[:HandlerConfig.SIMILAR_DISPLAY_LIMIT],  # 📊 유사 문서 추천
             "status": {
                 "retrieved_count": len(doc_details),
                 "selected_count": len(doc_details),
@@ -753,7 +753,7 @@ class SearchHandler(BaseHandler):
         return {
             "mode": "SEARCH_CONTENT_ONLY",
             "text": response_text,
-            "files": filenames[:10],
+            "files": filenames[:HandlerConfig.CONTENT_ONLY_RESULT_LIMIT],
             "count": len(doc_details),
             "citations": citations,
             "evidence": citations,
@@ -778,22 +778,22 @@ class SearchHandler(BaseHandler):
             if not snippet:
                 # BM25 청크 폴백 시도
                 try:
-                    chunks = self.retriever.search(filename, top_k=1)
+                    chunks = self.retriever.search(filename, top_k=HandlerConfig.EVIDENCE_CHUNK_TOP_K)
                     if chunks:
                         chunk_text = chunks[0].get("text", "")
-                        snippet = chunk_text[:400] if chunk_text else ""
+                        snippet = chunk_text[:HandlerConfig.EVIDENCE_SNIPPET_MAX] if chunk_text else ""
                 except Exception as e:
                     logger.debug(f"⚠️ BM25 청크 폴백 실패 ({filename}): {e}")
 
             if not snippet:
-                snippet = title[:160]
+                snippet = title[:HandlerConfig.TITLE_FALLBACK_MAX]
 
             evidence.append({
                 "doc_id": filename,
                 "filename": filename,
                 "file_path": file_path,
                 "page": 1,
-                "snippet": snippet[:400],
+                "snippet": snippet[:HandlerConfig.EVIDENCE_SNIPPET_MAX],
                 "ref": None,
                 "meta": {
                     "filename": filename,

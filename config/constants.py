@@ -231,14 +231,31 @@ class HandlerConfig:
     BULK_SEARCH_TOP_K: int = 200   # 전체/목록 검색 시 top_k
     NORMAL_SEARCH_TOP_K: int = 10  # 일반 검색 시 top_k
     COST_SEARCH_TOP_K: int = 15    # 비용 조회 시 top_k
+    CONTENT_ONLY_TOP_K: int = 50   # 정밀 내용 검색 시 top_k
+    CONTENT_ONLY_RESULT_LIMIT: int = 10  # 정밀 검색 결과 제한
 
     # 텍스트 품질 검사 임계값
     MIN_TEXT_LENGTH: int = 10               # 최소 텍스트 길이
     MAX_SPECIAL_CHAR_RATIO: float = 0.2     # 특수문자 비율 상한
     MIN_KOREAN_CHAR_RATIO: float = 0.3      # 한글 비율 하한
 
+    # 텍스트 미리보기 길이
+    TEXT_PREVIEW_MAX: int = 400             # 텍스트 미리보기 최대 길이
+    TEXT_PREVIEW_SHORT: int = 100           # 짧은 텍스트 미리보기 길이
+    TITLE_FALLBACK_MAX: int = 160           # 제목 폴백 최대 길이
+
+    # 유사 문서 설정
+    SIMILAR_SEARCH_TOP_K: int = 5           # 유사 문서 검색 수
+    SIMILAR_MERGE_THRESHOLD: float = 0.7    # 유사도 병합 임계값
+    SIMILAR_DISPLAY_LIMIT: int = 3          # 유사 문서 표시 제한
+
     # 응답 제한
     MAX_COST_DOCS_DISPLAY: int = 10         # 비용 응답 시 최대 표시 문서 수
+    COUNT_QUERY_DISPLAY_LIMIT: int = 10     # 개수 질의 시 표시 제한
+
+    # Evidence 생성
+    EVIDENCE_CHUNK_TOP_K: int = 1           # Evidence 청크 검색 수
+    EVIDENCE_SNIPPET_MAX: int = 400         # Evidence 스니펫 최대 길이
 
 
 @dataclass(frozen=True)
@@ -262,10 +279,19 @@ class DocumentHandlerConfig:
     # 토큰 설정
     DEFAULT_MAX_TOKENS: int = 800           # 기본 max_tokens
     SUMMARY_MIN_TOKENS: int = 1000          # 요약 모드 최소 토큰
+    DETAILED_MIN_TOKENS: int = 300          # 자세히 모드 최소 토큰
+    NORMAL_MIN_TOKENS: int = 200            # 일반 모드 최소 토큰
 
     # 청크 로드
     DEFAULT_CHUNK_TOP_K: int = 20           # 기본 청크 로드 수
     FALLBACK_CHUNK_TOP_K: int = 10          # 폴백 청크 로드 수
+    SEARCH_FALLBACK_TOP_K: int = 20         # 검색 폴백 시 top_k
+
+    # 검색 설정
+    IDENTIFY_SEARCH_TOP_K: int = 1          # 문서 식별 시 top_k
+
+    # LLM 설정
+    LLM_TEMPERATURE: float = 0.3            # LLM 생성 온도
 
 
 @dataclass(frozen=True)

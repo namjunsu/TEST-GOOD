@@ -239,7 +239,7 @@ class DocumentHandler(BaseHandler):
         keywords = extract_keywords_for_document(query)
         logger.info(f"🔍 키워드로 문서 검색: {keywords}")
 
-        search_results = self.retriever.search(keywords, top_k=1)
+        search_results = self.retriever.search(keywords, top_k=DocumentHandlerConfig.IDENTIFY_SEARCH_TOP_K)
         if search_results:
             result = search_results[0]
             filename = result.get("meta", {}).get("filename") or result.get("doc_id", "")
@@ -331,7 +331,7 @@ class DocumentHandler(BaseHandler):
             # BM25 사용 불가 시 검색 폴백
             logger.warning("⚠️ BM25 직접 접근 불가, 검색으로 폴백")
             search_query = filename.replace(".pdf", "").replace("_", " ")
-            results = self.retriever.search(search_query, top_k=20)
+            results = self.retriever.search(search_query, top_k=DocumentHandlerConfig.SEARCH_FALLBACK_TOP_K)
 
             chunks = []
             for result in results:
@@ -445,7 +445,7 @@ class DocumentHandler(BaseHandler):
                 raw_result = rag.generate_from_context(
                     query=llm_prompt,
                     context=context,
-                    temperature=0.3,
+                    temperature=DocumentHandlerConfig.LLM_TEMPERATURE,
                     mode=mode,
                 )
 
@@ -490,7 +490,7 @@ class DocumentHandler(BaseHandler):
                     {"role": "user", "content": llm_prompt},
                 ],
                 max_tokens=max_tokens,
-                temperature=0.3,
+                temperature=DocumentHandlerConfig.LLM_TEMPERATURE,
             )
             raw_result = output["choices"][0]["message"]["content"]
 
@@ -587,8 +587,8 @@ class DocumentHandler(BaseHandler):
             return max(DocumentHandlerConfig.SUMMARY_MIN_TOKENS, min(base_max_tokens, content_length // 2))
 
         if detailed_mode:
-            return min(base_max_tokens, max(300, content_length // 3))
-        return min(base_max_tokens, max(200, content_length // 4))
+            return min(base_max_tokens, max(DocumentHandlerConfig.DETAILED_MIN_TOKENS, content_length // 3))
+        return min(base_max_tokens, max(DocumentHandlerConfig.NORMAL_MIN_TOKENS, content_length // 4))
 
     def _format_summary_output(
         self,

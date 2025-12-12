@@ -14,6 +14,7 @@ from functools import lru_cache
 from typing import Any, Optional
 
 from app.core.logging import get_logger
+from config.constants import AmountParserConfig
 
 logger = get_logger(__name__)
 
@@ -120,7 +121,9 @@ def format_krw(value: Optional[int]) -> str:
     return f"{value:,}원"
 
 
-def extract_amount_candidates(text: str, window: int = 30) -> list[AmountCandidate]:
+def extract_amount_candidates(
+    text: str, window: int = AmountParserConfig.DEFAULT_CONTEXT_WINDOW,
+) -> list[AmountCandidate]:
     """텍스트에서 금액 후보 추출 (문맥 포함, 억/만 포함)
 
     Args:
@@ -134,7 +137,7 @@ def extract_amount_candidates(text: str, window: int = 30) -> list[AmountCandida
 
     # 1) 억/만 단위 우선 처리
     for value, s, e, kind in _parse_eok_man(text):
-        if value < 1000:  # 1000원 미만 제외
+        if value < AmountParserConfig.MIN_AMOUNT:
             continue
         ctx = text[max(0, s - window): min(len(text), e + window)]
         raw = text[s:e]
@@ -144,7 +147,7 @@ def extract_amount_candidates(text: str, window: int = 30) -> list[AmountCandida
     for m in RE_KRW.finditer(text):
         raw = m.group(0)
         val = _to_int_krw(raw)
-        if val is None or val < 1000:
+        if val is None or val < AmountParserConfig.MIN_AMOUNT:
             continue
 
         s, e = m.start(), m.end()
@@ -184,8 +187,11 @@ def extract_line_items(text: str) -> list[tuple[int, int]]:
         except (ValueError, TypeError):
             continue
 
-        # 검증: 단가 10,000 ~ 10,000,000원, 수량 1~50 (방송장비 고가 품목 대응)
-        if price is not None and 10_000 <= price <= 10_000_000 and 1 <= qty <= 50:
+        # 검증: 단가/수량 범위 (방송장비 고가 품목 대응)
+        cfg = AmountParserConfig
+        price_ok = cfg.LINE_ITEM_MIN_PRICE <= price <= cfg.LINE_ITEM_MAX_PRICE
+        qty_ok = cfg.LINE_ITEM_MIN_QTY <= qty <= cfg.LINE_ITEM_MAX_QTY
+        if price is not None and price_ok and qty_ok:
             items.append((price, qty))
             logger.debug(f"Line item found: {price:,}원 × {qty} = {price * qty:,}원")
 
@@ -200,7 +206,8 @@ def choose_total_by_line_items(line_items: list[tuple[int, int]]) -> Optional[in
     total = sum(u * q for (u, q) in line_items)
 
     # DVR 2~6대 + HDD/컨버터 포함 예상 범위
-    if 100_000 <= total <= 50_000_000:
+    cfg = AmountParserConfig
+    if cfg.LINE_TOTAL_MIN <= total <= cfg.LINE_TOTAL_MAX:
         logger.info(f"Line items total: ₩{total:,} (validated)")
         return total
     logger.warning(f"Line items total ₩{total:,} out of range, rejected")
@@ -226,8 +233,9 @@ def select_document_amount(doc_id: str, text: str, item_hint: str = "") -> Optio
     # 2) 자유 텍스트 후보 (억 단위/비정상 제거)
     cands = extract_amount_candidates(text)
 
-    # 10,000 ~ 20,000,000원 범위만 수용 (방송장비 고가 품목 대응)
-    normals = [c.value for c in cands if 10_000 <= c.value < 20_000_000]
+    # 자유 텍스트 금액 범위만 수용 (방송장비 고가 품목 대응)
+    cfg = AmountParserConfig
+    normals = [c.value for c in cands if cfg.FREE_TEXT_MIN <= c.value < cfg.FREE_TEXT_MAX]
 
     if normals:
         normals.sort()
@@ -248,14 +256,16 @@ def validate_amount(amount: Optional[int], context: str = "") -> tuple[Optional[
     if amount is None:
         return None, False
 
+    cfg = AmountParserConfig
+
     # 억 단위 이상 거부
-    if amount >= 100_000_000:
-        logger.error(f"Amount ₩{amount:,} rejected: >= 100M (context: {context})")
+    if amount >= cfg.MAX_AMOUNT:
+        logger.error(f"Amount ₩{amount:,} rejected: >= {cfg.MAX_AMOUNT:,} (context: {context})")
         return None, False
 
-    # 1,000원 미만 거부
-    if amount < 1_000:
-        logger.error(f"Amount ₩{amount:,} rejected: < 1,000 (context: {context})")
+    # 최소 금액 미만 거부
+    if amount < cfg.MIN_AMOUNT:
+        logger.error(f"Amount ₩{amount:,} rejected: < {cfg.MIN_AMOUNT:,} (context: {context})")
         return None, False
 
     return amount, True
@@ -266,7 +276,7 @@ def validate_amount(amount: Optional[int], context: str = "") -> tuple[Optional[
 # ============================================================================
 
 
-@lru_cache(maxsize=512)
+@lru_cache(maxsize=AmountParserConfig.LRU_CACHE_SIZE)
 def extract_amounts(text: str) -> list[dict[str, Any]]:
     """텍스트에서 모든 금액 추출 (억/만 포함, 캐시됨)
 
@@ -276,7 +286,7 @@ def extract_amounts(text: str) -> list[dict[str, Any]]:
     Returns:
         [{"value": int, "start": int, "end": int, "context": str, "kind": str}, ...]
     """
-    candidates = extract_amount_candidates(text, window=40)
+    candidates = extract_amount_candidates(text, window=AmountParserConfig.EXTRACT_CONTEXT_WINDOW)
     return [
         {
             "value": c.value,
@@ -292,7 +302,7 @@ def extract_amounts(text: str) -> list[dict[str, Any]]:
 def nearest_amount_to_keyword(
     text: str,
     keywords: list[str],
-    window: int = 80,
+    window: int = AmountParserConfig.KEYWORD_PROXIMITY_WINDOW,
     prefer_later: bool = True,
 ) -> Optional[dict[str, Any]]:
     """키워드 주변 가장 가까운 금액 1건 반환 (근접도 기반 랭킹)
@@ -307,7 +317,7 @@ def nearest_amount_to_keyword(
         {"value": int, "start": int, "end": int, "context": str, "kind": str, "distance": int, "confidence": float}
         또는 None (키워드 주변에 금액이 없음)
     """
-    candidates = extract_amount_candidates(text, window=40)
+    candidates = extract_amount_candidates(text, window=AmountParserConfig.EXTRACT_CONTEXT_WINDOW)
     if not candidates:
         return None
 

@@ -429,6 +429,37 @@ class FinanceExtractorConfig:
 
 
 @dataclass(frozen=True)
+class AmountParserConfig:
+    """금액 파서 관련 상수 (amount_parser_v2.py용)"""
+
+    # 최소/최대 금액 임계값
+    MIN_AMOUNT: int = 1_000                 # 1,000원 미만 거부
+    MAX_AMOUNT: int = 100_000_000           # 1억원 이상 거부
+
+    # 라인아이템 검증 범위
+    LINE_ITEM_MIN_PRICE: int = 10_000       # 단가 최소 (1만원)
+    LINE_ITEM_MAX_PRICE: int = 10_000_000   # 단가 최대 (1천만원)
+    LINE_ITEM_MIN_QTY: int = 1              # 수량 최소
+    LINE_ITEM_MAX_QTY: int = 50             # 수량 최대
+
+    # 라인아이템 총액 범위
+    LINE_TOTAL_MIN: int = 100_000           # 총액 최소 (10만원)
+    LINE_TOTAL_MAX: int = 50_000_000        # 총액 최대 (5천만원)
+
+    # 자유 텍스트 금액 범위
+    FREE_TEXT_MIN: int = 10_000             # 자유 텍스트 최소 (1만원)
+    FREE_TEXT_MAX: int = 20_000_000         # 자유 텍스트 최대 (2천만원)
+
+    # 컨텍스트 윈도우
+    DEFAULT_CONTEXT_WINDOW: int = 30        # 기본 컨텍스트 윈도우
+    EXTRACT_CONTEXT_WINDOW: int = 40        # extract_amounts 윈도우
+    KEYWORD_PROXIMITY_WINDOW: int = 80      # 키워드 근접도 윈도우
+
+    # 캐시
+    LRU_CACHE_SIZE: int = 512               # extract_amounts 캐시 크기
+
+
+@dataclass(frozen=True)
 class JsonUtilsConfig:
     """JSON 유틸리티 관련 상수 (json_utils.py용)"""
 
@@ -674,6 +705,7 @@ def get_llm_config() -> dict:
 
 
 __all__ = [
+    "AmountParserConfig",
     "AnchorScorerConfig",
     "APIConfig",
     "CacheConfig",

@@ -8,19 +8,21 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Optional
 
+from config.constants import OCRConfig
+
 logger = logging.getLogger(__name__)
 
 
 def select_by_text_length(
     db_path: str,
-    threshold: int = 100,
+    threshold: int = OCRConfig.POOR_TEXT_THRESHOLD,
     limit: Optional[int] = None,
 ) -> list[dict[str, Any]]:
     """텍스트 길이 기준 선택 (force_ocr_update.py 로직)
 
     Args:
         db_path: DB 파일 경로
-        threshold: 텍스트 길이 임계값 (기본 100자)
+        threshold: 텍스트 길이 임계값 (기본 POOR_TEXT_THRESHOLD)
         limit: 최대 개수 제한
 
     Returns:
@@ -52,14 +54,14 @@ def select_by_text_length(
 
 def select_by_avg_per_page(
     db_path: str,
-    threshold: int = 300,
+    threshold: int = OCRConfig.GOOD_AVG_PER_PAGE,
     limit: Optional[int] = None,
 ) -> list[dict[str, Any]]:
     """페이지당 평균 글자수 기준 선택 (reprocess_with_ocr.py 로직)
 
     Args:
         db_path: DB 파일 경로
-        threshold: 페이지당 평균 글자수 임계값 (기본 300자)
+        threshold: 페이지당 평균 글자수 임계값 (기본 GOOD_AVG_PER_PAGE)
         limit: 최대 개수 제한
 
     Returns:

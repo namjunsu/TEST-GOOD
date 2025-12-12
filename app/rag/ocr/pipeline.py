@@ -18,6 +18,8 @@ import numpy as np
 import pytesseract
 from pdf2image import convert_from_path
 
+from config.constants import OCRConfig
+
 logger = logging.getLogger(__name__)
 
 # PaddleOCR 전역 인스턴스 (thread-safe lazy loading)
@@ -43,7 +45,7 @@ def _get_paddleocr():
 
 def ocr_extract_pdf(
     pdf_path: Path,
-    dpi: int = 300,
+    dpi: int = OCRConfig.DEFAULT_DPI,
     lang: str = "kor+eng",
     progress_callback: Optional[Callable[[int, int], None]] = None,
     engine: Literal["tesseract", "paddleocr"] = "paddleocr",

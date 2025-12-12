@@ -92,6 +92,17 @@ class LLMConfig:
 
 
 @dataclass(frozen=True)
+class MetricsConfig:
+    """메트릭 수집 관련 상수 (metrics_collector.py용)"""
+
+    # 지연시간 샘플 윈도 크기
+    LATENCY_WINDOW_SIZE: int = 2000
+
+    # EWMA 반감기 (초)
+    EWMA_HALFLIFE_SECONDS: float = 60.0
+
+
+@dataclass(frozen=True)
 class OCRConfig:
     """OCR 처리 관련 상수"""
 
@@ -595,6 +606,7 @@ __all__ = [
     "LLMConfig",
     "MergeExtractorConfig",
     "MetaParserConfig",
+    "MetricsConfig",
     "OCRConfig",
     "ParallelExecutorConfig",
     "PersistentCacheConfig",

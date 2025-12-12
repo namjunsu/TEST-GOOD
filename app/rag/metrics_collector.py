@@ -19,6 +19,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from app.core.logging import get_logger
+from config.constants import MetricsConfig
 
 logger = get_logger(__name__)
 
@@ -44,7 +45,7 @@ def _percentile(sorted_vals: list[float], p: float) -> float:
 class CodeSearchMetrics:
     """코드 검색 메트릭 수집기 v2.0 (Thread-safe + High precision)"""
 
-    def __init__(self, latency_window_size: int = 2000):
+    def __init__(self, latency_window_size: int = MetricsConfig.LATENCY_WINDOW_SIZE):
         """Initialize metrics collector
 
         Args:
@@ -83,7 +84,7 @@ class CodeSearchMetrics:
         inst_qps = 1.0 / dt
 
         # 1분 EWMA (반감기 60초)
-        alpha = 1 - math.exp(-dt / 60.0)
+        alpha = 1 - math.exp(-dt / MetricsConfig.EWMA_HALFLIFE_SECONDS)
         self._qps_ewma_1m = (1 - alpha) * self._qps_ewma_1m + alpha * inst_qps
         self._hit_rate_ewma_1m = (
             (1 - alpha) * self._hit_rate_ewma_1m + alpha * hit_increment
@@ -277,6 +278,6 @@ def get_metrics_collector() -> CodeSearchMetrics:
     if _metrics_instance is None:
         with _metrics_lock:
             if _metrics_instance is None:
-                _metrics_instance = CodeSearchMetrics(latency_window_size=2000)
+                _metrics_instance = CodeSearchMetrics()
                 logger.info("📊 CodeSearchMetrics v2.0 초기화됨 (싱글턴)")
     return _metrics_instance

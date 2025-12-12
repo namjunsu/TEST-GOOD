@@ -21,8 +21,18 @@ from unittest.mock import Mock, MagicMock, patch
 
 # streamlit 모듈 모킹
 st_mock = Mock()
-st_mock.cache_data = lambda func: func
-st_mock.cache_resource = lambda func: func
+
+# 유연한 데코레이터 mock: @st.cache_data와 @st.cache_data(ttl=300) 모두 지원
+def flexible_decorator(*args, **kwargs):
+    """@decorator 또는 @decorator(args) 모두 지원"""
+    if args and callable(args[0]):
+        # @st.cache_data 형태 (인자 없이 직접 함수에 적용)
+        return args[0]
+    # @st.cache_data(ttl=300) 형태 (팩토리 패턴)
+    return lambda func: func
+
+st_mock.cache_data = flexible_decorator
+st_mock.cache_resource = flexible_decorator
 st_mock.warning = Mock()
 st_mock.error = Mock()
 st_mock.info = Mock()

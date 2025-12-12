@@ -20,8 +20,7 @@ from unittest.mock import Mock, patch, MagicMock
 # 프로젝트 루트 경로 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Mock streamlit과 다른 의존성들
-sys.modules['streamlit'] = Mock()
+# streamlit mock은 conftest.py에서 전역으로 설정됨
 
 # system_checker import
 from utils.system_checker import SystemChecker, CheckStatus, CheckResult

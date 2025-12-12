@@ -3,67 +3,24 @@
 시간 측정 정확도 및 메트릭 수집 검증
 """
 
-import pytest
-import time
 import os
 import sys
+import time
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
+
+import pytest
 
 # 프로젝트 루트 경로 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Mock streamlit with proper session_state
-class MockSessionState:
-    def __init__(self):
-        self._data = {}
+# streamlit/pandas mock은 conftest.py에서 전역으로 설정됨
 
-    def __setattr__(self, name, value):
-        if name == '_data':
-            super().__setattr__(name, value)
-        else:
-            self._data[name] = value
-
-    def __getattr__(self, name):
-        return self._data.get(name)
-
-    def __contains__(self, name):
-        return name in self._data
-
-    def __setitem__(self, name, value):
-        self._data[name] = value
-
-    def __getitem__(self, name):
-        return self._data[name]
-
-    def get(self, name, default=None):
-        return self._data.get(name, default)
-
-    def __delattr__(self, name):
-        if name in self._data:
-            del self._data[name]
-
-    def clear(self):
-        self._data.clear()
-
-st_mock = MagicMock()
-st_mock.session_state = MockSessionState()
-st_mock.error = Mock()
-st_mock.warning = Mock()
-st_mock.info = Mock()
-st_mock.caption = Mock()
-st_mock.success = Mock()
-st_mock.metric = Mock()
-st_mock.markdown = Mock()
-st_mock.expander = Mock(return_value=MagicMock(__enter__=Mock(), __exit__=Mock()))
-st_mock.columns = Mock(return_value=[Mock(), Mock(), Mock(), Mock()])
-st_mock.dataframe = Mock()
-
-sys.modules['streamlit'] = st_mock
-sys.modules['pandas'] = Mock()
-
-# 이제 performance import
+# performance import
 from utils.performance import PerformanceMonitor, Timer, benchmark
+
+# conftest.py에서 설정한 streamlit mock 참조
+st_mock = sys.modules['streamlit']
 
 
 class TestPerformanceMonitor:

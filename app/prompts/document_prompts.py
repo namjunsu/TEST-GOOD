@@ -26,6 +26,8 @@ from __future__ import annotations
 
 from typing import Optional
 
+from config.constants import LLMConfig
+
 TEMPLATE_VERSION = "v1.3.0"
 
 # -----------------------------------------------------------------------------
@@ -180,7 +182,7 @@ def _build_header(
     return "\n".join(lines) + "\n\n"
 
 
-def _sanitize_context(context: str, max_chars: Optional[int] = 12000) -> str:
+def _sanitize_context(context: str, max_chars: Optional[int] = LLMConfig.PROMPT_CONTEXT_MAX_CHARS) -> str:
     """컨텍스트 안전 처리
 
     Args:

@@ -89,6 +89,7 @@ class LLMConfig:
     # 컨텍스트 제한
     MAX_CONTEXT_TOKENS: int = 3200
     MAX_CONTEXT_CHARS: int = 10000
+    PROMPT_CONTEXT_MAX_CHARS: int = 12000    # 프롬프트 빌더 컨텍스트 최대 길이
 
 
 @dataclass(frozen=True)

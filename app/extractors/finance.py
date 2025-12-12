@@ -16,6 +16,7 @@ import re
 from typing import Any, Optional
 
 from app.core.logging import get_logger
+from config.constants import FinanceExtractorConfig
 
 logger = get_logger(__name__)
 
@@ -442,7 +443,7 @@ def validate_financial_consistency(fields: dict[str, Optional[int]]) -> dict[str
         if vat_mode in ("included", "zero"):
             # 포함/면세: total ≈ amount (±1.5%)
             diff = abs(total - amount) / total
-            if diff > 0.015:
+            if diff > FinanceExtractorConfig.TOTAL_AMOUNT_TOLERANCE:
                 errors.append(
                     f"총액-공급가액 불일치(포함/면세): "
                     f"total={total:,}, amount={amount:,}, "
@@ -453,7 +454,7 @@ def validate_financial_consistency(fields: dict[str, Optional[int]]) -> dict[str
             # 별도: amount + vat ≈ total
             if vat:
                 diff = abs((amount + vat) - total) / total
-                if diff > 0.015:
+                if diff > FinanceExtractorConfig.TOTAL_AMOUNT_TOLERANCE:
                     errors.append(
                         f"금액+부가세 ≠ 총액: "
                         f"{amount:,}+{vat:,}={amount + vat:,} vs {total:,} "
@@ -468,7 +469,7 @@ def validate_financial_consistency(fields: dict[str, Optional[int]]) -> dict[str
     if unit_price and qty and amount:
         calc = unit_price * qty
         diff = abs(calc - amount) / max(amount, 1)
-        if diff > 0.05:
+        if diff > FinanceExtractorConfig.QTY_PRICE_TOLERANCE:
             errors.append(
                 f"단가×수량 불일치: "
                 f"{unit_price:,}×{qty}={calc:,} vs amount={amount:,} "
@@ -477,9 +478,9 @@ def validate_financial_consistency(fields: dict[str, Optional[int]]) -> dict[str
 
     # VAT 10% 규칙 (면세/포함 제외, ±2% 허용)
     if amount and vat and vat_mode not in ("zero", "included"):
-        exp_vat = round(amount * 0.1)
+        exp_vat = round(amount * FinanceExtractorConfig.VAT_RATE)
         diff = abs(exp_vat - vat) / max(vat, 1)
-        if diff > 0.02:
+        if diff > FinanceExtractorConfig.VAT_RULE_TOLERANCE:
             warnings.append(
                 f"부가세 10% 규칙 벗어남: "
                 f"expected={exp_vat:,}, actual={vat:,} "

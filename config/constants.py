@@ -291,6 +291,19 @@ class DBConfig:
 
 
 @dataclass(frozen=True)
+class FinanceExtractorConfig:
+    """금액 추출기 관련 상수 (extractors/finance.py용)"""
+
+    # 금액 검증 허용 오차
+    TOTAL_AMOUNT_TOLERANCE: float = 0.015   # 총액-공급가액 불일치 허용 (1.5%)
+    QTY_PRICE_TOLERANCE: float = 0.05       # 단가×수량 불일치 허용 (5%)
+    VAT_RULE_TOLERANCE: float = 0.02        # VAT 10% 규칙 허용 오차 (2%)
+
+    # VAT 세율
+    VAT_RATE: float = 0.1                   # 부가세 기본 세율 (10%)
+
+
+@dataclass(frozen=True)
 class MetaParserConfig:
     """메타데이터 파서 관련 상수 (parse_meta.py용)"""
 
@@ -385,6 +398,7 @@ __all__ = [
     "DBConfig",
     "DocumentHandlerConfig",
     "ExactMatchConfig",
+    "FinanceExtractorConfig",
     "HandlerConfig",
     "HybridRetrieverConfig",
     "HybridSearchConfig",

@@ -470,6 +470,26 @@ class QueryRoutingConfig:
 
 
 @dataclass(frozen=True)
+class QueryParserConfig:
+    """쿼리 파서 관련 상수 (query_parser.py용)"""
+
+    # 연도 파싱
+    YEAR_MIN: int = 1900                     # 연도 유효 범위 하한
+    YEAR_MAX: int = 2100                     # 연도 유효 범위 상한
+    TWO_DIGIT_YEAR_WINDOW: int = 20          # 2자리 연도 해석 윈도우
+
+    # 한국 이름 길이
+    NAME_MIN_LENGTH: int = 2                 # 한국 이름 최소 길이
+    NAME_MAX_LENGTH: int = 4                 # 한국 이름 최대 길이
+
+    # 퍼지 매칭
+    FUZZY_MAX_CHECKS: int = 50               # 퍼지 매칭 최대 체크 수
+    FUZZY_LENGTH_DIFF_MAX: int = 1           # 허용 길이 차이
+    JAMO_SIMILARITY_THRESHOLD: float = 0.80  # 자모 유사도 1차 컷 임계값
+    FUZZY_MATCH_THRESHOLD: float = 0.87      # 퍼지 매칭 최종 임계값
+
+
+@dataclass(frozen=True)
 class PipelineConfig:
     """RAG 파이프라인 관련 상수"""
 
@@ -535,6 +555,7 @@ __all__ = [
     "PersistentCacheConfig",
     "PipelineConfig",
     "QueryExpanderConfig",
+    "QueryParserConfig",
     "QueryRoutingConfig",
     "ResponseBuilderConfig",
     "RouterConfig",

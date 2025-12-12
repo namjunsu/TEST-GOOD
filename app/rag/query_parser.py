@@ -21,6 +21,8 @@ from typing import Optional
 
 import yaml
 
+from config.constants import QueryParserConfig
+
 logger = logging.getLogger(__name__)
 
 CONFIG_PATH = Path(__file__).parent.parent.parent / "config" / "filters.yaml"
@@ -81,12 +83,12 @@ def _sequence_ratio(a: str, b: str) -> float:
 
 
 def _two_digit_to_four(yy: int, today: date) -> int:
-    # '24 → 2024 해석: 현재 세기 기준, +/- 20년 윈도우
+    # '24 → 2024 해석: 현재 세기 기준, +/- N년 윈도우
     century = today.year // 100 * 100
     cand = century + yy
-    if cand > today.year + 20:
+    if cand > today.year + QueryParserConfig.TWO_DIGIT_YEAR_WINDOW:
         cand -= 100
-    elif cand < 1900:
+    elif cand < QueryParserConfig.YEAR_MIN:
         cand += 100
     return cand
 
@@ -202,7 +204,7 @@ class QueryParser:
                 if len(y) == 2:
                     y4 = _two_digit_to_four(int(y), self.today)
                     res["year"] = str(y4)
-                elif len(y) == 4 and 1900 <= int(y) <= 2100:
+                elif len(y) == 4 and QueryParserConfig.YEAR_MIN <= int(y) <= QueryParserConfig.YEAR_MAX:
                     res["year"] = y
 
         # drafter
@@ -253,21 +255,22 @@ class QueryParser:
             y1 = int(a) if len(a) == 4 else _two_digit_to_four(int(a), self.today)
             y2 = int(b) if len(b) == 4 else _two_digit_to_four(int(b), self.today)
             y1, y2 = min(y1, y2), max(y1, y2)
-            if 1900 <= y1 <= 2100 and 1900 <= y2 <= 2100:
+            year_min, year_max = QueryParserConfig.YEAR_MIN, QueryParserConfig.YEAR_MAX
+            if year_min <= y1 <= year_max and year_min <= y2 <= year_max:
                 return f"{y1}-{y2}"
 
         # 단일 4자리
         m = RE_YEAR_4.search(q)
         if m:
             y = int(m.group(0))
-            if 1900 <= y <= 2100:
+            if QueryParserConfig.YEAR_MIN <= y <= QueryParserConfig.YEAR_MAX:
                 return str(y)
 
         # 단일 2자리
         m = RE_YEAR_2.search(q)
         if m:
             y4 = _two_digit_to_four(int(m.group(1)), self.today)
-            if 1900 <= y4 <= 2100:
+            if QueryParserConfig.YEAR_MIN <= y4 <= QueryParserConfig.YEAR_MAX:
                 return str(y4)
 
         return None
@@ -289,16 +292,17 @@ class QueryParser:
             return " ".join(filtered) if filtered else ""
 
         candidates_spaced = [remove_stopwords(c) for c in candidates_spaced]
-        # 빈 문자열 제거 + 공백 제거 후 길이가 2-4자인 것만 유지
-        candidates_spaced = [c for c in candidates_spaced if c and 2 <= len(c.replace(" ", "")) <= 4]
+        # 빈 문자열 제거 + 공백 제거 후 길이가 N자인 것만 유지
+        name_min, name_max = QueryParserConfig.NAME_MIN_LENGTH, QueryParserConfig.NAME_MAX_LENGTH
+        candidates_spaced = [c for c in candidates_spaced if c and name_min <= len(c.replace(" ", "")) <= name_max]
 
         # 모든 후보 합치기
         all_candidates = candidates_ko + candidates_spaced
 
         # 직함 제거/정규화
         cand_norm = [_normalize_name(c) for c in all_candidates if _normalize_text(c) not in self.stopwords]
-        # 빈 값 제거 및 길이 체크 (한국 이름은 보통 2-4자)
-        cand_norm = [c for c in cand_norm if c and 2 <= len(c) <= 4]
+        # 빈 값 제거 및 길이 체크 (한국 이름은 보통 N자)
+        cand_norm = [c for c in cand_norm if c and name_min <= len(c) <= name_max]
 
         if not cand_norm:
             return None, None
@@ -311,7 +315,7 @@ class QueryParser:
         # 2) 퍼지 매칭(안전장치 포함)
         best: tuple[Optional[str], float] = (None, 0.0)
         # 후보·대상 상한
-        max_checks = 50
+        max_checks = QueryParserConfig.FUZZY_MAX_CHECKS
         checked = 0
         for n in cand_norm:
             nj = _jamo_approx(n)
@@ -319,12 +323,12 @@ class QueryParser:
                 if checked >= max_checks:
                     break
                 # 길이 차 과도 시 skip
-                if abs(len(n) - len(k)) > 1:
+                if abs(len(n) - len(k)) > QueryParserConfig.FUZZY_LENGTH_DIFF_MAX:
                     checked += 1
                     continue
                 kj = _jamo_approx(k)
                 # 자모 근접성 1차 컷
-                if _sequence_ratio(nj, kj) < 0.80:
+                if _sequence_ratio(nj, kj) < QueryParserConfig.JAMO_SIMILARITY_THRESHOLD:
                     checked += 1
                     continue
                 # 원문 근접성(가중)
@@ -333,7 +337,7 @@ class QueryParser:
                     best = (k, score)
                 checked += 1
 
-        if best[0] and best[1] >= 0.87:
+        if best[0] and best[1] >= QueryParserConfig.FUZZY_MATCH_THRESHOLD:
             return self._norm_to_original[best[0]], "fuzzy"
 
         return None, None

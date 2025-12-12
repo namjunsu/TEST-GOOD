@@ -172,6 +172,30 @@ class DBConfig:
     DEFAULT_EXTRACTED_DIR: str = "data/extracted"
 
 
+@dataclass(frozen=True)
+class PipelineConfig:
+    """RAG 파이프라인 관련 상수"""
+
+    # 컨텍스트 설정
+    CONTEXT_MAX_LENGTH: int = 10000          # hydrate_context max_len
+    SNIPPET_PREVIEW_LENGTH: int = 400        # 스니펫 미리보기 길이
+    FALLBACK_SNIPPET_LENGTH: int = 800       # 폴백 스니펫 길이
+
+    # 성능 가드 임계값 (초)
+    SLOW_QUERY_CRITICAL: float = 10.0        # 심각한 슬로 쿼리
+    SLOW_QUERY_WARNING: float = 3.0          # 경고 슬로 쿼리
+
+    # 출처 표시 제한
+    DEFAULT_MAX_SOURCES: int = 3             # 기본 출처 표시 수
+    BULK_MAX_SOURCES: int = 200              # 전체/모든 쿼리 출처 표시 수
+
+    # 토큰 임계값
+    MIN_TOKEN_COUNT_FOR_RAG: int = 4         # RAG 모드 최소 토큰 수
+
+    # Evidence 폴백
+    EVIDENCE_FALLBACK_COUNT: int = 3         # raw_results 폴백 시 사용할 개수
+
+
 # 환경변수 오버라이드 지원 함수
 def get_search_config() -> dict:
     """SearchConfig를 환경변수로 오버라이드"""
@@ -202,6 +226,7 @@ __all__ = [
     "HybridSearchConfig",
     "LLMConfig",
     "OCRConfig",
+    "PipelineConfig",
     "RouterConfig",
     "ScoringConfig",
     "SearchConfig",

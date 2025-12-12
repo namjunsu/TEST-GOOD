@@ -150,60 +150,53 @@ class TestQueryMethod:
             mock_retriever.search.assert_called_once()
 
 
-class TestDetermineRagMode:
-    """모드 결정 로직 테스트"""
+class TestModeResolver:
+    """ModeResolver 테스트 (리팩토링된 모드 결정 로직)"""
 
-    @pytest.fixture
-    def pipeline(self):
-        """테스트용 파이프라인"""
-        with patch("app.rag.factory.RAGPipelineFactory") as mock_factory:
-            mock_factory.create_retriever.return_value = Mock()
-            mock_factory.create_compressor.return_value = Mock()
-            mock_factory.create_generator.return_value = Mock()
-            mock_factory.load_known_drafters.return_value = set()
-
-            from app.rag.pipeline import RAGPipeline
-            return RAGPipeline()
-
-    def test_force_chat_mode_smalltalk(self, pipeline):
+    def test_force_chat_mode_smalltalk(self):
         """스몰토크는 CHAT 모드"""
-        with patch("app.rag.pipeline.settings") as mock_settings:
+        from app.rag.mode_resolver import ModeResolver
+
+        resolver = ModeResolver()
+        results = [{"score": 0.9}]
+
+        with patch("app.rag.mode_resolver.settings") as mock_settings:
             mock_settings.MODE = "AUTO"
 
-            with patch("app.rag.pipeline.force_chat_mode") as mock_force:
-                mock_force.return_value = (True, "smalltalk")
+            decision = resolver.resolve("안녕하세요", results)
 
-                metrics = {}
-                results = [{"score": 0.9}]
-                mode = pipeline._determine_rag_mode("안녕하세요", results, metrics)
+            assert decision.mode == "chat"
+            assert "smalltalk" in decision.reason
 
-                assert mode == "chat"
-                assert metrics["mode"] == "chat"
-                assert metrics["force_chat_reason"] == "smalltalk"
-
-    def test_chat_mode_env(self, pipeline):
+    def test_chat_mode_env(self):
         """CHAT 환경 설정"""
-        with patch("app.rag.pipeline.settings") as mock_settings:
+        from app.rag.mode_resolver import ModeResolver
+
+        resolver = ModeResolver()
+        results = [{"score": 0.9}]
+
+        with patch("app.rag.mode_resolver.settings") as mock_settings:
             mock_settings.MODE = "CHAT"
 
-            metrics = {}
-            results = [{"score": 0.9}]
-            mode = pipeline._determine_rag_mode("테스트", results, metrics)
+            decision = resolver.resolve("테스트", results)
 
-            assert mode == "chat"
-            assert metrics["top_score"] == 0.0
+            assert decision.mode == "chat"
+            assert decision.metrics["top_score"] == 0.0
 
-    def test_rag_mode_env(self, pipeline):
+    def test_rag_mode_env(self):
         """RAG 환경 설정"""
-        with patch("app.rag.pipeline.settings") as mock_settings:
+        from app.rag.mode_resolver import ModeResolver
+
+        resolver = ModeResolver()
+        results = [{"score": 0.85}]
+
+        with patch("app.rag.mode_resolver.settings") as mock_settings:
             mock_settings.MODE = "RAG"
 
-            metrics = {}
-            results = [{"score": 0.85}]
-            mode = pipeline._determine_rag_mode("문서 검색", results, metrics)
+            decision = resolver.resolve("문서 검색", results)
 
-            assert mode == "rag"
-            assert metrics["top_score"] == 0.85
+            assert decision.mode == "rag"
+            assert decision.metrics["top_score"] == 0.85
 
 
 class TestAnswerMethod:
@@ -315,30 +308,20 @@ class TestAnswerText:
                 assert result == "테스트 답변"
 
 
-class TestBuildRagResponse:
-    """_build_rag_response() 테스트"""
+class TestResponseBuilder:
+    """ResponseBuilder 테스트 (리팩토링된 응답 구성 로직)"""
 
-    @pytest.fixture
-    def pipeline(self):
-        """테스트용 파이프라인"""
-        with patch("app.rag.factory.RAGPipelineFactory") as mock_factory:
-            mock_factory.create_retriever.return_value = Mock()
-            mock_factory.create_compressor.return_value = Mock()
-            mock_factory.create_generator.return_value = Mock()
-            mock_factory.load_known_drafters.return_value = set()
-
-            from app.rag.pipeline import RAGPipeline
-            return RAGPipeline()
-
-    def test_chat_mode_no_sources(self, pipeline):
+    def test_chat_mode_no_sources(self):
         """CHAT 모드에서는 출처 제거"""
         import time
+        from app.rag.response_builder import ResponseBuilder
 
+        builder = ResponseBuilder()
         results = [{"doc_id": "doc1", "score": 0.9}]
         compressed = [{"doc_id": "doc1", "snippet": "내용"}]
         metrics = {"search_time": 0.1, "compress_time": 0.1, "generate_time": 0.1}
 
-        response = pipeline._build_rag_response(
+        response = builder.build_rag_response(
             query="테스트",
             answer="답변",
             results=results,
@@ -352,15 +335,17 @@ class TestBuildRagResponse:
         assert response.source_docs == []
         assert response.evidence_chunks == []
 
-    def test_rag_mode_has_sources(self, pipeline):
+    def test_rag_mode_has_sources(self):
         """RAG 모드에서는 출처 포함"""
         import time
+        from app.rag.response_builder import ResponseBuilder
 
+        builder = ResponseBuilder()
         results = [{"doc_id": "doc1", "score": 0.9}]
         compressed = [{"doc_id": "doc1", "snippet": "내용"}]
         metrics = {"search_time": 0.1, "compress_time": 0.1, "generate_time": 0.1}
 
-        response = pipeline._build_rag_response(
+        response = builder.build_rag_response(
             query="테스트",
             answer="답변",
             results=results,

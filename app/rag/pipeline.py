@@ -1,7 +1,13 @@
-"""RAG 파이프라인 (파사드 패턴)
+"""RAG 파이프라인 v2.0 (파사드 패턴)
 
 단일 진입점: RAGPipeline.query()
 내부 흐름: 검색 → 압축 → LLM 생성
+
+2025-12-12 v2.0 변경사항:
+- ModeResolver 클래스로 모드 결정 로직 분리
+- ResponseBuilder 클래스로 응답 구성 로직 분리
+- PipelineConfig로 Magic Number 외부화
+- 중복 코드 제거 및 헬퍼 메서드 활용
 
 Example:
     >>> pipeline = RAGPipeline()
@@ -37,6 +43,7 @@ from app.rag.contracts import (
 )
 from app.rag.document_utils import DocumentUtils
 from app.rag.factory import RAGPipelineFactory
+from app.rag.mode_resolver import ModeResolver, get_mode_resolver
 from app.rag.persistent_cache import cache_query_result_persistent, get_cached_result_persistent
 from app.rag.query_router import QueryMode, QueryRouter
 from app.rag.query_routing import (
@@ -44,12 +51,10 @@ from app.rag.query_routing import (
     DIAG_RAG,
     _encode_file_ref,
     clean_ui_metadata,
-    force_chat_mode,
-    get_keyword_coverage,
-    has_domain_keyword,
 )
-from app.rag.utils.text import get_query_token_count
+from app.rag.response_builder import ResponseBuilder, get_response_builder
 from app.rag.similarity import DocumentSimilarity
+from config.constants import PipelineConfig
 
 logger = get_logger(__name__)
 
@@ -110,7 +115,11 @@ class RAGPipeline:
         # 📊 유사 문서 추천 서비스 (2025-12-08)
         self._similarity_service = DocumentSimilarity(retriever=self.retriever)
 
-        logger.info(f"RAG Pipeline initialized (known_drafters: {len(self.known_drafters)}명)")
+        # 🎯 v2.0: 분리된 컴포넌트 초기화
+        self._mode_resolver: ModeResolver = get_mode_resolver()
+        self._response_builder: ResponseBuilder = get_response_builder()
+
+        logger.info(f"RAG Pipeline v2.0 initialized (known_drafters: {len(self.known_drafters)}명)")
 
     def _load_full_text_if_short(self, filename: str, snippet: str) -> str:
         """스니펫이 짧으면 data/extracted에서 전체 텍스트 로드 (DocumentUtils 위임)"""
@@ -137,260 +146,6 @@ class RAGPipeline:
             )
         return None
 
-    def _perform_retrieval(
-        self,
-        query: str,
-        top_k: int,
-        preliminary_mode: str,
-        selected_filename: Optional[str],
-        diagnostics: dict,
-    ) -> tuple[list[dict[str, Any]], dict]:
-        """검색 수행
-
-        Args:
-            query: 사용자 질문
-            top_k: 검색 결과 개수
-            preliminary_mode: 검색 모드 ("chat", "doc_anchored")
-            selected_filename: 선택된 문서 파일명
-            diagnostics: 진단 정보 딕셔너리
-
-        Returns:
-            (검색 결과 리스트, 메트릭 딕셔너리)
-        """
-        metrics = {}
-        search_start = time.perf_counter()
-        results = self.retriever.search(
-            query, top_k, mode=preliminary_mode, selected_filename=selected_filename,
-        )
-        metrics["search_time"] = time.perf_counter() - search_start
-
-        # [검색 결과 Top-N 진단 로그]
-        logger.info(f"RETRIEVE_TOPN mode={preliminary_mode}")
-        for i, doc in enumerate(results[:10], 1):
-            score = doc.get("score", 0.0)
-            doc_id = doc.get("doc_id", "unknown")
-            snippet_preview = doc.get("snippet", "")[:60].replace("\n", " ")
-            logger.info(f"  #{i} score={score:.4f} doc={doc_id} preview={snippet_preview}...")
-
-        # [DIAG] 검색 결과 진단
-        if DIAG_RAG:
-            diagnostics["retrieved_k"] = len(results)
-            if DIAG_LOG_LEVEL in ["DEBUG", "INFO"]:
-                logger.info(f"[DIAG] 검색 완료: {len(results)}개 문서 검색됨")
-
-        return results, metrics
-
-    def _determine_rag_mode(
-        self,
-        query: str,
-        results: list[dict[str, Any]],
-        metrics: dict,
-    ) -> str:
-        """RAG 모드 결정 (chat/rag)
-
-        Args:
-            query: 사용자 질문
-            results: 검색 결과
-            metrics: 메트릭 딕셔너리 (업데이트됨)
-
-        Returns:
-            결정된 모드 ("chat" 또는 "rag")
-        """
-        mode_env = settings.MODE
-        top_score = results[0].get("score", 0.0) if results else 0.0
-        metrics["top_score"] = top_score
-
-        if mode_env == "AUTO":
-            # 1. 강제 CHAT 모드 체크 (스몰토크/산술/짧은 질의)
-            should_force, force_reason = force_chat_mode(query)
-            if should_force:
-                metrics["mode"] = "chat"
-                metrics["force_chat_reason"] = force_reason
-                logger.info(f"🎯 AUTO 모드: CHAT 강제 적용 (이유: {force_reason})")
-            else:
-                # 2. 도메인 키워드 + 절대값 임계값 기반 판단
-                has_keyword = has_domain_keyword(query)
-                token_count = get_query_token_count(query)
-
-                use_absolute = settings.RAG_MIN_SCORE_POLICY == "absolute"
-                vec_min = settings.VEC_MIN_ABS
-
-                if use_absolute:
-                    pass_abs_threshold = top_score >= vec_min
-                    pass_domain = has_keyword
-                    pass_length = token_count >= 4
-
-                    # Coverage Gate
-                    keyword_coverage = get_keyword_coverage(query, results)
-                    min_coverage = settings.MIN_KEYWORD_COVERAGE
-                    pass_coverage = keyword_coverage >= min_coverage
-
-                    should_use_rag = (
-                        pass_abs_threshold and pass_domain and pass_length and pass_coverage
-                    )
-                    metrics["mode"] = "rag" if should_use_rag else "chat"
-                    metrics["keyword_coverage"] = keyword_coverage
-
-                    logger.info(
-                        f"🎯 AUTO 모드 (절대값): top_score={top_score:.3f}, "
-                        f"has_keyword={has_keyword}, token_count={token_count}, "
-                        f"coverage={keyword_coverage}/{min_coverage}, "
-                        f"threshold={vec_min}, selected_mode={metrics['mode']}",
-                    )
-                else:
-                    # 기존 정규화 정책 (fallback)
-                    rag_min_score = settings.RAG_MIN_SCORE
-                    metrics["mode"] = "rag" if top_score >= rag_min_score else "chat"
-                    logger.info(
-                        f"🎯 AUTO 모드 (정규화): top_score={top_score:.3f}, "
-                        f"threshold={rag_min_score}, selected_mode={metrics['mode']}",
-                    )
-        elif mode_env == "CHAT":
-            metrics["mode"] = "chat"
-            metrics["top_score"] = 0.0
-        else:  # RAG, SUMMARIZE
-            metrics["mode"] = "rag"
-            metrics["top_score"] = results[0].get("score", 0.0) if results else 0.0
-
-        return metrics.get("mode", "rag")
-
-    def _hydrate_and_generate(
-        self,
-        query: str,
-        compressed: list[dict[str, Any]],
-        determined_mode: str,
-        temperature: float,
-        metrics: dict,
-        diagnostics: dict,
-    ) -> str:
-        """컨텍스트 수화 및 LLM 생성
-
-        Args:
-            query: 사용자 질문
-            compressed: 압축된 청크 리스트
-            determined_mode: 결정된 모드
-            temperature: 생성 온도
-            metrics: 메트릭 딕셔너리 (업데이트됨)
-            diagnostics: 진단 정보 딕셔너리
-
-        Returns:
-            생성된 답변
-        """
-        # Context Hydrator with mode-aware optimization (폴백 보장)
-        try:
-            from app.rag.utils.context_hydrator import hydrate_context
-        except Exception as e:
-            logger.warning(f"⚠️ hydrate_context import 실패, 폴백 사용: {e}")
-
-            def hydrate_context(
-                chunks: list[dict[str, Any]],
-                max_len: int = 10000,
-                mode: str = "rag",
-            ) -> tuple[str, dict[str, Any]]:
-                """안전 폴백: 청크 스니펫 결합"""
-                parts = []
-                for c in chunks:
-                    t = (c.get("snippet") or c.get("content") or c.get("text") or "")
-                    if t:
-                        parts.append(t[:800])
-                ctx = "\n\n".join(parts)[:max_len]
-                return ctx, {"fallback": True, "joined": len(parts)}
-
-        hydrate_start = time.perf_counter()
-        context, hydrator_metrics = hydrate_context(compressed, max_len=10000, mode=determined_mode)
-        metrics["hydrate_time"] = time.perf_counter() - hydrate_start
-        metrics.update({f"ctx_{k}": v for k, v in hydrator_metrics.items()})
-
-        # LLM 생성
-        logger.info(f"🎯 모드={determined_mode} → 생성 시작")
-        llm_gen_start = time.perf_counter()
-        answer = self.generator.generate(query, context, temperature, mode=determined_mode)
-        metrics["generate_time"] = time.perf_counter() - llm_gen_start
-
-        # [DIAG] 생성 완료 진단
-        if DIAG_RAG:
-            diagnostics["mode"] = "normal"
-            diagnostics["generate_path"] = "from_context"
-            diagnostics["used_k"] = len(compressed)
-            if DIAG_LOG_LEVEL in ["DEBUG", "INFO"]:
-                logger.info(
-                    f"[DIAG] 생성 완료: from_context 경로, {len(compressed)}개 문서 사용",
-                )
-
-        return answer
-
-    def _build_rag_response(
-        self,
-        query: str,
-        answer: str,
-        results: list[dict[str, Any]],
-        compressed: list[dict[str, Any]],
-        determined_mode: str,
-        start_time: float,
-        metrics: dict,
-        diagnostics: dict,
-    ) -> RAGResponse:
-        """RAG 응답 구성
-
-        Args:
-            query: 사용자 질문
-            answer: 생성된 답변
-            results: 원본 검색 결과
-            compressed: 압축된 결과
-            determined_mode: 결정된 모드
-            start_time: 시작 시간
-            metrics: 메트릭
-            diagnostics: 진단 정보
-
-        Returns:
-            RAGResponse 객체
-        """
-        total_latency = time.perf_counter() - start_time
-        metrics["total_time"] = total_latency
-
-        # 성능 가드: 슬로 쿼리 임계값 체크
-        if total_latency > 10.0:
-            logger.warning(
-                f"⚠️  SLOW_QUERY (>10s): {total_latency:.2f}s | "
-                f"query='{query[:50]}...' | "
-                f"search={metrics['search_time']:.2f}s, "
-                f"hydrate={metrics.get('hydrate_time', 0):.3f}s, "
-                f"generate={metrics['generate_time']:.2f}s",
-            )
-        elif total_latency > 3.0:
-            logger.warning(
-                f"⚠️  SLOW_QUERY (>3s): {total_latency:.2f}s | "
-                f"query='{query[:50]}...'",
-            )
-
-        logger.info(
-            f"RAG query completed in {total_latency:.2f}s "
-            f"(search={metrics['search_time']:.2f}s, "
-            f"compress={metrics['compress_time']:.2f}s, "
-            f"hydrate={metrics.get('hydrate_time', 0):.3f}s, "
-            f"generate={metrics['generate_time']:.2f}s)",
-        )
-
-        # CHAT 모드일 경우 출처 제거
-        max_sources = 200 if any(
-            kw in query.lower() for kw in ["전부", "모두", "모든", "전체", "all", "몇", "개수", "총"]
-        ) else 3
-        final_source_docs = (
-            [] if determined_mode == "chat" else [c.get("doc_id") for c in results[:max_sources]]
-        )
-        final_evidence_chunks = [] if determined_mode == "chat" else compressed
-
-        return RAGResponse(
-            answer=answer,
-            source_docs=final_source_docs,
-            evidence_chunks=final_evidence_chunks,
-            raw_results=results,
-            latency=total_latency,
-            success=True,
-            metrics=metrics,
-            diagnostics=diagnostics,
-        )
-
     def query(
         self,
         query: str,
@@ -400,7 +155,7 @@ class RAGPipeline:
         temperature: float = 0.1,
         selected_filename: Optional[str] = None,
     ) -> RAGResponse:
-        """RAG 질의 (단일 진입점)
+        """RAG 질의 v2.0 (단일 진입점)
 
         Args:
             query: 사용자 질문
@@ -413,256 +168,48 @@ class RAGPipeline:
         Returns:
             RAGResponse: 답변 + 메타데이터
         """
-
         # 입력 검증
         if not query or not query.strip():
-            return RAGResponse(
-                answer="",
-                success=False,
-                error="빈 질문입니다",
-            )
+            return RAGResponse(answer="", success=False, error="빈 질문입니다")
 
         start_time = time.perf_counter()
-        metrics = {}
-        diagnostics = {}  # 진단 정보 수집
+        metrics: dict[str, Any] = {}
+        diagnostics: dict[str, Any] = {}
 
         try:
-            # 0. 검색 전 pre-routing: 장비 질의 감지 (DOC_ANCHORED 필터링용)
-            # QueryRouter의 device term 감지 로직 활용 (공개 API 우선, fallback to 비공개)
-            preliminary_mode = "chat"
-            if hasattr(self, "query_router"):
-                has_device = (
-                    getattr(self.query_router, "has_device_terms", None) or
-                    getattr(self.query_router, "_has_device_terms", None)
-                )
-                if callable(has_device) and has_device(query):
-                    preliminary_mode = "doc_anchored"
-                    logger.info("🎯 검색 전 DOC_ANCHORED 모드 감지 (장비 용어)")
-
-            # 1. 검색: 정규화된 청크(dict) 리스트 기대
-            search_start = time.perf_counter()
-            results = self.retriever.search(query, top_k, mode=preliminary_mode, selected_filename=selected_filename)
-            metrics["search_time"] = time.perf_counter() - search_start
-
-            # [검색 결과 Top-N 진단 로그]
-            logger.info(f"RETRIEVE_TOPN mode={preliminary_mode}")
-            for i, doc in enumerate(results[:10], 1):
-                score = doc.get("score", 0.0)
-                doc_id = doc.get("doc_id", "unknown")
-                snippet_preview = doc.get("snippet", "")[:60].replace("\n", " ")
-                logger.info(f"  #{i} score={score:.4f} doc={doc_id} preview={snippet_preview}...")
-
-            # [DIAG] 검색 결과 진단
-            if DIAG_RAG:
-                diagnostics["retrieved_k"] = len(results)
-                if DIAG_LOG_LEVEL in ["DEBUG", "INFO"]:
-                    logger.info(f"[DIAG] 검색 완료: {len(results)}개 문서 검색됨")
-
-            if not results:
-                logger.warning(f"No results found for query: {query[:50]}")
-                if DIAG_RAG:
-                    diagnostics["mode"] = "no_results"
-                    diagnostics["generate_path"] = "fallback_no_context"
-
-                # 검색 결과 없음 → CHAT 모드로 폴백
-                metrics["mode"] = "chat"
-                metrics["top_score"] = 0.0
-
-                return RAGResponse(
-                    answer="관련 문서가 검색되지 않았다.",
-                    success=True,
-                    latency=time.perf_counter() - start_time,
-                    metrics=metrics,
-                    diagnostics=diagnostics,
-                )
-
-            # 2. 압축: 청크 단위 유지(페이지/스니펫/메타 보존)
-            compress_start = time.perf_counter()
-            compressed = self.compressor.compress(results, compression_ratio)
-            metrics["compress_time"] = time.perf_counter() - compress_start
-
-            # [DIAG] 압축 후 진단
-            if DIAG_RAG:
-                diagnostics["after_compress_k"] = len(compressed)
-                diagnostics["compression_ratio"] = compression_ratio
-                if DIAG_LOG_LEVEL in ["DEBUG", "INFO"]:
-                    logger.info(
-                        f"[DIAG] 압축 완료: {len(results)} → {len(compressed)}개 문서",
-                    )
-
-            # 3. 생성: 모드 결정 → 컨텍스트 최적화 → 생성
-            # CRITICAL: Inject compressed chunks into generator for proper LLM context
-            if hasattr(self.generator, "compressed_chunks"):
-                self.generator.compressed_chunks = compressed
-                logger.debug(
-                    f"Injected {len(compressed)} compressed chunks into generator",
-                )
-
-            # [DIAG] 생성 전 컨텍스트 스냅샷
-            if DIAG_RAG and DIAG_LOG_LEVEL == "DEBUG":
-                for i, c in enumerate(compressed[:3], 1):  # 상위 3개만 로그
-                    logger.debug(
-                        f"[DIAG] Context[{i}]: doc_id={c.get('doc_id')}, "
-                        f"filename={c.get('filename', 'N/A')}, "
-                        f"page={c.get('page', 0)}, "
-                        f"snippet={c.get('snippet', '')[:120]}...",
-                    )
-
-            # 🎯 STEP 1: QueryRouter 모드 분류 (DOC_ANCHORED 최우선 체크)
-            # CRITICAL: 검색 결과를 고려한 지능형 라우팅
-            route_decision = self.query_router.classify_mode_with_retrieval(query, results)
-            router_reason = route_decision.reason
-            query_mode = route_decision.mode  # Extract QueryMode enum
-            logger.info(f"🔀 QueryRouter 분류: mode={query_mode.value}, reason={router_reason}")
-
-            # 🎯 STEP 2: 모드 결정 로직
-            # CRITICAL: Determine mode BEFORE context hydration to apply mode-aware context limits
-            mode_env = settings.MODE
-            top_score = results[0].get("score", 0.0) if results else 0.0
-            metrics["top_score"] = top_score
-
-            if mode_env == "AUTO":
-                # ━━━ 1. 강제 CHAT 모드 체크 (스몰토크/산술/짧은 질의) ━━━
-                should_force, force_reason = force_chat_mode(query)
-                if should_force:
-                    metrics["mode"] = "chat"
-                    metrics["force_chat_reason"] = force_reason
-                    logger.info(f"🎯 AUTO 모드: CHAT 강제 적용 (이유: {force_reason})")
-                else:
-                    # ━━━ 2. 도메인 키워드 + 절대값 임계값 기반 판단 ━━━
-                    has_keyword = has_domain_keyword(query)
-                    token_count = get_query_token_count(query)
-
-                    # settings 중앙 설정에서 절대값 임계값 읽기
-                    use_absolute = settings.RAG_MIN_SCORE_POLICY == "absolute"
-                    # bm25_min reserved for future BM25-specific scoring
-                    vec_min = settings.VEC_MIN_ABS
-
-                    # 절대값 정책 사용 시 (권장)
-                    if use_absolute:
-                        # 실제 BM25/벡터 스코어를 results에서 추출 시도
-                        # (현재는 fused score만 있으므로 간소화)
-                        # 일단 top_score를 벡터 스코어로 간주
-                        pass_abs_threshold = top_score >= vec_min
-                        pass_domain = has_keyword
-                        pass_length = token_count >= 4
-
-                        # 🔒 Coverage Gate: 검색 결과에서 실제로 키워드가 발견되는지 확인
-                        keyword_coverage = get_keyword_coverage(query, results)
-                        min_coverage = settings.MIN_KEYWORD_COVERAGE
-                        pass_coverage = keyword_coverage >= min_coverage
-
-                        should_use_rag = pass_abs_threshold and pass_domain and pass_length and pass_coverage
-                        metrics["mode"] = "rag" if should_use_rag else "chat"
-                        metrics["keyword_coverage"] = keyword_coverage
-
-                        logger.info(
-                            f"🎯 AUTO 모드 (절대값): top_score={top_score:.3f}, "
-                            f"has_keyword={has_keyword}, token_count={token_count}, "
-                            f"coverage={keyword_coverage}/{min_coverage}, "
-                            f"threshold={vec_min}, selected_mode={metrics['mode']}",
-                        )
-                    else:
-                        # 기존 정규화 정책 (fallback)
-                        rag_min_score = settings.RAG_MIN_SCORE
-                        metrics["mode"] = "rag" if top_score >= rag_min_score else "chat"
-                        logger.info(
-                            f"🎯 AUTO 모드 (정규화): top_score={top_score:.3f}, "
-                            f"threshold={rag_min_score}, selected_mode={metrics['mode']}",
-                        )
-
-            elif mode_env == "CHAT":
-                metrics["mode"] = "chat"
-                metrics["top_score"] = 0.0
-            else:  # RAG, SUMMARIZE
-                metrics["mode"] = "rag"
-                metrics["top_score"] = results[0].get("score", 0.0) if results else 0.0
-
-            # 🎯 STEP 2: 모드 기반 컨텍스트 최적화
-            determined_mode = metrics.get("mode", "rag")
-            logger.info(f"🎯 모드={determined_mode} → 컨텍스트 최적화 시작")
-
-            # Context Hydrator with mode-aware optimization (폴백 보장)
-            try:
-                from app.rag.utils.context_hydrator import hydrate_context
-            except Exception as e:
-                logger.warning(f"⚠️ hydrate_context import 실패, 폴백 사용: {e}")
-
-                def hydrate_context(
-                    chunks: list[dict[str, Any]],
-                    max_len: int = 10000,
-                    mode: str = "rag",
-                ) -> tuple[str, dict[str, Any]]:
-                    """안전 폴백: 청크 스니펫 결합"""
-                    parts = []
-                    for c in chunks:
-                        t = (c.get("snippet") or c.get("content") or c.get("text") or "")
-                        if t:
-                            parts.append(t[:800])
-                    ctx = "\n\n".join(parts)[:max_len]
-                    return ctx, {"fallback": True, "joined": len(parts)}
-
-            hydrate_start = time.perf_counter()
-            context, hydrator_metrics = hydrate_context(compressed, max_len=10000, mode=determined_mode)
-            metrics["hydrate_time"] = time.perf_counter() - hydrate_start
-            # Merge hydrator metrics into main metrics
-            metrics.update({f"ctx_{k}": v for k, v in hydrator_metrics.items()})
-
-            # 🎯 STEP 3: 생성 (모드별 토큰 예산 적용)
-            logger.info(f"🎯 모드={determined_mode} → 생성 시작")
-            llm_gen_start = time.perf_counter()
-            answer = self.generator.generate(query, context, temperature, mode=determined_mode)
-            metrics["generate_time"] = time.perf_counter() - llm_gen_start
-
-            # [DIAG] 생성 완료 진단
-            if DIAG_RAG:
-                diagnostics["mode"] = "normal"
-                diagnostics["generate_path"] = "from_context"
-                diagnostics["used_k"] = len(compressed)
-                if DIAG_LOG_LEVEL in ["DEBUG", "INFO"]:
-                    logger.info(
-                        f"[DIAG] 생성 완료: from_context 경로, {len(compressed)}개 문서 사용",
-                    )
-
-            total_latency = time.perf_counter() - start_time
-            metrics["total_time"] = total_latency
-
-            # 🚨 성능 가드: 슬로 쿼리 임계값 체크
-            if total_latency > 10.0:
-                logger.warning(
-                    f"⚠️  SLOW_QUERY (>10s): {total_latency:.2f}s | "
-                    f"query='{query[:50]}...' | "
-                    f"search={metrics['search_time']:.2f}s, "
-                    f"hydrate={metrics.get('hydrate_time', 0):.3f}s, "
-                    f"generate={metrics['generate_time']:.2f}s",
-                )
-            elif total_latency > 3.0:
-                logger.warning(
-                    f"⚠️  SLOW_QUERY (>3s): {total_latency:.2f}s | "
-                    f"query='{query[:50]}...'",
-                )
-
-            logger.info(
-                f"RAG query completed in {total_latency:.2f}s "
-                f"(search={metrics['search_time']:.2f}s, "
-                f"compress={metrics['compress_time']:.2f}s, "
-                f"hydrate={metrics.get('hydrate_time', 0):.3f}s, "
-                f"generate={metrics['generate_time']:.2f}s)",
+            # 1. 검색
+            results, metrics = self._perform_retrieval(
+                query, top_k, selected_filename, diagnostics
             )
 
-            # CHAT 모드일 경우 출처 제거 (일반 대화는 문서 인용 불필요)
-            # "전부" 또는 "개수" 질의 감지 시 출처도 더 많이 표시
-            max_sources = 200 if any(kw in query.lower() for kw in ["전부", "모두", "모든", "전체", "all", "몇", "개수", "총"]) else 3
-            final_source_docs = [] if determined_mode == "chat" else [c.get("doc_id") for c in results[:max_sources]]
-            final_evidence_chunks = [] if determined_mode == "chat" else compressed
+            # 검색 결과 없음 → CHAT 모드로 폴백
+            if not results:
+                return self._handle_no_results(query, start_time, metrics, diagnostics)
 
-            return RAGResponse(
+            # 2. 압축
+            compressed, metrics = self._perform_compression(
+                results, compression_ratio, metrics, diagnostics
+            )
+
+            # 3. 모드 결정 (ModeResolver 활용)
+            mode_decision = self._mode_resolver.resolve(query, results)
+            metrics.update(mode_decision.metrics)
+            metrics["mode"] = mode_decision.mode
+            determined_mode = mode_decision.mode
+
+            # 4. 컨텍스트 수화 및 생성
+            answer, metrics = self._hydrate_and_generate(
+                query, compressed, determined_mode, temperature, metrics, diagnostics
+            )
+
+            # 5. 응답 구성 (ResponseBuilder 활용)
+            return self._response_builder.build_rag_response(
+                query=query,
                 answer=answer,
-                source_docs=final_source_docs,
-                evidence_chunks=final_evidence_chunks,  # UI용 근거
-                raw_results=results,  # Evidence 최소 보장용
-                latency=total_latency,
-                success=True,
+                results=results,
+                compressed=compressed,
+                determined_mode=determined_mode,
+                start_time=start_time,
                 metrics=metrics,
                 diagnostics=diagnostics,
             )
@@ -670,8 +217,7 @@ class RAGPipeline:
         except SearchError as e:
             logger.error(f"Search failed: {e}", exc_info=True)
             return RAGResponse(
-                answer="",
-                success=False,
+                answer="", success=False,
                 error=f"[E_RETRIEVE] 검색 실패: {e.message}",
                 latency=time.perf_counter() - start_time,
             )
@@ -679,8 +225,7 @@ class RAGPipeline:
         except ModelError as e:
             logger.error(f"Model inference failed: {e}", exc_info=True)
             return RAGResponse(
-                answer="",
-                success=False,
+                answer="", success=False,
                 error=f"[E_GENERATE] 생성 실패: {e.message}",
                 latency=time.perf_counter() - start_time,
             )
@@ -688,11 +233,174 @@ class RAGPipeline:
         except Exception as e:
             logger.error(f"Unexpected error: {e}", exc_info=True)
             return RAGResponse(
-                answer="",
-                success=False,
+                answer="", success=False,
                 error=f"[E_UNKNOWN] {e!s}",
                 latency=time.perf_counter() - start_time,
             )
+
+    def _perform_retrieval(
+        self,
+        query: str,
+        top_k: int,
+        selected_filename: Optional[str],
+        diagnostics: dict[str, Any],
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """검색 수행
+
+        Returns:
+            (검색 결과, 메트릭)
+        """
+        metrics: dict[str, Any] = {}
+
+        # pre-routing: 장비 질의 감지
+        preliminary_mode = self._detect_preliminary_mode(query)
+
+        # 검색 실행
+        search_start = time.perf_counter()
+        results = self.retriever.search(
+            query, top_k, mode=preliminary_mode, selected_filename=selected_filename
+        )
+        metrics["search_time"] = time.perf_counter() - search_start
+
+        # 검색 결과 진단 로그
+        self._log_retrieval_results(results, preliminary_mode)
+
+        if DIAG_RAG:
+            diagnostics["retrieved_k"] = len(results)
+            if DIAG_LOG_LEVEL in ["DEBUG", "INFO"]:
+                logger.info(f"[DIAG] 검색 완료: {len(results)}개 문서 검색됨")
+
+        return results, metrics
+
+    def _detect_preliminary_mode(self, query: str) -> str:
+        """검색 전 모드 감지 (DOC_ANCHORED 필터링용)"""
+        if hasattr(self, "query_router"):
+            has_device = (
+                getattr(self.query_router, "has_device_terms", None) or
+                getattr(self.query_router, "_has_device_terms", None)
+            )
+            if callable(has_device) and has_device(query):
+                logger.info("🎯 검색 전 DOC_ANCHORED 모드 감지 (장비 용어)")
+                return "doc_anchored"
+        return "chat"
+
+    def _log_retrieval_results(
+        self, results: list[dict[str, Any]], mode: str
+    ) -> None:
+        """검색 결과 Top-N 진단 로그"""
+        logger.info(f"RETRIEVE_TOPN mode={mode}")
+        for i, doc in enumerate(results[:10], 1):
+            score = doc.get("score", 0.0)
+            doc_id = doc.get("doc_id", "unknown")
+            snippet_preview = doc.get("snippet", "")[:60].replace("\n", " ")
+            logger.info(f"  #{i} score={score:.4f} doc={doc_id} preview={snippet_preview}...")
+
+    def _handle_no_results(
+        self,
+        query: str,
+        start_time: float,
+        metrics: dict[str, Any],
+        diagnostics: dict[str, Any],
+    ) -> RAGResponse:
+        """검색 결과 없음 처리"""
+        logger.warning(f"No results found for query: {query[:50]}")
+        if DIAG_RAG:
+            diagnostics["mode"] = "no_results"
+            diagnostics["generate_path"] = "fallback_no_context"
+
+        metrics["mode"] = "chat"
+        metrics["top_score"] = 0.0
+
+        return RAGResponse(
+            answer="관련 문서가 검색되지 않았다.",
+            success=True,
+            latency=time.perf_counter() - start_time,
+            metrics=metrics,
+            diagnostics=diagnostics,
+        )
+
+    def _perform_compression(
+        self,
+        results: list[dict[str, Any]],
+        compression_ratio: float,
+        metrics: dict[str, Any],
+        diagnostics: dict[str, Any],
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """압축 수행"""
+        compress_start = time.perf_counter()
+        compressed = self.compressor.compress(results, compression_ratio)
+        metrics["compress_time"] = time.perf_counter() - compress_start
+
+        # Generator에 청크 주입
+        if hasattr(self.generator, "compressed_chunks"):
+            self.generator.compressed_chunks = compressed
+
+        if DIAG_RAG:
+            diagnostics["after_compress_k"] = len(compressed)
+            diagnostics["compression_ratio"] = compression_ratio
+            if DIAG_LOG_LEVEL in ["DEBUG", "INFO"]:
+                logger.info(f"[DIAG] 압축 완료: {len(results)} → {len(compressed)}개 문서")
+
+        return compressed, metrics
+
+    def _hydrate_and_generate(
+        self,
+        query: str,
+        compressed: list[dict[str, Any]],
+        determined_mode: str,
+        temperature: float,
+        metrics: dict[str, Any],
+        diagnostics: dict[str, Any],
+    ) -> tuple[str, dict[str, Any]]:
+        """컨텍스트 수화 및 LLM 생성
+
+        Returns:
+            (생성된 답변, 업데이트된 메트릭)
+        """
+        # Context Hydrator (폴백 보장)
+        try:
+            from app.rag.utils.context_hydrator import hydrate_context
+        except Exception as e:
+            logger.warning(f"⚠️ hydrate_context import 실패, 폴백 사용: {e}")
+            hydrate_context = self._fallback_hydrate_context
+
+        logger.info(f"🎯 모드={determined_mode} → 컨텍스트 최적화 시작")
+        hydrate_start = time.perf_counter()
+        context, hydrator_metrics = hydrate_context(
+            compressed, max_len=PipelineConfig.CONTEXT_MAX_LENGTH, mode=determined_mode
+        )
+        metrics["hydrate_time"] = time.perf_counter() - hydrate_start
+        metrics.update({f"ctx_{k}": v for k, v in hydrator_metrics.items()})
+
+        # LLM 생성
+        logger.info(f"🎯 모드={determined_mode} → 생성 시작")
+        llm_gen_start = time.perf_counter()
+        answer = self.generator.generate(query, context, temperature, mode=determined_mode)
+        metrics["generate_time"] = time.perf_counter() - llm_gen_start
+
+        if DIAG_RAG:
+            diagnostics["mode"] = "normal"
+            diagnostics["generate_path"] = "from_context"
+            diagnostics["used_k"] = len(compressed)
+            if DIAG_LOG_LEVEL in ["DEBUG", "INFO"]:
+                logger.info(f"[DIAG] 생성 완료: from_context 경로, {len(compressed)}개 문서 사용")
+
+        return answer, metrics
+
+    @staticmethod
+    def _fallback_hydrate_context(
+        chunks: list[dict[str, Any]],
+        max_len: int = 10000,
+        mode: str = "rag",
+    ) -> tuple[str, dict[str, Any]]:
+        """안전 폴백: 청크 스니펫 결합"""
+        parts = []
+        for c in chunks:
+            t = c.get("snippet") or c.get("content") or c.get("text") or ""
+            if t:
+                parts.append(t[:PipelineConfig.FALLBACK_SNIPPET_LENGTH])
+        ctx = "\n\n".join(parts)[:max_len]
+        return ctx, {"fallback": True, "joined": len(parts)}
 
     def _make_response(
         self, text: str, selected: list[dict[str, Any]], retrieved: list[dict[str, Any]],

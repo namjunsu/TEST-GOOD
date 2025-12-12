@@ -14,7 +14,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Optional
 
-from app.core.errors import DocumentNotFoundError
+from app.core.errors import DocumentNotFoundError, SearchError
 from app.core.logging import get_logger
 from app.data.metadata_db import connect_metadata
 from config.constants import DocumentHandlerConfig
@@ -208,10 +208,29 @@ class DocumentHandler(BaseHandler):
                 "문서 조회 중 데이터베이스 오류가 발생했습니다.",
             )
 
-        except Exception as e:
-            logger.error(f"❌ DOCUMENT 모드 처리 실패: {e}", exc_info=True)
+        except SearchError:
+            # SearchError는 이미 적절히 처리됨, 재발생
+            raise
+
+        except (OSError, IOError) as e:
+            # 파일 시스템 오류 (인덱스 파일 접근 불가 등)
+            logger.error(f"❌ 파일 시스템 오류: {e}", exc_info=True)
             return self._make_error_response(
-                f"문서 내용 조회 중 오류가 발생했습니다: {e!s}",
+                "문서 파일 접근 중 오류가 발생했습니다. 관리자에게 문의하세요.",
+            )
+
+        except (RuntimeError, ValueError) as e:
+            # LLM 또는 내부 로직 오류
+            logger.error(f"❌ 내부 처리 오류: {e}", exc_info=True)
+            return self._make_error_response(
+                "문서 처리 중 내부 오류가 발생했습니다.",
+            )
+
+        except Exception as e:
+            # 예상치 못한 오류 - 스택트레이스 전체 기록
+            logger.exception(f"❌ DOCUMENT 모드 예상치 못한 오류: {type(e).__name__}")
+            return self._make_error_response(
+                f"문서 내용 조회 중 예상치 못한 오류가 발생했습니다: {type(e).__name__}",
             )
 
     # ========================================================================
@@ -275,8 +294,19 @@ class DocumentHandler(BaseHandler):
                 }
             return None
 
+        except sqlite3.OperationalError as e:
+            # DB 락 또는 연결 문제 - 재시도 가능
+            logger.warning(f"⚠️ DB 일시 오류 (메타데이터): {e}")
+            return None
+
+        except sqlite3.Error as e:
+            # 기타 DB 오류
+            logger.error(f"❌ 메타데이터 조회 DB 오류: {e}")
+            return None
+
         except Exception as e:
-            logger.error(f"❌ 메타데이터 조회 실패: {e}")
+            # 예상치 못한 오류
+            logger.exception(f"❌ 메타데이터 조회 예상치 못한 오류: {type(e).__name__}")
             return None
 
     def _load_full_text(self, filename: str) -> str:
@@ -299,8 +329,13 @@ class DocumentHandler(BaseHandler):
                 )[:DocumentHandlerConfig.CHUNK_CONTEXT_MAX]
                 logger.info(f"✅ 청크 {len(chunks)}개 결합 → {len(joined)}자 확보")
                 return joined
+        except (AttributeError, KeyError) as e:
+            # 인덱스 구조 문제
+            logger.warning(f"⚠️ 청크 폴백 - 인덱스 접근 오류: {e}")
+
         except Exception as e:
-            logger.warning(f"⚠️ 청크 폴백 실패: {e}")
+            # 예상치 못한 오류
+            logger.warning(f"⚠️ 청크 폴백 실패 ({type(e).__name__}): {e}")
 
         return ""
 
@@ -349,8 +384,14 @@ class DocumentHandler(BaseHandler):
 
             return chunks
 
+        except (AttributeError, KeyError) as e:
+            # BM25 인덱스 구조 문제
+            logger.warning(f"⚠️ BM25 인덱스 접근 오류: {e}")
+            return []
+
         except Exception as e:
-            logger.error(f"❌ 문서 청크 로드 실패: {e}")
+            # 예상치 못한 오류
+            logger.exception(f"❌ 문서 청크 로드 예상치 못한 오류: {type(e).__name__}")
             return []
 
     def _route_document_query(self, query: str) -> dict[str, Any]:
@@ -384,31 +425,20 @@ class DocumentHandler(BaseHandler):
                 metadata=metadata,
                 routing=routing,
             )
-        except Exception as e:
-            logger.warning(f"⚠️ LLM 응답 생성 실패: {e}", exc_info=True)
-            # 모드별 폴백 응답 차별화
-            filename = metadata.get("filename", "알 수 없음")
-            drafter = metadata.get("drafter") or "정보 없음"
-            date = metadata.get("display_date") or metadata.get("date") or "정보 없음"
+        except (RuntimeError, ValueError) as e:
+            # LLM 내부 오류 (모델 로드 실패, 토큰 제한 등)
+            logger.warning(f"⚠️ LLM 응답 생성 실패 (내부 오류): {e}", exc_info=True)
 
-            if routing.get("detailed_mode"):
-                # 자세히 모드: 더 긴 원본 제공
-                preview = full_text[:DocumentHandlerConfig.DETAILED_PREVIEW_LEN].strip()
-                return (
-                    f"**문서명**: {filename}\n"
-                    f"**기안자**: {drafter} | **날짜**: {date}\n\n"
-                    f"---\n\n"
-                    f"**원본 내용**:\n\n{preview}..."
-                )
-            # 일반 모드: 짧은 미리보기 + 안내
-            preview = full_text[:DocumentHandlerConfig.NORMAL_PREVIEW_LEN].strip()
-            return (
-                f"**문서명**: {filename}\n"
-                f"**기안자**: {drafter} | **날짜**: {date}\n\n"
-                f"---\n\n"
-                f"**내용 미리보기**:\n\n{preview}...\n\n"
-                f"전체 내용은 '자세히 알려줘'로 요청하세요."
-            )
+        except (TimeoutError, ConnectionError) as e:
+            # 네트워크/타임아웃 오류 (외부 API 사용 시)
+            logger.warning(f"⚠️ LLM 응답 생성 실패 (연결 오류): {e}")
+
+        except Exception as e:
+            # 예상치 못한 오류
+            logger.warning(f"⚠️ LLM 응답 생성 실패 ({type(e).__name__}): {e}", exc_info=True)
+
+        # 모든 예외 발생 시 폴백 응답
+        return self._build_fallback_response(full_text, metadata, routing)
 
     def _generate_llm_answer(
         self,
@@ -616,9 +646,45 @@ class DocumentHandler(BaseHandler):
                 display_date=metadata.get("display_date"),
                 claimed_total=None,
             )
-        except Exception as e:
-            logger.warning(f"⚠️ 요약 포맷팅 실패: {e}")
+        except (KeyError, TypeError) as e:
+            # JSON 구조 불일치
+            logger.warning(f"⚠️ 요약 포맷팅 실패 (데이터 구조 오류): {e}")
             return raw_result
+
+        except Exception as e:
+            # 예상치 못한 오류
+            logger.warning(f"⚠️ 요약 포맷팅 실패 ({type(e).__name__}): {e}")
+            return raw_result
+
+    def _build_fallback_response(
+        self,
+        full_text: str,
+        metadata: dict[str, Any],
+        routing: dict[str, Any],
+    ) -> str:
+        """LLM 실패 시 폴백 응답 생성"""
+        filename = metadata.get("filename", "알 수 없음")
+        drafter = metadata.get("drafter") or "정보 없음"
+        date = metadata.get("display_date") or metadata.get("date") or "정보 없음"
+
+        if routing.get("detailed_mode"):
+            # 자세히 모드: 더 긴 원본 제공
+            preview = full_text[:DocumentHandlerConfig.DETAILED_PREVIEW_LEN].strip()
+            return (
+                f"**문서명**: {filename}\n"
+                f"**기안자**: {drafter} | **날짜**: {date}\n\n"
+                f"---\n\n"
+                f"**원본 내용**:\n\n{preview}..."
+            )
+        # 일반 모드: 짧은 미리보기 + 안내
+        preview = full_text[:DocumentHandlerConfig.NORMAL_PREVIEW_LEN].strip()
+        return (
+            f"**문서명**: {filename}\n"
+            f"**기안자**: {drafter} | **날짜**: {date}\n\n"
+            f"---\n\n"
+            f"**내용 미리보기**:\n\n{preview}...\n\n"
+            f"전체 내용은 '자세히 알려줘'로 요청하세요."
+        )
 
     def _build_evidence(
         self,

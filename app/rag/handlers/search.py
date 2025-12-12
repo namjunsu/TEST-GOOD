@@ -93,6 +93,14 @@ class EvidenceItem(TypedDict, total=False):
 _DRAFTERS_CACHE: list[str] | None = None
 
 
+# 폴백 기안자 목록
+_FALLBACK_DRAFTERS = [
+    "유인혁", "최새름", "하승범", "신규호", "노규민", "남준수",
+    "이권형", "이승현", "윤상현", "장다운", "정다운", "김승룡",
+    "총무팀", "강병규", "박연수", "이호영", "이승헌", "이의주",
+]
+
+
 def get_common_drafters() -> list[str]:
     """DB에서 기안자 목록을 동적으로 로드 (캐싱 적용)"""
     global _DRAFTERS_CACHE
@@ -107,14 +115,22 @@ def get_common_drafters() -> list[str]:
         conn.close()
         _DRAFTERS_CACHE = [row[0] for row in rows if row[0]]
         logger.info(f"기안자 목록 로드: {len(_DRAFTERS_CACHE)}명")
+
+    except sqlite3.OperationalError as e:
+        # DB 락 또는 연결 문제 - 재시도 가능
+        logger.warning(f"기안자 목록 로드 실패 (DB 일시 오류), 폴백 사용: {e}")
+        _DRAFTERS_CACHE = _FALLBACK_DRAFTERS
+
+    except sqlite3.Error as e:
+        # 기타 DB 오류
+        logger.warning(f"기안자 목록 로드 실패 (DB 오류), 폴백 사용: {e}")
+        _DRAFTERS_CACHE = _FALLBACK_DRAFTERS
+
     except Exception as e:
-        logger.warning(f"기안자 목록 로드 실패, 폴백 사용: {e}")
-        # 폴백: 기본 목록
-        _DRAFTERS_CACHE = [
-            "유인혁", "최새름", "하승범", "신규호", "노규민", "남준수",
-            "이권형", "이승현", "윤상현", "장다운", "정다운", "김승룡",
-            "총무팀", "강병규", "박연수", "이호영", "이승헌", "이의주",
-        ]
+        # 예상치 못한 오류
+        logger.warning(f"기안자 목록 로드 실패 ({type(e).__name__}), 폴백 사용: {e}")
+        _DRAFTERS_CACHE = _FALLBACK_DRAFTERS
+
     return _DRAFTERS_CACHE
 
 
@@ -377,17 +393,30 @@ class SearchHandler(BaseHandler):
             # 7. 응답 생성
             return self._build_search_response(keywords, query, doc_details, filenames)
 
+        except sqlite3.OperationalError as e:
+            # DB 락 또는 연결 문제 - 재시도 가능
+            logger.warning(f"⚠️ DB 일시 오류 (검색): {e}")
+            return self._make_error_response("데이터베이스가 일시적으로 사용 중입니다. 잠시 후 다시 시도하세요.")
+
         except sqlite3.Error as e:
+            # 기타 DB 오류
             logger.error(f"❌ DB 오류: {e}", exc_info=True)
             return self._make_error_response("데이터베이스 접근 중 오류가 발생했습니다.")
 
         except SearchError as e:
+            # 검색 엔진 오류
             logger.error(f"❌ 검색 오류: {e}", exc_info=True)
             return self._make_error_response(f"검색 중 오류: {e.message}")
 
+        except (AttributeError, KeyError) as e:
+            # 인덱스 구조 문제
+            logger.error(f"❌ 인덱스 접근 오류: {e}", exc_info=True)
+            return self._make_error_response("검색 인덱스 접근 중 오류가 발생했습니다.")
+
         except Exception as e:
-            logger.error(f"❌ 문서 검색 실패: {e}", exc_info=True)
-            return self._make_error_response(f"문서 검색 중 오류가 발생했습니다: {e!s}")
+            # 예상치 못한 오류 - 스택트레이스 전체 기록
+            logger.exception(f"❌ 문서 검색 예상치 못한 오류: {type(e).__name__}")
+            return self._make_error_response(f"문서 검색 중 예상치 못한 오류가 발생했습니다: {type(e).__name__}")
 
     def _handle_content_only(self, query: str) -> dict[str, Any]:
         """정밀 내용 검색 처리 (본문에 키워드 포함된 문서만)"""
@@ -462,21 +491,39 @@ class SearchHandler(BaseHandler):
             # 5. 응답 생성
             return self._build_content_only_response(keywords, doc_details, filenames)
 
+        except sqlite3.OperationalError as e:
+            # DB 락 또는 연결 문제
+            logger.warning(f"⚠️ DB 일시 오류 (정밀 검색): {e}")
+            error_text = "데이터베이스가 일시적으로 사용 중입니다. 잠시 후 다시 시도하세요."
+
+        except sqlite3.Error as e:
+            # 기타 DB 오류
+            logger.error(f"❌ DB 오류 (정밀 검색): {e}", exc_info=True)
+            error_text = "데이터베이스 접근 중 오류가 발생했습니다."
+
+        except SearchError as e:
+            # 검색 엔진 오류
+            logger.error(f"❌ 검색 오류 (정밀 검색): {e}", exc_info=True)
+            error_text = f"검색 중 오류: {e.message}"
+
         except Exception as e:
-            logger.error(f"❌ 정밀 내용 검색 실패: {e}", exc_info=True)
-            return {
-                "mode": "SEARCH_CONTENT_ONLY",
-                "text": f"검색 중 오류가 발생했습니다: {e!s}",
-                "files": [],
-                "count": 0,
-                "citations": [],
-                "evidence": [],
-                "status": {
-                    "retrieved_count": 0,
-                    "selected_count": 0,
-                    "found": False,
-                },
-            }
+            # 예상치 못한 오류
+            logger.exception(f"❌ 정밀 내용 검색 예상치 못한 오류: {type(e).__name__}")
+            error_text = f"검색 중 예상치 못한 오류가 발생했습니다: {type(e).__name__}"
+
+        return {
+            "mode": "SEARCH_CONTENT_ONLY",
+            "text": f"❌ {error_text}",
+            "files": [],
+            "count": 0,
+            "citations": [],
+            "evidence": [],
+            "status": {
+                "retrieved_count": 0,
+                "selected_count": 0,
+                "found": False,
+            },
+        }
 
     # ========================================================================
     # Private 헬퍼 메서드
@@ -686,8 +733,13 @@ class SearchHandler(BaseHandler):
                 if merged_count > 0:
                     logger.info(f"📊 유사 문서 {merged_count}건 출처에 병합됨")
 
+            except (AttributeError, KeyError) as e:
+                # 유사도 서비스 접근 오류
+                logger.debug(f"⚠️ 유사 문서 추천 실패 (접근 오류, 무시): {e}")
+
             except Exception as e:
-                logger.warning(f"⚠️ 유사 문서 추천 실패 (무시): {e}")
+                # 예상치 못한 오류 - 유사 문서 추천은 선택적이므로 무시
+                logger.warning(f"⚠️ 유사 문서 추천 실패 ({type(e).__name__}, 무시): {e}")
 
         return {
             "mode": "SEARCH",
@@ -782,8 +834,13 @@ class SearchHandler(BaseHandler):
                     if chunks:
                         chunk_text = chunks[0].get("text", "")
                         snippet = chunk_text[:HandlerConfig.EVIDENCE_SNIPPET_MAX] if chunk_text else ""
+                except (AttributeError, KeyError) as e:
+                    # 검색 결과 구조 오류
+                    logger.debug(f"⚠️ BM25 청크 폴백 실패 (구조 오류, {filename}): {e}")
+
                 except Exception as e:
-                    logger.debug(f"⚠️ BM25 청크 폴백 실패 ({filename}): {e}")
+                    # 예상치 못한 오류 - 스니펫 폴백은 선택적이므로 무시
+                    logger.debug(f"⚠️ BM25 청크 폴백 실패 ({type(e).__name__}, {filename}): {e}")
 
             if not snippet:
                 snippet = title[:HandlerConfig.TITLE_FALLBACK_MAX]

@@ -205,6 +205,16 @@ class HybridSearchConfig:
     # 선택 문서 스코어
     SELECTED_DOC_SCORE: float = 99.9       # 선택된 문서 강제 스코어
 
+    # strict_content 모드 설정
+    STRICT_CONTENT_OVERSAMPLE: int = 5     # strict_content 모드 오버샘플링 배수
+
+    # 메타데이터 라우팅 설정
+    METADATA_MATCH_SCORE: float = 3.0      # 메타데이터 일치 기본 스코어
+
+    # 짧은 텍스트 페널티 (relevance score 계산용)
+    RELEVANCE_SHORT_TEXT_THRESHOLD: int = 100  # 짧은 텍스트 임계값
+    RELEVANCE_SHORT_TEXT_PENALTY: float = 0.7  # 짧은 텍스트 페널티 배수
+
 
 @dataclass(frozen=True)
 class HybridRetrieverConfig:

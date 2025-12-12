@@ -29,7 +29,7 @@ from app.rag.parallel_executor import ParallelSearchExecutor, get_parallel_execu
 from app.rag.query_expander import get_query_expander
 from app.rag.query_parser import QueryParser
 from app.rag.retrievers.exact_match import ExactMatchRetriever
-from config.constants import ScoringConfig
+from config.constants import HybridRetrieverConfig, HybridSearchConfig, ScoringConfig
 from rag_system.active.bm25_store import BM25Store  # 인덱서와 동일 모듈 사용
 
 if TYPE_CHECKING:
@@ -80,11 +80,11 @@ class HybridRetriever:
         """초기화 - BM25Store 및 MetadataDB 로드"""
         try:
             # 스니펫 길이 설정 (3600자 = ~1200 토큰)
-            self.snippet_max_length = int(os.getenv("SNIPPET_MAX_LENGTH", "3600"))
+            self.snippet_max_length = int(os.getenv("SNIPPET_MAX_LENGTH", str(HybridRetrieverConfig.SNIPPET_MAX_LENGTH)))
 
             # 검색 후보/표시 수 분리 (2025-11-10)
-            self.retrieve_topk = int(os.getenv("RETRIEVE_TOPK", "200"))
-            self.display_limit = int(os.getenv("DISPLAY_LIMIT", "20"))
+            self.retrieve_topk = int(os.getenv("RETRIEVE_TOPK", str(HybridRetrieverConfig.RETRIEVE_TOPK)))
+            self.display_limit = int(os.getenv("DISPLAY_LIMIT", str(HybridRetrieverConfig.DISPLAY_LIMIT)))
 
             # 검색 백엔드 설정
             self.use_bm25 = os.getenv("RETRIEVER_BACKEND", "bm25").lower() == "bm25"
@@ -93,7 +93,7 @@ class HybridRetriever:
             self.enable_parallel = os.getenv("ENABLE_PARALLEL_SEARCH", "true").lower() == "true"
             self.parallel_executor = None  # 기본값
             if self.enable_parallel:
-                self.parallel_executor = get_parallel_executor(max_workers=3)
+                self.parallel_executor = get_parallel_executor(max_workers=HybridRetrieverConfig.PARALLEL_MAX_WORKERS)
                 logger.info("✅ Parallel search execution enabled")
 
             # MetadataDB 초기화 (필터링용)
@@ -117,7 +117,7 @@ class HybridRetriever:
             # BM25Store 초기화
             self.bm25 = None
             if self.use_bm25:
-                index_path = os.getenv("BM25_INDEX_PATH", "var/index/bm25_index.pkl")
+                index_path = os.getenv("BM25_INDEX_PATH", HybridRetrieverConfig.DEFAULT_BM25_INDEX_PATH)
                 logger.info(f"🔍 DEBUG: BM25_INDEX_PATH={index_path} (exists={Path(index_path).exists()})")
                 self.bm25 = BM25Store(index_path=index_path)
                 logger.info(f"✅ HybridRetriever 초기화 완료 (BM25 백엔드, {len(self.bm25.documents)}개 문서, path={self.bm25.index_path})")
@@ -199,7 +199,7 @@ class HybridRetriever:
         """인덱스 파일의 수정 시간 반환"""
         if not self.use_bm25:
             return 0.0
-        index_path = os.getenv("BM25_INDEX_PATH", "var/index/bm25_index.pkl")
+        index_path = os.getenv("BM25_INDEX_PATH", HybridRetrieverConfig.DEFAULT_BM25_INDEX_PATH)
         return os.path.getmtime(index_path) if Path(index_path).exists() else 0.0
 
     def _reload_if_index_rotated(self) -> None:
@@ -215,7 +215,7 @@ class HybridRetriever:
                 current_mtime = self._get_index_mtime()
                 if current_mtime > self._last_index_mtime:
                     logger.info("🔄 인덱스 파일 갱신 감지, 재로드 중...")
-                    index_path = os.getenv("BM25_INDEX_PATH", "var/index/bm25_index.pkl")
+                    index_path = os.getenv("BM25_INDEX_PATH", HybridRetrieverConfig.DEFAULT_BM25_INDEX_PATH)
                     self.bm25 = BM25Store(index_path=index_path)
                     self._last_index_mtime = current_mtime
                     logger.info(f"✅ 인덱스 재로드 완료 ({len(self.bm25.documents)}개 문서)")
@@ -238,7 +238,7 @@ class HybridRetriever:
                 return {
                     "doc_id": doc.get("filename", "unknown"),
                     "snippet": doc.get("text_preview") or "",
-                    "score": 99.9,  # 최우선 스코어
+                    "score": HybridSearchConfig.SELECTED_DOC_SCORE,  # 최우선 스코어
                     "page": 1,
                     "filename": doc.get("filename"),
                     "file_path": doc.get("path"),
@@ -303,7 +303,7 @@ class HybridRetriever:
                 WHERE documents_fts MATCH ?
                 ORDER BY bm25(documents_fts)
                 LIMIT ?
-            """, (fts_query, top_k * 2))  # 여유있게 가져오기
+            """, (fts_query, top_k * HybridSearchConfig.FTS_OVERSAMPLE_FACTOR))  # 여유있게 가져오기
 
             results = []
             for row in cursor.fetchall():
@@ -414,8 +414,8 @@ class HybridRetriever:
 
         # 페널티: 문서가 너무 짧으면 감점 (신뢰도 저하)
         text_len = len(doc.get("snippet") or "")  # Fixed: text_preview → snippet
-        if text_len < 100:
-            match_ratio *= 0.7
+        if text_len < HybridSearchConfig.RELEVANCE_SHORT_TEXT_THRESHOLD:
+            match_ratio *= HybridSearchConfig.RELEVANCE_SHORT_TEXT_PENALTY
 
         # 안전장치: match_ratio가 0일 때 최소 epsilon 값 부여
         if match_ratio == 0.0 and matched_tokens == 0:
@@ -506,7 +506,7 @@ class HybridRetriever:
                 logger.info("🎯 STRICT CONTENT MODE 활성화: QueryExpander/파일명보너스/메타라우팅 비활성화")
                 if self.use_bm25 and self.bm25:
                     # BM25-only 검색 (넉넉히 가져옴)
-                    bm25_results = self.bm25.search(query, top_k=top_k * 5)
+                    bm25_results = self.bm25.search(query, top_k=top_k * HybridSearchConfig.STRICT_CONTENT_OVERSAMPLE)
 
                     # 결과를 표준 형식으로 변환
                     converted_results = []
@@ -603,7 +603,7 @@ class HybridRetriever:
                         converted_results.append({
                             "doc_id": result.get("filename", "unknown"),
                             "snippet": result.get("text_preview", "")[:self.snippet_max_length],
-                            "score": 3.0,  # 메타데이터 일치는 높은 점수
+                            "score": HybridSearchConfig.METADATA_MATCH_SCORE,  # 메타데이터 일치는 높은 점수
                             "page": 1,
                             "filename": result.get("filename"),
                             "file_path": result.get("path"),
@@ -631,13 +631,13 @@ class HybridRetriever:
             # FTS 우선 검색, BM25 보충 전략
             if self.use_bm25 and self.bm25:
                 # DOC_ANCHORED 모드: 넉넉하게 검색 후 필터링
-                search_k = 50 if mode.lower() == "doc_anchored" else top_k
+                search_k = HybridSearchConfig.DOC_ANCHORED_SEARCH_K if mode.lower() == "doc_anchored" else top_k
 
                 # 1. FTS 먼저 시도 (더 정확함)
                 fts_results = self._search_fts(query, top_k=search_k)
 
                 # 2. FTS 결과가 충분하면 FTS만 사용, 부족하면 BM25 보충
-                if len(fts_results) >= search_k * 0.5:  # FTS 결과가 목표의 50% 이상이면
+                if len(fts_results) >= search_k * HybridSearchConfig.FTS_SUFFICIENT_RATIO:  # FTS 결과가 목표의 50% 이상이면
                     logger.info(f"✅ FTS 결과 충분 ({len(fts_results)}개), BM25 생략")
                     # 🔧 FTS 결과에 재스코어링 적용 (관련도 0.000 문제 해결)
                     for result in fts_results:
@@ -731,10 +731,10 @@ class HybridRetriever:
                         if re.search(self.device_pattern, text, re.IGNORECASE):
                             filtered.append(result)
 
-                    # 필터 결과가 없으면 원본 상위 N*3 사용 (미탐 방지)
+                    # 필터 결과가 없으면 원본 상위 N*배수 사용 (미탐 방지)
                     if not filtered:
                         logger.warning("⚠️ DOC_ANCHORED 필터링 결과 없음, 원본 상위 사용")
-                        normalized = converted_results[:top_k * 3]
+                        normalized = converted_results[:top_k * HybridSearchConfig.DOC_ANCHORED_FALLBACK_MULTIPLIER]
                     else:
                         logger.info(f"🎯 DOC_ANCHORED 필터링: {len(converted_results)}개 → {len(filtered)}개")
                         normalized = filtered[:top_k]
@@ -752,7 +752,7 @@ class HybridRetriever:
                         for result in converted_results:
                             if result.get("filename") == selected_filename:
                                 selected_doc = result.copy()
-                                selected_doc["score"] = 99.9
+                                selected_doc["score"] = HybridSearchConfig.SELECTED_DOC_SCORE
                                 logger.info(f"✅ BM25 결과에서 선택 문서 발견: {selected_filename}")
                                 break
 
@@ -767,9 +767,9 @@ class HybridRetriever:
                         normalized = [r for r in normalized if r.get("filename") != selected_filename]
                         # 최상위에 강제 추가
                         selected_doc_priority = selected_doc.copy()
-                        selected_doc_priority["score"] = 99.9
+                        selected_doc_priority["score"] = HybridSearchConfig.SELECTED_DOC_SCORE
                         normalized = [selected_doc_priority] + normalized[:top_k - 1]
-                        logger.info(f"🎯 선택된 문서 최상위 강제 추가: {selected_filename} (score=99.9)")
+                        logger.info(f"🎯 선택된 문서 최상위 강제 추가: {selected_filename} (score={HybridSearchConfig.SELECTED_DOC_SCORE})")
                     else:
                         logger.warning(f"⚠️ 선택된 문서 '{selected_filename}'를 찾지 못함 (BM25/MetadataDB 모두)")
 

@@ -202,7 +202,9 @@ class TestQuickFixGenerator:
         generator = _QuickFixGenerator(None)
         result = generator.generate("질문", "컨텍스트", 0.7)
 
-        assert "비활성화" in result
+        # ERROR_RAG_UNAVAILABLE 메시지 확인
+        assert "[E_GENERATE]" in result
+        assert "사용할 수 없" in result
 
     def test_generate_exception(self):
         """생성 실패 시 에러 메시지"""

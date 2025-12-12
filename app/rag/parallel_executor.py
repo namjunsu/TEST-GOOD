@@ -260,7 +260,9 @@ def reconfigure_parallel_executor(max_workers: int) -> None:
         if _global_executor is not None:
             _global_executor.shutdown()
         _global_executor = ParallelSearchExecutor(max_workers=max_workers)
-        atexit.register(lambda: _global_executor.shutdown())
+        # NOTE: atexit 등록은 get_parallel_executor에서 한 번만 수행
+        # reconfigure 시에는 새 인스턴스를 교체하지만, atexit 콜백은
+        # _global_executor 변수를 참조하므로 추가 등록 불필요
         logger.info(f"🔧 Reconfigured executor (max_workers={max_workers})")
 
 

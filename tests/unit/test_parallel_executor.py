@@ -15,6 +15,7 @@ from typing import List
 
 import pytest
 
+import app.rag.parallel_executor as pe_module
 from app.rag.parallel_executor import (
     ParallelSearchExecutor,
     get_parallel_executor,
@@ -22,6 +23,30 @@ from app.rag.parallel_executor import (
     reconfigure_parallel_executor,
     timed_execution,
 )
+
+
+@pytest.fixture(autouse=True)
+def reset_singleton():
+    """각 테스트 전후로 싱글톤 상태 초기화"""
+    # 테스트 전: 기존 싱글톤 정리
+    with pe_module._global_executor_lock:
+        if pe_module._global_executor is not None:
+            try:
+                pe_module._global_executor.shutdown()
+            except Exception:
+                pass
+        pe_module._global_executor = None
+
+    yield  # 테스트 실행
+
+    # 테스트 후: 싱글톤 정리
+    with pe_module._global_executor_lock:
+        if pe_module._global_executor is not None:
+            try:
+                pe_module._global_executor.shutdown()
+            except Exception:
+                pass
+        pe_module._global_executor = None
 
 
 class TestTimedExecution:

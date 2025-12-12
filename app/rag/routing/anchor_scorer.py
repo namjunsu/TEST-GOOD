@@ -18,6 +18,7 @@ import yaml
 
 from app.core.logging import get_logger
 from app.textproc.normalizer import normalize_text
+from config.constants import AnchorScorerConfig
 
 logger = get_logger(__name__)
 
@@ -91,10 +92,18 @@ class AnchorScorer:
                     profile_config.get("boost", {}).get("vendor", []),
                 ),
                 "weights": profile_config.get(
-                    "weights", {"high": 3.0, "medium": 1.5, "vendor": 1.0},
+                    "weights", {
+                        "high": AnchorScorerConfig.DEFAULT_WEIGHT_HIGH,
+                        "medium": AnchorScorerConfig.DEFAULT_WEIGHT_MEDIUM,
+                        "vendor": AnchorScorerConfig.DEFAULT_WEIGHT_VENDOR,
+                    },
                 ),
-                "deny_penalty": profile_config.get("deny_penalty", -4.0),
-                "pass_threshold": profile_config.get("pass_threshold", 1.0),
+                "deny_penalty": profile_config.get(
+                    "deny_penalty", AnchorScorerConfig.DEFAULT_DENY_PENALTY,
+                ),
+                "pass_threshold": profile_config.get(
+                    "pass_threshold", AnchorScorerConfig.DEFAULT_PASS_THRESHOLD,
+                ),
                 "proximity_pairs": profile_config.get("proximity_pairs", []),
             }
 
@@ -176,15 +185,15 @@ class AnchorScorer:
 
         for pattern in high:
             if pattern.search(text):
-                score += weights.get("high", 3.0)
+                score += weights.get("high", AnchorScorerConfig.DEFAULT_WEIGHT_HIGH)
 
         for pattern in medium:
             if pattern.search(text):
-                score += weights.get("medium", 1.5)
+                score += weights.get("medium", AnchorScorerConfig.DEFAULT_WEIGHT_MEDIUM)
 
         for pattern in vendor:
             if pattern.search(text):
-                score += weights.get("vendor", 1.0)
+                score += weights.get("vendor", AnchorScorerConfig.DEFAULT_WEIGHT_VENDOR)
 
         return score
 
@@ -206,8 +215,8 @@ class AnchorScorer:
         for pair in pairs:
             pattern_a = self._expand_macro(pair["a"])
             pattern_b = self._expand_macro(pair["b"])
-            window = pair.get("window", 40)
-            bonus_value = pair.get("bonus", 1.0)
+            window = pair.get("window", AnchorScorerConfig.DEFAULT_PROXIMITY_WINDOW)
+            bonus_value = pair.get("bonus", AnchorScorerConfig.DEFAULT_PROXIMITY_BONUS)
 
             # 패턴 A 찾기
             matches_a = list(re.finditer(pattern_a, text, re.IGNORECASE))
@@ -302,7 +311,7 @@ class AnchorScorer:
         self.metrics["by_profile"][profile_name] += 1
         if deny_hit:
             self.metrics["denies"] += 1
-        if total_score < 0.3:
+        if total_score < AnchorScorerConfig.LOW_CONFIDENCE_THRESHOLD:
             self.metrics["low_confidence"] += 1
 
         return {

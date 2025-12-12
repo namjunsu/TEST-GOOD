@@ -180,6 +180,27 @@ class RouterConfig:
 
 
 @dataclass(frozen=True)
+class AnchorScorerConfig:
+    """앵커 스코어링 관련 상수 (anchor_scorer.py용)"""
+
+    # 기본 가중치
+    DEFAULT_WEIGHT_HIGH: float = 3.0
+    DEFAULT_WEIGHT_MEDIUM: float = 1.5
+    DEFAULT_WEIGHT_VENDOR: float = 1.0
+
+    # 기본 패널티/임계값
+    DEFAULT_DENY_PENALTY: float = -4.0
+    DEFAULT_PASS_THRESHOLD: float = 1.0
+
+    # Proximity 설정
+    DEFAULT_PROXIMITY_WINDOW: int = 40
+    DEFAULT_PROXIMITY_BONUS: float = 1.0
+
+    # 저신뢰도 임계값
+    LOW_CONFIDENCE_THRESHOLD: float = 0.3
+
+
+@dataclass(frozen=True)
 class HandlerConfig:
     """핸들러 관련 상수 (handlers/search.py용)"""
 
@@ -636,6 +657,7 @@ def get_llm_config() -> dict:
 
 
 __all__ = [
+    "AnchorScorerConfig",
     "APIConfig",
     "CacheConfig",
     "ContextHydratorConfig",

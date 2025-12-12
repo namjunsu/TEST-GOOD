@@ -323,8 +323,9 @@ class DocumentHandler(BaseHandler):
             # 🔧 top_k를 확대하여 더 많은 컨텍스트 확보
             chunks = self._make_chunks_for_doc(filename, top_k=DocumentHandlerConfig.FALLBACK_CHUNK_TOP_K)
             if chunks:
+                max_snippet = DocumentHandlerConfig.CHUNK_SNIPPET_MAX
                 joined = "\n\n".join(
-                    [(ch.get("text") or ch.get("snippet") or ch.get("content") or "")[:DocumentHandlerConfig.CHUNK_SNIPPET_MAX]
+                    [(ch.get("text") or ch.get("snippet") or ch.get("content") or "")[:max_snippet]
                      for ch in chunks],
                 )[:DocumentHandlerConfig.CHUNK_CONTEXT_MAX]
                 logger.info(f"✅ 청크 {len(chunks)}개 결합 → {len(joined)}자 확보")
@@ -339,7 +340,9 @@ class DocumentHandler(BaseHandler):
 
         return ""
 
-    def _make_chunks_for_doc(self, filename: str, top_k: int = DocumentHandlerConfig.DEFAULT_CHUNK_TOP_K) -> list[dict[str, Any]]:
+    def _make_chunks_for_doc(
+        self, filename: str, top_k: int = DocumentHandlerConfig.DEFAULT_CHUNK_TOP_K,
+    ) -> list[dict[str, Any]]:
         """특정 문서의 청크만 로드 (top_k: 최대 청크 수)"""
         try:
             # BM25 인덱스에서 직접 접근

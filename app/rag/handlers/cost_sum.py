@@ -72,7 +72,7 @@ class CostSumHandler(BaseHandler):
 
         except Exception as e:
             logger.exception(f"❌ 비용 질의 예상치 못한 오류: {type(e).__name__}")
-            return self._make_error_response(f"비용 정보 조회 중 예상치 못한 오류가 발생했습니다.")
+            return self._make_error_response("비용 정보 조회 중 예상치 못한 오류가 발생했습니다.")
 
     def _collect_cost_docs(
         self, search_results: list[dict[str, Any]]

@@ -148,6 +148,33 @@ class HandlerConfig:
 
 
 @dataclass(frozen=True)
+class DocumentHandlerConfig:
+    """문서 핸들러 관련 상수 (handlers/document.py용)"""
+
+    # 텍스트 길이 임계값
+    SHORT_TEXT_THRESHOLD: int = 500         # 짧은 문서 임계값 (원문 반환)
+    MIN_TEXT_LENGTH: int = 10               # 최소 텍스트 길이
+
+    # 컨텍스트 윈도우
+    CONTEXT_WINDOW: int = 8000              # LLM 컨텍스트 최대 길이
+    CHUNK_CONTEXT_MAX: int = 12000          # 청크 결합 최대 길이
+    CHUNK_SNIPPET_MAX: int = 3000           # 개별 청크 최대 길이
+
+    # 미리보기 길이
+    DETAILED_PREVIEW_LEN: int = 3000        # 자세히 모드 미리보기
+    NORMAL_PREVIEW_LEN: int = 1500          # 일반 모드 미리보기
+    EVIDENCE_SNIPPET_LEN: int = 1000        # Evidence 스니펫 길이
+
+    # 토큰 설정
+    DEFAULT_MAX_TOKENS: int = 800           # 기본 max_tokens
+    SUMMARY_MIN_TOKENS: int = 1000          # 요약 모드 최소 토큰
+
+    # 청크 로드
+    DEFAULT_CHUNK_TOP_K: int = 20           # 기본 청크 로드 수
+    FALLBACK_CHUNK_TOP_K: int = 10          # 폴백 청크 로드 수
+
+
+@dataclass(frozen=True)
 class CacheConfig:
     """캐시 관련 상수"""
 
@@ -242,6 +269,7 @@ def get_llm_config() -> dict:
 __all__ = [
     "CacheConfig",
     "DBConfig",
+    "DocumentHandlerConfig",
     "HandlerConfig",
     "HybridSearchConfig",
     "LLMConfig",

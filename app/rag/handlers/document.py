@@ -12,16 +12,14 @@ Strangler Fig 패턴:
 import re
 import sqlite3
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
 from app.core.errors import DocumentNotFoundError
 from app.core.logging import get_logger
 from app.data.metadata_db import connect_metadata
+from config.constants import DocumentHandlerConfig
 
 from .base import BaseHandler
-
-if TYPE_CHECKING:
-    pass
 
 logger = get_logger(__name__)
 
@@ -158,7 +156,7 @@ class DocumentHandler(BaseHandler):
             # 3. 문서 텍스트 로드
             full_text = self._load_full_text(metadata["filename"])
 
-            if not full_text or len(full_text.strip()) < 10:
+            if not full_text or len(full_text.strip()) < DocumentHandlerConfig.MIN_TEXT_LENGTH:
                 return self._make_empty_response(
                     f"'{metadata['filename']}' 문서의 텍스트를 확보하지 못했습니다.",
                 )
@@ -292,13 +290,13 @@ class DocumentHandler(BaseHandler):
         # 2. 인덱스 청크 기반 폴백 (top_k 확대: 요약 품질 개선)
         logger.warning(f"⚠️ extracted txt 없음, 인덱스 청크 폴백 시도: {filename}")
         try:
-            # 🔧 top_k를 5로 확대하여 더 많은 컨텍스트 확보
-            chunks = self._make_chunks_for_doc(filename, top_k=10)
+            # 🔧 top_k를 확대하여 더 많은 컨텍스트 확보
+            chunks = self._make_chunks_for_doc(filename, top_k=DocumentHandlerConfig.FALLBACK_CHUNK_TOP_K)
             if chunks:
                 joined = "\n\n".join(
-                    [(ch.get("text") or ch.get("snippet") or ch.get("content") or "")[:3000]
+                    [(ch.get("text") or ch.get("snippet") or ch.get("content") or "")[:DocumentHandlerConfig.CHUNK_SNIPPET_MAX]
                      for ch in chunks],
-                )[:12000]  # 기존 8000 → 12000 확대
+                )[:DocumentHandlerConfig.CHUNK_CONTEXT_MAX]
                 logger.info(f"✅ 청크 {len(chunks)}개 결합 → {len(joined)}자 확보")
                 return joined
         except Exception as e:
@@ -306,7 +304,7 @@ class DocumentHandler(BaseHandler):
 
         return ""
 
-    def _make_chunks_for_doc(self, filename: str, top_k: int = 20) -> list[dict[str, Any]]:
+    def _make_chunks_for_doc(self, filename: str, top_k: int = DocumentHandlerConfig.DEFAULT_CHUNK_TOP_K) -> list[dict[str, Any]]:
         """특정 문서의 청크만 로드 (top_k: 최대 청크 수)"""
         try:
             # BM25 인덱스에서 직접 접근
@@ -363,7 +361,7 @@ class DocumentHandler(BaseHandler):
             "detailed_mode": routing.get("detailed_mode", False),
             "detected_section": routing.get("detected_section"),
             "needs_summary": routing.get("needs_summary", False),
-            "max_tokens": routing.get("max_tokens", 800),
+            "max_tokens": routing.get("max_tokens", DocumentHandlerConfig.DEFAULT_MAX_TOKENS),
         }
 
     def _generate_answer(
@@ -375,7 +373,7 @@ class DocumentHandler(BaseHandler):
     ) -> str:
         """응답 생성 (LLM 또는 원문)"""
         # 짧은 문서는 원문 그대로 반환
-        if len(full_text) <= 500:
+        if len(full_text) <= DocumentHandlerConfig.SHORT_TEXT_THRESHOLD:
             return full_text
 
         # LLM을 통한 응답 생성
@@ -395,7 +393,7 @@ class DocumentHandler(BaseHandler):
 
             if routing.get("detailed_mode"):
                 # 자세히 모드: 더 긴 원본 제공
-                preview = full_text[:3000].strip()
+                preview = full_text[:DocumentHandlerConfig.DETAILED_PREVIEW_LEN].strip()
                 return (
                     f"**문서명**: {filename}\n"
                     f"**기안자**: {drafter} | **날짜**: {date}\n\n"
@@ -403,7 +401,7 @@ class DocumentHandler(BaseHandler):
                     f"**원본 내용**:\n\n{preview}..."
                 )
             # 일반 모드: 짧은 미리보기 + 안내
-            preview = full_text[:1500].strip()
+            preview = full_text[:DocumentHandlerConfig.NORMAL_PREVIEW_LEN].strip()
             return (
                 f"**문서명**: {filename}\n"
                 f"**기안자**: {drafter} | **날짜**: {date}\n\n"
@@ -428,8 +426,8 @@ class DocumentHandler(BaseHandler):
             routing=routing,
         )
 
-        # 컨텍스트 준비 (8000자 제한)
-        context = full_text[:8000]
+        # 컨텍스트 준비
+        context = full_text[:DocumentHandlerConfig.CONTEXT_WINDOW]
 
         # 모드 결정
         if routing.get("detailed_mode"):
@@ -520,8 +518,8 @@ class DocumentHandler(BaseHandler):
         routing: dict[str, Any],
     ) -> tuple:
         """LLM 프롬프트 및 시스템 메시지 생성"""
-        # 🔧 컨텍스트 윈도우 확대 (4000 → 8000): 요약 품질 개선
-        context = full_text[:8000]
+        # 🔧 컨텍스트 윈도우: 요약 품질 개선
+        context = full_text[:DocumentHandlerConfig.CONTEXT_WINDOW]
         filename = metadata["filename"]
         drafter = metadata.get("drafter", "")
         date = metadata.get("display_date") or metadata.get("date", "")
@@ -580,13 +578,13 @@ class DocumentHandler(BaseHandler):
         routing: dict[str, Any],
     ) -> int:
         """토큰 제한 계산"""
-        base_max_tokens = routing.get("max_tokens", 800)
+        base_max_tokens = routing.get("max_tokens", DocumentHandlerConfig.DEFAULT_MAX_TOKENS)
         detailed_mode = routing.get("detailed_mode", False)
         needs_summary = routing.get("needs_summary", False)
 
-        # 요약 모드: 최소 1000 토큰 보장 (불완전 요약 방지)
+        # 요약 모드: 최소 토큰 보장 (불완전 요약 방지)
         if needs_summary:
-            return max(1000, min(base_max_tokens, content_length // 2))
+            return max(DocumentHandlerConfig.SUMMARY_MIN_TOKENS, min(base_max_tokens, content_length // 2))
 
         if detailed_mode:
             return min(base_max_tokens, max(300, content_length // 3))
@@ -642,7 +640,7 @@ class DocumentHandler(BaseHandler):
             "filename": filename,
             "file_path": file_path,
             "page": 1,
-            "snippet": full_text[:1000],
+            "snippet": full_text[:DocumentHandlerConfig.EVIDENCE_SNIPPET_LEN],
             "ref": None,
             "meta": {
                 "filename": filename,

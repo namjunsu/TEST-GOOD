@@ -490,6 +490,14 @@ class QueryParserConfig:
 
 
 @dataclass(frozen=True)
+class ParallelExecutorConfig:
+    """병렬 실행기 관련 상수 (parallel_executor.py용)"""
+
+    DEFAULT_MAX_WORKERS: int = 6             # 기본 병렬 워커 수
+    FALLBACK_TIMEOUT_SEC: float = 5.0        # 경쟁 실행 기본 타임아웃 (초)
+
+
+@dataclass(frozen=True)
 class PipelineConfig:
     """RAG 파이프라인 관련 상수"""
 
@@ -552,6 +560,7 @@ __all__ = [
     "MergeExtractorConfig",
     "MetaParserConfig",
     "OCRConfig",
+    "ParallelExecutorConfig",
     "PersistentCacheConfig",
     "PipelineConfig",
     "QueryExpanderConfig",

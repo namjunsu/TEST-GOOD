@@ -26,6 +26,8 @@ from concurrent.futures import (
 from functools import wraps
 from typing import Any, Optional
 
+from config.constants import ParallelExecutorConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -58,11 +60,11 @@ def timed_execution(func_name: str, level: int = logging.DEBUG) -> Callable[[Cal
 class ParallelSearchExecutor:
     """Execute multiple search operations in parallel v2.0"""
 
-    def __init__(self, max_workers: int = 6):
+    def __init__(self, max_workers: int = ParallelExecutorConfig.DEFAULT_MAX_WORKERS):
         """Initialize parallel executor
 
         Args:
-            max_workers: Maximum number of parallel threads (default 6)
+            max_workers: Maximum number of parallel threads
         """
         self.max_workers = max_workers
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
@@ -220,11 +222,11 @@ _global_executor: Optional[ParallelSearchExecutor] = None
 _global_executor_lock = threading.Lock()
 
 
-def get_parallel_executor(max_workers: int = 6) -> ParallelSearchExecutor:
+def get_parallel_executor(max_workers: int = ParallelExecutorConfig.DEFAULT_MAX_WORKERS) -> ParallelSearchExecutor:
     """Get or create global parallel executor instance (thread-safe singleton)
 
     Args:
-        max_workers: Maximum number of parallel threads (default 6)
+        max_workers: Maximum number of parallel threads
 
     Returns:
         ParallelSearchExecutor instance
@@ -258,7 +260,7 @@ def reconfigure_parallel_executor(max_workers: int) -> None:
 def parallel_search_with_fallback(
     primary_search: Callable[[], list[Any]],
     fallback_search: Optional[Callable[[], list[Any]]] = None,
-    timeout: float = 5.0,
+    timeout: float = ParallelExecutorConfig.FALLBACK_TIMEOUT_SEC,
 ) -> list[Any]:
     """Execute search with race execution: primary + fallback simultaneously
 

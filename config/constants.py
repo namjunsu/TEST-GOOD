@@ -207,6 +207,23 @@ class HybridSearchConfig:
 
 
 @dataclass(frozen=True)
+class HybridRetrieverConfig:
+    """HybridRetriever 환경변수 기본값 (retrievers/hybrid.py용)"""
+
+    # 검색 설정
+    SNIPPET_MAX_LENGTH: int = 3600          # 스니펫 최대 길이
+    RETRIEVE_TOPK: int = 200                # 검색 top_k 기본값
+    DISPLAY_LIMIT: int = 20                 # 표시 제한
+
+    # 병렬 처리
+    PARALLEL_MAX_WORKERS: int = 3           # 병렬 워커 수
+
+    # 인덱스 경로
+    DEFAULT_BM25_INDEX_PATH: str = "var/index/bm25_index.pkl"
+    DEFAULT_ROUTER_KEYWORDS_PATH: str = "config/router_keywords.yaml"
+
+
+@dataclass(frozen=True)
 class DBConfig:
     """데이터베이스 관련 상수"""
 
@@ -271,6 +288,7 @@ __all__ = [
     "DBConfig",
     "DocumentHandlerConfig",
     "HandlerConfig",
+    "HybridRetrieverConfig",
     "HybridSearchConfig",
     "LLMConfig",
     "OCRConfig",

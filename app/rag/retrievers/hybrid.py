@@ -36,6 +36,7 @@ from app.rag.retrievers.stages import (
     StageResult,
     StrictContentStage,
 )
+from config.constants import HybridRetrieverConfig
 from rag_system.active.bm25_store import BM25Store
 
 logger = get_logger(__name__)
@@ -67,10 +68,10 @@ class HybridRetriever:
     def __init__(self) -> None:
         """초기화 - Stage들과 공유 리소스 설정"""
         try:
-            # 설정 로드
-            self.snippet_max_length = int(os.getenv("SNIPPET_MAX_LENGTH", "3600"))
-            self.retrieve_topk = int(os.getenv("RETRIEVE_TOPK", "200"))
-            self.display_limit = int(os.getenv("DISPLAY_LIMIT", "20"))
+            # 설정 로드 (환경변수 → 상수 기본값)
+            self.snippet_max_length = int(os.getenv("SNIPPET_MAX_LENGTH", str(HybridRetrieverConfig.SNIPPET_MAX_LENGTH)))
+            self.retrieve_topk = int(os.getenv("RETRIEVE_TOPK", str(HybridRetrieverConfig.RETRIEVE_TOPK)))
+            self.display_limit = int(os.getenv("DISPLAY_LIMIT", str(HybridRetrieverConfig.DISPLAY_LIMIT)))
             self.use_bm25 = os.getenv("RETRIEVER_BACKEND", "bm25").lower() == "bm25"
             self.enable_parallel = os.getenv("ENABLE_PARALLEL_SEARCH", "true").lower() == "true"
 
@@ -107,13 +108,13 @@ class HybridRetriever:
         # 병렬 처리
         self.parallel_executor: Optional[ParallelSearchExecutor] = None
         if self.enable_parallel:
-            self.parallel_executor = get_parallel_executor(max_workers=3)
+            self.parallel_executor = get_parallel_executor(max_workers=HybridRetrieverConfig.PARALLEL_MAX_WORKERS)
             logger.info("✅ Parallel search execution enabled")
 
         # BM25Store
         self.bm25: Optional[BM25Store] = None
         if self.use_bm25:
-            index_path = os.getenv("BM25_INDEX_PATH", "var/index/bm25_index.pkl")
+            index_path = os.getenv("BM25_INDEX_PATH", HybridRetrieverConfig.DEFAULT_BM25_INDEX_PATH)
             if Path(index_path).exists():
                 self.bm25 = BM25Store(index_path=index_path)
                 logger.info(f"✅ BM25Store 로드 완료 ({len(self.bm25.documents)}개 문서)")
@@ -173,7 +174,7 @@ class HybridRetriever:
     def _load_router_keywords(self) -> None:
         """라우터 키워드 YAML v2 로드"""
         try:
-            config_path = Path("config/router_keywords.yaml")
+            config_path = Path(HybridRetrieverConfig.DEFAULT_ROUTER_KEYWORDS_PATH)
             if config_path.exists():
                 config = yaml.safe_load(config_path.read_text())
 
@@ -229,7 +230,7 @@ class HybridRetriever:
         """인덱스 파일의 수정 시간 반환"""
         if not self.use_bm25:
             return 0.0
-        index_path = os.getenv("BM25_INDEX_PATH", "var/index/bm25_index.pkl")
+        index_path = os.getenv("BM25_INDEX_PATH", HybridRetrieverConfig.DEFAULT_BM25_INDEX_PATH)
         return os.path.getmtime(index_path) if Path(index_path).exists() else 0.0
 
     def _reload_if_index_rotated(self) -> None:
@@ -243,7 +244,7 @@ class HybridRetriever:
                 current_mtime = self._get_index_mtime()
                 if current_mtime > self._last_index_mtime:
                     logger.info("🔄 인덱스 파일 갱신 감지, 재로드 중...")
-                    index_path = os.getenv("BM25_INDEX_PATH", "var/index/bm25_index.pkl")
+                    index_path = os.getenv("BM25_INDEX_PATH", HybridRetrieverConfig.DEFAULT_BM25_INDEX_PATH)
                     self.bm25 = BM25Store(index_path=index_path)
                     self._last_index_mtime = current_mtime
 

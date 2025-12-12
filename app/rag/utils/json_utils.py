@@ -4,10 +4,12 @@ import logging
 import re
 from typing import Any, Optional
 
+from config.constants import JsonUtilsConfig
+
 logger = logging.getLogger(__name__)
 
 
-def _mask_sensitive_data(obj: Any, max_length: int = 200) -> str:
+def _mask_sensitive_data(obj: Any, max_length: int = JsonUtilsConfig.MASK_OUTPUT_MAX_LEN) -> str:
     """민감정보 마스킹 및 샘플링
 
     Args:
@@ -26,7 +28,8 @@ def _mask_sensitive_data(obj: Any, max_length: int = 200) -> str:
             elif isinstance(v, (dict, list)):
                 masked[k] = f"<{type(v).__name__}>"
             else:
-                masked[k] = str(v)[:50] + "..." if len(str(v)) > 50 else v
+                max_val_len = JsonUtilsConfig.VALUE_PREVIEW_MAX_LEN
+                masked[k] = str(v)[:max_val_len] + "..." if len(str(v)) > max_val_len else v
         result = json.dumps(masked, ensure_ascii=False)
         return result[:max_length] + "..." if len(result) > max_length else result
     return str(obj)[:max_length]
@@ -160,7 +163,8 @@ def parse_summary_json_robust(response: str) -> Optional[dict[str, Any]]:
                 i += 1
 
         # 6단계: 모든 시도 실패
-        logger.warning(f"❌ JSON 파싱 완전 실패. LLM 원문(첫 200자):\n{response[:200]}")
+        preview_len = JsonUtilsConfig.LOG_PREVIEW_MAX_LEN
+        logger.warning(f"❌ JSON 파싱 완전 실패. LLM 원문(첫 {preview_len}자):\n{response[:preview_len]}")
         return None
 
     except Exception as e:
@@ -269,7 +273,11 @@ def validate_numeric_fields(json_data: dict[str, Any], source_text: str) -> dict
                 nearest = nearest_amount_to_keyword(source_text, ["금액", "총액", "합계"])
                 if nearest:
                     correct_amount = nearest["value"]
-                    logger.warning(f"⚠️ 금액 교정 (근접도): {claimed_amount} → {correct_amount} (confidence: {nearest['confidence']:.2f})")
+                    conf = nearest["confidence"]
+                    logger.warning(
+                        f"⚠️ 금액 교정 (근접도): {claimed_amount} → {correct_amount} "
+                        f"(confidence: {conf:.2f})"
+                    )
                     json_data["details"]["금액"] = correct_amount
                     validation["actions"].append({
                         "field": "details.금액",
@@ -320,7 +328,11 @@ def validate_numeric_fields(json_data: dict[str, Any], source_text: str) -> dict
                     )
                     if nearest:
                         correct_total = nearest["value"]
-                        logger.warning(f"⚠️ 총액 교정 (근접도): {claimed_total} → {correct_total} (confidence: {nearest['confidence']:.2f})")
+                        conf = nearest["confidence"]
+                        logger.warning(
+                            f"⚠️ 총액 교정 (근접도): {claimed_total} → {correct_total} "
+                            f"(confidence: {conf:.2f})"
+                        )
                         json_data["비용상세"]["총액"] = correct_total
                         validation["actions"].append({
                             "field": "비용상세.총액",
@@ -367,7 +379,11 @@ def validate_numeric_fields(json_data: dict[str, Any], source_text: str) -> dict
                     )
                     if nearest:
                         correct_unit = nearest["value"]
-                        logger.warning(f"⚠️ 단가 교정 (근접도): {claimed_unit} → {correct_unit} (confidence: {nearest['confidence']:.2f})")
+                        conf = nearest["confidence"]
+                        logger.warning(
+                            f"⚠️ 단가 교정 (근접도): {claimed_unit} → {correct_unit} "
+                            f"(confidence: {conf:.2f})"
+                        )
                         json_data["비용상세"]["단가"] = f"{correct_unit:,}원"
                         validation["actions"].append({
                             "field": "비용상세.단가",
@@ -408,7 +424,11 @@ def validate_numeric_fields(json_data: dict[str, Any], source_text: str) -> dict
                 nearest = nearest_amount_to_keyword(source_text, ["예산", "예산합계", "총예산"])
                 if nearest:
                     correct_budget = nearest["value"]
-                    logger.warning(f"⚠️ 예산 교정 (근접도): {budget} → {correct_budget} (confidence: {nearest['confidence']:.2f})")
+                    conf = nearest["confidence"]
+                    logger.warning(
+                        f"⚠️ 예산 교정 (근접도): {budget} → {correct_budget} "
+                        f"(confidence: {conf:.2f})"
+                    )
                     json_data["예산합계"] = correct_budget
                     validation["actions"].append({
                         "field": "예산합계",

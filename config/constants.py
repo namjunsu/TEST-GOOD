@@ -334,6 +334,16 @@ class FinanceExtractorConfig:
 
 
 @dataclass(frozen=True)
+class JsonUtilsConfig:
+    """JSON 유틸리티 관련 상수 (json_utils.py용)"""
+
+    # 마스킹 출력 길이
+    MASK_OUTPUT_MAX_LEN: int = 200          # 마스킹된 출력 최대 길이
+    VALUE_PREVIEW_MAX_LEN: int = 50         # 개별 값 미리보기 최대 길이
+    LOG_PREVIEW_MAX_LEN: int = 200          # 로그 미리보기 최대 길이
+
+
+@dataclass(frozen=True)
 class MetaParserConfig:
     """메타데이터 파서 관련 상수 (parse_meta.py용)"""
 
@@ -581,6 +591,7 @@ __all__ = [
     "HandlerConfig",
     "HybridRetrieverConfig",
     "HybridSearchConfig",
+    "JsonUtilsConfig",
     "LLMConfig",
     "MergeExtractorConfig",
     "MetaParserConfig",

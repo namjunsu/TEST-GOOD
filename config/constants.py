@@ -186,6 +186,12 @@ class CacheConfig:
     MAX_CACHE_SIZE_MB: int = 500
     MAX_CACHE_ENTRIES: int = 10000
 
+    # QueryCache 설정 (cache_manager.py)
+    QUERY_CACHE_MAX_SIZE: int = 100  # 최대 캐시 항목 수
+    QUERY_CACHE_DEFAULT_TTL: int = 3600  # 기본 TTL (1시간)
+    QUERY_CACHE_GLOBAL_TTL: int = 7200  # 글로벌 인스턴스 TTL (2시간)
+    INFLIGHT_WAIT_TIMEOUT: float = 10.0  # 스탬피드 대기 타임아웃
+
 
 @dataclass(frozen=True)
 class APIConfig:

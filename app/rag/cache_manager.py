@@ -18,6 +18,7 @@ from collections import OrderedDict
 from typing import Any, Optional
 
 from app.rag.smart_cache_key import generate_smart_cache_key
+from config.constants import CacheConfig
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +26,16 @@ logger = logging.getLogger(__name__)
 class QueryCache:
     """Thread-safe in-memory cache for query results with TTL and LRU eviction"""
 
-    def __init__(self, max_size: int = 100, ttl: int = 3600):
+    def __init__(
+        self,
+        max_size: int = CacheConfig.QUERY_CACHE_MAX_SIZE,
+        ttl: int = CacheConfig.QUERY_CACHE_DEFAULT_TTL,
+    ):
         """Initialize cache
 
         Args:
             max_size: Maximum number of cached entries
-            ttl: Time to live in seconds (default 1 hour)
+            ttl: Time to live in seconds
         """
         self.max_size = max_size
         self.ttl = ttl
@@ -162,7 +167,7 @@ class QueryCache:
                 ev.set()  # 대기 중인 스레드 깨우기
 
     def wait_inflight(self, query: str, mode: Optional[str] = None,
-                      namespace: Optional[str] = None, timeout: float = 10.0) -> None:
+                      namespace: Optional[str] = None, timeout: float = CacheConfig.INFLIGHT_WAIT_TIMEOUT) -> None:
         """다른 스레드의 계산 완료 대기
 
         Args:
@@ -240,8 +245,8 @@ def get_cache() -> QueryCache:
         with _cache_lock:
             if _cache_instance is None:  # Double-checked locking
                 _cache_instance = QueryCache(
-                    max_size=100,  # Store up to 100 queries
-                    ttl=7200,       # 2 hours TTL
+                    max_size=CacheConfig.QUERY_CACHE_MAX_SIZE,
+                    ttl=CacheConfig.QUERY_CACHE_GLOBAL_TTL,
                 )
     return _cache_instance
 

@@ -291,6 +291,23 @@ class DBConfig:
 
 
 @dataclass(frozen=True)
+class SummaryTemplateConfig:
+    """요약 템플릿 관련 상수 (summary_templates.py용)"""
+
+    # 문서 종류 감지
+    DOC_KIND_SAMPLE_LENGTH: int = 2000      # 감지 시 분석할 텍스트 길이
+    MINUTES_KEYWORD_THRESHOLD: int = 2      # 회의록 판별 키워드 임계값
+
+    # 금액 파싱 윈도우
+    MONEY_SEARCH_WINDOW: int = 60           # 기본 윈도우 크기
+    MONEY_RECHECK_WINDOW: int = 80          # 재확인 윈도우 크기
+
+    # 출력 포맷팅 제한
+    MAX_COMPARE_ALTERNATIVES: int = 4       # 비교 대안 최대 표시 개수
+    MAX_EVIDENCE_DISPLAY: int = 2           # 증거 최대 표시 개수
+
+
+@dataclass(frozen=True)
 class PipelineConfig:
     """RAG 파이프라인 관련 상수"""
 
@@ -352,6 +369,7 @@ __all__ = [
     "RouterConfig",
     "ScoringConfig",
     "SearchConfig",
+    "SummaryTemplateConfig",
     "get_llm_config",
     "get_search_config",
 ]

@@ -12,6 +12,8 @@ import re
 import unicodedata
 from typing import Any, Optional
 
+from config.constants import SummaryTemplateConfig
+
 # Compiled regex patterns for performance
 _KW = {
     "minutes": re.compile(
@@ -59,13 +61,13 @@ def detect_doc_kind(filename: str, text: str) -> str:
     Returns:
         문서 종류: consumables/repair/proc_eval/disposal/minutes/generic
     """
-    s = _norm(f"{filename}\n{text[:2000]}").lower()
+    s = _norm(f"{filename}\n{text[:SummaryTemplateConfig.DOC_KIND_SAMPLE_LENGTH]}").lower()
 
     # 회의록 강한 시그널 우선 (오분류 방지)
     # '안건/참석자/결정' 중 2개 이상 동시 존재 시 minutes 확정
     if _KW["minutes"].search(s):
         score = sum(1 for k in ["안건", "참석자", "결정"] if k in s)
-        if score >= 2:
+        if score >= SummaryTemplateConfig.MINUTES_KEYWORD_THRESHOLD:
             return "minutes"
 
     # 구매/교체 검토서
@@ -116,7 +118,7 @@ def parse_money_any(s: str) -> Optional[int]:
     return None
 
 
-def _windowed_money_candidates(text: str, window: int = 60) -> list:
+def _windowed_money_candidates(text: str, window: int = SummaryTemplateConfig.MONEY_SEARCH_WINDOW) -> list:
     """금액 주변 윈도우에서 후보 추출
 
     Args:
@@ -157,7 +159,7 @@ def _recheck_money_and_decision(text: str, claimed_total: Optional[int]) -> tupl
     """
     money = claimed_total
     if not money:
-        cands = _windowed_money_candidates(text, window=80)
+        cands = _windowed_money_candidates(text, window=SummaryTemplateConfig.MONEY_RECHECK_WINDOW)
         money = max(cands) if cands else None
 
     # 결정/선정 사항 존재 여부
@@ -659,7 +661,7 @@ def format_summary_output(
 
         if parsed_json.get("비교대안") and len(parsed_json["비교대안"]) > 0:
             output += "🔍 비교 대안\n\n"
-            for i, item in enumerate(parsed_json["비교대안"][:4], 1):  # 최대 4개까지 표시
+            for i, item in enumerate(parsed_json["비교대안"][:SummaryTemplateConfig.MAX_COMPARE_ALTERNATIVES], 1):
                 model = item.get("모델", "없음")
                 spec = item.get("사양", "없음")  # 수정: '사양특징' → '사양'
                 qty = item.get("수량", "")
@@ -742,7 +744,7 @@ def format_summary_output(
     # 증거 (있으면)
     if parsed_json.get("증거") and len(parsed_json["증거"]) > 0:
         output += "**📌 근거**\n"
-        for ev in parsed_json["증거"][:2]:  # 최대 2개
+        for ev in parsed_json["증거"][:SummaryTemplateConfig.MAX_EVIDENCE_DISPLAY]:
             page = ev.get("page", "?")
             quote = ev.get("quote", "없음")
             output += f'- p.{page}: "{quote}"\n'

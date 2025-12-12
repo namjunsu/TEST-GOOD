@@ -18,6 +18,7 @@ from typing import Any
 
 from app.core.logging import get_logger
 from app.data.metadata_db import MetadataDB
+from config.constants import ExactMatchConfig
 
 logger = get_logger(__name__)
 
@@ -47,12 +48,6 @@ class ExactMatchRetriever:
     - 파일명 정확/부분 일치 검색
     - 스코어 부스팅으로 우선순위 조정
     """
-
-    # 스코어 가중치 (v2.0 업데이트)
-    EXACT_CODE_WEIGHT = 3.0          # model_codes 테이블에서 정확일치
-    FILENAME_EXACT_WEIGHT = 1.5      # 파일명 정확일치 (토큰 전체)
-    FILENAME_PARTIAL_WEIGHT = 1.0    # 파일명 부분일치
-    RECENCY_WEIGHT = 0.1             # 최신성 가중 (연도당)
 
     def __init__(self, db: MetadataDB = None):
         """초기화
@@ -217,7 +212,7 @@ class ExactMatchRetriever:
                         boundary_count += 1
 
             # (doc_id, score, match_type)
-            results = [(doc_id, self.EXACT_CODE_WEIGHT, "exact_code") for doc_id in doc_ids_found]
+            results = [(doc_id, ExactMatchConfig.EXACT_CODE_WEIGHT, "exact_code") for doc_id in doc_ids_found]
 
             logger.debug(
                 f"model_codes 일치: {len(results)}건 (정확={exact_count}, 경계={boundary_count})",
@@ -280,10 +275,10 @@ class ExactMatchRetriever:
 
                 if is_exact:
                     match_type = "filename_exact"
-                    score = self.FILENAME_EXACT_WEIGHT
+                    score = ExactMatchConfig.FILENAME_EXACT_WEIGHT
                 else:
                     match_type = "filename_partial"
-                    score = self.FILENAME_PARTIAL_WEIGHT
+                    score = ExactMatchConfig.FILENAME_PARTIAL_WEIGHT
 
                 # 더 높은 점수로 갱신
                 if doc_id not in results_map or score > results_map[doc_id][0]:
@@ -436,12 +431,12 @@ class ExactMatchRetriever:
             if not doc:
                 continue
 
-            snippet = (doc.get("text_preview") or "")[:800]
+            snippet = (doc.get("text_preview") or "")[:ExactMatchConfig.SNIPPET_MAX_LENGTH]
             if not snippet:
                 snippet = f"[{doc.get('filename', 'unknown')}]"
 
-            # 스코어 정규화 (0-10 범위 클리핑)
-            normalized_score = max(0.0, min(10.0, score))
+            # 스코어 정규화 (범위 클리핑)
+            normalized_score = max(ExactMatchConfig.SCORE_MIN, min(ExactMatchConfig.SCORE_MAX, score))
 
             results.append({
                 "doc_id": doc.get("filename", "unknown"),

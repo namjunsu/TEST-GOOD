@@ -224,6 +224,24 @@ class HybridRetrieverConfig:
 
 
 @dataclass(frozen=True)
+class ExactMatchConfig:
+    """정확일치 검색기 관련 상수 (retrievers/exact_match.py용)"""
+
+    # 스코어 가중치
+    EXACT_CODE_WEIGHT: float = 3.0          # model_codes 테이블에서 정확일치
+    FILENAME_EXACT_WEIGHT: float = 1.5      # 파일명 정확일치 (토큰 전체)
+    FILENAME_PARTIAL_WEIGHT: float = 1.0    # 파일명 부분일치
+    RECENCY_WEIGHT: float = 0.1             # 최신성 가중 (연도당)
+
+    # 스니펫 설정
+    SNIPPET_MAX_LENGTH: int = 800           # 스니펫 최대 길이
+
+    # 스코어 범위
+    SCORE_MIN: float = 0.0                  # 최소 스코어
+    SCORE_MAX: float = 10.0                 # 최대 스코어
+
+
+@dataclass(frozen=True)
 class DBConfig:
     """데이터베이스 관련 상수"""
 
@@ -287,6 +305,7 @@ __all__ = [
     "CacheConfig",
     "DBConfig",
     "DocumentHandlerConfig",
+    "ExactMatchConfig",
     "HandlerConfig",
     "HybridRetrieverConfig",
     "HybridSearchConfig",

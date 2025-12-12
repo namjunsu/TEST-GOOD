@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from app.config.settings import settings
 from app.core.logging import get_logger
+from config.constants import DocumentUtilsConfig
 
 if TYPE_CHECKING:
     from app.rag.contracts import Retriever
@@ -61,7 +62,7 @@ class DocumentUtils:
             try:
                 full_text = txt_path.read_text(encoding="utf-8", errors="ignore")
                 logger.info(f"📄 DOC_ANCHORED: {filename} 전체 텍스트 로드 ({len(full_text)}자)")
-                return full_text[:5000]  # 최대 5000자
+                return full_text[:DocumentUtilsConfig.FULL_TEXT_MAX_LENGTH]
             except Exception as e:
                 logger.warning(f"⚠️ 전체 텍스트 로드 실패: {e}")
 
@@ -137,7 +138,7 @@ class DocumentUtils:
             # BM25 사용 불가 시 폴백: 키워드 검색
             logger.warning("⚠️ BM25 직접 접근 불가, 검색으로 폴백")
             search_query = filename.replace(".pdf", "").replace("_", " ")
-            results = self.retriever.search(search_query, top_k=20)
+            results = self.retriever.search(search_query, top_k=DocumentUtilsConfig.FALLBACK_SEARCH_TOP_K)
 
             # 검색 결과를 해당 문서로 필터링
             chunks = []
@@ -198,7 +199,7 @@ class DocumentUtils:
                 except Exception as e:
                     logger.warning(f"⚠️ pytesseract 실패 (페이지 {start_page + i + 1}): {e}")
 
-            if len(text.strip()) > 50:
+            if len(text.strip()) > DocumentUtilsConfig.OCR_MIN_VALID_LENGTH:
                 return text
 
             # pytesseract 실패 시 paddleocr 시도
@@ -253,7 +254,10 @@ class DocumentUtils:
 
         # 인덱스 청크 기반 컨텍스트 수집 (섹션 가중치 적용)
         # 우선순위 키워드: 개요, 배경, 검토사유, 대안, 견적, 결론, 비용, 도입사유
-        priority_keywords = r"(개요|배경|검토사유|검토\s*사유|대안|견적|결론|비용|도입사유|도입\s*사유|구매목적|구매\s*목적|선정|권고|총액|합계)"
+        priority_keywords = (
+            r"(개요|배경|검토사유|검토\s*사유|대안|견적|결론|비용|"
+            r"도입사유|도입\s*사유|구매목적|구매\s*목적|선정|권고|총액|합계)"
+        )
 
         try:
             if doc_locked:
@@ -271,13 +275,14 @@ class DocumentUtils:
                     else:
                         normal_chunks.append(chunk)
 
-                # 우선순위 청크 + 일반 청크 순서로 재조합, 최대 10개 (검토서 상세 정보 포함)
-                sorted_chunks = (priority_chunks + normal_chunks)[:10]
+                # 우선순위 청크 + 일반 청크 순서로 재조합
+                sorted_chunks = (priority_chunks + normal_chunks)[:DocumentUtilsConfig.MAX_CHUNKS_COUNT]
 
                 for i, chunk in enumerate(sorted_chunks, 1):
                     chunk_text = chunk.get("text") or chunk.get("snippet") or chunk.get("content") or ""
                     if chunk_text:
-                        parts.append(f"=== [문서 청크 {i}] ===\n" + chunk_text[:5000])
+                        max_len = DocumentUtilsConfig.CHUNK_TEXT_MAX_LENGTH
+                        parts.append(f"=== [문서 청크 {i}] ===\n" + chunk_text[:max_len])
 
                 if sorted_chunks:
                     logger.info(f"✓ 문서 고정 청크 {len(sorted_chunks)}개 추출 (우선순위: {len(priority_chunks)}개)")
@@ -287,7 +292,7 @@ class DocumentUtils:
                 search_keywords = re.sub(r"\.pdf$", "", search_keywords, flags=re.IGNORECASE)
                 search_keywords = search_keywords.replace("_", " ")
 
-                hits = self.retriever.search(search_keywords, top_k=10)
+                hits = self.retriever.search(search_keywords, top_k=DocumentUtilsConfig.SUMMARY_SEARCH_TOP_K)
                 same_file_hits = [h for h in hits if h.get("filename") == filename]
 
                 # 섹션 가중치 적용
@@ -300,19 +305,20 @@ class DocumentUtils:
                     else:
                         normal_hits.append(h)
 
-                sorted_hits = (priority_hits + normal_hits)[:10]
+                sorted_hits = (priority_hits + normal_hits)[:DocumentUtilsConfig.MAX_CHUNKS_COUNT]
 
                 for i, h in enumerate(sorted_hits, 1):
                     chunk_text = h.get("text") or h.get("snippet") or h.get("content") or ""
                     if chunk_text:
-                        parts.append(f"=== [관련 청크 {i}] ===\n" + chunk_text[:5000])
+                        max_len = DocumentUtilsConfig.CHUNK_TEXT_MAX_LENGTH
+                        parts.append(f"=== [관련 청크 {i}] ===\n" + chunk_text[:max_len])
 
                 if sorted_hits:
                     logger.info(f"✓ RAG 청크 {len(sorted_hits)}개 추출 (우선순위: {len(priority_hits)}개)")
         except Exception as e:
             logger.warning(f"⚠️ RAG 청크 추출 실패: {e}")
 
-        # 결합 및 길이 제한 (약 3k 토큰 ~ 6000자, 검토서 상세 정보 포함)
-        context = "\n\n".join(parts)[:6000]
+        # 결합 및 길이 제한 (약 3k 토큰)
+        context = "\n\n".join(parts)[:DocumentUtilsConfig.CONTEXT_MAX_LENGTH]
         logger.info(f"📋 최종 컨텍스트 길이: {len(context)}자 (청크 수: {len(parts)})")
         return context

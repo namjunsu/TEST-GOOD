@@ -498,6 +498,24 @@ class ParallelExecutorConfig:
 
 
 @dataclass(frozen=True)
+class DocumentUtilsConfig:
+    """문서 유틸리티 관련 상수 (document_utils.py용)"""
+
+    # 텍스트 길이 제한
+    FULL_TEXT_MAX_LENGTH: int = 5000         # 전체 텍스트 최대 길이
+    CHUNK_TEXT_MAX_LENGTH: int = 5000        # 청크 텍스트 최대 길이
+    CONTEXT_MAX_LENGTH: int = 6000           # 최종 컨텍스트 최대 길이
+
+    # OCR 설정
+    OCR_MIN_VALID_LENGTH: int = 50           # OCR 최소 유효 텍스트 길이
+
+    # 검색 설정
+    FALLBACK_SEARCH_TOP_K: int = 20          # 폴백 검색 상위 결과 수
+    SUMMARY_SEARCH_TOP_K: int = 10           # 요약용 검색 상위 결과 수
+    MAX_CHUNKS_COUNT: int = 10               # 최대 청크 수
+
+
+@dataclass(frozen=True)
 class PipelineConfig:
     """RAG 파이프라인 관련 상수"""
 
@@ -550,6 +568,7 @@ __all__ = [
     "ContextHydratorConfig",
     "DBConfig",
     "DoctypeConfig",
+    "DocumentUtilsConfig",
     "DocumentHandlerConfig",
     "ExactMatchConfig",
     "FinanceExtractorConfig",

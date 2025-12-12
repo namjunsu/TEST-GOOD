@@ -263,6 +263,15 @@ class DBConfig:
     DEFAULT_METADATA_DB: str = "metadata.db"
     DEFAULT_EXTRACTED_DIR: str = "data/extracted"
 
+    # SQLite PRAGMA 설정 (metadata_db.py용)
+    MMAP_SIZE: int = 1073741824       # 1GB mmap
+    CACHE_SIZE: int = -524288         # ~512MB cache (음수: KB 단위)
+    PAGE_SIZE: int = 4096             # 페이지 크기
+    ANALYSIS_LIMIT: int = 400         # 분석 제한
+
+    # 텍스트 제한
+    TEXT_PREVIEW_MAX_LENGTH: int = 1000  # text_preview 최대 길이
+
 
 @dataclass(frozen=True)
 class PipelineConfig:

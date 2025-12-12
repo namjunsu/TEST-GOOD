@@ -17,9 +17,10 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Optional
 
+from app.config.settings import settings  # v2.2: 설정에서 DB 경로 가져오기
 from app.core.logging import get_logger
 from app.utils.sqlite_helpers import connect_metadata  # v2.1: 공용 커넥터 사용
-from app.config.settings import settings  # v2.2: 설정에서 DB 경로 가져오기
+from config.constants import DBConfig
 
 logger = get_logger(__name__)
 
@@ -49,10 +50,10 @@ class MetadataDB:
 
         # MetadataDB 특화 설정 추가 (메모리 튜닝)
         conn.execute("PRAGMA temp_store=MEMORY;")
-        conn.execute("PRAGMA mmap_size=1073741824;")   # 1GB mmap
-        conn.execute("PRAGMA cache_size=-524288;")     # ~512MB cache
-        conn.execute("PRAGMA page_size=4096;")
-        conn.execute("PRAGMA analysis_limit=400;")
+        conn.execute(f"PRAGMA mmap_size={DBConfig.MMAP_SIZE};")
+        conn.execute(f"PRAGMA cache_size={DBConfig.CACHE_SIZE};")
+        conn.execute(f"PRAGMA page_size={DBConfig.PAGE_SIZE};")
+        conn.execute(f"PRAGMA analysis_limit={DBConfig.ANALYSIS_LIMIT};")
 
         return conn
 
@@ -585,7 +586,7 @@ class MetadataDB:
         with self._cursor() as cur:
             cur.execute(
                 "UPDATE documents SET text_preview = ?, updated_at = CURRENT_TIMESTAMP WHERE path = ?",
-                (text_preview[:1000], self._normalize_path(str(path))),  # 최대 1000자
+                (text_preview[:DBConfig.TEXT_PREVIEW_MAX_LENGTH], self._normalize_path(str(path))),
             )
 
     def get_statistics(self) -> dict[str, Any]:

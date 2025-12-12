@@ -10,6 +10,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from config.constants import ContextHydratorConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -78,8 +80,8 @@ def hydrate_context(chunks: list[dict[str, Any]], max_len: int = 10000, mode: st
     for chunk in chunks:
         text = _extract_text_from_chunk(chunk, metrics)
         if text:
-            # 중복 체크: 텍스트의 처음 200자를 해시로 사용
-            text_hash = text[:200]
+            # 중복 체크: 텍스트의 처음 N자를 해시로 사용
+            text_hash = text[:ContextHydratorConfig.DEDUP_HASH_LENGTH]
             if text_hash in seen_texts:
                 continue
             seen_texts.add(text_hash)
@@ -90,7 +92,7 @@ def hydrate_context(chunks: list[dict[str, Any]], max_len: int = 10000, mode: st
     current_text = "\n\n".join(parts)
     current_len = len(current_text)
 
-    if current_len < 500 and chunks:
+    if current_len < ContextHydratorConfig.MIN_TEXT_FOR_PDF and chunks:
         # PDF 보강 시도
         pdf_text = _extract_pdf_tail(chunks[0], metrics, needed=effective_max_len - current_len)
         if pdf_text:
@@ -227,7 +229,7 @@ def _is_under_docs(path: Path) -> bool:
         return False
 
 
-def _extract_pdf_tail(chunk: dict[str, Any], metrics: dict[str, Any], needed: int = 5000) -> str:
+def _extract_pdf_tail(chunk: dict[str, Any], metrics: dict[str, Any], needed: int = ContextHydratorConfig.PDF_NEEDED_LENGTH) -> str:
     """
     PDF 마지막 2페이지 추출 (결론/요약 가능성 높음)
 
@@ -272,7 +274,8 @@ def _extract_pdf_tail(chunk: dict[str, Any], metrics: dict[str, Any], needed: in
             metrics["pdf_tail_status"] = "fail"
             return ""
 
-        if p.stat().st_size > 64 * 1024 * 1024:  # 64MB 상한
+        max_pdf_bytes = ContextHydratorConfig.MAX_PDF_SIZE_MB * 1024 * 1024
+        if p.stat().st_size > max_pdf_bytes:
             logger.warning(f"⚠️ PDF too large: {p} ({p.stat().st_size / 1024 / 1024:.1f}MB)")
             metrics["pdf_tail_status"] = "fail"
             return ""
@@ -335,7 +338,7 @@ def _extract_core_sentences(text: str, max_len: int) -> str:
     """
     # 문장 분리 (lookbehind로 구분자 미포함)
     sent_boundary = re.compile(r"(?<=[.!?])\s+|\n{2,}")
-    sentences = [s.strip() for s in sent_boundary.split(text) if len(s.strip()) > 10]
+    sentences = [s.strip() for s in sent_boundary.split(text) if len(s.strip()) > ContextHydratorConfig.MIN_SENTENCE_LENGTH]
 
     # 수치/단위 패턴 (쉼표 구분 숫자 + 단위)
     numeric = re.compile(r"\b\d{1,3}(?:,\d{3})+\b|\b\d+\b")

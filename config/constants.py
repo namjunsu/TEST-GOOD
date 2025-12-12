@@ -418,6 +418,22 @@ class PersistentCacheConfig:
 
 
 @dataclass(frozen=True)
+class ContextHydratorConfig:
+    """컨텍스트 수화기 관련 상수 (context_hydrator.py용)"""
+
+    # 텍스트 길이
+    DEDUP_HASH_LENGTH: int = 200             # 중복 제거용 텍스트 해시 길이
+    MIN_TEXT_FOR_PDF: int = 500              # PDF 보강 트리거 임계값
+    PDF_NEEDED_LENGTH: int = 5000            # PDF 추출 필요 길이
+
+    # 파일 크기 제한
+    MAX_PDF_SIZE_MB: int = 64                # PDF 최대 크기 (MB)
+
+    # 문장 추출
+    MIN_SENTENCE_LENGTH: int = 10            # 최소 문장 길이
+
+
+@dataclass(frozen=True)
 class PipelineConfig:
     """RAG 파이프라인 관련 상수"""
 
@@ -467,6 +483,7 @@ def get_llm_config() -> dict:
 __all__ = [
     "APIConfig",
     "CacheConfig",
+    "ContextHydratorConfig",
     "DBConfig",
     "DocumentHandlerConfig",
     "ExactMatchConfig",

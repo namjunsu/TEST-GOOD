@@ -362,7 +362,10 @@ class SearchHandler(BaseHandler):
             )
 
             # 2. 검색 top_k 결정
-            search_top_k = HandlerConfig.BULK_SEARCH_TOP_K if needs_expanded_search(query, drafter_filter) else HandlerConfig.NORMAL_SEARCH_TOP_K
+            if needs_expanded_search(query, drafter_filter):
+                search_top_k = HandlerConfig.BULK_SEARCH_TOP_K
+            else:
+                search_top_k = HandlerConfig.NORMAL_SEARCH_TOP_K
             logger.info(f"🔍 검색 top_k: {search_top_k}")
 
             # 3. 검색 실행
@@ -383,6 +386,10 @@ class SearchHandler(BaseHandler):
                 return self._handle_count_query(
                     keywords, drafter_filter, year_filter,
                 )
+
+            # 5.5 기안자 필터가 있고 결과가 많으면 통계+샘플 응답
+            if drafter_filter and len(filenames) > 10:
+                return self._handle_drafter_stats(drafter_filter, year_filter, filenames)
 
             # 6. 문서 상세 정보 조회
             max_docs = calculate_max_docs(query, drafter_filter)
@@ -576,6 +583,104 @@ class SearchHandler(BaseHandler):
                 "retrieved_count": total_count,
                 "selected_count": 0,
                 "found": total_count > 0,
+            },
+        }
+
+    def _handle_drafter_stats(
+        self,
+        drafter: str,
+        year_filter: Optional[str],
+        filenames: list[str],
+    ) -> dict[str, Any]:
+        """기안자 문서 통계 + 샘플 응답 생성
+
+        많은 문서(>10개)가 있을 때 전체 목록 대신 통계와 샘플을 제공합니다.
+        """
+        conn = self._db._get_conn()
+
+        # 1. 총 건수 조회
+        total_sql = "SELECT COUNT(*) as cnt FROM documents WHERE drafter = ?"
+        params: list = [drafter]
+        if year_filter:
+            total_sql += " AND year = ?"
+            params.append(year_filter)
+        total_count = conn.execute(total_sql, params).fetchone()["cnt"]
+
+        # 2. 연도별 분포
+        year_sql = """
+            SELECT year, COUNT(*) as cnt
+            FROM documents
+            WHERE drafter = ? AND year IS NOT NULL
+            GROUP BY year ORDER BY year DESC LIMIT 5
+        """
+        year_dist = conn.execute(year_sql, [drafter]).fetchall()
+
+        # 3. 카테고리별 분포
+        cat_sql = """
+            SELECT category, COUNT(*) as cnt
+            FROM documents
+            WHERE drafter = ? AND category IS NOT NULL AND category != '미분류'
+            GROUP BY category ORDER BY cnt DESC LIMIT 5
+        """
+        cat_dist = conn.execute(cat_sql, [drafter]).fetchall()
+
+        # 4. 최근 5건
+        recent_sql = """
+            SELECT filename, date, category
+            FROM documents
+            WHERE drafter = ?
+            ORDER BY date DESC LIMIT 5
+        """
+        recent_docs = conn.execute(recent_sql, [drafter]).fetchall()
+
+        # 5. 응답 텍스트 생성
+        lines = [f"**{drafter}**님이 기안한 문서는 총 **{total_count}건**입니다.\n"]
+
+        # 연도별 분포
+        if year_dist:
+            lines.append("📊 **연도별 분포:**")
+            for row in year_dist:
+                lines.append(f"  - {row['year']}년: {row['cnt']}건")
+            lines.append("")
+
+        # 카테고리별 분포
+        if cat_dist:
+            lines.append("📂 **유형별 분포:**")
+            for row in cat_dist:
+                lines.append(f"  - {row['category']}: {row['cnt']}건")
+            lines.append("")
+
+        # 최근 문서
+        if recent_docs:
+            lines.append("📄 **최근 문서 (5건):**")
+            for i, row in enumerate(recent_docs, 1):
+                date_str = row['date'] or '날짜 없음'
+                fname = row['filename'].replace('.pdf', '')
+                lines.append(f"  {i}. {fname} ({date_str})")
+            lines.append("")
+
+        # 안내 메시지
+        lines.append(
+            f"💡 더 자세히 보려면: \"{drafter} 2024년 문서\" 또는 "
+            f"\"{drafter} 카메라 문서\" 처럼 범위를 좁혀서 질문해주세요."
+        )
+
+        return {
+            "mode": "SEARCH",
+            "text": "\n".join(lines),
+            "files": [{"filename": r['filename']} for r in recent_docs] if recent_docs else [],
+            "count": total_count,
+            "citations": [],
+            "evidence": [],
+            "status": {
+                "retrieved_count": total_count,
+                "selected_count": min(5, total_count),
+                "found": True,
+            },
+            "stats": {
+                "total": total_count,
+                "by_year": {r["year"]: r["cnt"] for r in year_dist},
+                "by_category": {r["category"]: r["cnt"] for r in cat_dist},
             },
         }
 

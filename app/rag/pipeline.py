@@ -543,9 +543,7 @@ class RAGPipeline:
                         normalized_title = candidate_title.replace("_", " ").replace("&", "").strip()
 
                         # DB에서 제목 유사도 검색 (LIKE 패턴)
-                        conn = getattr(db, "conn", None)  # type: ignore[attr-defined]
-                        if conn is None:
-                            raise AttributeError("MetadataDB has no connection")
+                        conn = db._get_conn()
                         cursor = conn.cursor()
                         query_sql = """
                             SELECT filename, title FROM documents

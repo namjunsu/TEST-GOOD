@@ -266,8 +266,8 @@ class DocumentHandlerConfig:
     SHORT_TEXT_THRESHOLD: int = 500         # 짧은 문서 임계값 (원문 반환)
     MIN_TEXT_LENGTH: int = 10               # 최소 텍스트 길이
 
-    # 컨텍스트 윈도우
-    CONTEXT_WINDOW: int = 8000              # LLM 컨텍스트 최대 길이
+    # 컨텍스트 윈도우 (LLM n_ctx=4096 기준, 한글 토큰당 ~1.3자)
+    CONTEXT_WINDOW: int = 3000              # LLM 컨텍스트 최대 길이 (프롬프트+응답 여유 확보)
     CHUNK_CONTEXT_MAX: int = 12000          # 청크 결합 최대 길이
     CHUNK_SNIPPET_MAX: int = 3000           # 개별 청크 최대 길이
 

@@ -351,8 +351,8 @@ def health() -> dict[str, Any]:
         try:
             from pathlib import Path
 
-            from config import QWEN_MODEL_PATH
-            llm_status["model"] = Path(QWEN_MODEL_PATH).name
+            from app.config.settings import settings
+            llm_status["model"] = Path(settings.MODEL_PATH).name
         except (ImportError, AttributeError):
             pass
     except ImportError:
@@ -749,9 +749,9 @@ def debug_llm() -> dict[str, Any]:
 
     # 3. QwenLLM 초기화 테스트 (실제 모델 로드는 하지 않음)
     try:
-        from config import QWEN_MODEL_PATH
+        from app.config.settings import settings
         # 초기화만 테스트 (모델 로드는 시간이 오래 걸리므로 건너뜀)
-        result["qwen_init"] = f"Model path: {QWEN_MODEL_PATH}"
+        result["qwen_init"] = f"Model path: {settings.MODEL_PATH}"
     except Exception as e:
         result["qwen_init"] = "FAILED"
         result["error"] = str(e)

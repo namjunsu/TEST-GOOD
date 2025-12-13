@@ -54,10 +54,27 @@ EXTRACTED_DIR = Path("data/extracted")
 # ============================================================================
 
 def extract_filename_from_query(query: str) -> Optional[str]:
-    """쿼리에서 파일명 추출"""
+    """쿼리에서 파일명 추출
+
+    지원 패턴:
+    1. .pdf 확장자 포함: "2025-08-13_TVLogic_모니터.pdf"
+    2. 날짜_제목 형식: "2025-08-13_TVLogic_모니터_구매_검토서"
+    3. 날짜_제목 (날짜) 형식: "2025-08-13_TVLogic_모니터_구매_검토서 (2025-08-13)"
+    """
+    # 1. .pdf 확장자 포함 파일명
     match = re.search(r"(\S+\.pdf)", query, re.IGNORECASE)
     if match:
         return match.group(1)
+
+    # 2. 날짜_제목 패턴: YYYY-MM-DD_제목 (optional: (YYYY-MM-DD))
+    # 예: "2025-08-13_TVLogic_모니터_구매_검토서 (2025-08-13) 이문서 내용 요약줘"
+    pattern = r"(\d{4}-\d{2}-\d{2}_[^\s\(]+(?:_[^\s\(]+)*)"
+    match = re.search(pattern, query)
+    if match:
+        doc_name = match.group(1)
+        # .pdf 확장자 추가하여 반환
+        return f"{doc_name}.pdf"
+
     return None
 
 

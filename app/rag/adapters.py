@@ -100,6 +100,13 @@ class _LLMAdapter:
         Returns:
             str: 생성된 답변
         """
+        # 🔥 컨텍스트 크기 제한 (LLM n_ctx=4096 기준, 프롬프트+응답 여유 확보)
+        # 한글 토큰당 ~1.3자, 2500토큰 = ~3250자
+        MAX_CONTEXT_CHARS = 3000
+        if len(context) > MAX_CONTEXT_CHARS:
+            logger.info(f"⚠️ 컨텍스트 잘림: {len(context)} → {MAX_CONTEXT_CHARS}자")
+            context = context[:MAX_CONTEXT_CHARS]
+
         # Context를 청크 형식으로 변환
         chunks = [{"snippet": context, "content": context}]
 

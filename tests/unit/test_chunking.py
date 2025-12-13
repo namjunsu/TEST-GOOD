@@ -1,8 +1,6 @@
 """청킹 모듈 단위 테스트"""
 
-import pytest
-
-from app.rag.chunking import TextChunker, Chunk
+from app.rag.chunking import Chunk, TextChunker
 
 
 class TestTextChunker:

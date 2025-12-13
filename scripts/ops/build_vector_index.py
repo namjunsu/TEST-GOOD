@@ -45,7 +45,9 @@ def build_index(
     # 1. MetadataDB에서 문서 로드
     logger.info("📄 문서 로딩 중...")
     db = MetadataDB()
-    documents = db.list_documents()
+
+    # 모든 문서 검색 (빈 쿼리로 전체 조회)
+    documents = db.search_documents("")
 
     if not documents:
         logger.warning("⚠️ 인덱싱할 문서가 없습니다")

@@ -487,27 +487,26 @@ class DocumentHandler(BaseHandler):
         else:
             mode = "rag"
 
-        # ===== 경로 1: _LLMAdapter.generate_from_context() 사용 (권장) =====
-        if hasattr(self.generator, "rag") and self.generator.rag:
-            rag = self.generator.rag
-            if hasattr(rag, "generate_from_context"):
-                logger.info(f"🎯 _LLMAdapter.generate_from_context() 사용 (mode={mode})")
-                raw_result = rag.generate_from_context(
-                    query=llm_prompt,
-                    context=context,
-                    temperature=DocumentHandlerConfig.LLM_TEMPERATURE,
-                    mode=mode,
-                )
+        # ===== 경로 1: _LLMAdapter.generate_from_context() 사용 (권장, 요약 모드 제외) =====
+        # 🔧 요약 모드에서는 경로 1 스킵 → QwenLLM이 별도 시스템 프롬프트를 사용하여 JSON 출력 지시가 무시됨
+        # 요약 모드는 경로 2(llama_cpp 직접 접근)로 처리하여 JSON 출력을 보장함
+        if not routing.get("needs_summary"):
+            if hasattr(self.generator, "rag") and self.generator.rag:
+                rag = self.generator.rag
+                if hasattr(rag, "generate_from_context"):
+                    logger.info(f"🎯 _LLMAdapter.generate_from_context() 사용 (mode={mode})")
+                    raw_result = rag.generate_from_context(
+                        query=llm_prompt,
+                        context=context,
+                        temperature=DocumentHandlerConfig.LLM_TEMPERATURE,
+                        mode=mode,
+                    )
 
-                # 에러 응답 체크
-                if raw_result.startswith("[E_GENERATE]"):
-                    raise RuntimeError(raw_result)
+                    # 에러 응답 체크
+                    if raw_result.startswith("[E_GENERATE]"):
+                        raise RuntimeError(raw_result)
 
-                # 요약 모드 후처리
-                if routing.get("needs_summary"):
-                    return self._format_summary_output(raw_result, metadata)
-
-                return raw_result.strip()
+                    return raw_result.strip()
 
         # ===== 경로 2: llama_cpp.Llama 직접 접근 (폴백) =====
         llm = None
@@ -632,9 +631,10 @@ class DocumentHandler(BaseHandler):
         detailed_mode = routing.get("detailed_mode", False)
         needs_summary = routing.get("needs_summary", False)
 
-        # 요약 모드: 최소 토큰 보장 (불완전 요약 방지)
+        # 요약 모드: JSON 출력을 위한 최소 토큰 보장 (불완전 요약 방지)
+        # 🔧 SUMMARY_MIN_TOKENS(1000)을 base_max_tokens보다 우선하여 JSON 응답이 잘리지 않도록 함
         if needs_summary:
-            return max(DocumentHandlerConfig.SUMMARY_MIN_TOKENS, min(base_max_tokens, content_length // 2))
+            return max(DocumentHandlerConfig.SUMMARY_MIN_TOKENS, content_length // 3)
 
         if detailed_mode:
             return min(base_max_tokens, max(DocumentHandlerConfig.DETAILED_MIN_TOKENS, content_length // 3))

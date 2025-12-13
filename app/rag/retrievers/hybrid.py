@@ -29,12 +29,15 @@ from app.rag.retrievers.exact_match import ExactMatchRetriever
 from app.rag.retrievers.scoring import RelevanceScorer, get_relevance_scorer
 from app.rag.retrievers.stages import (
     BaseSearchStage,
+    DenseStage,
     ExactMatchStage,
     FTSBM25Stage,
+    HybridRanker,
     MetadataRoutingStage,
     SearchContext,
     StageResult,
     StrictContentStage,
+    get_hybrid_ranker,
 )
 from config.constants import HybridRetrieverConfig
 from rag_system.active.bm25_store import BM25Store
@@ -84,14 +87,21 @@ class HybridRetriever:
             # 스코어러 초기화
             self.scorer: RelevanceScorer = get_relevance_scorer()
 
+            # Dense Retrieval 활성화 여부
+            self.enable_dense = os.getenv("ENABLE_DENSE_RETRIEVAL", "true").lower() == "true"
+            self.hybrid_ranker: Optional[HybridRanker] = None
+            if self.enable_dense:
+                self.hybrid_ranker = get_hybrid_ranker()
+
             # 인덱스 자동 재로드
             self._last_index_mtime = self._get_index_mtime()
             self._reload_lock = threading.RLock()
 
             logger.info(
-                f"✅ HybridRetriever v3.0 초기화 완료 "
+                f"✅ HybridRetriever v3.1 초기화 완료 "
                 f"({len(self.stages)}개 Stage, "
                 f"BM25={self.use_bm25}, "
+                f"Dense={self.enable_dense}, "
                 f"docs={len(self.bm25.documents) if self.bm25 else 0})"
             )
 
@@ -149,14 +159,21 @@ class HybridRetriever:
             enabled=self.exact_match_enabled,
         ))
 
-        # Stage 2: MetadataRoutingStage
+        # Stage 2: DenseStage (NEW - 벡터 기반 의미론적 검색)
+        enable_dense = os.getenv("ENABLE_DENSE_RETRIEVAL", "true").lower() == "true"
+        stages.append(DenseStage(
+            enabled=enable_dense,
+            min_score=0.3,
+        ))
+
+        # Stage 3: MetadataRoutingStage
         stages.append(MetadataRoutingStage(
             metadata_db=self.metadata_db,
             retrieve_topk=self.retrieve_topk,
             snippet_max_length=self.snippet_max_length,
         ))
 
-        # Stage 3: FTSBM25Stage
+        # Stage 4: FTSBM25Stage
         stages.append(FTSBM25Stage(
             bm25=self.bm25,
             metadata_db=self.metadata_db,
@@ -329,6 +346,9 @@ class HybridRetriever:
         Returns:
             검색 결과 리스트
         """
+        dense_results = []
+        bm25_results = []
+
         for stage in self.stages:
             # 스킵 조건 체크
             if stage.should_skip(context):
@@ -344,11 +364,32 @@ class HybridRetriever:
                 logger.info(f"🛑 {stage.name}에서 조기 종료 ({len(result.results)}건)")
                 return result.results
 
-            # 결과 누적
+            # Dense 결과는 별도 저장 (RRF용)
             if result.results:
-                context.add_results(result.results)
+                if stage.name == "DenseStage":
+                    dense_results = result.results
+                else:
+                    # BM25/기타 결과 누적
+                    bm25_results.extend(result.results)
+                    context.add_results(result.results)
 
-        # 누적된 결과 반환
+        # Dense + BM25 결과가 모두 있으면 RRF 결합
+        if dense_results and bm25_results and self.hybrid_ranker:
+            logger.info(
+                f"🔀 RRF 결합: Dense({len(dense_results)}) + BM25({len(bm25_results)})"
+            )
+            fused_results = self.hybrid_ranker.fuse(
+                bm25_results=bm25_results,
+                dense_results=dense_results,
+                top_k=context.top_k * 2,  # 여유있게
+            )
+            return fused_results
+
+        # Dense만 있으면 Dense 결과 반환
+        if dense_results and not bm25_results:
+            return dense_results
+
+        # 누적된 결과 반환 (BM25만 또는 빈 결과)
         return context.accumulated_results
 
     def _calculate_score_stats(self, results: list[dict[str, Any]]) -> dict[str, float]:

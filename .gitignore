@@ -112,3 +112,4 @@ health_check.py
 
 # Backup archives
 *.tar.gz
+indexes_v2/

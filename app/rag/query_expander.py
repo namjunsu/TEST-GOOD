@@ -227,14 +227,28 @@ class _MemCache:
 class QueryExpander:
     """LLM 기반 쿼리 확장"""
 
-    def __init__(self):
-        """초기화"""
-        self.llm = LLMSingleton.get_instance()
+    def __init__(self, use_llm: bool = True):
+        """초기화
+
+        Args:
+            use_llm: LLM 사용 여부 (False면 fallback 모드만 사용)
+        """
+        self.llm = None
+        self._use_llm = use_llm
+
+        if use_llm:
+            try:
+                self.llm = LLMSingleton.get_instance()
+            except Exception as e:
+                logger.warning(f"⚠️ LLM 초기화 실패, fallback 모드 사용: {e}")
+                self._use_llm = False
+
         self.cache = _MemCache()  # 스레드 안전 캐시 (TTL은 Config에서 설정)
         self.search_stopwords = self._load_search_stopwords()
         self.domain_terms = self._load_domain_terms()
+        mode_str = "LLM 모드" if self._use_llm else "Fallback 모드"
         logger.info(
-            f"✅ QueryExpander 초기화: {len(self.search_stopwords)}개 불용어, "
+            f"✅ QueryExpander 초기화 ({mode_str}): {len(self.search_stopwords)}개 불용어, "
             f"{len(self.domain_terms)}개 도메인 용어",
         )
 
@@ -307,6 +321,11 @@ class QueryExpander:
         if cached:
             logger.info(f"💾 Cache hit: {query[:80]}...")
             return cached
+
+        # LLM 비활성화 시 fallback 사용
+        if not self._use_llm or self.llm is None:
+            logger.info("📝 LLM 비활성화, fallback 확장 사용")
+            return self._create_fallback_expansion(query)
 
         # LLM 프롬프트 생성 (인젝션 방어 포함)
         prompt = _llm_keyword_prompt(query)

@@ -8,8 +8,9 @@
 - 5초 이내 응답
 """
 
-import pytest
 import time
+
+import pytest
 
 
 @pytest.mark.e2e
@@ -75,7 +76,7 @@ def test_consumables_summary():
         # 6. found 상태 확인
         assert result.get("status", {}).get("found", False), "found=False"
 
-        print(f"\n✅ 소모품 요약 테스트 통과")
+        print("\n✅ 소모품 요약 테스트 통과")
         print(f"   - 응답 길이: {len(response)}자")
         print(f"   - 처리 시간: {elapsed:.2f}s")
         print(f"   - 키워드 발견: {found_keywords}")

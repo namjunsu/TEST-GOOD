@@ -4,7 +4,7 @@
 """
 
 import pytest
-import pytest
+
 pytestmark = pytest.mark.skip(reason="인터페이스 변경으로 재작성 필요")
 from app.rag.parse.parse_tables import TableParser
 
@@ -50,7 +50,7 @@ class TestTableParser:
 
         # 최소한 몇 개의 헤더가 발견되어야 함
         assert len(headers) > 0
-        assert any('모델' in h for h in headers)
+        assert any("모델" in h for h in headers)
 
     def test_extract_cost_table_basic(self, parser):
         """기본 비용 표 추출 테스트"""
@@ -145,23 +145,23 @@ class TestTableParser:
         result = parser.parse(text)
 
         # 파싱 성공 확인
-        assert result['parse_status'] in ['success', 'partial']
+        assert result["parse_status"] in ["success", "partial"]
 
         # 항목 확인
-        assert len(result['items']) >= 2
+        assert len(result["items"]) >= 2
 
         # 합계 확인
-        assert result['total'] > 0
+        assert result["total"] > 0
 
     def test_format_cost_display(self, parser):
         """비용 표시 형식 테스트"""
         parsed_table = {
-            'items': [
+            "items": [
                 {"name": "항목1", "amount": 100000},
                 {"name": "항목2", "amount": 200000}
             ],
-            'total': 300000,
-            'sum_match': True
+            "total": 300000,
+            "sum_match": True
         }
 
         display = parser.format_cost_display(parsed_table)
@@ -174,13 +174,13 @@ class TestTableParser:
     def test_format_cost_display_mismatch(self, parser):
         """합계 불일치 표시 테스트"""
         parsed_table = {
-            'items': [
+            "items": [
                 {"name": "항목1", "amount": 100000},
                 {"name": "항목2", "amount": 200000}
             ],
-            'total': 300000,
-            'claimed_total': 350000,
-            'sum_match': False
+            "total": 300000,
+            "claimed_total": 350000,
+            "sum_match": False
         }
 
         display = parser.format_cost_display(parsed_table)

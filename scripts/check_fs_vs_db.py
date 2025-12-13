@@ -9,11 +9,10 @@
 """
 
 import argparse
-import os
 import sqlite3
 import sys
 from pathlib import Path
-from typing import Set, Dict, List
+from typing import Dict, Set
 
 # 프로젝트 루트 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -133,7 +132,7 @@ def print_report(issues: Dict):
     print(f"⚠️  문제 있음: {summary['years_with_issues']}")
     print()
 
-    if summary['years_with_issues'] == 0:
+    if summary["years_with_issues"] == 0:
         print("🎉 모든 연도가 완벽하게 동기화되어 있습니다!")
         return
 

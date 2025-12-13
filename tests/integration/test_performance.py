@@ -7,7 +7,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.performance import PerformanceMonitor, Timer, benchmark
 
 # conftest.py에서 설정한 streamlit mock 참조
-st_mock = sys.modules['streamlit']
+st_mock = sys.modules["streamlit"]
 
 
 class TestPerformanceMonitor:
@@ -40,14 +40,14 @@ class TestPerformanceMonitor:
         result = test_func()
 
         assert result == "result"
-        assert 'performance_metrics' in st_mock.session_state
+        assert "performance_metrics" in st_mock.session_state
 
-        metrics = st_mock.session_state['performance_metrics']
+        metrics = st_mock.session_state["performance_metrics"]
         func_key = f"{test_func.__module__}.test_func"
         assert func_key in metrics
-        assert metrics[func_key]['count'] == 1
-        assert metrics[func_key]['total_time'] >= 0.01
-        assert metrics[func_key]['errors'] == 0
+        assert metrics[func_key]["count"] == 1
+        assert metrics[func_key]["total_time"] >= 0.01
+        assert metrics[func_key]["errors"] == 0
 
     def test_measure_decorator_with_name(self):
         """커스텀 이름 지정"""
@@ -57,9 +57,9 @@ class TestPerformanceMonitor:
 
         test_func()
 
-        metrics = st_mock.session_state['performance_metrics']
+        metrics = st_mock.session_state["performance_metrics"]
         assert "CustomFunction" in metrics
-        assert metrics["CustomFunction"]['count'] == 1
+        assert metrics["CustomFunction"]["count"] == 1
 
     def test_measure_decorator_error_tracking(self):
         """에러 발생 시 메트릭 추적"""
@@ -71,15 +71,15 @@ class TestPerformanceMonitor:
         with pytest.raises(ValueError):
             failing_func()
 
-        metrics = st_mock.session_state['performance_metrics']
+        metrics = st_mock.session_state["performance_metrics"]
         func_key = f"{failing_func.__module__}.failing_func"
-        assert metrics[func_key]['count'] == 1
-        assert metrics[func_key]['errors'] == 1
-        assert metrics[func_key]['total_time'] >= 0.01
+        assert metrics[func_key]["count"] == 1
+        assert metrics[func_key]["errors"] == 1
+        assert metrics[func_key]["total_time"] >= 0.01
 
     def test_perf_counter_usage(self):
         """perf_counter 사용 확인"""
-        with patch('time.perf_counter') as mock_perf:
+        with patch("time.perf_counter") as mock_perf:
             mock_perf.side_effect = [1.0, 1.5]  # 0.5초 경과
 
             @PerformanceMonitor.measure
@@ -91,9 +91,9 @@ class TestPerformanceMonitor:
             # perf_counter가 두 번 호출되었는지 확인
             assert mock_perf.call_count == 2
 
-            metrics = st_mock.session_state['performance_metrics']
+            metrics = st_mock.session_state["performance_metrics"]
             func_key = f"{test_func.__module__}.test_func"
-            assert abs(metrics[func_key]['total_time'] - 0.5) < 0.001
+            assert abs(metrics[func_key]["total_time"] - 0.5) < 0.001
 
     def test_multiple_calls_aggregation(self):
         """여러 번 호출 시 메트릭 집계"""
@@ -105,18 +105,18 @@ class TestPerformanceMonitor:
         for _ in range(3):
             test_func()
 
-        metrics = st_mock.session_state['performance_metrics']
+        metrics = st_mock.session_state["performance_metrics"]
         func_key = f"{test_func.__module__}.test_func"
 
-        assert metrics[func_key]['count'] == 3
-        assert metrics[func_key]['total_time'] >= 0.03
-        assert metrics[func_key]['min_time'] >= 0.01
-        assert metrics[func_key]['max_time'] >= metrics[func_key]['min_time']
+        assert metrics[func_key]["count"] == 3
+        assert metrics[func_key]["total_time"] >= 0.03
+        assert metrics[func_key]["min_time"] >= 0.01
+        assert metrics[func_key]["max_time"] >= metrics[func_key]["min_time"]
 
     def test_debug_mode_display(self):
         """디버그 모드 표시 동작"""
         # 디버그 모드 활성화
-        os.environ['DEBUG_MODE'] = 'true'
+        os.environ["DEBUG_MODE"] = "true"
 
         @PerformanceMonitor.measure
         def slow_func():
@@ -128,7 +128,7 @@ class TestPerformanceMonitor:
         st_mock.caption.assert_called()
 
         # 디버그 모드 비활성화
-        os.environ['DEBUG_MODE'] = 'false'
+        os.environ["DEBUG_MODE"] = "false"
         st_mock.caption.reset_mock()
 
         slow_func()
@@ -137,7 +137,7 @@ class TestPerformanceMonitor:
         st_mock.caption.assert_not_called()
 
         # 환경 변수 정리
-        del os.environ['DEBUG_MODE']
+        del os.environ["DEBUG_MODE"]
 
     def test_get_summary(self):
         """요약 정보 생성"""
@@ -155,13 +155,13 @@ class TestPerformanceMonitor:
 
         summary = PerformanceMonitor.get_summary()
 
-        assert summary['total_functions'] == 2
-        assert summary['total_calls'] == 3
-        assert summary['total_time'] >= 0.04
-        assert summary['avg_time'] >= 0.013
-        assert summary['total_errors'] == 0
-        assert summary['most_called']['name'] == 'func1'
-        assert summary['most_called']['count'] == 2
+        assert summary["total_functions"] == 2
+        assert summary["total_calls"] == 3
+        assert summary["total_time"] >= 0.04
+        assert summary["avg_time"] >= 0.013
+        assert summary["total_errors"] == 0
+        assert summary["most_called"]["name"] == "func1"
+        assert summary["most_called"]["count"] == 2
 
     def test_reset_metrics(self):
         """메트릭 초기화"""
@@ -170,11 +170,11 @@ class TestPerformanceMonitor:
             pass
 
         test_func()
-        assert 'performance_metrics' in st_mock.session_state
+        assert "performance_metrics" in st_mock.session_state
 
         # 메시지 표시 없이 초기화
         PerformanceMonitor.reset_metrics(show_message=False)
-        assert 'performance_metrics' not in st_mock.session_state
+        assert "performance_metrics" not in st_mock.session_state
         st_mock.success.assert_not_called()
 
         # 메시지 표시하며 초기화
@@ -199,13 +199,13 @@ class TestTimer:
         assert timer.name == "TestOperation"
 
         # 메트릭에 저장되었는지 확인
-        metrics = st_mock.session_state['performance_metrics']
+        metrics = st_mock.session_state["performance_metrics"]
         assert "TestOperation" in metrics
-        assert metrics["TestOperation"]['count'] == 1
+        assert metrics["TestOperation"]["count"] == 1
 
     def test_timer_debug_mode_integration(self):
         """Timer의 디버그 모드 통합"""
-        os.environ['DEBUG_MODE'] = 'true'
+        os.environ["DEBUG_MODE"] = "true"
 
         with Timer("SlowOp") as timer:
             time.sleep(0.01)
@@ -214,7 +214,7 @@ class TestTimer:
         st_mock.caption.assert_called()
 
         # 디버그 모드 비활성화
-        os.environ['DEBUG_MODE'] = 'false'
+        os.environ["DEBUG_MODE"] = "false"
         st_mock.caption.reset_mock()
 
         with Timer("FastOp"):
@@ -223,7 +223,7 @@ class TestTimer:
         # 비활성화 시 표시 안 함
         st_mock.caption.assert_not_called()
 
-        del os.environ['DEBUG_MODE']
+        del os.environ["DEBUG_MODE"]
 
     def test_timer_exception_handling(self):
         """Timer 내 예외 발생 처리"""
@@ -232,13 +232,13 @@ class TestTimer:
                 raise ValueError("Test error")
 
         # 예외가 발생해도 메트릭은 저장됨
-        metrics = st_mock.session_state['performance_metrics']
+        metrics = st_mock.session_state["performance_metrics"]
         assert "ErrorOp" in metrics
-        assert metrics["ErrorOp"]['count'] == 1
+        assert metrics["ErrorOp"]["count"] == 1
 
     def test_timer_perf_counter(self):
         """Timer의 perf_counter 사용"""
-        with patch('time.perf_counter') as mock_perf:
+        with patch("time.perf_counter") as mock_perf:
             mock_perf.side_effect = [1.0, 1.5]
 
             with Timer("TestOp", show=False) as timer:
@@ -268,7 +268,7 @@ class TestBenchmark:
 
     def test_benchmark_timing_accuracy(self):
         """벤치마크 시간 측정 정확도"""
-        with patch('time.perf_counter') as mock_perf:
+        with patch("time.perf_counter") as mock_perf:
             # 10번 반복, 각 0.1초
             mock_perf.side_effect = [i * 0.1 for i in range(21)]
 
@@ -276,7 +276,7 @@ class TestBenchmark:
             def test_func():
                 return "result"
 
-            with patch.object(PerformanceMonitor.logger, 'info') as mock_log:
+            with patch.object(PerformanceMonitor.logger, "info") as mock_log:
                 result = test_func()
 
                 # 로그 메시지 확인
@@ -299,7 +299,7 @@ class TestPerformanceThresholds:
         def slow_func():
             time.sleep(1.1)  # SLOW_THRESHOLD = 1.0 초과
 
-        with patch.object(PerformanceMonitor.logger, 'info') as mock_log:
+        with patch.object(PerformanceMonitor.logger, "info") as mock_log:
             slow_func()
             mock_log.assert_called()
             assert "Slow:" in mock_log.call_args[0][0]
@@ -314,7 +314,7 @@ class TestPerformanceThresholds:
         original = PerformanceMonitor.CRITICAL_THRESHOLD
         PerformanceMonitor.CRITICAL_THRESHOLD = 0.005
 
-        with patch.object(PerformanceMonitor.logger, 'warning') as mock_log:
+        with patch.object(PerformanceMonitor.logger, "warning") as mock_log:
             very_slow_func()
             mock_log.assert_called()
             assert "Critical:" in mock_log.call_args[0][0]

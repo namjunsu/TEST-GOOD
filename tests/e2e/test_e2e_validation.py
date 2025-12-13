@@ -11,10 +11,10 @@ RAG 파이프라인의 전체 흐름을 실제 쿼리로 검증합니다.
 4. 성능: 처리 시간 임계값 (3초 warn, 10초 fail)
 """
 
-import pytest
 import time
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
+import pytest
 
 # 골든셋 시나리오 정의
 GOLDEN_SCENARIOS = [
@@ -159,9 +159,9 @@ def test_golden_scenarios():
         all_results = []
         all_failures = []
 
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("E2E 골든셋 검증 시작")
-        print("="*80)
+        print("=" * 80)
 
         for scenario in GOLDEN_SCENARIOS:
             print(f"\n[{scenario['id']}] {scenario['query']}")
@@ -210,11 +210,11 @@ def test_golden_scenarios():
                 all_failures.append(f"[{scenario['id']}] 예외: {e}")
 
         # 최종 결과 요약
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print(f"E2E 검증 완료: {len(GOLDEN_SCENARIOS)}개 시나리오")
         print(f"  통과: {len(GOLDEN_SCENARIOS) - len([r for r in all_results if r['failures']])}개")
         print(f"  실패: {len([r for r in all_results if r['failures']])}개")
-        print("="*80 + "\n")
+        print("=" * 80 + "\n")
 
         # 실패가 있으면 테스트 실패
         if all_failures:
@@ -257,7 +257,7 @@ def test_context_length_minimum():
                     failures.append(f"[{query}] 금지 문구 포함: '{phrase}'")
 
         if failures:
-            pytest.fail(f"응답 품질 검증 실패:\n" + "\n".join(failures))
+            pytest.fail("응답 품질 검증 실패:\n" + "\n".join(failures))
 
         print(f"✅ 응답 품질 검증 통과: {len(test_cases)}개 케이스")
 
@@ -299,7 +299,7 @@ def test_forbidden_responses():
                     )
 
         if failures:
-            pytest.fail(f"금지 응답 검증 실패:\n" + "\n".join(failures))
+            pytest.fail("금지 응답 검증 실패:\n" + "\n".join(failures))
 
         print(f"✅ 금지 응답 검증 통과: {len(test_queries)}개 케이스")
 

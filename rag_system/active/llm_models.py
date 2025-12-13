@@ -65,7 +65,7 @@ class RAGResponse:
 MODE_TOKEN_CONFIG = {
     "chat": {"max": 512, "context": 1024},       # 64 → 512 (일반 대화도 충분한 응답)
     "rag": {"max": 3072, "context": 4000},       # 160 → 3072 (.env RAG_MAX_TOKENS와 동기화)
-    "summarize": {"max": 2048, "context": 4000}, # 1200 → 2048 (상세 요약)
+    "summarize": {"max": 2048, "context": 4000},  # 1200 → 2048 (상세 요약)
     "full_document": {"max": 2048, "context": 4000},
     "conversational": {"max": 2048, "context": 4000},
     "default": {"max": 1024, "context": 2048},   # 512 → 1024

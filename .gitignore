@@ -109,3 +109,6 @@ var/
 /check_*.py
 /debug_*.py
 health_check.py
+
+# Backup archives
+*.tar.gz

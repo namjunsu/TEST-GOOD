@@ -9,13 +9,14 @@ system_checker.py 버그 수정 검증 테스트
 4. config.py 검사가 WARN으로 변경되었는지 확인
 """
 
-import pytest
-import sys
 import os
 import pickle
+import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 
 # 프로젝트 루트 경로 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -23,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # streamlit mock은 conftest.py에서 전역으로 설정됨
 
 # system_checker import
-from utils.system_checker import SystemChecker, CheckStatus, CheckResult
+from utils.system_checker import CheckResult, CheckStatus, SystemChecker
 
 
 class TestCacheResultSync:
@@ -48,11 +49,11 @@ class TestCacheResultSync:
             "result": fake_result
         }
 
-        with open(cache_file, 'wb') as f:
+        with open(cache_file, "wb") as f:
             pickle.dump(payload, f)
 
         # SystemChecker 생성 (캐시 파일 경로 오버라이드)
-        with patch.object(SystemChecker, 'CACHE_FILE', cache_file):
+        with patch.object(SystemChecker, "CACHE_FILE", cache_file):
             checker = SystemChecker(verbose=False, use_cache=True)
 
             # check_all() 호출 전 self.result는 비어있음
@@ -84,25 +85,25 @@ class TestCacheResultSync:
             status=CheckStatus.PASS,
             message="This is from cache"
         ))
-        fake_result.metrics['test_metric'] = 123
+        fake_result.metrics["test_metric"] = 123
 
         payload = {
             "version": 2,
             "result": fake_result
         }
 
-        with open(cache_file, 'wb') as f:
+        with open(cache_file, "wb") as f:
             pickle.dump(payload, f)
 
-        with patch.object(SystemChecker, 'CACHE_FILE', cache_file):
+        with patch.object(SystemChecker, "CACHE_FILE", cache_file):
             checker = SystemChecker(verbose=False, use_cache=True)
             checker.check_all()
 
             # to_json() 결과 확인
             result_dict = checker.result.to_dict()
 
-            assert result_dict['passed'][0]['message'] == "This is from cache"
-            assert result_dict['metrics']['test_metric'] == 123
+            assert result_dict["passed"][0]["message"] == "This is from cache"
+            assert result_dict["metrics"]["test_metric"] == 123
 
 
 class TestLoggerExceptionUsage:
@@ -116,8 +117,8 @@ class TestLoggerExceptionUsage:
         def failing_check():
             raise ValueError("Test error")
 
-        with patch('utils.system_checker.logger') as mock_logger:
-            with patch('utils.system_checker.LOGGING_AVAILABLE', True):
+        with patch("utils.system_checker.logger") as mock_logger:
+            with patch("utils.system_checker.LOGGING_AVAILABLE", True):
                 # 병렬 검사 실행
                 checker._run_parallel_checks([("Test", failing_check)], 1)
 
@@ -129,7 +130,7 @@ class TestLoggerExceptionUsage:
                 # (exception 키워드 인자 사용하는 호출이 없어야 함)
                 for call in mock_logger.error.call_args_list:
                     if call[1]:  # kwargs가 있으면
-                        assert 'exception' not in call[1]
+                        assert "exception" not in call[1]
 
     def test_logger_exception_called_on_sequential_check_error(self):
         """순차 검사 실패 시 logger.exception() 호출 확인"""
@@ -138,8 +139,8 @@ class TestLoggerExceptionUsage:
         def failing_check():
             raise RuntimeError("Sequential test error")
 
-        with patch('utils.system_checker.logger') as mock_logger:
-            with patch('utils.system_checker.LOGGING_AVAILABLE', True):
+        with patch("utils.system_checker.logger") as mock_logger:
+            with patch("utils.system_checker.LOGGING_AVAILABLE", True):
                 checker._run_sequential_checks([("Test", failing_check)], 1)
 
                 mock_logger.exception.assert_called_once()
@@ -167,10 +168,10 @@ class TestCacheVersionManagement:
             "result": old_result
         }
 
-        with open(cache_file, 'wb') as f:
+        with open(cache_file, "wb") as f:
             pickle.dump(old_payload, f)
 
-        with patch.object(SystemChecker, 'CACHE_FILE', cache_file):
+        with patch.object(SystemChecker, "CACHE_FILE", cache_file):
             checker = SystemChecker(verbose=False, use_cache=True, show_progress=False)
 
             # check_all() 호출
@@ -188,14 +189,14 @@ class TestCacheVersionManagement:
         """저장된 캐시에 버전 메타데이터가 포함되는지 확인"""
         cache_file = tmp_path / ".system_check_cache.pkl"
 
-        with patch.object(SystemChecker, 'CACHE_FILE', cache_file):
+        with patch.object(SystemChecker, "CACHE_FILE", cache_file):
             checker = SystemChecker(verbose=False, use_cache=True, show_progress=False)
 
             # 검사 실행 (캐시 저장됨)
             checker.check_all()
 
             # 캐시 파일 내용 확인
-            with open(cache_file, 'rb') as f:
+            with open(cache_file, "rb") as f:
                 payload = pickle.load(f)
 
             # 버전 필드 존재 확인
@@ -219,10 +220,10 @@ class TestCacheVersionManagement:
             message="Invalid format"
         ))
 
-        with open(cache_file, 'wb') as f:
+        with open(cache_file, "wb") as f:
             pickle.dump(old_format_result, f)  # payload 딕셔너리 없이 직접 저장
 
-        with patch.object(SystemChecker, 'CACHE_FILE', cache_file):
+        with patch.object(SystemChecker, "CACHE_FILE", cache_file):
             checker = SystemChecker(verbose=False, use_cache=True, show_progress=False)
 
             # 오류 없이 새 검사 실행되어야 함
@@ -243,7 +244,7 @@ class TestConfigCheckPolicy:
         fake_root = tmp_path / "fake_project"
         fake_root.mkdir()
 
-        with patch('utils.system_checker.project_root', fake_root):
+        with patch("utils.system_checker.project_root", fake_root):
             checker = SystemChecker(verbose=False, use_cache=False, show_progress=False)
             checker.check_config_files()
 
@@ -271,7 +272,7 @@ class TestConfigCheckPolicy:
         (fake_root / "app").mkdir()
         (fake_root / "app" / "config").mkdir()
 
-        with patch('utils.system_checker.project_root', fake_root):
+        with patch("utils.system_checker.project_root", fake_root):
             checker = SystemChecker(verbose=False, use_cache=False, show_progress=False)
             checker.check_config_files()
 
@@ -286,7 +287,7 @@ class TestIntegrationAllFixes:
         """캐시 저장 → 로드 → JSON 출력 전체 흐름 테스트"""
         cache_file = tmp_path / ".system_check_cache.pkl"
 
-        with patch.object(SystemChecker, 'CACHE_FILE', cache_file):
+        with patch.object(SystemChecker, "CACHE_FILE", cache_file):
             # 첫 번째 실행 (캐시 저장)
             checker1 = SystemChecker(verbose=False, use_cache=True, show_progress=False)
             result1 = checker1.check_all()
@@ -309,9 +310,9 @@ class TestIntegrationAllFixes:
             import json
             json_data = json.loads(json_output)
             total_items = (
-                len(json_data.get('passed', [])) +
-                len(json_data.get('warnings', [])) +
-                len(json_data.get('errors', []))
+                len(json_data.get("passed", [])) +
+                len(json_data.get("warnings", [])) +
+                len(json_data.get("errors", []))
             )
             assert total_items > 0
 

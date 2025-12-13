@@ -10,7 +10,8 @@
 """
 
 import pytest
-from app.config.compat import normalize_config, is_legacy_config, validate_ocr_mode
+
+from app.config.compat import is_legacy_config, normalize_config, validate_ocr_mode
 
 
 class TestCompatNormalize:
@@ -161,7 +162,7 @@ class TestOCRRouting:
 
     def test_ocr_mode_off(self):
         """OCR off 모드"""
-        from scripts.ingest_from_docs import DocumentIngester, OCR_MODE_OFF
+        from scripts.ingest_from_docs import OCR_MODE_OFF, DocumentIngester
 
         ingester = DocumentIngester(ocr_mode="off", dry_run=True)
         assert ingester.ocr_mode == OCR_MODE_OFF
@@ -169,7 +170,7 @@ class TestOCRRouting:
 
     def test_ocr_mode_fallback(self):
         """OCR fallback 모드"""
-        from scripts.ingest_from_docs import DocumentIngester, OCR_MODE_FALLBACK
+        from scripts.ingest_from_docs import OCR_MODE_FALLBACK, DocumentIngester
 
         ingester = DocumentIngester(ocr_mode="fallback", dry_run=True)
         assert ingester.ocr_mode == OCR_MODE_FALLBACK
@@ -177,7 +178,7 @@ class TestOCRRouting:
 
     def test_ocr_mode_force(self):
         """OCR force 모드"""
-        from scripts.ingest_from_docs import DocumentIngester, OCR_MODE_FORCE
+        from scripts.ingest_from_docs import OCR_MODE_FORCE, DocumentIngester
 
         ingester = DocumentIngester(ocr_mode="force", dry_run=True)
         assert ingester.ocr_mode == OCR_MODE_FORCE
@@ -185,7 +186,7 @@ class TestOCRRouting:
 
     def test_ocr_enabled_backward_compat(self):
         """v0 호환: ocr_enabled=True → fallback 모드"""
-        from scripts.ingest_from_docs import DocumentIngester, OCR_MODE_FALLBACK
+        from scripts.ingest_from_docs import OCR_MODE_FALLBACK, DocumentIngester
 
         ingester = DocumentIngester(ocr_enabled=True, dry_run=True)
         assert ingester.ocr_mode == OCR_MODE_FALLBACK
@@ -193,7 +194,7 @@ class TestOCRRouting:
 
     def test_ocr_mode_priority(self):
         """ocr_mode가 ocr_enabled보다 우선"""
-        from scripts.ingest_from_docs import DocumentIngester, OCR_MODE_FORCE
+        from scripts.ingest_from_docs import OCR_MODE_FORCE, DocumentIngester
 
         ingester = DocumentIngester(
             ocr_mode="force", ocr_enabled=False, dry_run=True

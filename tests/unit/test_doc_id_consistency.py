@@ -10,7 +10,7 @@ import sqlite3
 from pathlib import Path
 
 import pytest
-import pytest
+
 pytestmark = pytest.mark.skip(reason="인터페이스 변경으로 재작성 필요")
 
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -64,9 +64,9 @@ class TestDocIDConsistency:
         conn.close()
 
         # BM25 IDs
-        with open(bm25_path, 'rb') as f:
+        with open(bm25_path, "rb") as f:
             bm25_data = pickle.load(f)
-            bm25_ids = {m.get('id') for m in bm25_data['metadata'][:10]}
+            bm25_ids = {m.get("id") for m in bm25_data["metadata"][:10]}
 
         # 샘플 비교 (최소 5개 이상 일치해야 함)
         common_ids = db_ids & bm25_ids
@@ -82,12 +82,12 @@ class TestDocIDConsistency:
         if not bm25_path.exists():
             pytest.skip("BM25 인덱스 없음")
 
-        with open(bm25_path, 'rb') as f:
+        with open(bm25_path, "rb") as f:
             bm25_data = pickle.load(f)
-            metadata = bm25_data['metadata'][:10]
+            metadata = bm25_data["metadata"][:10]
 
         for meta in metadata:
-            doc_id = meta.get('id')
+            doc_id = meta.get("id")
             assert doc_id is not None, f"id 필드 누락: {meta}"
             assert isinstance(doc_id, str), f"id가 문자열이 아님: {doc_id} (type={type(doc_id)})"
 
@@ -102,11 +102,11 @@ class TestDocIDConsistency:
         if not report_path.exists():
             pytest.skip("정합성 리포트 없음 (scripts/check_index_consistency.py 미실행)")
 
-        content = report_path.read_text(encoding='utf-8')
+        content = report_path.read_text(encoding="utf-8")
 
         # 정합성 점수 파싱
         import re
-        match = re.search(r'정합성 점수:\s*(\d+\.\d+)%', content)
+        match = re.search(r"정합성 점수:\s*(\d+\.\d+)%", content)
         assert match, "정합성 점수를 찾을 수 없음"
 
         score = float(match.group(1))
@@ -118,20 +118,20 @@ class TestDocIDRegressionPrevention:
 
     def test_no_sequential_doc_id_in_new_code(self):
         """신규 코드에서 순서 기반 doc_id 사용 금지"""
-        from rag_system.active import bm25_store
-
         # _resolve_doc_id 함수 시그니처 확인
         import inspect
+
+        from rag_system.active import bm25_store
         sig = inspect.signature(bm25_store._resolve_doc_id)
         params = list(sig.parameters.keys())
 
-        assert 'metadata' in params, "_resolve_doc_id에 metadata 파라미터 필수"
-        assert 'doc_idx' in params, "_resolve_doc_id에 doc_idx 파라미터 필수"
+        assert "metadata" in params, "_resolve_doc_id에 metadata 파라미터 필수"
+        assert "doc_idx" in params, "_resolve_doc_id에 doc_idx 파라미터 필수"
 
     def test_reindex_script_uses_db_id(self):
         """reindex_atomic.py가 DB ID를 사용하는지 검증"""
         script_path = PROJECT_ROOT / "scripts/reindex_atomic.py"
-        content = script_path.read_text(encoding='utf-8')
+        content = script_path.read_text(encoding="utf-8")
 
         # DB 쿼리에서 id 필드를 SELECT하는지 확인
         assert "SELECT id" in content or "SELECT *" in content, (

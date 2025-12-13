@@ -15,7 +15,7 @@ import pytest
 # route_query 함수가 삭제되어 테스트 전체 스킵
 pytestmark = pytest.mark.skip(reason="route_query 함수가 QueryRouter 클래스로 이관됨")
 
-from app.utils.text_normalizer import normalize_query, is_detailed_mode, detect_section
+from app.utils.text_normalizer import detect_section, is_detailed_mode, normalize_query
 
 
 # route_query 임시 정의 (테스트 로드 에러 방지)

@@ -15,8 +15,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 def test_imports():
     """Test that core modules can be imported."""
     try:
-        import app.rag.pipeline
         import app.data.metadata_db
+        import app.rag.pipeline
         import app.rag.query_parser
         import app.rag.query_router
         print("✅ Core modules import successfully")
@@ -65,8 +65,8 @@ def test_known_drafters():
 def test_query_parser():
     """Test query parsing functionality."""
     try:
-        from app.rag.query_parser import QueryParser
         from app.data.metadata_db import MetadataDB
+        from app.rag.query_parser import QueryParser
 
         db = MetadataDB()
         known_drafters = db.list_unique_drafters()
@@ -94,7 +94,7 @@ def test_query_parser():
 def test_query_router():
     """Test query routing functionality."""
     try:
-        from app.rag.query_router import QueryRouter, QueryMode
+        from app.rag.query_router import QueryMode, QueryRouter
 
         router = QueryRouter()
 

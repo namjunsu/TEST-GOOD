@@ -4,6 +4,7 @@
 """
 
 import pytest
+
 from app.rag.pipeline import RAGPipeline
 
 
@@ -84,7 +85,7 @@ def test_preview_mode_no_fake_table(pipeline):
     assert table_markers == 0, "가짜 Markdown 테이블이 생성되지 않아야 함"
 
     # 원문 6-8줄 검증 (개행 기준)
-    lines = [line for line in text.split('\n') if line.strip() and not line.startswith("**")]
+    lines = [line for line in text.split("\n") if line.strip() and not line.startswith("**")]
     assert 1 <= len(lines) <= 20, f"원문 줄 수 범위 초과 ({len(lines)}줄)"
 
     print(f"\n✅ AC3 통과: 미리보기 (원문 {len(lines)}줄, 가짜 표 없음)\n{text[:300]}...")
@@ -121,7 +122,7 @@ def test_routing_priority():
     - COST_SUM → COST (비용 조회)
     - LIST/SUMMARY/PREVIEW → SEARCH/DOCUMENT (통합)
     """
-    from app.rag.query_router import QueryRouter, QueryMode
+    from app.rag.query_router import QueryMode, QueryRouter
 
     router = QueryRouter()
 

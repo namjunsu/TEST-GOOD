@@ -7,8 +7,9 @@ FastAPI 엔드포인트 테스트
 
 pytest-mock 없이 기본 pytest 기능으로 테스트
 """
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
 

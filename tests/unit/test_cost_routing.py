@@ -8,7 +8,8 @@ classify_mode()는 RouteDecision 객체를 반환하므로 .mode로 접근 필�
 """
 
 import pytest
-from app.rag.query_router import QueryRouter, QueryMode
+
+from app.rag.query_router import QueryMode, QueryRouter
 
 
 class TestCostRouting:
@@ -157,9 +158,9 @@ def test_cost_routing_accuracy_batch():
     total_correct = cost_correct + negative_correct
     accuracy = total_correct / total_cases * 100
 
-    print(f"\n=== COST 라우팅 정확도 ===")
-    print(f"COST 정확도: {cost_correct}/{len(cost_cases)} ({cost_correct/len(cost_cases)*100:.1f}%)")
-    print(f"Negative 정확도: {negative_correct}/{len(non_cost_cases)} ({negative_correct/len(non_cost_cases)*100:.1f}%)")
+    print("\n=== COST 라우팅 정확도 ===")
+    print(f"COST 정확도: {cost_correct}/{len(cost_cases)} ({cost_correct / len(cost_cases) * 100:.1f}%)")
+    print(f"Negative 정확도: {negative_correct}/{len(non_cost_cases)} ({negative_correct / len(non_cost_cases) * 100:.1f}%)")
     print(f"전체 정확도: {total_correct}/{total_cases} ({accuracy:.1f}%)")
 
     # 정확도 ≥95% 검증

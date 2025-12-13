@@ -6,6 +6,7 @@ v0 → v1 하위호환 + 병렬 풀 + OCR 모드 통합 테스트
 """
 
 import pytest
+
 from app.config.performance_compat import (
     normalize_performance_config,
     resolve_auto_workers,

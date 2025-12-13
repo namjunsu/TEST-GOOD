@@ -221,7 +221,7 @@ class ParallelSearchExecutor:
     def shutdown(self):
         """Shutdown the thread pool executor"""
         self.executor.shutdown(wait=True)
-        logger.info("🔄 Parallel executor shutdown")
+        # atexit 시 logging stream이 이미 닫혀 있을 수 있으므로 로깅 생략
 
 
 # Global executor instance with lock

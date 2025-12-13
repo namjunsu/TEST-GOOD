@@ -3,8 +3,9 @@
 app/rag/handlers/ 모듈의 단위 테스트.
 """
 
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
 
 
 class TestResponseBuilderFunctions:

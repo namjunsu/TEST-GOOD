@@ -6,6 +6,7 @@
 """
 
 import pytest
+
 from app.query.filters import QueryFilter, get_query_filter
 
 

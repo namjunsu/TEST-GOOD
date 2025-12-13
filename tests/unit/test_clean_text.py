@@ -4,6 +4,7 @@
 """
 
 import pytest
+
 from app.rag.preprocess.clean_text import TextCleaner
 
 
@@ -30,7 +31,7 @@ class TestTextCleaner:
         assert "오전 10:20" not in cleaned
 
         # 노이즈 카운트 확인 (날짜 포함 + 시간만 패턴 합산)
-        timestamp_count = counts.get('프린트 타임스탬프 (날짜 포함)', 0) + counts.get('프린트 타임스탬프 (시간만)', 0)
+        timestamp_count = counts.get("프린트 타임스탬프 (날짜 포함)", 0) + counts.get("프린트 타임스탬프 (시간만)", 0)
         assert timestamp_count >= 2
 
     def test_remove_url(self, cleaner):
@@ -47,9 +48,9 @@ http://gw.channela-mt.com/another_page.php?id=456
         assert "gw.channela-mt.com" not in cleaned
 
         # 노이즈 카운트 확인 (그룹웨어 URL 패턴 합산)
-        url_count = (counts.get('그룹웨어 결재 팝업 전체 URL', 0) +
-                    counts.get('그룹웨어 도메인 URL (기타)', 0) +
-                    counts.get('그룹웨어 전체 URL (http 포함)', 0))
+        url_count = (counts.get("그룹웨어 결재 팝업 전체 URL", 0) +
+                    counts.get("그룹웨어 도메인 URL (기타)", 0) +
+                    counts.get("그룹웨어 전체 URL (http 포함)", 0))
         assert url_count >= 1
 
     def test_remove_page_number(self, cleaner):
@@ -67,7 +68,7 @@ http://gw.channela-mt.com/another_page.php?id=456
         assert "- 10 -" not in cleaned
 
         # 노이즈 카운트 확인
-        assert counts.get('페이지 번호', 0) >= 2
+        assert counts.get("페이지 번호", 0) >= 2
 
     def test_remove_repeated_lines(self, cleaner):
         """반복 라인 제거 테스트"""
@@ -86,7 +87,7 @@ http://gw.channela-mt.com/another_page.php?id=456
         assert cleaned.count("반복 헤더") <= 2
 
         # 노이즈 카운트 확인 (repeated 또는 deduplicated 중 하나)
-        total_removed = counts.get('repeated_headers_footers', 0) + counts.get('deduplicated_lines', 0)
+        total_removed = counts.get("repeated_headers_footers", 0) + counts.get("deduplicated_lines", 0)
         assert total_removed >= 2
 
     def test_deduplicate_consecutive_lines(self, cleaner):
@@ -105,7 +106,7 @@ http://gw.channela-mt.com/another_page.php?id=456
         assert cleaned.count("중복 라인") <= 2
 
         # 노이즈 카운트 확인
-        assert counts.get('deduplicated_lines', 0) >= 2
+        assert counts.get("deduplicated_lines", 0) >= 2
 
     def test_combined_noise_removal(self, cleaner):
         """복합 노이즈 제거 테스트"""

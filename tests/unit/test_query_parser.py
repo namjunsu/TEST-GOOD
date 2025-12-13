@@ -8,10 +8,11 @@ QueryParser 단위 테스트
 - 우선순위 검증
 """
 
-import pytest
 from datetime import date
-from app.rag.query_parser import QueryParser, parse_filters_simple
 
+import pytest
+
+from app.rag.query_parser import QueryParser, parse_filters_simple
 
 # 테스트용 기안자 데이터
 KNOWN_DRAFTERS = {

@@ -5,11 +5,12 @@
 - 근접도 기반 랭킹
 """
 import pytest
+
 from app.data.amount_parser_v2 import (
-    extract_amounts,
-    nearest_amount_to_keyword,
-    format_krw,
     _parse_eok_man,
+    extract_amounts,
+    format_krw,
+    nearest_amount_to_keyword,
 )
 
 

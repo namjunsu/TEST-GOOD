@@ -1,21 +1,22 @@
 """테스트: 요약 및 목록 기능"""
-import pytest
-import sys
-import os
-from unittest.mock import patch, MagicMock, Mock
 import json
+import os
+import sys
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 
 # 프로젝트 루트를 sys.path에 추가
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from app.data.metadata_db import MetadataDB
 from app.rag.utils.json_utils import (
-    extract_last_json_block,
-    parse_summary_json_robust,
     ensure_citations,
     extract_amounts_from_text,
-    validate_numeric_fields
+    extract_last_json_block,
+    parse_summary_json_robust,
+    validate_numeric_fields,
 )
-from app.data.metadata_db import MetadataDB
 
 
 class TestJSONParsing:
@@ -29,12 +30,12 @@ class TestJSONParsing:
 
     def test_parse_summary_json_robust_with_markdown(self):
         """마크다운 블록이 포함된 JSON 파싱"""
-        response = '''```json
+        response = """```json
         {
             "summary": "테스트 요약",
             "details": {"금액": "1,000,000원"}
         }
-        ```'''
+        ```"""
         result = parse_summary_json_robust(response)
         assert result is not None
         assert result["summary"] == "테스트 요약"

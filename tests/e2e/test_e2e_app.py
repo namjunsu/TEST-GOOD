@@ -4,9 +4,10 @@ End-to-End tests without server startup.
 Directly calls FastAPI TestClient and core modules for coverage.
 """
 
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -15,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 def test_fastapi_health():
     """Test FastAPI health endpoint."""
     from fastapi.testclient import TestClient
+
     from app.api.main import app
 
     client = TestClient(app)
@@ -28,6 +30,7 @@ def test_fastapi_health():
 def test_fastapi_preview():
     """Test FastAPI preview endpoint."""
     from fastapi.testclient import TestClient
+
     from app.api.main import app
 
     client = TestClient(app)
@@ -78,21 +81,21 @@ def test_query_parser():
     from app.rag.query_parser import QueryParser
 
     # Test with known drafters
-    parser = QueryParser(known_drafters={'홍길동', '김철수'})
+    parser = QueryParser(known_drafters={"홍길동", "김철수"})
 
     # Test simple query
     filters = parser.parse_filters("2024년 문서")
     assert isinstance(filters, dict)
-    assert filters.get('year') is None or filters['year'] == '2024'
+    assert filters.get("year") is None or filters["year"] == "2024"
 
     # Test with drafter
     filters = parser.parse_filters("홍길동 보고서")
-    assert filters.get('drafter') == '홍길동' or filters.get('drafter') is None
+    assert filters.get("drafter") == "홍길동" or filters.get("drafter") is None
 
 
 def test_query_router():
     """Test query router directly."""
-    from app.rag.query_router import QueryRouter, QueryMode
+    from app.rag.query_router import QueryMode, QueryRouter
 
     router = QueryRouter()
 
@@ -142,8 +145,8 @@ def test_response_formatter():
 
         # Test formatting
         formatted = formatter.format({
-            'answer': 'test answer',
-            'confidence': 0.8
+            "answer": "test answer",
+            "confidence": 0.8
         })
         assert isinstance(formatted, (str, dict))
     except ImportError:
@@ -172,8 +175,8 @@ def test_metadata_extractor():
 
         # Test extraction with dummy data
         metadata = extractor.extract({
-            'content': 'test content',
-            'filename': 'test.pdf'
+            "content": "test content",
+            "filename": "test.pdf"
         })
         assert isinstance(metadata, dict)
     except ImportError:
@@ -187,7 +190,7 @@ def test_web_interface_imports():
         import web_interface
         assert web_interface is not None
     except ImportError as e:
-        if 'streamlit' not in str(e):
+        if "streamlit" not in str(e):
             raise
         pytest.skip("Streamlit not properly configured")
 
@@ -197,10 +200,10 @@ def test_config_module():
     import config
 
     # Should have basic attributes
-    assert hasattr(config, '__file__')
+    assert hasattr(config, "__file__")
 
     # Test any config functions if available
-    if hasattr(config, 'get_config'):
+    if hasattr(config, "get_config"):
         cfg = config.get_config()
         assert cfg is not None
 
@@ -210,7 +213,7 @@ def test_app_config_settings():
     from app.config import settings
 
     # Should have configuration values
-    assert hasattr(settings, '__file__')
+    assert hasattr(settings, "__file__")
 
 
 def test_logging_system():
@@ -249,7 +252,7 @@ def test_utils_modules():
         result = safe_json_loads('{"test": 1}')
         assert result == {"test": 1}
 
-        result = safe_json_loads('invalid')
+        result = safe_json_loads("invalid")
         assert result is None or result == {}
     except ImportError:
         pass

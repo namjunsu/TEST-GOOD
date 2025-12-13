@@ -7,9 +7,10 @@ document_utils.py의 문서 처리 유틸리티 테스트:
 - gather_summary_context: 요약용 컨텍스트 수집
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 
 from app.rag.document_utils import DocumentUtils
 

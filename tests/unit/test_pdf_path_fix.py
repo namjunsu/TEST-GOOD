@@ -6,18 +6,18 @@
 """
 
 import pytest
-import pytest
+
 pytestmark = pytest.mark.skip(reason="인터페이스 변경으로 재작성 필요")
 import sys
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
 
 # 프로젝트 루트 경로 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Mock streamlit
 st_mock = MagicMock()
-sys.modules['streamlit'] = st_mock
+sys.modules["streamlit"] = st_mock
 
 
 class TestPDFViewerPathResolution:
@@ -42,7 +42,7 @@ class TestPDFViewerPathResolution:
         mock_settings.DOCS_DIR = tmp_path / "docs"
         mock_settings.DOCS_DIR.mkdir(parents=True, exist_ok=True)
 
-        with patch('app.config.settings.settings', mock_settings):
+        with patch("app.config.settings.settings", mock_settings):
             rel_path = "year_2018/test.pdf"
             viewer = PDFViewer(file_path=rel_path)
 
@@ -58,7 +58,7 @@ class TestPDFViewerPathResolution:
         mock_settings.DOCS_DIR = tmp_path / "docs"
         mock_settings.DOCS_DIR.mkdir(parents=True, exist_ok=True)
 
-        with patch('app.config.settings.settings', mock_settings):
+        with patch("app.config.settings.settings", mock_settings):
             rel_path = "year_2018/2018-10-30_잠실_롯데타워_파노라마_카메라_사용_검토.pdf"
             viewer = PDFViewer(file_path=rel_path)
 
@@ -85,7 +85,7 @@ class TestChatInterfacePathGeneration:
             "meta": {"date": "2018-10-30", "doctype": "검토서"}
         }
 
-        with patch('app.config.settings.settings', mock_settings):
+        with patch("app.config.settings.settings", mock_settings):
             # 실제 로직 시뮬레이션
             filename = evidence["filename"]
             file_path_str = evidence.get("file_path")
@@ -97,7 +97,7 @@ class TestChatInterfacePathGeneration:
             else:
                 # Fallback: year 폴더 추출
                 import re
-                year_match = re.search(r'(\d{4})-', filename)
+                year_match = re.search(r"(\d{4})-", filename)
                 if year_match:
                     year = year_match.group(1)
                     file_path = mock_settings.DOCS_DIR / f"year_{year}" / filename
@@ -122,7 +122,7 @@ class TestChatInterfacePathGeneration:
             "snippet": "Test document"
         }
 
-        with patch('app.config.settings.settings', mock_settings):
+        with patch("app.config.settings.settings", mock_settings):
             filename = evidence["filename"]
             file_path_str = evidence.get("file_path")
 
@@ -151,7 +151,7 @@ class TestChatInterfacePathGeneration:
             "snippet": "Test document"
         }
 
-        with patch('app.config.settings.settings', mock_settings):
+        with patch("app.config.settings.settings", mock_settings):
             filename = evidence["filename"]
             file_path_str = evidence.get("file_path")
 
@@ -173,6 +173,7 @@ class TestIntegrationScenario:
     def test_full_evidence_to_pdf_viewer_flow(self, tmp_path):
         """Evidence → chat_interface → PDFViewer 전체 흐름"""
         from pathlib import Path
+
         from components.pdf_viewer import PDFViewer
 
         # Mock settings
@@ -194,14 +195,14 @@ class TestIntegrationScenario:
             "snippet": "Test document"
         }
 
-        with patch('app.config.settings.settings', mock_settings):
+        with patch("app.config.settings.settings", mock_settings):
             # Step 1: chat_interface에서 경로 생성
             filename = evidence["filename"]
             file_path_str = evidence.get("file_path")
 
             if not file_path_str:
                 import re
-                year_match = re.search(r'(\d{4})-', filename)
+                year_match = re.search(r"(\d{4})-", filename)
                 if year_match:
                     year = year_match.group(1)
                     file_path = mock_settings.DOCS_DIR / f"year_{year}" / filename

@@ -4,8 +4,9 @@
 """
 
 import pytest
-from app.rag.retrievers.exact_match import ExactMatchRetriever
+
 from app.data.metadata_db import MetadataDB
+from app.rag.retrievers.exact_match import ExactMatchRetriever
 
 
 class TestExactMatchContract:

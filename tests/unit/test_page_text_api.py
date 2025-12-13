@@ -6,7 +6,7 @@ metadata_db.get_page_text() 메서드의 동작을 검증합니다.
 """
 
 import pytest
-import pytest
+
 pytestmark = pytest.mark.skip(reason="인터페이스 변경으로 재작성 필요")
 from app.data.metadata_db import MetadataDB
 
@@ -69,7 +69,7 @@ def test_get_page_text_basic(metadata_db):
     assert text1 == text2, "캐시된 텍스트가 다름"
     assert elapsed2 < elapsed1 * 0.5, f"캐시 효과 없음: {elapsed1:.3f}s vs {elapsed2:.3f}s"
 
-    print(f"  캐시 효과: {elapsed1:.3f}s → {elapsed2:.3f}s (x{elapsed1/elapsed2:.1f})")
+    print(f"  캐시 효과: {elapsed1:.3f}s → {elapsed2:.3f}s (x{elapsed1 / elapsed2:.1f})")
 
 
 @pytest.mark.integration
@@ -100,7 +100,7 @@ def test_get_page_text_edge_cases(metadata_db):
     result = metadata_db.get_page_text(filename, -1)
     assert result is None, "음수 페이지에서 None 반환 실패"
 
-    print(f"✅ 예외 케이스 처리 정상")
+    print("✅ 예외 케이스 처리 정상")
 
 
 if __name__ == "__main__":

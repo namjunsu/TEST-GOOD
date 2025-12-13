@@ -5,12 +5,15 @@
 NOTE: 이 테스트는 실제 DB 상태에 의존하므로 통합 테스트로 분류합니다.
 """
 
-import sys
 import os
+import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import unittest
+
 import pytest
+
 from app.data.metadata_db import MetadataDB
 from config.indexing import ALLOWED_EXTS
 
@@ -34,13 +37,13 @@ class TestSidebarCounts(unittest.TestCase):
         print("\n=== 케이스1: PDF + TXT 카운트 검증 ===")
 
         # 고유 문서 수
-        unique_count = self.db.count_unique_documents(allowed_ext=('pdf', 'txt'))
+        unique_count = self.db.count_unique_documents(allowed_ext=("pdf", "txt"))
         print(f"라이브러리 총 문서 (PDF+TXT): {unique_count}개")
 
         # 확장자별 카운트 (물리 파일 기준)
         ext_counts = self.db.count_by_extension()
         print(f"물리 파일 - PDF: {ext_counts.get('pdf', 0)}개, TXT: {ext_counts.get('txt', 0)}개")
-        physical_total = ext_counts.get('pdf', 0) + ext_counts.get('txt', 0)
+        physical_total = ext_counts.get("pdf", 0) + ext_counts.get("txt", 0)
         print(f"물리 파일 총계: {physical_total}개")
 
         # 검색 인덱스 카운트
@@ -61,7 +64,7 @@ class TestSidebarCounts(unittest.TestCase):
         print("\n=== 케이스2: TXT 제외 정책 ===")
 
         # PDF만 카운트
-        pdf_only_count = self.db.count_unique_documents(allowed_ext=('pdf',))
+        pdf_only_count = self.db.count_unique_documents(allowed_ext=("pdf",))
         print(f"라이브러리 총 문서 (PDF만): {pdf_only_count}개")
 
         # 예상값 검증 (480개여야 함)
@@ -73,7 +76,7 @@ class TestSidebarCounts(unittest.TestCase):
 
         # 전체 레코드 수
         cursor = self.db.conn.execute("SELECT COUNT(*) as total FROM documents")
-        total_records = cursor.fetchone()['total']
+        total_records = cursor.fetchone()["total"]
 
         # 고유 문서 수
         unique_count = self.db.count_unique_documents()
@@ -104,7 +107,7 @@ class TestSidebarCounts(unittest.TestCase):
         consistency_check = {
             "library_vs_search": unique_count == search_count,
             "library_expected": unique_count == 483,
-            "physical_expected": ext_counts.get('pdf', 0) == 490 or ext_counts.get('pdf', 0) == 480
+            "physical_expected": ext_counts.get("pdf", 0) == 490 or ext_counts.get("pdf", 0) == 480
         }
 
         print("\n일관성 체크 결과:")

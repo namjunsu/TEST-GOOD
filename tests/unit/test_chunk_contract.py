@@ -13,8 +13,9 @@ RAG 파이프라인에서 생성되는 청크들이 필수 계약을 준수하�
 Note: 2025-10-26 이후 'snippet' 필드는 'text'로 통합됨
 """
 
+from typing import Any, Dict, List
+
 import pytest
-from typing import List, Dict, Any
 
 
 def validate_chunk_contract(chunk: Dict[str, Any]) -> List[str]:
@@ -155,17 +156,17 @@ def test_retriever_chunk_contract():
 
         # 위반 사항 출력 및 검증
         if all_violations:
-            print("\n" + "="*80)
+            print("\n" + "=" * 80)
             print("청크 계약 위반 발견:")
-            print("="*80)
+            print("=" * 80)
             for violation_info in all_violations:
                 print(f"\n쿼리: {violation_info['query']}")
                 print(f"청크 인덱스: {violation_info['chunk_index']}")
                 print(f"청크 키: {violation_info['chunk_keys']}")
-                print(f"위반 사항:")
-                for v in violation_info['violations']:
+                print("위반 사항:")
+                for v in violation_info["violations"]:
                     print(f"  - {v}")
-            print("="*80 + "\n")
+            print("=" * 80 + "\n")
 
             pytest.fail(f"청크 계약 위반: {len(all_violations)}건")
 
@@ -195,7 +196,7 @@ def test_pipeline_chunk_contract():
             result = pipeline.run(query=query)
 
             # 압축된 청크 가져오기 (internal API)
-            if hasattr(pipeline, '_last_compressed_chunks'):
+            if hasattr(pipeline, "_last_compressed_chunks"):
                 compressed = pipeline._last_compressed_chunks
 
                 for i, chunk in enumerate(compressed):
@@ -209,19 +210,19 @@ def test_pipeline_chunk_contract():
                         })
 
         if all_violations:
-            print("\n" + "="*80)
+            print("\n" + "=" * 80)
             print("파이프라인 청크 계약 위반:")
-            print("="*80)
+            print("=" * 80)
             for v in all_violations:
                 print(f"\n쿼리: {v['query']}")
                 print(f"모드: {v['mode']}")
                 print(f"청크 인덱스: {v['chunk_index']}")
                 print(f"위반 사항: {v['violations']}")
-            print("="*80 + "\n")
+            print("=" * 80 + "\n")
 
             pytest.fail(f"파이프라인 청크 계약 위반: {len(all_violations)}건")
 
-        print(f"✅ 파이프라인 청크 계약 검증 통과")
+        print("✅ 파이프라인 청크 계약 검증 통과")
 
     except Exception as e:
         pytest.skip(f"파이프라인 테스트 실패: {e}")

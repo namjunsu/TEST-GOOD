@@ -8,6 +8,7 @@ import json
 import pickle
 import smtplib
 import sqlite3
+import sys
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -16,7 +17,6 @@ from typing import Optional
 
 import requests
 
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from app.config.settings import settings
 

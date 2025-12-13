@@ -50,6 +50,7 @@ class TestSentenceSplit:
         monkeypatch.setenv("IGNORE_SEMVER_IN_NUMERIC", "true")
         # 모듈 재임포트 (환경변수 변경 반영)
         import importlib
+
         import app.rag.utils.context_hydrator
         importlib.reload(app.rag.utils.context_hydrator)
         from app.rag.utils.context_hydrator import _extract_core_sentences

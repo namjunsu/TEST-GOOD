@@ -6,7 +6,8 @@
 """
 
 import pytest
-from app.rag.routing import ProfileMatcher, AnchorScorer
+
+from app.rag.routing import AnchorScorer, ProfileMatcher
 
 
 class TestProfileMatcher:

@@ -11,11 +11,10 @@ year_* 폴더에 있지만 DB에 없는 PDF들을 OCR 처리하여 DB에 추가�
 
 import argparse
 import hashlib
-import re
 import sys
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 # 프로젝트 루트를 sys.path에 추가
 PROJECT_ROOT = Path(__file__).parent.parent.parent

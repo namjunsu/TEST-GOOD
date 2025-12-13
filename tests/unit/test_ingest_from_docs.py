@@ -2,12 +2,13 @@
 문서 투입 인덱싱 테스트
 """
 
-import pytest
-from pathlib import Path
 import shutil
 import sqlite3
-import tempfile
 import sys
+import tempfile
+from pathlib import Path
+
+import pytest
 
 # 프로젝트 루트를 sys.path에 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -130,6 +131,7 @@ def test_duplicate_detection(temp_dirs, sample_proposal_pdf):
 def test_proposal_parsing_success(sample_proposal_pdf):
     """기안서 메타·비용표 파싱 성공 테스트"""
     import pdfplumber
+
     from app.rag.parse.doctype import classify_document
 
     # PDF에서 텍스트 추출
@@ -160,6 +162,7 @@ def test_proposal_parsing_success(sample_proposal_pdf):
 def test_report_doctype_classification(sample_report_pdf):
     """보고서 doctype 분류·요약 템플릿 적용 테스트"""
     import pdfplumber
+
     from app.rag.parse.doctype import classify_document
 
     # PDF에서 텍스트 추출

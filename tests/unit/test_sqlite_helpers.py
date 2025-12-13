@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 
 import pytest
-import pytest
+
 pytestmark = pytest.mark.skip(reason="인터페이스 변경으로 재작성 필요")
 
 from app.utils.sqlite_helpers import _cleanup_stale_wal, connect_metadata

@@ -9,12 +9,14 @@ BM25 검색 결과 중복 제거 테스트
 2025-11-28: _resolve_doc_id 인터페이스 변경 반영 (id=DB PK 필수)
 """
 
-import sys
 import shutil
+import sys
 from pathlib import Path
-sys.path.insert(0, '/home/wnstn4647/AI-CHAT')
+
+sys.path.insert(0, "/home/wnstn4647/AI-CHAT")
 
 import pytest
+
 from rag_system.active.bm25_store import BM25Store
 
 
@@ -91,7 +93,7 @@ def test_bm25_dedup_by_doc_id(tmp_path=Path("/tmp/bm25_test")):
     bm25.add_documents(texts, metadatas)
     results = bm25.search("PGM 모니터", top_k=10)
 
-    print(f"검색 쿼리: 'PGM 모니터'")
+    print("검색 쿼리: 'PGM 모니터'")
     print(f"인덱싱된 문서: {len(texts)}개")
     print(f"검색 결과: {len(results)}개")
 
@@ -156,7 +158,7 @@ def test_bm25_dedup_same_id_different_chunks(tmp_path=Path("/tmp/bm25_test2")):
     bm25.add_documents(texts, metadatas)
     results = bm25.search("Livestream Studio", top_k=10)
 
-    print(f"검색 쿼리: 'Livestream Studio'")
+    print("검색 쿼리: 'Livestream Studio'")
     print(f"인덱싱된 문서: {len(texts)}개")
     print(f"검색 결과: {len(results)}개")
 
@@ -209,7 +211,7 @@ def test_bm25_dedup_multiple_docs(tmp_path=Path("/tmp/bm25_test3")):
     bm25.add_documents(texts, metadatas)
     results = bm25.search("DVR", top_k=10)
 
-    print(f"검색 쿼리: 'DVR'")
+    print("검색 쿼리: 'DVR'")
     print(f"인덱싱된 문서: {len(texts)}개")
     print(f"검색 결과: {len(results)}개")
 
@@ -223,7 +225,7 @@ def test_bm25_dedup_multiple_docs(tmp_path=Path("/tmp/bm25_test3")):
 
     # 예상: id=3001 1개, id=3002 1개 = 총 2개
     if len(results) == 2:
-        print(f"✅ PASS: 중복 제거 후 2개 문서만 남음")
+        print("✅ PASS: 중복 제거 후 2개 문서만 남음")
     else:
         print(f"❌ FAIL: 중복 제거 실패, {len(results)}개 남음")
 

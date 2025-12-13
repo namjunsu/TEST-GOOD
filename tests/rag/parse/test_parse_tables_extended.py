@@ -10,6 +10,7 @@ Coverage 12.6% → 목표 40%+
 """
 
 import pytest
+
 from app.rag.parse.parse_tables import TableParser
 
 

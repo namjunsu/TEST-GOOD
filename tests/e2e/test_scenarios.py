@@ -10,8 +10,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.rag.pipeline import RAGPipeline
 from app.data.metadata_db import MetadataDB
+from app.rag.pipeline import RAGPipeline
 from app.rag.query_parser import QueryParser
 from app.rag.query_router import QueryRouter
 
@@ -121,7 +121,7 @@ class ScenarioRunner:
 - Total Scenarios: {total}
 - Passed: {passed}
 - Failed: {total - passed}
-- Success Rate: {passed/total*100:.1f}%
+- Success Rate: {passed / total * 100:.1f}%
 
 ## Detailed Results
 """
@@ -134,7 +134,7 @@ class ScenarioRunner:
             report += f"- Actual Mode: {r['actual_mode']}\n"
             report += f"- Filters: {r['filters']}\n"
             report += f"- Time: {r['time']:.3f}s\n"
-            if r['error']:
+            if r["error"]:
                 report += f"- Error: {r['error']}\n"
 
         return report
@@ -161,9 +161,9 @@ def main():
     print(f"Total: {total}")
     print(f"Passed: {passed}")
     print(f"Failed: {total - passed}")
-    print(f"Success Rate: {passed/total*100:.1f}%")
+    print(f"Success Rate: {passed / total * 100:.1f}%")
 
-    print(f"\n✅ Report saved to reports/runtime_coverage.md")
+    print("\n✅ Report saved to reports/runtime_coverage.md")
 
     return 0 if passed == total else 1
 

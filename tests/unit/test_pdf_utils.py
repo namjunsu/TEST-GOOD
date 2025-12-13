@@ -3,12 +3,13 @@ PDF 유틸리티 보안 기능 테스트
 디렉터리 트래버설 차단 및 PDF 파일 접근 테스트
 """
 
-import pytest
-import tempfile
-import shutil
-from pathlib import Path
-import sys
 import os
+import shutil
+import sys
+import tempfile
+from pathlib import Path
+
+import pytest
 
 # 프로젝트 루트 경로 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -17,10 +18,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 os.environ["TESTING"] = "true"
 
 # Mock streamlit 모듈
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 # streamlit 모듈 모킹
 st_mock = Mock()
+
 
 # 유연한 데코레이터 mock: @st.cache_data와 @st.cache_data(ttl=300) 모두 지원
 def flexible_decorator(*args, **kwargs):
@@ -31,6 +33,7 @@ def flexible_decorator(*args, **kwargs):
     # @st.cache_data(ttl=300) 형태 (팩토리 패턴)
     return lambda func: func
 
+
 st_mock.cache_data = flexible_decorator
 st_mock.cache_resource = flexible_decorator
 st_mock.warning = Mock()
@@ -38,8 +41,8 @@ st_mock.error = Mock()
 st_mock.info = Mock()
 st_mock.download_button = Mock(return_value=False)
 
-sys.modules['streamlit'] = st_mock
-sys.modules['components.pdf_viewer'] = Mock()
+sys.modules["streamlit"] = st_mock
+sys.modules["components.pdf_viewer"] = Mock()
 
 # 이제 pdf_utils import
 from utils import pdf_utils

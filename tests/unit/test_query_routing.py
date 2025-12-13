@@ -10,8 +10,9 @@ from pathlib import Path
 # 프로젝트 루트 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.rag.query_router import QueryRouter, QueryMode
 import pytest
+
+from app.rag.query_router import QueryMode, QueryRouter
 
 
 class TestQueryRouting:

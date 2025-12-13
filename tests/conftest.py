@@ -9,10 +9,10 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-
 # ==============================================================================
 # Streamlit Mock (session_state 지원)
 # ==============================================================================
+
 
 class MockSessionState:
     """Streamlit session_state Mock - dict-like + attribute 접근 지원"""
@@ -21,7 +21,7 @@ class MockSessionState:
         self._data = {}
 
     def __setattr__(self, name, value):
-        if name == '_data':
+        if name == "_data":
             super().__setattr__(name, value)
         else:
             self._data[name] = value
@@ -86,21 +86,21 @@ def _create_streamlit_mock():
 _st_mock = _create_streamlit_mock()
 
 # 테스트 모듈 로드 전에 sys.modules에 등록
-if 'streamlit' not in sys.modules:
-    sys.modules['streamlit'] = _st_mock
+if "streamlit" not in sys.modules:
+    sys.modules["streamlit"] = _st_mock
 
 
 @pytest.fixture(autouse=True)
 def reset_streamlit_session():
     """각 테스트 전후로 streamlit session_state 초기화"""
     # 테스트 전: 세션 상태 초기화
-    if hasattr(_st_mock, 'session_state') and hasattr(_st_mock.session_state, 'clear'):
+    if hasattr(_st_mock, "session_state") and hasattr(_st_mock.session_state, "clear"):
         _st_mock.session_state.clear()
 
     yield
 
     # 테스트 후: 세션 상태 초기화
-    if hasattr(_st_mock, 'session_state') and hasattr(_st_mock.session_state, 'clear'):
+    if hasattr(_st_mock, "session_state") and hasattr(_st_mock.session_state, "clear"):
         _st_mock.session_state.clear()
 
 
@@ -108,7 +108,7 @@ def reset_streamlit_session():
 # Pandas Mock
 # ==============================================================================
 
-if 'pandas' not in sys.modules:
+if "pandas" not in sys.modules:
     pd_mock = MagicMock()
     pd_mock.DataFrame = MagicMock(return_value=MagicMock())
-    sys.modules['pandas'] = pd_mock
+    sys.modules["pandas"] = pd_mock

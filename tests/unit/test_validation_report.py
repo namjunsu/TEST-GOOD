@@ -5,6 +5,7 @@
 - confidence 점수 산출
 """
 import pytest
+
 from app.rag.utils.json_utils import validate_numeric_fields
 
 

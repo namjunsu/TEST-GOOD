@@ -7,9 +7,10 @@ pipeline.py의 핵심 기능 테스트:
 - 캐싱 로직
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
 from dataclasses import asdict
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 
 from app.rag.contracts import RAGResponse
 
@@ -314,6 +315,7 @@ class TestResponseBuilder:
     def test_chat_mode_no_sources(self):
         """CHAT 모드에서는 출처 제거"""
         import time
+
         from app.rag.response_builder import ResponseBuilder
 
         builder = ResponseBuilder()
@@ -338,6 +340,7 @@ class TestResponseBuilder:
     def test_rag_mode_has_sources(self):
         """RAG 모드에서는 출처 포함"""
         import time
+
         from app.rag.response_builder import ResponseBuilder
 
         builder = ResponseBuilder()

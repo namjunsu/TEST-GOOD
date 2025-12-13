@@ -65,7 +65,7 @@ def log_query_to_terminal(query: str, client_ip: str = "local") -> None:
     timestamp = datetime.now().strftime("%H:%M:%S")
     query_short = query[:50] + "..." if len(query) > 50 else query
     print(
-        f"\033[0;90m[{timestamp}]\033[0m \033[0;36m{client_ip}\033[0m → \"{query_short}\"",
+        f'\033[0;90m[{timestamp}]\033[0m \033[0;36m{client_ip}\033[0m → "{query_short}"',
         file=sys.stderr,
         flush=True,
     )

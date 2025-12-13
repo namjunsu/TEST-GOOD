@@ -9,14 +9,15 @@ adapters.py의 폴백 및 어댑터 클래스 테스트:
 - _V2RetrieverAdapter: V2 검색기 어댑터
 """
 
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, MagicMock, patch
 
 from app.rag.adapters import (
-    _DummyRetriever,
-    _NoOpCompressor,
     _DummyGenerator,
+    _DummyRetriever,
     _LLMAdapter,
+    _NoOpCompressor,
     _QuickFixGenerator,
     _V2RetrieverAdapter,
 )

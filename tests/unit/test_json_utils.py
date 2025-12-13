@@ -2,12 +2,13 @@
 JSON 유틸리티 테스트 (Phase 1 개선사항)
 """
 import pytest
+
 from app.rag.utils.json_utils import (
     _extract_balanced_json_blocks,
+    _mask_sensitive_data,
+    ensure_citations,
     extract_last_json_block,
     parse_summary_json_robust,
-    ensure_citations,
-    _mask_sensitive_data,
 )
 
 

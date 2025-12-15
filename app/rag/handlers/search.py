@@ -158,6 +158,42 @@ BULK_PATTERNS = [
 # 헬퍼 함수
 # ============================================================================
 
+def _clean_query(query: str) -> str:
+    """쿼리에서 이모지, 특수문자, UI 형식 제거
+
+    웹 UI에서 복사한 문서 제목 형식을 정리:
+    - 이모지 제거 (📅, 👤, ✅ 등)
+    - UI 구분자 제거 (|)
+    - 연속 공백 정리
+    """
+    import re
+
+    # 이모지 제거 (유니코드 이모지 범위)
+    emoji_pattern = re.compile(
+        "["
+        "\U0001F600-\U0001F64F"  # 이모티콘
+        "\U0001F300-\U0001F5FF"  # 기호 및 픽토그램
+        "\U0001F680-\U0001F6FF"  # 교통 및 지도
+        "\U0001F1E0-\U0001F1FF"  # 국기
+        "\U00002702-\U000027B0"  # 딩뱃
+        "\U0001F900-\U0001F9FF"  # 보조 기호
+        "\U0001FA00-\U0001FA6F"  # 체스 기호
+        "\U0001FA70-\U0001FAFF"  # 기호 확장
+        "\U00002600-\U000026FF"  # 기타 기호
+        "]+",
+        flags=re.UNICODE,
+    )
+    cleaned = emoji_pattern.sub(" ", query)
+
+    # UI 구분자 제거
+    cleaned = cleaned.replace("|", " ")
+
+    # 연속 공백을 단일 공백으로
+    cleaned = re.sub(r"\s+", " ", cleaned)
+
+    return cleaned.strip()
+
+
 def extract_keywords(query: str, stop_words: list[str]) -> str:
     """쿼리에서 불용어를 제거하고 키워드 추출
 
@@ -168,9 +204,17 @@ def extract_keywords(query: str, stop_words: list[str]) -> str:
     Returns:
         불용어가 제거된 키워드 문자열
     """
-    keywords = query
+    # 먼저 이모지/특수문자 정리
+    keywords = _clean_query(query)
+
+    # 불용어 제거
     for word in stop_words:
         keywords = keywords.replace(word, " ")
+
+    # 연속 공백 정리
+    import re
+    keywords = re.sub(r"\s+", " ", keywords)
+
     return keywords.strip()
 
 

@@ -1,16 +1,15 @@
 """도메인 동의어 관리 모듈
 
-SEARCH_CONTENT_ONLY 모드에서 브랜드/모델명의 한영/대소문자 변형을 처리합니다.
-
-Usage:
-    >>> from app.rag.domain_synonyms import expand_for_strict_content
-    >>> expand_for_strict_content("티비로직")
-    "티비로직 TVLogic TVLOGIC TV Logic tvlogic"
+브랜드/모델명의 한↔영, 대소문자, 하이픈 변형을 처리합니다.
 
 Architecture:
-    - YAML 파일 기반 동의어 사전 (config/domain_synonyms.yaml)
-    - 느리게 로딩 (첫 호출 시 한 번만 로드)
-    - 캐시된 flat dict 사용 (빠른 조회)
+    1. YAML 기반 동의어 사전: 한글↔영문 매핑 (티비로직 ↔ TVLogic)
+    2. 퍼지 매칭: 영문 변형 자동 처리 (TVLogic, TV-Logic, TvLogic)
+
+Usage:
+    >>> from app.rag.domain_synonyms import expand_query_smart
+    >>> expand_query_smart("티비로직 모니터")
+    "티비로직 TVLogic TvLogic TV-Logic TVLOGIC 모니터"
 """
 
 from pathlib import Path
@@ -162,3 +161,53 @@ def reload_synonyms():
     global _LOADED
     _LOADED = False
     return _load_domain_synonyms()
+
+
+def expand_query_smart(query: str, db_path: str = "metadata.db") -> str:
+    """스마트 쿼리 확장: YAML 동의어 + 퍼지 매칭 통합
+
+    1단계: YAML 동의어 사전으로 한↔영 변환
+    2단계: 퍼지 매칭으로 영문 변형 추가 (하이픈, 대소문자)
+
+    Args:
+        query: 원본 쿼리 (예: "티비로직 모니터")
+        db_path: DB 경로 (퍼지 매칭용)
+
+    Returns:
+        확장된 쿼리 (예: "티비로직 TVLogic TvLogic TV-Logic TVLOGIC 모니터")
+
+    Example:
+        >>> expand_query_smart("티비로직")
+        "티비로직 TVLogic TvLogic TV-Logic TVLOGIC tvlogic TV Logic"
+
+        >>> expand_query_smart("블랙매직")
+        "블랙매직 Blackmagic BlackMagic BLACKMAGIC blackmagic Black Magic"
+    """
+    # 1단계: YAML 동의어 확장 (한↔영)
+    yaml_expanded = expand_for_strict_content(query)
+
+    # 2단계: 퍼지 매칭으로 영문 변형 추가
+    try:
+        from app.rag.fuzzy_matcher import init_brand_matcher_from_db
+
+        matcher = init_brand_matcher_from_db(db_path)
+        fuzzy_expanded = matcher.expand_query(yaml_expanded)
+
+        # 중복 제거하면서 순서 유지
+        tokens = fuzzy_expanded.split()
+        seen: set[str] = set()
+        unique_tokens = []
+        for t in tokens:
+            t_lower = t.lower()
+            if t_lower not in seen:
+                unique_tokens.append(t)
+                seen.add(t_lower)
+
+        return " ".join(unique_tokens)
+
+    except ImportError:
+        logger.warning("⚠️ fuzzy_matcher 모듈 없음, YAML 동의어만 사용")
+        return yaml_expanded
+    except Exception as e:
+        logger.warning(f"⚠️ 퍼지 매칭 실패: {e}, YAML 동의어만 사용")
+        return yaml_expanded

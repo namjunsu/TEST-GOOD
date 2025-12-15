@@ -26,6 +26,9 @@ scikit-learn>=1.7.2
 # LLM
 llama-cpp-python>=0.3.16
 
+# Fuzzy Matching
+rapidfuzz>=3.10.0
+
 # Utils
 numpy>=2.3.4
 pandas>=2.3.3

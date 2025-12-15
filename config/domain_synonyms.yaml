@@ -74,9 +74,13 @@ mixer_switcher_brands:
   티비로직:
     - 티비로직
     - TVLogic
+    - TvLogic
+    - Tv-Logic
+    - TV-Logic
     - TVLOGIC
     - TV Logic
     - tvlogic
+    - tv-logic
 
 # ========== 오디오 장비 브랜드 ==========
 audio_brands:
@@ -387,10 +391,58 @@ equipment_types:
 
   지미집:
     - 지미집
+    - 지미짚
     - Jimmy Jib
     - JimmyJib
-    - 지미짚
+    - jimmy jib
     - 크레인
+    - Crane
+
+  트라이포드:
+    - 트라이포드
+    - 트라이포트
+    - Tripod
+    - TRIPOD
+    - tripod
+    - 삼각대
+
+  페데스탈:
+    - 페데스탈
+    - Pedestal
+    - PEDESTAL
+    - pedestal
+
+  프롬프터:
+    - 프롬프터
+    - 텔레프롬프터
+    - Prompter
+    - Teleprompter
+    - PROMPTER
+    - prompter
+
+  헬리캠:
+    - 헬리캠
+    - Helicam
+    - 드론
+    - Drone
+    - DRONE
+    - drone
+    - 드론캠
+
+  고프로:
+    - 고프로
+    - GoPro
+    - GOPRO
+    - gopro
+    - Go Pro
+
+  스카이라이프:
+    - 스카이라이프
+    - SkyLife
+    - Skylife
+    - SKYLIFE
+    - skylife
+    - Sky Life
 
 # ========== 방송 전문 용어 ==========
 broadcast_terms:

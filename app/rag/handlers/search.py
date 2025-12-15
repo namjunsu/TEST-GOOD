@@ -361,6 +361,16 @@ class SearchHandler(BaseHandler):
                 f"{f' | 연도={year_filter}' if year_filter else ''}",
             )
 
+            # 1.5. 스마트 동의어 확장 (YAML 동의어 + 퍼지 매칭)
+            try:
+                from app.rag.domain_synonyms import expand_query_smart
+                expanded_keywords = expand_query_smart(keywords)
+                if expanded_keywords != keywords:
+                    logger.info(f"🔄 동의어 확장: '{keywords}' → '{expanded_keywords}'")
+            except Exception as e:
+                logger.debug(f"동의어 확장 스킵: {e}")
+                expanded_keywords = keywords
+
             # 2. 검색 top_k 결정
             if needs_expanded_search(query, drafter_filter):
                 search_top_k = HandlerConfig.BULK_SEARCH_TOP_K
@@ -368,12 +378,12 @@ class SearchHandler(BaseHandler):
                 search_top_k = HandlerConfig.NORMAL_SEARCH_TOP_K
             logger.info(f"🔍 검색 top_k: {search_top_k}")
 
-            # 3. 검색 실행
+            # 3. 검색 실행 (확장된 키워드 사용)
             if not hasattr(self.retriever, "search"):
                 logger.error("❌ Retriever에 search 메서드가 없습니다")
                 return self._make_error_response("검색 기능을 사용할 수 없습니다.")
 
-            search_results = self.retriever.search(keywords, top_k=search_top_k)
+            search_results = self.retriever.search(expanded_keywords, top_k=search_top_k)
 
             # 4. 파일명 추출 (중복 제거)
             filenames = self._extract_unique_filenames(search_results)
@@ -459,10 +469,10 @@ class SearchHandler(BaseHandler):
                     },
                 }
 
-            # 2. 동의어 확장 (QueryExpander 없이 브랜드/모델명 변형 처리)
+            # 2. 스마트 동의어 확장 (YAML 동의어 + 퍼지 매칭)
             try:
-                from app.rag.domain_synonyms import expand_for_strict_content
-                expanded_query = expand_for_strict_content(keywords)
+                from app.rag.domain_synonyms import expand_query_smart
+                expanded_query = expand_query_smart(keywords)
             except ImportError:
                 expanded_query = keywords
 

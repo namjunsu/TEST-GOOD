@@ -55,6 +55,7 @@ from app.rag.query_routing import (
 )
 from app.rag.response_builder import ResponseBuilder, get_response_builder
 from app.rag.similarity import DocumentSimilarity
+from app.rag.conversation_logger import get_conversation_logger
 from config.constants import PipelineConfig
 
 logger = get_logger(__name__)
@@ -698,6 +699,20 @@ class RAGPipeline:
             cache_query_result(cache_key, result)  # Memory cache
             cache_query_result_persistent(cache_key, result)  # Persistent cache
             logger.info(f"📝 Cached result to memory + persistent storage for query: {query[:50]}...")
+
+            # 💬 대화 로깅 (2025-12-16)
+            try:
+                conv_logger = get_conversation_logger()
+                conv_logger.log(
+                    query=query,
+                    answer=response.answer,
+                    mode=route_decision.mode.value if route_decision else "unknown",
+                    sources=evidence,
+                    confidence=route_decision.confidence if route_decision else 0.0,
+                    latency_ms=total_ms,
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ 대화 로깅 실패 (무시): {e}")
 
             return result
         # 에러 발생 시 (중립 톤, 사과 표현 금지)

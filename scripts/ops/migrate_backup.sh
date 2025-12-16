@@ -39,8 +39,13 @@ echo "  - var.tar.gz ($(du -h "$BACKUP_DIR/var.tar.gz" | cut -f1))"
 echo "[5/5] 설정 파일 백업..."
 mkdir -p "$BACKUP_DIR/config"
 cp "$PROJECT_DIR/.env" "$BACKUP_DIR/config/" 2>/dev/null || echo "  - .env 없음 (스킵)"
-cp "$PROJECT_DIR/config/settings.yaml" "$BACKUP_DIR/config/" 2>/dev/null || echo "  - settings.yaml 없음 (스킵)"
 cp "$PROJECT_DIR/requirements.txt" "$BACKUP_DIR/config/"
+
+# config 폴더의 yaml 파일들 백업 (도메인 설정 등)
+if [ -d "$PROJECT_DIR/config" ]; then
+    tar -czf "$BACKUP_DIR/config_yaml.tar.gz" -C "$PROJECT_DIR" config/*.yaml config/*.py 2>/dev/null
+    echo "  - config_yaml.tar.gz ($(du -h "$BACKUP_DIR/config_yaml.tar.gz" | cut -f1))"
+fi
 
 # 6. 검증
 echo ""

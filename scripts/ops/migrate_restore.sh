@@ -56,9 +56,13 @@ echo "  - var/ 복원 완료"
 echo "[5/5] 설정 파일 복원..."
 if [ -d "$BACKUP_DIR/config" ]; then
     cp "$BACKUP_DIR/config/.env" "$PROJECT_DIR/" 2>/dev/null || true
-    mkdir -p "$PROJECT_DIR/config"
-    cp "$BACKUP_DIR/config/settings.yaml" "$PROJECT_DIR/config/" 2>/dev/null || true
-    echo "  - 설정 파일 복원 완료"
+    echo "  - .env 복원 완료"
+fi
+
+# config yaml 파일 복원
+if [ -f "$BACKUP_DIR/config_yaml.tar.gz" ]; then
+    tar -xzf "$BACKUP_DIR/config_yaml.tar.gz" -C "$PROJECT_DIR/"
+    echo "  - config/*.yaml 복원 완료"
 fi
 
 echo ""

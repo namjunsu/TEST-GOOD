@@ -52,7 +52,11 @@ def _load_fulltext_from_extracted(pdf_filename: str) -> str | None:
 
 
 def _load_text_from_metadata_db(filename: str, db_conn) -> str | None:
-    """metadata.db에서 text_preview 로드 (2순위)
+    """metadata.db에서 text_preview 로드 (deprecated - 사용하지 않음)
+
+    2025-12-16: text_preview와 텍스트 파일 불일치 문제로 인해
+    항상 data/extracted/*.txt 파일을 우선 사용하도록 변경.
+    이 함수는 하위 호환성을 위해 유지하되, 실제로는 사용하지 않음.
 
     Args:
         filename: PDF 파일명
@@ -61,18 +65,10 @@ def _load_text_from_metadata_db(filename: str, db_conn) -> str | None:
     Returns:
         text_preview 또는 None
     """
-    try:
-        cursor = db_conn.cursor()
-        cursor.execute(
-            "SELECT text_preview FROM documents WHERE filename = ?",
-            (filename,),
-        )
-        result = cursor.fetchone()
-        if result and result[0]:
-            return result[0]
-    except Exception as e:
-        logger.debug(f"metadata.db 조회 실패: {filename} - {e}")
-
+    # 2025-12-16: text_preview 사용 중단
+    # 텍스트 파일과 DB text_preview가 불일치하는 문제가 있었음
+    # 항상 data/extracted/*.txt를 소스로 사용
+    logger.debug(f"text_preview 조회 스킵 (deprecated): {filename}")
     return None
 
 

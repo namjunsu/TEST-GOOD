@@ -235,24 +235,56 @@ class MetadataDB:
             logger.exception(f"❌ 스키마 마이그레이션 예상치 못한 오류: {type(e).__name__}")
 
     def add_document(self, metadata: dict[str, Any]) -> int:
-        """문서 메타데이터 추가"""
+        """문서 메타데이터 추가 (기존 수동 입력 필드 보호)
+
+        2025-12-16: INSERT OR REPLACE → INSERT ON CONFLICT DO UPDATE 변경
+        - claimed_total, sum_match 등 수동 입력 필드가 NULL로 덮어씌워지는 문제 해결
+        - 기존 값이 있으면 유지, 새 값이 있을 때만 업데이트
+        """
         try:
             # 키워드를 JSON 문자열로 변환
             keywords = metadata.get("keywords", [])
             if isinstance(keywords, list):
                 keywords = json.dumps(keywords, ensure_ascii=False)
 
+            path = self._normalize_path(str(metadata.get("path", "")))
+            claimed_total = metadata.get("claimed_total")
+            sum_match = metadata.get("sum_match")
+
             with self._cursor() as cur:
+                # ON CONFLICT DO UPDATE: 기존 수동 입력 필드 보호
+                # COALESCE를 사용하여 새 값이 NULL이면 기존 값 유지
                 cur.execute(
                     """
-                    INSERT OR REPLACE INTO documents (
+                    INSERT INTO documents (
                         path, filename, title, date, year, month, category,
                         drafter, amount, file_size, page_count, text_preview, keywords,
                         doctype, display_date, claimed_total, sum_match
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(path) DO UPDATE SET
+                        filename = excluded.filename,
+                        title = excluded.title,
+                        date = excluded.date,
+                        year = excluded.year,
+                        month = excluded.month,
+                        category = excluded.category,
+                        drafter = CASE
+                            WHEN excluded.drafter != '' THEN excluded.drafter
+                            ELSE COALESCE(documents.drafter, excluded.drafter)
+                        END,
+                        amount = excluded.amount,
+                        file_size = excluded.file_size,
+                        page_count = excluded.page_count,
+                        text_preview = excluded.text_preview,
+                        keywords = excluded.keywords,
+                        doctype = excluded.doctype,
+                        display_date = excluded.display_date,
+                        claimed_total = COALESCE(excluded.claimed_total, documents.claimed_total),
+                        sum_match = COALESCE(excluded.sum_match, documents.sum_match),
+                        updated_at = CURRENT_TIMESTAMP
                 """,
                     (
-                        self._normalize_path(str(metadata.get("path", ""))),
+                        path,
                         metadata.get("filename", ""),
                         metadata.get("title", ""),
                         metadata.get("date", ""),
@@ -267,8 +299,8 @@ class MetadataDB:
                         keywords,
                         metadata.get("doctype", "proposal"),
                         metadata.get("display_date", ""),
-                        metadata.get("claimed_total", None),
-                        metadata.get("sum_match", None),
+                        claimed_total,
+                        sum_match,
                     ),
                 )
                 return cur.lastrowid

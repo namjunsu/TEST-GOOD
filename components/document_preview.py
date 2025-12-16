@@ -92,7 +92,7 @@ def render_document_preview(rag_instance: Any, config_module: Any) -> None:
                     data=pdf_bytes,
                     file_name=filename,
                     mime="application/pdf",
-                    key=f"dl_{doc_key}",
+                    key=f"preview_dl_{doc_key}",
                     use_container_width=True,
                 )
             else:

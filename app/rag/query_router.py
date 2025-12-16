@@ -500,6 +500,22 @@ class QueryRouter:
         Returns:
             RouteDecision if matched, None otherwise
         """
+        # 정확한 파일명이 감지되면 DOCUMENT 모드로 (단일 문서 반환)
+        # 2025-12-16: "X 문서 찾아줘" → 해당 문서를 직접 보여주기
+        # 파일명이 있으면 검색 의도(list)보다 우선함
+        if has_filename:
+            logger.info("🎯 모드 결정: DOCUMENT (정확한 파일명 감지)")
+            reason = "exact_filename_detected"
+            self._log_routing_decision(query, QueryMode.DOCUMENT, confidence=RouterConfig.CONF_HIGH, reason=reason)
+            return RouteDecision(
+                mode=QueryMode.DOCUMENT,
+                reason=reason,
+                confidence=RouterConfig.CONF_HIGH,
+                content_intent=True,
+                year=params.get("year"),
+                drafter=params.get("drafter"),
+            )
+
         # 목록/검색 의도
         if intents["list"]:
             logger.info("🎯 모드 결정: SEARCH (문서 검색)")
@@ -514,16 +530,17 @@ class QueryRouter:
                 drafter=params.get("drafter"),
             )
 
-        # 문서 참조만 있고 의도 불명확
-        if has_filename or has_doc_reference:
-            logger.info("🎯 모드 결정: SEARCH (문서 참조 감지, 목록 우선)")
-            reason = self.get_routing_reason(query)
-            self._log_routing_decision(query, QueryMode.SEARCH, confidence=RouterConfig.CONF_DOC_REF_ONLY, reason=reason)
+        # 문서 참조만 있고 의도 불명확 → DOCUMENT 모드 (단일 문서 우선)
+        # 2025-12-16: SEARCH → DOCUMENT로 변경 (사용자가 특정 문서를 원함)
+        if has_doc_reference:
+            logger.info("🎯 모드 결정: DOCUMENT (문서 참조 감지)")
+            reason = "doc_reference_detected"
+            self._log_routing_decision(query, QueryMode.DOCUMENT, confidence=RouterConfig.CONF_DOC_REF_ONLY, reason=reason)
             return RouteDecision(
-                mode=QueryMode.SEARCH,
+                mode=QueryMode.DOCUMENT,
                 reason=reason,
                 confidence=RouterConfig.CONF_DOC_REF_ONLY,
-                list_intent=True,
+                content_intent=True,
                 year=params.get("year"),
                 drafter=params.get("drafter"),
             )

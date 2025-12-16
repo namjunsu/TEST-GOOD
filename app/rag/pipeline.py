@@ -680,20 +680,9 @@ class RAGPipeline:
                 f"total_ms={total_ms}",
             )
 
-            # 📊 유사 문서 추천 (2025-12-08)
+            # 📊 유사 문서 추천 - 비활성화 (2025-12-16)
+            # 사유: 쿼리 기반 검색으로 관련 없는 문서가 추천되는 문제
             similar_documents = []
-            if evidence and len(evidence) > 0:
-                try:
-                    primary_doc = evidence[0].get("meta", {}).get("filename") or evidence[0].get("doc_id", "")
-                    if primary_doc:
-                        reference_docs = [e.get("meta", {}).get("filename") or e.get("doc_id", "") for e in evidence]
-                        similar_documents = self._similarity_service.find_similar_by_query(
-                            query, reference_docs, top_k=3
-                        )
-                except (AttributeError, KeyError) as e:
-                    logger.debug(f"유사 문서 추천 데이터 접근 오류 (무시): {e}")
-                except Exception as e:
-                    logger.warning(f"⚠️ 유사 문서 추천 예상치 못한 오류 (무시): {type(e).__name__}")
 
             result = {
                 "text": response.answer,

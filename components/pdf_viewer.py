@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import base64
 import io
+import uuid
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -108,6 +109,9 @@ class PDFViewer:
         self.height = height
         self.info: PDFInfo | None = None
 
+        # 인스턴스별 고유 ID (키 충돌 방지)
+        self._instance_id = uuid.uuid4().hex[:8]
+
         # 라이브러리 가용성 체크
         self.pymupdf_available = self._check_pymupdf()
         self.pdfplumber_available = self._check_pdfplumber()
@@ -179,7 +183,7 @@ class PDFViewer:
                 st.button(
                     "📥 다운로드",
                     disabled=True,
-                    key=f"dl_disabled_{generate_file_hash(str(self.file_path))}",
+                    key=f"dl_disabled_{self._instance_id}_{generate_file_hash(str(self.file_path))}",
                 )
                 st.caption(f"({MAX_PDF_MB:.0f}MB 초과 또는 접근 불가)")
             else:
@@ -188,7 +192,7 @@ class PDFViewer:
                     data=data,
                     file_name=info.name,
                     mime="application/pdf",
-                    key=f"dl_{generate_file_hash(str(self.file_path))}",
+                    key=f"dl_{self._instance_id}_{generate_file_hash(str(self.file_path))}",
                 )
 
         st.markdown("---")
@@ -558,7 +562,7 @@ class PDFViewer:
                     data=data,
                     file_name=self.file_path.name,
                     mime="application/pdf",
-                    key=f"fallback_dl_{generate_file_hash(str(self.file_path))}",
+                    key=f"fallback_dl_{self._instance_id}_{generate_file_hash(str(self.file_path))}",
                     help="미리보기는 실패했지만 파일을 다운로드할 수 있습니다",
                 )
                 st.info("💡 미리보기가 실패해도 다운로드하여 로컬에서 확인 가능합니다")

@@ -340,11 +340,11 @@ def build_evidence_item(
     filename: str,
     snippet: str = "",
     page: int = 1,
-    drafter: str = None,
-    date: str = None,
-    category: str = None,
-    doctype: str = None,
-    claimed_total: int = None,
+    drafter: Optional[str] = None,
+    date: Optional[str] = None,
+    category: Optional[str] = None,
+    doctype: Optional[str] = None,
+    claimed_total: Optional[int] = None,
 ) -> dict[str, Any]:
     """단일 Evidence 아이템 생성"""
     file_path = build_file_path(filename)
@@ -426,7 +426,7 @@ def format_search_card(
     drafter: str = "",
     date: str = "",
     doctype: str = "",
-    claimed_total: int = None,
+    claimed_total: Optional[int] = None,
     text_preview: str = "",
 ) -> str:
     """검색 결과 카드 포맷팅 (2025-12-11: 깔끔한 형식으로 개선)"""
@@ -486,10 +486,10 @@ def build_standard_response(
     text: str,
     files: list[str],
     count: int,
-    citations: list[dict[str, Any]] = None,
+    citations: Optional[list[dict[str, Any]]] = None,
     found: bool = True,
-    retrieved_count: int = None,
-    selected_count: int = None,
+    retrieved_count: Optional[int] = None,
+    selected_count: Optional[int] = None,
 ) -> dict[str, Any]:
     """표준 응답 딕셔너리 생성"""
     citations = citations or []

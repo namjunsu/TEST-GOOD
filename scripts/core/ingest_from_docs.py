@@ -108,6 +108,7 @@ class DocumentIngester:
         ocr_mode: Optional[str] = None,  # "off" | "fallback" | "force"
         dry_run: bool = False,
         override_drafter: Optional[str] = None,  # 기안자 수동 지정
+        llm_correct: bool = False,  # 2025-12-16: LLM OCR 교정 활성화
     ):
         self.incoming_dir = Path(incoming_dir)
         self.processed_dir = Path(processed_dir)
@@ -117,6 +118,7 @@ class DocumentIngester:
         self.db_path = db_path
         self.dry_run = dry_run
         self.override_drafter = override_drafter  # 기안자 수동 지정
+        self.llm_correct = llm_correct  # LLM OCR 교정 활성화
 
         # OCR 모드 결정 (v1 스키마 지원)
         if ocr_mode is not None:
@@ -231,7 +233,10 @@ class DocumentIngester:
             return "", {}
 
     def _ocr_extract(self, pdf_path: Path) -> str:
-        """OCR을 사용한 PDF 텍스트 추출"""
+        """OCR을 사용한 PDF 텍스트 추출
+
+        2025-12-16: LLM 교정 옵션 추가 (--llm-correct)
+        """
         try:
             import pytesseract
             from pdf2image import convert_from_path
@@ -251,6 +256,25 @@ class DocumentIngester:
 
             full_text = "\n\n".join(text_pages)
             logger.info(f"OCR 완료: {pdf_path.name}, {len(full_text)}자 추출")
+
+            # LLM 교정 (옵션)
+            if self.llm_correct and full_text:
+                try:
+                    from app.rag.ocr_postprocess import correct_ocr_text
+
+                    logger.info(f"LLM OCR 교정 시작: {pdf_path.name}")
+                    corrected_text = correct_ocr_text(full_text, use_llm=True)
+                    if corrected_text and len(corrected_text) > len(full_text) * 0.5:
+                        logger.info(
+                            f"LLM 교정 완료: {len(full_text)}자 → {len(corrected_text)}자",
+                        )
+                        full_text = corrected_text
+                    else:
+                        logger.warning("LLM 교정 결과가 너무 짧음, 원본 사용")
+                except ImportError as e:
+                    logger.warning(f"LLM 교정 모듈 로드 실패: {e}")
+                except Exception as e:
+                    logger.warning(f"LLM 교정 실패 (원본 사용): {e}")
 
             return full_text
 
@@ -819,6 +843,11 @@ def main():
     parser.add_argument(
         "--drafter", type=str, help="기안자 수동 지정 (파싱 결과 덮어쓰기)",
     )
+    parser.add_argument(
+        "--llm-correct",
+        action="store_true",
+        help="OCR 결과를 LLM으로 교정 (품질 향상, 시간 증가)",
+    )
 
     args = parser.parse_args()
 
@@ -831,6 +860,7 @@ def main():
         ocr_enabled=ocr_enabled,
         dry_run=args.dry_run,
         override_drafter=args.drafter,
+        llm_correct=args.llm_correct,
     )
 
     ingester.run(limit=args.limit, pattern=args.only)

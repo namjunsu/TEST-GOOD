@@ -44,7 +44,7 @@ class TestChatFormatAutoDetection:
         mock_llama.return_value = mock_llama_instance
 
         # Execute
-        llm = QwenLLM(model_path="./models/test.gguf", config=GenerationConfig())
+        _llm = QwenLLM(model_path="./models/test.gguf", config=GenerationConfig())
 
         # Verify
         # chat_format이 None으로 설정되었는지 확인 (auto 모드)
@@ -65,7 +65,7 @@ class TestChatFormatAutoDetection:
         mock_llama.return_value = mock_llama_instance
 
         # Execute
-        llm = QwenLLM(model_path="./models/test.gguf", config=GenerationConfig())
+        _llm = QwenLLM(model_path="./models/test.gguf", config=GenerationConfig())
 
         # Verify
         call_kwargs = mock_llama.call_args.kwargs
@@ -84,7 +84,7 @@ class TestChatFormatAutoDetection:
         mock_llama.return_value = mock_llama_instance
 
         # Execute
-        llm = QwenLLM(model_path="./models/test.gguf", config=GenerationConfig())
+        _llm = QwenLLM(model_path="./models/test.gguf", config=GenerationConfig())
 
         # Verify
         call_kwargs = mock_llama.call_args.kwargs
@@ -103,7 +103,7 @@ class TestChatFormatAutoDetection:
         mock_llama.return_value = mock_llama_instance
 
         # Execute
-        llm = QwenLLM(model_path="./models/test.gguf", config=GenerationConfig())
+        _llm = QwenLLM(model_path="./models/test.gguf", config=GenerationConfig())
 
         # Verify
         call_kwargs = mock_llama.call_args.kwargs
@@ -122,7 +122,7 @@ class TestChatFormatAutoDetection:
         mock_llama.return_value = mock_llama_instance
 
         # Execute
-        llm = QwenLLM(model_path="./models/test.gguf", config=GenerationConfig())
+        _llm = QwenLLM(model_path="./models/test.gguf", config=GenerationConfig())
 
         # Verify
         call_kwargs = mock_llama.call_args.kwargs
@@ -140,7 +140,7 @@ class TestChatFormatAutoDetection:
         mock_llama.return_value = mock_llama_instance
 
         # Execute
-        llm = QwenLLM(model_path="./models/test.gguf", config=GenerationConfig())
+        _llm = QwenLLM(model_path="./models/test.gguf", config=GenerationConfig())
 
         # Verify
         call_kwargs = mock_llama.call_args.kwargs

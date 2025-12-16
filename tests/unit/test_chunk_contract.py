@@ -193,7 +193,7 @@ def test_pipeline_chunk_contract():
         all_violations = []
 
         for query, expected_mode in test_queries:
-            result = pipeline.run(query=query)
+            _result = pipeline.run(query=query)
 
             # 압축된 청크 가져오기 (internal API)
             if hasattr(pipeline, "_last_compressed_chunks"):

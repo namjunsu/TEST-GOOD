@@ -708,21 +708,21 @@ class SearchHandler(BaseHandler):
         if recent_docs:
             lines.append("📄 **최근 문서 (5건):**")
             for i, row in enumerate(recent_docs, 1):
-                date_str = row['date'] or '날짜 없음'
-                fname = row['filename'].replace('.pdf', '')
+                date_str = row["date"] or "날짜 없음"
+                fname = row["filename"].replace(".pdf", "")
                 lines.append(f"  {i}. {fname} ({date_str})")
             lines.append("")
 
         # 안내 메시지
         lines.append(
-            f"💡 더 자세히 보려면: \"{drafter} 2024년 문서\" 또는 "
-            f"\"{drafter} 카메라 문서\" 처럼 범위를 좁혀서 질문해주세요."
+            f'💡 더 자세히 보려면: "{drafter} 2024년 문서" 또는 '
+            f'"{drafter} 카메라 문서" 처럼 범위를 좁혀서 질문해주세요.'
         )
 
         return {
             "mode": "SEARCH",
             "text": "\n".join(lines),
-            "files": [{"filename": r['filename']} for r in recent_docs] if recent_docs else [],
+            "files": [{"filename": r["filename"]} for r in recent_docs] if recent_docs else [],
             "count": total_count,
             "citations": [],
             "evidence": [],

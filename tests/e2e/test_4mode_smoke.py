@@ -40,7 +40,7 @@ def test_list_mode_2024_namjoonsu(pipeline):
     print(f"\n✅ AC1 통과: 목록 검색 (2줄 카드)\n{text[:300]}...")
 
 
-def test_cost_sum_mode_channelA_truck(pipeline):
+def test_cost_sum_mode_channel_a_truck(pipeline):
     """AC2: 채널에이 중계차 보수 합계 얼마였지? → VAT/검증 배지"""
     query = "채널에이 중계차 보수 합계 얼마였지?"
     result = pipeline.answer(query)

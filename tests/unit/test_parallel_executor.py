@@ -193,8 +193,11 @@ class TestExecuteFilters:
         items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
         # 짝수만, 5보다 큰 것만
-        filter_even = lambda x: x % 2 == 0
-        filter_gt5 = lambda x: x > 5
+        def filter_even(x: int) -> bool:
+            return x % 2 == 0
+
+        def filter_gt5(x: int) -> bool:
+            return x > 5
 
         result = executor.execute_filters(items, [filter_even, filter_gt5])
 
@@ -214,12 +217,15 @@ class TestExecuteFilters:
         ]
 
         # 나이 > 28, 이름 길이 >= 4
-        filter_age = lambda x: x["age"] > 28
-        filter_name_len = lambda x: len(x["name"]) >= 4
+        def filter_age(x: dict) -> bool:
+            return x["age"] > 28
+
+        def filter_name_len(x: dict) -> bool:
+            return len(x["name"]) >= 4
 
         # 키 함수: id 기준 교집합
         result = executor.execute_filters(
-            items, [filter_age, filter_name_len], key=lambda x: x["id"]
+            items, [filter_age, filter_name_len], key=lambda x: x["id"]  # noqa: E731
         )
 
         # bob(30, len=3) - 제외 (이름 길이)

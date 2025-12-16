@@ -11,13 +11,13 @@ Usage:
 """
 
 import re
-from functools import lru_cache
 
-from rapidfuzz import fuzz, process
+from rapidfuzz import fuzz
 
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+
 
 # 정규화: 하이픈, 공백 제거 + 소문자
 def _normalize(text: str) -> str:
@@ -151,7 +151,7 @@ class BrandVariantMatcher:
             return self._normalized_to_variants[norm]
 
         # 퍼지 매칭으로 유사한 그룹 찾기
-        for group_norm, variants in self._normalized_to_variants.items():
+        for _group_norm, variants in self._normalized_to_variants.items():
             if _is_similar_brand(term, variants[0] if variants else "", threshold=80):
                 return variants
 

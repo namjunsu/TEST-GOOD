@@ -153,7 +153,9 @@ class CostSumHandler(BaseHandler):
             verification = "sum_match=불일치 ⚠️"
 
         answer_text = f"💰 합계: **₩{claimed_total:,}** ({vat_status})\n"
-        answer_text += f"출처: {filename} | 날짜: {doc.get('display_date') or doc.get('date') or '정보 없음'} | 기안자: {doc.get('drafter') or '정보 없음'}\n"
+        date_str = doc.get("display_date") or doc.get("date") or "정보 없음"
+        drafter_str = doc.get("drafter") or "정보 없음"
+        answer_text += f"출처: {filename} | 날짜: {date_str} | 기안자: {drafter_str}\n"
         answer_text += f"검증: {verification}"
 
         evidence = [{
@@ -186,8 +188,10 @@ class CostSumHandler(BaseHandler):
         for i, (claimed_total, doc, filename) in enumerate(cost_docs[:HandlerConfig.MAX_COST_DOCS_DISPLAY], 1):
             title = format_title_from_filename(filename)
 
+            date_str = doc.get("display_date") or doc.get("date") or "날짜 없음"
+            drafter_str = doc.get("drafter") or "정보 없음"
             answer_text += f"{i}. {title}: ₩{claimed_total:,}\n"
-            answer_text += f"   📅 {doc.get('display_date') or doc.get('date') or '날짜 없음'} | 👤 {doc.get('drafter') or '정보 없음'}\n"
+            answer_text += f"   📅 {date_str} | 👤 {drafter_str}\n"
 
             filenames.append(filename)
             evidence.append({

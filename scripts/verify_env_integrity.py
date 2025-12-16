@@ -172,16 +172,14 @@ def main():
     print("=" * 80)
     print()
 
-    all_passed = True
-    fatal_errors = []
-    all_warnings = []
+    fatal_errors: list[str] = []
+    all_warnings: list[str] = []
 
     # 1. .env 파일 검증
     log("INFO", "1/4 .env 파일 검증 중...")
     success, errors = verify_dotenv_file()
     if not success:
         fatal_errors.extend(errors)
-        all_passed = False
     print()
 
     # .env가 없으면 더 이상 진행 불가
@@ -198,7 +196,6 @@ def main():
     success, errors = verify_model_path()
     if not success:
         fatal_errors.extend(errors)
-        all_passed = False
     print()
 
     # 3. 필수 환경변수 검증

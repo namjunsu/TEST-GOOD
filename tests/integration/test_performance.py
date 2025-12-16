@@ -207,7 +207,7 @@ class TestTimer:
         """Timer의 디버그 모드 통합"""
         os.environ["DEBUG_MODE"] = "true"
 
-        with Timer("SlowOp") as timer:
+        with Timer("SlowOp") as _timer:
             time.sleep(0.01)
 
         # 디버그 모드에서 표시
@@ -277,7 +277,7 @@ class TestBenchmark:
                 return "result"
 
             with patch.object(PerformanceMonitor.logger, "info") as mock_log:
-                result = test_func()
+                _result = test_func()
 
                 # 로그 메시지 확인
                 mock_log.assert_called_once()

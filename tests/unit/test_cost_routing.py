@@ -22,19 +22,19 @@ class TestCostRouting:
 
     # === Regression Tests: 기존 동작 케이스 (0 regressions) ===
 
-    def test_cost_routing_original_얼마였지(self, router):
+    def test_cost_routing_original_eolma(self, router):
         """Original Pattern: '얼마였지' 단독 패턴"""
         query = "채널에이 중계차 보수 합계 얼마였지?"
         result = router.classify_mode(query)
         assert result.mode == QueryMode.COST, f"Expected COST, got {result.mode}"
 
-    def test_cost_routing_original_총액_얼마(self, router):
+    def test_cost_routing_original_total_amount(self, router):
         """Original Pattern: '총액...얼마' 패턴"""
         query = "2024년 장비 구매 총액 얼마인지 알려줘"
         result = router.classify_mode(query)
         assert result.mode == QueryMode.COST, f"Expected COST, got {result.mode}"
 
-    def test_cost_routing_original_합계_알려줘(self, router):
+    def test_cost_routing_original_sum_tell(self, router):
         """Original Pattern: '합계...알려줘' 패턴"""
         query = "작년 소모품 합계 알려줘"
         result = router.classify_mode(query)
@@ -42,19 +42,19 @@ class TestCostRouting:
 
     # === New Pattern Tests: 실패했던 3개 케이스 ===
 
-    def test_cost_routing_fix_총액은(self, router):
+    def test_cost_routing_fix_total_is(self, router):
         """FIX Case 1: '총액은?' 패턴 (particle + question mark)"""
         query = "최새름이 기안한 문서들의 총액은?"
         result = router.classify_mode(query)
         assert result.mode == QueryMode.COST, f"Expected COST, got {result.mode} for '{query}'"
 
-    def test_cost_routing_fix_비용_합계(self, router):
+    def test_cost_routing_fix_cost_sum(self, router):
         """FIX Case 2: '비용 합계' 복합어 패턴 (no verb)"""
         query = "조명 구매 비용 합계"
         result = router.classify_mode(query)
         assert result.mode == QueryMode.COST, f"Expected COST, got {result.mode} for '{query}'"
 
-    def test_cost_routing_fix_소모품_총액(self, router):
+    def test_cost_routing_fix_supplies_total(self, router):
         """FIX Case 3: 'context + 총액' 패턴 (no verb)"""
         query = "작년 소모품 구매 총액"
         result = router.classify_mode(query)
@@ -62,19 +62,19 @@ class TestCostRouting:
 
     # === Edge Cases: 추가 검증 ===
 
-    def test_cost_routing_edge_금액은(self, router):
+    def test_cost_routing_edge_amount_is(self, router):
         """Edge Case: '금액은?' 패턴 (다른 비용 키워드 + particle)"""
         query = "남준수가 작성한 문서의 금액은?"
         result = router.classify_mode(query)
         assert result.mode == QueryMode.COST, f"Expected COST, got {result.mode} for '{query}'"
 
-    def test_cost_routing_edge_합계_금액(self, router):
+    def test_cost_routing_edge_sum_amount(self, router):
         """Edge Case: '합계 금액' 복합어 패턴"""
         query = "2023년 발주 합계 금액"
         result = router.classify_mode(query)
         assert result.mode == QueryMode.COST, f"Expected COST, got {result.mode} for '{query}'"
 
-    def test_cost_routing_edge_납품_총액(self, router):
+    def test_cost_routing_edge_delivery_total(self, router):
         """Edge Case: '납품...총액' context 패턴"""
         query = "부산지국 납품 건 총액"
         result = router.classify_mode(query)

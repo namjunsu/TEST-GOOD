@@ -97,7 +97,7 @@ def ocr_extract(pdf_path: Path) -> str:
         images = convert_from_path(pdf_path, dpi=300)
 
         text_pages = []
-        for i, image in enumerate(images, 1):
+        for _i, image in enumerate(images, 1):
             text = pytesseract.image_to_string(image, lang="kor+eng")
             if text.strip():
                 text_pages.append(text)
@@ -152,8 +152,8 @@ def process_single_pdf(
         # 4. 문서 유형 분류
         doctype = classify_document(text, pdf_path.name, meta)
 
-        # 5. 표 파싱
-        table_data = table_parser.parse(text, pdf_path.name)
+        # 5. 표 파싱 (결과는 meta에 병합됨)
+        _table_data = table_parser.parse(text, pdf_path.name)
 
         # 6. DB 저장
         if not dry_run:

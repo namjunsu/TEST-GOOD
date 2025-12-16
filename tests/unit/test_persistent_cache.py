@@ -121,7 +121,7 @@ class TestWALMode:
 
     def test_wal_enabled(self, cache_db):
         """journal_mode 설정 확인 (WAL 또는 DELETE)"""
-        cache = PersistentCache(db_path=cache_db)
+        _cache = PersistentCache(db_path=cache_db)
 
         # DB 연결해서 journal_mode 확인
         conn = sqlite3.connect(cache_db)

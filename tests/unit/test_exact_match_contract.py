@@ -85,8 +85,8 @@ class TestExactMatchContract:
 
     def test_match_type_values(self, retriever):
         """match_type 값 제한 검증"""
-        # 허용된 match_type 값
-        allowed_match_types = {"exact_code", "filename_exact", "filename_partial"}
+        # 허용된 match_type 값 (런타임 검증에 사용)
+        _allowed_match_types = {"exact_code", "filename_exact", "filename_partial"}
 
         # Note: 실제 검색 결과가 있어야 테스트 가능
         # 여기서는 타입 정의만 확인

@@ -290,14 +290,14 @@ class TestIntegrationAllFixes:
         with patch.object(SystemChecker, "CACHE_FILE", cache_file):
             # 첫 번째 실행 (캐시 저장)
             checker1 = SystemChecker(verbose=False, use_cache=True, show_progress=False)
-            result1 = checker1.check_all()
+            _result1 = checker1.check_all()
 
             # 캐시 파일 생성 확인
             assert cache_file.exists()
 
             # 두 번째 실행 (캐시 로드)
             checker2 = SystemChecker(verbose=False, use_cache=True, show_progress=False)
-            result2 = checker2.check_all()
+            _result2 = checker2.check_all()
 
             # self.result가 올바르게 갱신되었는지 확인
             assert len(checker2.result.items) > 0

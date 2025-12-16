@@ -198,12 +198,11 @@ class TestRequestLogging:
 
         # X-Request-ID 또는 유사한 헤더 확인
         headers = dict(response.headers)
-        has_request_id = any(
+        _has_request_id = any(
             "request-id" in k.lower() or "trace-id" in k.lower()
             for k in headers.keys()
         )
-        # 미들웨어가 설정된 경우에만 확인
-        # assert has_request_id or response.status_code == 200
+        # 미들웨어가 설정된 경우에만 확인 (현재는 status_code만 체크)
         assert response.status_code == 200
 
 

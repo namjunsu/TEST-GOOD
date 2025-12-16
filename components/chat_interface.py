@@ -407,14 +407,13 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                     )
 
         # AI 응답 생성
-        with st.status(ChatConfig.SPINNER_SEARCH, expanded=False) as status:
+        with st.spinner(ChatConfig.SPINNER_SEARCH):
             response = _generate_ai_response(
                 enhanced_query,
                 unified_rag_instance,
                 message_placeholder,
                 selected_filename=selected_filename,
             )
-            status.update(label="완료", state="complete")
 
         if not response:
             error_msg = "오류가 발생했다. 잠시 후 다시 시도하라."

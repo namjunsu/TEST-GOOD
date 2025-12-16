@@ -470,30 +470,43 @@ def render_sidebar_library(rag_instance) -> None:
     # =========================================================================
     with st.expander("🛠️ 시스템 상태 (관리자용)", expanded=False):
         st.caption("**물리 파일 스캔 정보**")
-        if "auto_indexer" in st.session_state:
-            stats = st.session_state.auto_indexer.get_statistics()
+
+        # 실시간 파일 카운트 (2025-12-16: 캐시 대신 직접 스캔)
+        try:
+            import subprocess
+
+            # PDF 파일 수 (docs/year_* 폴더)
+            pdf_result = subprocess.run(
+                ["find", "docs/", "-name", "*.pdf"],
+                capture_output=True, text=True, timeout=5,
+            )
+            pdf_count = len([f for f in pdf_result.stdout.strip().split("\n") if f])
+
+            # DB 문서 수
+            db_count = unique_count
+
             col1, col2 = st.columns(2)
             with col1:
-                st.metric("PDF 파일", f"{stats['pdf_count']}개", help="폴더에 존재하는 물리 PDF 개수")
+                st.metric("PDF 파일", f"{pdf_count}개", help="폴더에 존재하는 물리 PDF 개수")
             with col2:
-                st.metric("TXT 파일", f"{stats['txt_count']}개", help="추출된 텍스트 파일 개수")
-
-            # 물리 파일 총 개수
-            physical_total = stats["pdf_count"] + stats["txt_count"]
-            st.caption(f"💾 물리 파일 총계: {physical_total}개")
-            st.caption(f"📊 인덱스 문서: {unique_count}건")
+                st.metric("DB 문서", f"{db_count}건", help="데이터베이스에 등록된 문서 수")
 
             # 차이 계산
-            if physical_total > unique_count:
-                diff = physical_total - unique_count
-                st.caption(f"⚠️ 미처리 또는 중복 파일: 약 {diff}개")
-                st.caption("(OCR 실패, 파싱 실패, 또는 processed 폴더 복사본 포함)")
+            if pdf_count != db_count:
+                diff = abs(pdf_count - db_count)
+                if pdf_count > db_count:
+                    st.caption(f"⚠️ 미등록 파일: {diff}개 (인덱싱 필요)")
+                else:
+                    st.caption(f"⚠️ DB에만 존재: {diff}건 (파일 삭제됨)")
+            else:
+                st.caption("✅ 파일과 DB 동기화됨")
 
-            # 마지막 업데이트
-            if stats.get("last_update") and stats["last_update"] != "Never":
-                st.caption(f"🕒 마지막 체크: {stats['last_update'][:16]}")
-        else:
-            st.caption("자동 인덱서 정보 없음")
+            # 현재 시간
+            from datetime import datetime
+            st.caption(f"🕒 조회 시간: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+
+        except Exception as e:
+            st.caption(f"파일 스캔 실패: {e}")
 
     st.markdown("---")
 

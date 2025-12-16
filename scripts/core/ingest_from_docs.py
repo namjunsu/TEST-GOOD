@@ -517,11 +517,19 @@ class DocumentIngester:
             # 라인아이템 없으면 sum_match는 None 유지
 
             # 8. 텍스트 저장 (기존 파일 보호)
+            # 2025-12-16: text_preview는 항상 텍스트 파일에서 읽도록 수정
+            extracted_file = self.extracted_dir / f"{pdf_path.stem}.txt"
+            text_for_preview = cleaned_text  # 기본값: 새로 추출한 텍스트
+
             if not self.dry_run:
-                extracted_file = self.extracted_dir / f"{pdf_path.stem}.txt"
                 if extracted_file.exists():
                     # 기존 텍스트 파일 보호 - 덮어쓰기 금지
-                    logger.info(f"텍스트 파일 이미 존재, 스킵: {extracted_file.name}")
+                    # 대신 기존 파일에서 text_preview 읽기 (일관성 보장)
+                    try:
+                        text_for_preview = extracted_file.read_text(encoding="utf-8")
+                        logger.info(f"텍스트 파일 이미 존재, 기존 파일에서 preview 로드: {extracted_file.name}")
+                    except Exception as e:
+                        logger.warning(f"기존 텍스트 읽기 실패, 새 텍스트 사용: {e}")
                     result["actions"].append(f"txt_exists_skipped→{extracted_file.name}")
                 else:
                     extracted_file.write_text(cleaned_text, encoding="utf-8")
@@ -570,7 +578,7 @@ class DocumentIngester:
                         "amount": cost_data.get("total", 0) if cost_data else 0,
                         "file_size": pdf_meta.get("file_size", 0),
                         "page_count": pdf_meta.get("page_count", 0),
-                        "text_preview": cleaned_text,  # 전체 텍스트 저장 (LLM 요약용)
+                        "text_preview": text_for_preview,  # 텍스트 파일 기준 (일관성 보장)
                         "keywords": [],
                         "doctype": doctype,
                         "display_date": parsed_meta.get("display_date", ""),

@@ -88,36 +88,71 @@ class _LLMAdapter:
     def __init__(self, llm: Any) -> None:
         self.llm = llm
 
-    def generate_from_context(self, query: str, context: str, temperature: float = 0.1, mode: str = "rag") -> str:
+    def generate_from_context(
+        self,
+        query: str,
+        context: str,
+        temperature: float = 0.1,
+        mode: str = "rag",
+        system_msg: Optional[str] = None,
+    ) -> str:
         """컨텍스트 기반 답변 생성
 
         Args:
-            query: 사용자 질문
-            context: 검색된 문서 컨텍스트 (텍스트 형식)
+            query: 사용자 질문 (완전한 프롬프트 형식)
+            context: 검색된 문서 컨텍스트 (텍스트 형식) - 이미 query에 포함된 경우 무시됨
             temperature: 생성 온도
             mode: 생성 모드 (chat/rag/summarize)
+            system_msg: 시스템 프롬프트 (None이면 기본값 사용)
 
         Returns:
             str: 생성된 답변
         """
-        # 🔥 컨텍스트 크기 제한 (LLM n_ctx=4096 기준, 프롬프트+응답 여유 확보)
-        # 한글 토큰당 ~1.3자, 2500토큰 = ~3250자
-        MAX_CONTEXT_CHARS = 3000
-        if len(context) > MAX_CONTEXT_CHARS:
-            logger.info(f"⚠️ 컨텍스트 잘림: {len(context)} → {MAX_CONTEXT_CHARS}자")
-            context = context[:MAX_CONTEXT_CHARS]
+        import os
 
-        # Context를 청크 형식으로 변환
-        chunks = [{"snippet": context, "content": context}]
+        # 🔥 모드별 토큰 예산 (2025-12-16: generate_response() 우회로 직접 설정)
+        mode_token_budgets = {
+            "chat": int(os.getenv("CHAT_MAX_TOKENS", "1024")),
+            "rag": int(os.getenv("RAG_MAX_TOKENS", "3072")),
+            "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", "2048")),
+            "summary": int(os.getenv("SUMMARY_MAX_TOKENS", "2048")),
+        }
+        max_tokens = mode_token_budgets.get(mode.lower(), 800)
+
+        # 🔧 2025-12-16: 모드별 시스템 프롬프트 (외부 전달 우선)
+        if system_msg is None:
+            system_msg = "당신은 문서 분석 전문가입니다. 문서 내용을 기반으로 정확하게 답변하세요."
+
+        logger.info(f"🎯 generate_from_context: mode={mode}, max_tokens={max_tokens}, system_len={len(system_msg)}")
 
         try:
-            # 🎯 모드별 토큰 예산 적용
-            logger.info(f"🎯 generate_from_context: mode={mode}")
+            # 🔧 2025-12-16: llama_cpp 직접 호출로 이중 프롬프트 문제 해결
+            # generate_response()는 create_user_prompt()로 프롬프트를 다시 감싸므로,
+            # document_handler가 이미 완전한 프롬프트를 제공한 경우 직접 호출 필요
+            llm_instance = getattr(self.llm, "llm", None)
+
+            if llm_instance is not None:
+                # llama_cpp.Llama 직접 접근
+                output = llm_instance.create_chat_completion(
+                    messages=[
+                        {"role": "system", "content": system_msg},
+                        {"role": "user", "content": query},
+                    ],
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
+                answer = output["choices"][0]["message"]["content"].strip()
+                return answer
+
+            # 폴백: generate_response() 사용 (이중 프롬프트 문제 있을 수 있음)
+            logger.warning("⚠️ llama_cpp 직접 접근 불가, generate_response() 폴백")
+            chunks = [{"snippet": context, "content": context}]
             response = self.llm.generate_response(query, chunks, max_retries=1, mode=mode)
 
             if hasattr(response, "answer"):
                 return response.answer
             return str(response)
+
         except Exception as e:
             logger.error(f"LLM 답변 생성 실패: {e}", exc_info=True)
             return f"[E_GENERATE] {e!s}"

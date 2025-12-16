@@ -638,7 +638,13 @@ A:"""
             # 검색 결과를 기반으로 간단한 요약 생성
             summary_parts = []
             for i, chunk in enumerate(context_chunks[:3], 1):
-                filename = self._get_chunk_source(chunk) or "알 수 없음"
+                # 소스 추출 (다양한 필드 검색)
+                filename = self._get_chunk_source(chunk)
+                if not filename:
+                    # 폴백: 청크에서 제목/doc_id 추출 시도
+                    filename = (chunk.get("title")
+                                or chunk.get("meta", {}).get("title")
+                                or f"문서 {i}")
                 # 🔥 CRITICAL: Support both 'content' and 'snippet' fields
                 content_preview = ((chunk.get("content") or chunk.get("snippet", ""))[:200] or "(내용 없음)")
                 summary_parts.append(f"{i}. {filename}\n{content_preview}...")

@@ -77,7 +77,7 @@ class LLMConfig:
     """LLM 생성 관련 상수"""
 
     # 모드별 max_tokens
-    MAX_TOKENS_DETAILED: int = 1500
+    MAX_TOKENS_DETAILED: int = 3072  # 상세 모드: 충분한 토큰으로 완전한 답변 보장
     MAX_TOKENS_SECTION: int = 900
     MAX_TOKENS_SUMMARY: int = 600
     MAX_TOKENS_QA: int = 800

@@ -204,9 +204,9 @@ settings = Settings(
     VEC_MIN_ABS=float(os.getenv("VEC_MIN_ABS", "0.25")),
     MIN_KEYWORD_COVERAGE=int(os.getenv("MIN_KEYWORD_COVERAGE", "2")),
     # LLM 토큰 설정
-    LLM_MAX_TOKENS_DETAILED=int(os.getenv("LLM_MAX_TOKENS_DETAILED", "1500")),
+    LLM_MAX_TOKENS_DETAILED=int(os.getenv("LLM_MAX_TOKENS_DETAILED", "3072")),  # 1500→3072: 상세 모드 확장
     LLM_MAX_TOKENS_SECTION=int(os.getenv("LLM_MAX_TOKENS_SECTION", "900")),
-    LLM_MAX_TOKENS_SUMMARY=int(os.getenv("LLM_MAX_TOKENS_SUMMARY", "600")),
+    LLM_MAX_TOKENS_SUMMARY=int(os.getenv("LLM_MAX_TOKENS_SUMMARY", "2048")),  # 600→2048: JSON 요약 출력용
     LLM_MAX_TOKENS_QA=int(os.getenv("LLM_MAX_TOKENS_QA", "800")),
     # 문서 처리 설정
     EXTRACTED_DIR=_as_path("EXTRACTED_DIR", _DATA_DIR / "extracted"),

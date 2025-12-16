@@ -80,14 +80,42 @@ class BaseRAGLLM:
         self.length_analyzer = None  # 명시적 초기화
 
     def _get_chunk_source(self, chunk: dict[str, Any]) -> str:
-        """청크에서 소스 정보 추출 (공통 유틸리티)"""
-        return (chunk.get("source")
-                or chunk.get("filename")
-                or chunk.get("file_path")
-                or chunk.get("doc_id")
-                or chunk.get("metadata", {}).get("source")
-                or chunk.get("metadata", {}).get("filename")
-                or "")
+        """청크에서 소스 정보 추출 (공통 유틸리티)
+
+        우선순위:
+        1. 직접 필드: source, filename, file_path, doc_id
+        2. metadata 딕셔너리: metadata.source, metadata.filename, metadata.file_path
+        3. meta 딕셔너리: meta.source, meta.filename, meta.doc_id
+        4. 빈 문자열 (폴백)
+        """
+        # 1. 직접 필드 검색
+        result = (chunk.get("source")
+                  or chunk.get("filename")
+                  or chunk.get("file_path")
+                  or chunk.get("doc_id"))
+        if result:
+            return result
+
+        # 2. metadata 딕셔너리 검색
+        metadata = chunk.get("metadata", {})
+        if isinstance(metadata, dict):
+            result = (metadata.get("source")
+                      or metadata.get("filename")
+                      or metadata.get("file_path"))
+            if result:
+                return result
+
+        # 3. meta 딕셔너리 검색 (V2 어댑터 형식)
+        meta = chunk.get("meta", {})
+        if isinstance(meta, dict):
+            result = (meta.get("source")
+                      or meta.get("filename")
+                      or meta.get("file_path")
+                      or meta.get("doc_id"))
+            if result:
+                return result
+
+        return ""
 
     def _format_context(self, context_chunks: list[dict[str, Any]]) -> str:
         """컨텍스트 포맷팅 (공통 로직)"""

@@ -96,7 +96,7 @@ def detect_section(query: str) -> Optional[str]:
     return None
 
 
-def safe_filename(meta: dict = None, doc_path: str = None) -> str:
+def safe_filename(meta: Optional[dict[str, Any]] = None, doc_path: Optional[str] = None) -> str:
     """파일명 안전 추출"""
     import os
 
@@ -362,9 +362,9 @@ class DocumentHandler(BaseHandler):
     ) -> list[dict[str, Any]]:
         """특정 문서의 청크만 로드 (top_k: 최대 청크 수)"""
         try:
-            # BM25 인덱스에서 직접 접근
-            if hasattr(self.retriever, "bm25") and self.retriever.bm25:
-                bm25_store = self.retriever.bm25
+            # BM25 인덱스에서 직접 접근 (동적 속성)
+            bm25_store = getattr(self.retriever, "bm25", None)
+            if bm25_store is not None:
                 chunks = []
 
                 for i, meta in enumerate(bm25_store.metadata):
@@ -491,15 +491,17 @@ class DocumentHandler(BaseHandler):
         # 🔧 요약 모드에서는 경로 1 스킵 → QwenLLM이 별도 시스템 프롬프트를 사용하여 JSON 출력 지시가 무시됨
         # 요약 모드는 경로 2(llama_cpp 직접 접근)로 처리하여 JSON 출력을 보장함
         if not routing.get("needs_summary"):
-            if hasattr(self.generator, "rag") and self.generator.rag:
-                rag = self.generator.rag
-                if hasattr(rag, "generate_from_context"):
+            rag_adapter = getattr(self.generator, "rag", None)
+            if rag_adapter is not None:
+                generate_fn = getattr(rag_adapter, "generate_from_context", None)
+                if generate_fn is not None:
                     logger.info(f"🎯 _LLMAdapter.generate_from_context() 사용 (mode={mode})")
-                    raw_result = rag.generate_from_context(
+                    raw_result: str = generate_fn(
                         query=llm_prompt,
                         context=context,
                         temperature=DocumentHandlerConfig.LLM_TEMPERATURE,
                         mode=mode,
+                        system_msg=system_msg,  # 🔧 시스템 프롬프트 전달
                     )
 
                     # 에러 응답 체크
@@ -509,14 +511,17 @@ class DocumentHandler(BaseHandler):
                     return raw_result.strip()
 
         # ===== 경로 2: llama_cpp.Llama 직접 접근 (폴백) =====
-        llm = None
-        if hasattr(self.generator, "rag") and self.generator.rag:
-            rag = self.generator.rag
-            if hasattr(rag, "llm") and rag.llm:
-                llm = rag.llm  # QwenLLM
+        llm: Any = None
+        rag_adapter = getattr(self.generator, "rag", None)
+        if rag_adapter is not None:
+            rag_llm = getattr(rag_adapter, "llm", None)
+            if rag_llm is not None:
+                llm = rag_llm  # QwenLLM
 
-        if llm is None and hasattr(self.generator, "llm") and self.generator.llm:
-            llm = self.generator.llm
+        if llm is None:
+            generator_llm = getattr(self.generator, "llm", None)
+            if generator_llm is not None:
+                llm = generator_llm
 
         if llm is None:
             logger.error(f"LLM 접근 실패: generator type={type(self.generator)}")
@@ -532,7 +537,9 @@ class DocumentHandler(BaseHandler):
         from llama_cpp import Llama
         llm_instance = getattr(llm, "llm", llm)
         if isinstance(llm_instance, Llama):
-            logger.info("🔧 llama_cpp.Llama 직접 접근 (폴백)")
+            import time
+            llm_start = time.time()
+            logger.info(f"🔧 LLM 호출: max_tokens={max_tokens}, prompt_len={len(llm_prompt)}")
             output = llm_instance.create_chat_completion(
                 messages=[
                     {"role": "system", "content": system_msg},
@@ -541,7 +548,14 @@ class DocumentHandler(BaseHandler):
                 max_tokens=max_tokens,
                 temperature=DocumentHandlerConfig.LLM_TEMPERATURE,
             )
-            raw_result = output["choices"][0]["message"]["content"]
+            # 타입 안전: content가 None일 수 있음
+            content = output["choices"][0]["message"]["content"]  # type: ignore[index]
+            raw_result: str = str(content) if content else ""
+            llm_elapsed = time.time() - llm_start
+
+            # 🔧 LLM 응답 로깅 (핵심 정보 + 미리보기)
+            logger.info(f"📤 LLM 응답: {len(raw_result)}자, {llm_elapsed:.2f}초")
+            logger.info(f"📤 응답 미리보기: {raw_result[:200].replace(chr(10), ' ')}...")
 
             if routing.get("needs_summary"):
                 return self._format_summary_output(raw_result, metadata)
@@ -594,7 +608,13 @@ class DocumentHandler(BaseHandler):
                 context=context, filename=filename,
                 drafter=drafter, date=date,
             )
-            system_msg = "당신은 문서 분석 전문가입니다. 모든 세부사항을 빠짐없이 포함하여 상세하게 답변하세요."
+            # 🔧 DETAILED 모드: 요약 형식 금지, 상세 서술 강제
+            system_msg = (
+                "당신은 문서 분석 전문가입니다. "
+                "모든 세부사항을 빠짐없이 포함하여 **상세하게 서술**하세요. "
+                "절대 요약하거나 목록 형식으로 줄이지 마세요. "
+                "배경, 목적, 검토 내용, 비교 대안, 선정 사유, 예산 등 모든 섹션을 충분히 설명하세요."
+            )
 
         elif needs_summary:
             from app.rag.summary_templates import build_prompt, detect_doc_kind
@@ -650,20 +670,25 @@ class DocumentHandler(BaseHandler):
             from app.rag.summary_templates import detect_doc_kind, format_summary_output, parse_summary_json
 
             parsed = parse_summary_json(raw_result)
-
-            # JSON 파싱 실패 시 원본 LLM 응답 반환
-            if not parsed:
-                logger.warning(f"⚠️ JSON 파싱 실패, 원본 응답 사용: {raw_result[:100]}...")
-                return raw_result.strip()
-
             kind = detect_doc_kind(metadata["filename"], "")
+
+            # 🔧 파싱 결과 상세 로깅
+            if parsed:
+                has_summary = bool(parsed.get("요약"))
+                logger.info(f"📊 JSON 파싱 성공: kind={kind}, keys={list(parsed.keys())}, has_요약={has_summary}")
+                # 요약 필드 내용 미리보기
+                if has_summary:
+                    logger.info(f"📝 요약 내용: {str(parsed.get('요약', ''))[:100]}...")
+            else:
+                logger.warning(f"⚠️ JSON 파싱 실패: {raw_result[:200]}...")
+                return raw_result.strip()
 
             return format_summary_output(
                 parsed_json=parsed,
                 kind=kind,
                 filename=metadata["filename"],
-                drafter=metadata.get("drafter"),
-                display_date=metadata.get("display_date"),
+                drafter=metadata.get("drafter") or "",
+                display_date=metadata.get("display_date") or "",
                 claimed_total=None,
             )
         except (KeyError, TypeError) as e:

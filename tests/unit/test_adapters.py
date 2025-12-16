@@ -91,12 +91,16 @@ class TestLLMAdapter:
         adapter = _LLMAdapter(mock_llm)
         assert adapter.llm == mock_llm
 
-    def test_generate_from_context_success(self):
-        """컨텍스트 기반 생성 성공"""
+    def test_generate_from_context_success_direct_llm(self):
+        """llama_cpp 직접 호출 성공 케이스"""
+        # llama_cpp.Llama 직접 호출 모킹
+        mock_llm_instance = Mock()
+        mock_llm_instance.create_chat_completion.return_value = {
+            "choices": [{"message": {"content": "직접 LLM 답변입니다."}}]
+        }
+
         mock_llm = Mock()
-        mock_response = Mock()
-        mock_response.answer = "생성된 답변입니다."
-        mock_llm.generate_response.return_value = mock_response
+        mock_llm.llm = mock_llm_instance  # llama_cpp 인스턴스
 
         adapter = _LLMAdapter(mock_llm)
         result = adapter.generate_from_context(
@@ -106,12 +110,25 @@ class TestLLMAdapter:
             mode="rag",
         )
 
-        assert result == "생성된 답변입니다."
+        assert result == "직접 LLM 답변입니다."
+        mock_llm_instance.create_chat_completion.assert_called_once()
+
+    def test_generate_from_context_fallback_generate_response(self):
+        """llama_cpp 직접 접근 불가 시 generate_response 폴백"""
+        mock_llm = Mock(spec=["generate_response"])  # llm 속성 없음
+        mock_response = Mock()
+        mock_response.answer = "폴백 답변입니다."
+        mock_llm.generate_response.return_value = mock_response
+
+        adapter = _LLMAdapter(mock_llm)
+        result = adapter.generate_from_context("질문", "컨텍스트", 0.1)
+
+        assert result == "폴백 답변입니다."
         mock_llm.generate_response.assert_called_once()
 
-    def test_generate_from_context_no_answer_attr(self):
-        """응답에 answer 속성이 없으면 str 변환"""
-        mock_llm = Mock()
+    def test_generate_from_context_fallback_no_answer_attr(self):
+        """폴백 경로에서 응답에 answer 속성이 없으면 str 변환"""
+        mock_llm = Mock(spec=["generate_response"])  # llm 속성 없음
         mock_llm.generate_response.return_value = "직접 문자열 응답"
 
         adapter = _LLMAdapter(mock_llm)
@@ -122,6 +139,7 @@ class TestLLMAdapter:
     def test_generate_from_context_exception(self):
         """생성 실패 시 에러 메시지 반환"""
         mock_llm = Mock()
+        mock_llm.llm = None  # llama_cpp 직접 접근 불가
         mock_llm.generate_response.side_effect = Exception("LLM 오류")
 
         adapter = _LLMAdapter(mock_llm)

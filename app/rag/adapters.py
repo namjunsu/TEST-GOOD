@@ -132,16 +132,46 @@ class _LLMAdapter:
             llm_instance = getattr(self.llm, "llm", None)
 
             if llm_instance is not None:
+                # 🔧 2025-12-16: RAG 모드에서는 context를 user prompt에 포함해야 함
+                # query가 이미 context를 포함하고 있는지 확인 (document_handler에서 build_qa_prompt 사용 시)
+                query_has_context = any(marker in query for marker in [
+                    "참고 문서", "Context:", "[문서 내용]", "### 문서", "문서 정보:",
+                ])
+
+                if context and context.strip() and not query_has_context:
+                    # context가 별도로 제공된 경우 → RAG 프롬프트 구성
+                    # 🔧 컨텍스트 길이 제한 (토큰 초과 방지)
+                    max_context_chars = int(os.getenv("RAG_MAX_CONTEXT_CHARS", "6000"))
+                    truncated_context = context[:max_context_chars]
+                    if len(context) > max_context_chars:
+                        truncated_context += "\n...(이하 생략)"
+                        logger.info(f"📝 컨텍스트 길이 제한: {len(context)} → {max_context_chars}자")
+
+                    user_content = f"""다음 참고 문서를 기반으로 질문에 답변하세요.
+
+[참고 문서]
+{truncated_context}
+
+[질문]
+{query}
+
+위 참고 문서 내용만을 기반으로 정확하게 답변하세요. 문서에 없는 내용은 답변하지 마세요."""
+                else:
+                    # query가 이미 완전한 프롬프트인 경우 (document_handler 등)
+                    user_content = query
+
                 # llama_cpp.Llama 직접 접근
                 output = llm_instance.create_chat_completion(
                     messages=[
                         {"role": "system", "content": system_msg},
-                        {"role": "user", "content": query},
+                        {"role": "user", "content": user_content},
                     ],
                     max_tokens=max_tokens,
                     temperature=temperature,
                 )
-                answer = output["choices"][0]["message"]["content"].strip()
+                # 🔧 content가 None일 수 있음 (안전 처리)
+                content = output["choices"][0]["message"].get("content")
+                answer = content.strip() if content else ""
                 return answer
 
             # 폴백: generate_response() 사용 (이중 프롬프트 문제 있을 수 있음)

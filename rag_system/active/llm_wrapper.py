@@ -1961,13 +1961,34 @@ class Qwen72BLLM(BaseRAGLLM):
                 trust_remote_code=True
             )
 
+            # Flash Attention 설정 (환경변수 기반)
+            enable_flash_attn = os.getenv("ENABLE_FLASH_ATTENTION", "false").lower() == "true"
+
+            # TF32 활성화 (H100 성능 향상)
+            if torch.cuda.is_available():
+                torch.set_float32_matmul_precision('high')  # TF32
+                os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
             # 모델 로드 (AWQ quantization 자동 인식)
+            model_kwargs = {
+                "device_map": "auto",  # H100에 자동 배치
+                "torch_dtype": torch.float16,
+                "trust_remote_code": True,
+                "low_cpu_mem_usage": True,
+            }
+
+            # Flash Attention 활성화 (설치된 경우)
+            if enable_flash_attn:
+                try:
+                    import flash_attn
+                    model_kwargs["attn_implementation"] = "flash_attention_2"
+                    self.logger.info("⚡ Flash Attention 2 활성화됨")
+                except ImportError:
+                    self.logger.warning("⚠️ flash-attn 미설치 - 기본 어텐션 사용")
+
             self.model = AutoModelForCausalLM.from_pretrained(
                 str(self.model_path),
-                device_map="auto",  # H100에 자동 배치
-                torch_dtype=torch.float16,
-                trust_remote_code=True,
-                low_cpu_mem_usage=True,
+                **model_kwargs
             )
 
             self.logger.info("✅ Qwen2.5-72B-Instruct-AWQ 로딩 완료!")
@@ -2054,6 +2075,108 @@ class Qwen72BLLM(BaseRAGLLM):
                 has_proper_citation=False,
                 retry_count=0,
             )
+
+    def generate_batch_responses(
+        self,
+        questions: list[str],
+        context_chunks_list: list[list[dict[str, Any]]]
+    ) -> list[RAGResponse]:
+        """여러 질의를 배치로 처리 (H100 성능 활용)
+
+        Args:
+            questions: 질의 리스트
+            context_chunks_list: 각 질의에 대응하는 컨텍스트 청크 리스트
+
+        Returns:
+            RAGResponse 리스트
+        """
+        start_time = time.time()
+
+        try:
+            import torch
+
+            if len(questions) != len(context_chunks_list):
+                raise ValueError(f"질의({len(questions)})와 컨텍스트({len(context_chunks_list)}) 개수 불일치")
+
+            # 프롬프트 일괄 생성
+            prompts = []
+            for question, chunks in zip(questions, context_chunks_list):
+                context_text = self._format_context(chunks)
+                user_prompt = f"""문서 내용:
+{context_text}
+
+질문: {question}
+
+답변:"""
+                messages = [
+                    {"role": "system", "content": self.IMPROVED_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt}
+                ]
+                text = self.tokenizer.apply_chat_template(
+                    messages,
+                    tokenize=False,
+                    add_generation_prompt=True
+                )
+                prompts.append(text)
+
+            # 배치 토크나이징 (패딩 적용)
+            model_inputs = self.tokenizer(
+                prompts,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+                max_length=self.config.max_context_tokens
+            ).to(self.model.device)
+
+            # 배치 생성
+            with torch.no_grad():
+                generated_ids = self.model.generate(
+                    **model_inputs,
+                    max_new_tokens=self.config.max_tokens,
+                    temperature=self.config.temperature,
+                    do_sample=True if self.config.temperature > 0 else False,
+                )
+
+            # 응답 추출
+            responses = []
+            total_time = time.time() - start_time
+            avg_time = total_time / len(questions)
+
+            for i, (input_ids, output_ids) in enumerate(zip(model_inputs.input_ids, generated_ids)):
+                # 입력 부분 제거하고 생성된 부분만 추출
+                response_ids = output_ids[len(input_ids):]
+                response_text = self.tokenizer.decode(response_ids, skip_special_tokens=True)
+
+                # 출처 추출
+                sources = self._extract_sources(context_chunks_list[i])
+                has_citation = any(source in response_text for source in sources)
+
+                responses.append(RAGResponse(
+                    answer=response_text.strip(),
+                    sources_cited=sources,
+                    confidence=0.95,
+                    generation_time=avg_time,  # 평균 시간 사용
+                    has_proper_citation=has_citation,
+                    retry_count=0,
+                ))
+
+            self.logger.info(f"✅ 배치 생성 완료 ({len(questions)}개, {total_time:.2f}초, 평균 {avg_time:.2f}초)")
+            return responses
+
+        except Exception as e:
+            self.logger.error(f"❌ 배치 응답 생성 실패: {e}")
+            # 실패 시 개별 응답 반환
+            return [
+                RAGResponse(
+                    answer=f"배치 생성 실패: {str(e)}",
+                    sources_cited=[],
+                    confidence=0.0,
+                    generation_time=0.0,
+                    has_proper_citation=False,
+                    retry_count=0,
+                )
+                for _ in questions
+            ]
 
 
 def create_llm(model_type: str = "llama", **kwargs) -> Any:

@@ -26,6 +26,8 @@ scikit-learn>=1.7.2
 # LLM
 llama-cpp-python>=0.3.16
 vllm>=0.12.0  # High-performance LLM inference (for H100 with Qwen2.5-72B-AWQ)
+flash-attn>=2.8.0  # Flash Attention 2 for memory optimization (Stage 3)
+einops>=0.8.0  # Tensor operations (required by flash-attn)
 
 # Fuzzy Matching
 rapidfuzz>=3.10.0

@@ -1937,8 +1937,11 @@ class Qwen72BLLM(BaseRAGLLM):
 ★ 출처를 [파일명.pdf] 형식으로 표시하세요.
 ★ 반드시 {ANSWER_LANGUAGE}로 답변하세요."""
 
-    def __init__(self, model_path: str, config: GenerationConfig = None, length_analyzer=None):
+    def __init__(self, model_path: str = None, config: GenerationConfig = None, length_analyzer=None):
         super().__init__()
+        # model_path가 None이면 환경변수에서 가져옴
+        if model_path is None:
+            model_path = os.getenv("LLM_MODEL_PATH", "/home/user/Desktop/AI/AI-CHAT/models")
         self.model_path = Path(model_path)
         self.config = config or GenerationConfig()
         self.length_analyzer = length_analyzer

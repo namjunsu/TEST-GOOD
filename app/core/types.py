@@ -8,7 +8,12 @@ IDE 자동완성 및 타입 체킹 지원.
 """
 
 from enum import Enum
-from typing import Any, NotRequired, Optional, TypedDict, Union
+from typing import Any, Optional, TypedDict, Union
+
+try:
+    from typing import NotRequired  # Python 3.11+
+except ImportError:
+    from typing_extensions import NotRequired  # Python 3.10
 
 # ============================================================================
 # 열거형 타입

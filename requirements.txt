@@ -25,15 +25,16 @@ scikit-learn>=1.7.2
 
 # LLM
 llama-cpp-python>=0.3.16
+vllm>=0.12.0  # High-performance LLM inference (for H100 with Qwen2.5-72B-AWQ)
 
 # Fuzzy Matching
 rapidfuzz>=3.10.0
 
 # Utils
-numpy>=2.3.4
-pandas>=2.3.3
-tqdm>=4.67.1
-Pillow>=11.3.0
+numpy>=2.0.0  # vLLM requires numpy 2.x
+pandas>=2.0.0
+tqdm>=4.65.0
+Pillow>=10.0.0
 PyYAML>=6.0.0
 
 # Logging

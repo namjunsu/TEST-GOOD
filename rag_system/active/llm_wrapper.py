@@ -32,6 +32,7 @@ __all__ = [
     "MAX_LLM_RETRY",
     "QwenLLM",
     "LlamaLLM",
+    "VllmLLM",
     "create_llm",
 ]
 
@@ -1775,8 +1776,292 @@ class LlamaLLM(BaseRAGLLM):
             )
 
 
+class VllmLLM(BaseRAGLLM):
+    """vLLM 엔진 기반 LLM (Qwen2.5-72B-Instruct-AWQ on H100)"""
+
+    # 프롬프트 템플릿 (QwenLLM과 동일)
+    SYSTEM_ROLE = "한국 방송사의 전문 지식 검색 도우미"
+    ANSWER_LANGUAGE = "한국어"
+    CITATION_FORMAT = "[파일명.pdf]"
+
+    IMPROVED_SYSTEM_PROMPT = f"""당신은 {SYSTEM_ROLE}입니다.
+
+[핵심 원칙 - 반드시 지켜주세요]
+★ 질문이 요청한 범위만 답변하세요. 요청하지 않은 정보는 포함하지 마세요.
+  - "개요만" → 개요 섹션만 답변
+  - "비용만" → 비용 정보만 답변
+  - "무슨 내용이야?" → 3-5문장으로 핵심 요약만
+
+[답변 규칙]
+1. 첫 문장에서 질문의 핵심 답변을 제시하세요.
+2. 문서에 있는 정보만 사용하세요. 추측 금지.
+3. 숫자/금액/날짜는 정확하게 인용하세요.
+4. 출처: [파일명.pdf] 형식으로 표시하세요.
+5. 반드시 {ANSWER_LANGUAGE}로 답변하세요.
+
+[금지사항]
+- 질문 범위를 넘어선 추가 정보 금지
+- 문서 전체를 나열하는 것 금지
+- 과장이나 확대해석 금지"""
+
+    IMPROVED_QUERY_TEMPLATE = """문서 내용:
+{context}
+
+질문: {query}
+
+★ 위 질문이 요청한 범위만 답변하세요. 요청하지 않은 정보는 포함하지 마세요.
+- 금액 질문 → 금액만 답변
+- 개요/요약 질문 → 3-5문장으로 핵심만
+- 특정 항목 질문 → 해당 항목만
+
+답변:""".replace("{CITATION_FORMAT}", CITATION_FORMAT)
+
+    def __init__(self, model_path: str, config: GenerationConfig = None, length_analyzer=None):
+        super().__init__()
+        self.model_path = Path(model_path)
+        self.config = config or GenerationConfig()
+        self.length_analyzer = length_analyzer
+        self.llm = None
+
+        # vLLM 설정 로드
+        self.gpu_memory_utilization = float(os.getenv("VLLM_GPU_MEMORY_UTILIZATION", "0.9"))
+        self.max_model_len = int(os.getenv("VLLM_MAX_MODEL_LEN", "8192"))
+        self.tensor_parallel_size = int(os.getenv("VLLM_TENSOR_PARALLEL_SIZE", "1"))
+        self.trust_remote_code = os.getenv("VLLM_TRUST_REMOTE_CODE", "true").lower() == "true"
+
+        self._load_model()
+
+    def _load_model(self):
+        """vLLM 모델 로드"""
+        try:
+            from vllm import LLM
+
+            self.logger.info(f"🚀 vLLM 모델 로딩 중: {self.model_path}")
+            self.logger.info(f"   - GPU 메모리 활용률: {self.gpu_memory_utilization}")
+            self.logger.info(f"   - 최대 모델 길이: {self.max_model_len}")
+            self.logger.info(f"   - 텐서 병렬화: {self.tensor_parallel_size}")
+
+            self.llm = LLM(
+                model=str(self.model_path),
+                gpu_memory_utilization=self.gpu_memory_utilization,
+                max_model_len=self.max_model_len,
+                tensor_parallel_size=self.tensor_parallel_size,
+                trust_remote_code=self.trust_remote_code,
+                dtype="float16",  # AWQ 모델용
+            )
+
+            self.logger.info("✅ vLLM 모델 로딩 완료 (Qwen2.5-72B-Instruct-AWQ)")
+
+        except Exception as e:
+            self.logger.error(f"❌ vLLM 모델 로딩 실패: {e}")
+            raise
+
+    def generate_response(self, question: str, context_chunks: list[dict[str, Any]]) -> RAGResponse:
+        """vLLM으로 응답 생성"""
+        start_time = time.time()
+
+        try:
+            from vllm import SamplingParams
+
+            # 컨텍스트 포맷팅
+            context_text = self._format_context(context_chunks)
+
+            # 프롬프트 생성
+            user_prompt = self.IMPROVED_QUERY_TEMPLATE.format(
+                context=context_text,
+                query=question
+            )
+
+            # Qwen2.5 chat template 적용
+            messages = [
+                {"role": "system", "content": self.IMPROVED_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt}
+            ]
+
+            # vLLM 샘플링 파라미터
+            sampling_params = SamplingParams(
+                temperature=self.config.temperature,
+                max_tokens=self.config.max_tokens,
+                top_p=self.config.top_p,
+                top_k=self.config.top_k,
+                repetition_penalty=self.config.repeat_penalty,
+            )
+
+            # 추론 실행
+            outputs = self.llm.chat(messages, sampling_params=sampling_params)
+
+            # 응답 추출
+            response_text = outputs[0].outputs[0].text
+
+            generation_time = time.time() - start_time
+
+            # 출처 추출
+            sources = self._extract_sources(context_chunks)
+
+            # 인용 확인
+            has_citation = any(source in response_text for source in sources)
+
+            return RAGResponse(
+                answer=response_text.strip(),
+                sources_cited=sources,
+                confidence=0.95,  # 72B 모델은 더 높은 신뢰도
+                generation_time=generation_time,
+                has_proper_citation=has_citation,
+                retry_count=0,
+            )
+
+        except Exception as e:
+            self.logger.error(f"❌ vLLM 응답 생성 실패: {e}")
+            return RAGResponse(
+                answer=f"응답 생성 실패: {str(e)}",
+                sources_cited=[],
+                confidence=0.0,
+                generation_time=time.time() - start_time,
+                has_proper_citation=False,
+                retry_count=0,
+            )
+
+
+class Qwen72BLLM(BaseRAGLLM):
+    """Qwen2.5-72B-Instruct-AWQ (Transformers 기반 - H100용)"""
+
+    SYSTEM_ROLE = "한국 방송사의 전문 지식 검색 도우미"
+    ANSWER_LANGUAGE = "한국어"
+
+    IMPROVED_SYSTEM_PROMPT = f"""당신은 {SYSTEM_ROLE}입니다.
+
+[핵심 원칙]
+★ 질문이 요청한 범위만 답변하세요.
+★ 문서에 있는 정보만 사용하세요. 추측 금지.
+★ 숫자/금액/날짜는 정확하게 인용하세요.
+★ 출처를 [파일명.pdf] 형식으로 표시하세요.
+★ 반드시 {ANSWER_LANGUAGE}로 답변하세요."""
+
+    def __init__(self, model_path: str, config: GenerationConfig = None, length_analyzer=None):
+        super().__init__()
+        self.model_path = Path(model_path)
+        self.config = config or GenerationConfig()
+        self.length_analyzer = length_analyzer
+        self.model = None
+        self.tokenizer = None
+        self._load_model()
+
+    def _load_model(self):
+        """Transformers로 72B AWQ 모델 로드"""
+        try:
+            import torch
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+
+            self.logger.info(f"🚀 Qwen2.5-72B-Instruct-AWQ 로딩 중: {self.model_path}")
+            self.logger.info(f"   H100 GPU에서 로딩 (약 30-60초 소요)")
+
+            # Tokenizer 로드
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                str(self.model_path),
+                trust_remote_code=True
+            )
+
+            # 모델 로드 (AWQ quantization 자동 인식)
+            self.model = AutoModelForCausalLM.from_pretrained(
+                str(self.model_path),
+                device_map="auto",  # H100에 자동 배치
+                torch_dtype=torch.float16,
+                trust_remote_code=True,
+                low_cpu_mem_usage=True,
+            )
+
+            self.logger.info("✅ Qwen2.5-72B-Instruct-AWQ 로딩 완료!")
+            self.logger.info(f"   GPU 메모리 사용: {torch.cuda.memory_allocated() / 1024**3:.1f} GB")
+
+        except Exception as e:
+            self.logger.error(f"❌ 모델 로딩 실패: {e}")
+            raise
+
+    def generate_response(self, question: str, context_chunks: list[dict[str, Any]]) -> RAGResponse:
+        """72B 모델로 응답 생성"""
+        start_time = time.time()
+
+        try:
+            import torch
+
+            # 컨텍스트 포맷팅
+            context_text = self._format_context(context_chunks)
+
+            # 프롬프트 생성
+            user_prompt = f"""문서 내용:
+{context_text}
+
+질문: {question}
+
+답변:"""
+
+            messages = [
+                {"role": "system", "content": self.IMPROVED_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt}
+            ]
+
+            # Chat template 적용
+            text = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True
+            )
+
+            # Tokenization
+            model_inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
+
+            # 생성
+            with torch.no_grad():
+                generated_ids = self.model.generate(
+                    **model_inputs,
+                    max_new_tokens=self.config.max_tokens,
+                    temperature=self.config.temperature,
+                    top_p=self.config.top_p,
+                    top_k=self.config.top_k,
+                    repetition_penalty=self.config.repeat_penalty,
+                    do_sample=True if self.config.temperature > 0 else False,
+                )
+
+            # 응답 추출
+            generated_ids = [
+                output_ids[len(input_ids):]
+                for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
+            ]
+            response_text = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+
+            generation_time = time.time() - start_time
+
+            # 출처 추출
+            sources = self._extract_sources(context_chunks)
+            has_citation = any(source in response_text for source in sources)
+
+            return RAGResponse(
+                answer=response_text.strip(),
+                sources_cited=sources,
+                confidence=0.95,
+                generation_time=generation_time,
+                has_proper_citation=has_citation,
+                retry_count=0,
+            )
+
+        except Exception as e:
+            self.logger.error(f"❌ 응답 생성 실패: {e}")
+            return RAGResponse(
+                answer=f"응답 생성 실패: {str(e)}",
+                sources_cited=[],
+                confidence=0.0,
+                generation_time=time.time() - start_time,
+                has_proper_citation=False,
+                retry_count=0,
+            )
+
+
 def create_llm(model_type: str = "llama", **kwargs) -> Any:
     """LLM 팩토리 함수"""
+    if model_type.lower() == "qwen72b":
+        return Qwen72BLLM(**kwargs)
+    if model_type.lower() == "vllm":
+        return VllmLLM(**kwargs)
     if model_type.lower() == "llama":
         return LlamaLLM(**kwargs)
     if model_type.lower() == "qwen":

@@ -3,19 +3,20 @@ LLM 싱글톤 패턴 - 성능 최적화 버전
 """
 
 import logging
+import os
 import threading
 import time
 from contextlib import contextmanager
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
-from rag_system.active.llm_wrapper import QwenLLM
+from rag_system.active.llm_wrapper import QwenLLM, VllmLLM, Qwen72BLLM
 
 
 class LLMSingleton:
     """LLM 인스턴스를 싱글톤으로 관리"""
 
-    _instance: Optional[QwenLLM] = None
+    _instance: Optional[Union[QwenLLM, VllmLLM, Qwen72BLLM]] = None
     _lock = threading.Lock()
     _stats_lock = threading.Lock()  # 통계 전용 락
     _initialized = False
@@ -30,7 +31,7 @@ class LLMSingleton:
     _logger = logging.getLogger(__name__)
 
     @classmethod
-    def get_instance(cls, model_path: Optional[str] = None, **kwargs) -> QwenLLM:
+    def get_instance(cls, model_path: Optional[str] = None, **kwargs) -> Union[QwenLLM, VllmLLM, Qwen72BLLM]:
         """싱글톤 인스턴스 반환 (스레드 안전)"""
 
         # 빠른 체크 (락 없이)
@@ -51,15 +52,30 @@ class LLMSingleton:
         with cls._lock:
             if cls._instance is None:
                 start_time = time.time()
-                cls._logger.info("🤖 LLM 모델 최초 로딩...")
+
+                # LLM 백엔드 선택 (환경변수 기반)
+                llm_backend = os.getenv("LLM_BACKEND", "llama_cpp").lower()
+
+                cls._logger.info(f"🤖 LLM 모델 최초 로딩... (backend: {llm_backend})")
 
                 # 설정 저장
                 cls._model_config = {
                     "model_path": model_path,
+                    "backend": llm_backend,
                     "kwargs": kwargs.copy() if kwargs else {},
                 }
 
-                cls._instance = QwenLLM(model_path=model_path, **kwargs)
+                # 백엔드에 따라 적절한 LLM 클래스 선택
+                if llm_backend == "qwen72b":
+                    cls._logger.info("🚀 Transformers 사용 (Qwen2.5-72B-Instruct-AWQ on H100)")
+                    cls._instance = Qwen72BLLM(model_path=model_path, **kwargs)
+                elif llm_backend == "vllm":
+                    cls._logger.info("🚀 vLLM 엔진 사용 (Qwen2.5-72B-Instruct-AWQ)")
+                    cls._instance = VllmLLM(model_path=model_path, **kwargs)
+                else:
+                    cls._logger.info("🔧 llama-cpp-python 사용 (Qwen2.5-7B-GGUF)")
+                    cls._instance = QwenLLM(model_path=model_path, **kwargs)
+
                 cls._load_time = time.time() - start_time
                 cls._initialized = True
                 cls._first_load_timestamp = datetime.now()

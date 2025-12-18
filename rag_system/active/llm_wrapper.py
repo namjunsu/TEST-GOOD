@@ -2119,14 +2119,21 @@ class Qwen72BLLM(BaseRAGLLM):
                 )
                 prompts.append(text)
 
-            # 배치 토크나이징 (패딩 적용)
+            # 배치 토크나이징 (패딩 적용 - Flash Attention은 left padding 필요)
+            max_context = int(os.getenv("LLM_N_CTX", "16384"))
+            original_padding_side = self.tokenizer.padding_side
+            self.tokenizer.padding_side = 'left'
+
             model_inputs = self.tokenizer(
                 prompts,
                 return_tensors="pt",
                 padding=True,
                 truncation=True,
-                max_length=self.config.max_context_tokens
+                max_length=max_context
             ).to(self.model.device)
+
+            # 원래 패딩 설정 복원
+            self.tokenizer.padding_side = original_padding_side
 
             # 배치 생성
             with torch.no_grad():

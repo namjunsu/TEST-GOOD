@@ -177,7 +177,8 @@ class _LLMAdapter:
             # 폴백: generate_response() 사용 (이중 프롬프트 문제 있을 수 있음)
             logger.warning("⚠️ llama_cpp 직접 접근 불가, generate_response() 폴백")
             chunks = [{"snippet": context, "content": context}]
-            response = self.llm.generate_response(query, chunks, max_retries=1, mode=mode)
+            # Qwen72BLLM은 max_retries, mode 인자를 지원하지 않음
+            response = self.llm.generate_response(query, chunks)
 
             if hasattr(response, "answer"):
                 return response.answer

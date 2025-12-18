@@ -217,7 +217,7 @@ settings = Settings(
     # 런타임 모드 설정
     MODE=os.getenv("MODE", "AUTO").upper(),
     USE_V2_RETRIEVER=os.getenv("USE_V2_RETRIEVER", "false").lower() == "true",
-    MODEL_PATH=os.getenv("MODEL_PATH", "./models/ggml-model-Q4_K_M.gguf"),
+    MODEL_PATH=os.getenv("LLM_MODEL_PATH", os.getenv("MODEL_PATH", "/home/user/Desktop/AI/AI-CHAT/models")),
     # 보안 설정
     API_KEY=_validate_api_key("API_KEY"),
 )

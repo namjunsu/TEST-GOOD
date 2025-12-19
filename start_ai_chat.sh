@@ -168,7 +168,7 @@ if [[ "$RETRIEVER_BACKEND" == "bm25" && "${SKIP_BM25_GUARD:-0}" != "1" ]]; then
   if [[ ! -f "${BM25_INDEX_PATH}" ]]; then
     printf "\r\033[K"
     log WARN "BM25 인덱스가 없어 재인덱싱을 수행합니다"
-    if run_with_spinner "BM25 인덱스 생성 중..." python scripts/indexing/rebuild_bm25.py; then
+    if run_with_spinner "BM25 인덱스 생성 중..." "${PY}" scripts/indexing/rebuild_bm25.py; then
       log SUCCESS "BM25 인덱스 생성 완료"
     else
       log ERROR "재인덱싱 실패"
@@ -178,7 +178,7 @@ if [[ "$RETRIEVER_BACKEND" == "bm25" && "${SKIP_BM25_GUARD:-0}" != "1" ]]; then
 
   # 2. 메타DB vs BM25 문서 수 정합성 (허용 편차 5% 또는 10문서 중 큰 값)
   set +e  # 일시적으로 exit-on-error 비활성화
-  BM25_CHECK_OUTPUT=$(PYTHONPATH="${PROJECT_ROOT}" python - 2>>"${LOG_FILE}" <<'PYCHECK'
+  BM25_CHECK_OUTPUT=$(PYTHONPATH="${PROJECT_ROOT}" "${PY}" - 2>>"${LOG_FILE}" <<'PYCHECK'
 import sqlite3, os, sys, logging
 logging.disable(logging.CRITICAL)  # 로거 출력 억제
 from rag_system.active.bm25_store import BM25Store
@@ -203,7 +203,7 @@ PYCHECK
 
   if [[ $rc -eq 2 ]]; then
     log WARN "인덱스 드리프트 감지 → 재인덱싱"
-    if run_with_spinner "BM25 재인덱싱 중..." python scripts/indexing/rebuild_bm25.py; then
+    if run_with_spinner "BM25 재인덱싱 중..." "${PY}" scripts/indexing/rebuild_bm25.py; then
       log SUCCESS "BM25 재인덱싱 완료"
     else
       log ERROR "재인덱싱 실패"

@@ -1816,8 +1816,11 @@ class VllmLLM(BaseRAGLLM):
 
 답변:""".replace("{CITATION_FORMAT}", CITATION_FORMAT)
 
-    def __init__(self, model_path: str, config: GenerationConfig = None, length_analyzer=None):
+    def __init__(self, model_path: str = None, config: GenerationConfig = None, length_analyzer=None):
         super().__init__()
+        # model_path가 None이면 환경변수에서 가져옴
+        if model_path is None:
+            model_path = os.getenv("LLM_MODEL_PATH", os.getenv("VLLM_MODEL_PATH", "/home/user/Desktop/AI/AI-CHAT/models"))
         self.model_path = Path(model_path)
         self.config = config or GenerationConfig()
         self.length_analyzer = length_analyzer
@@ -1848,6 +1851,8 @@ class VllmLLM(BaseRAGLLM):
                 tensor_parallel_size=self.tensor_parallel_size,
                 trust_remote_code=self.trust_remote_code,
                 dtype="float16",  # AWQ 모델용
+                quantization="awq",  # AWQ 양자화 명시
+                enforce_eager=True,  # H100에서 안정성 향상
             )
 
             self.logger.info("✅ vLLM 모델 로딩 완료 (Qwen2.5-72B-Instruct-AWQ)")

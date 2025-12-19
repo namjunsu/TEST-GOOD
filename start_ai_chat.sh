@@ -128,7 +128,7 @@ API_PORT="${AI_CHAT_API_PORT:-7860}"
 PY="${PROJECT_ROOT}/.venv/bin/python"
 
 : "${MODEL_PATH:?MODEL_PATH가 비어있습니다 (.env 확인)}"
-[[ -f "$MODEL_PATH" ]] || { log ERROR "MODEL_PATH 파일 없음: $MODEL_PATH"; exit 2; }
+[[ -e "$MODEL_PATH" ]] || { log ERROR "MODEL_PATH 경로 없음: $MODEL_PATH"; exit 2; }
 
 : "${RETRIEVER_BACKEND:=bm25}"
 if [[ "$RETRIEVER_BACKEND" == "bm25" ]]; then

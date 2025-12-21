@@ -14,7 +14,7 @@ model_codes 테이블을 활용한 정확일치 검색
 """
 
 import time
-from typing import Any
+from typing import Any, Optional
 
 from app.core.logging import get_logger
 from app.data.metadata_db import MetadataDB
@@ -49,7 +49,7 @@ class ExactMatchRetriever:
     - 스코어 부스팅으로 우선순위 조정
     """
 
-    def __init__(self, db: MetadataDB = None):
+    def __init__(self, db: Optional[MetadataDB] = None):
         """초기화
 
         Args:

@@ -4,6 +4,7 @@ pipeline.py에서 분리된 응답 구성 로직.
 검색 결과와 생성된 답변을 RAGResponse로 변환합니다.
 """
 
+import threading
 import time
 from typing import Any, Optional
 
@@ -222,11 +223,25 @@ class ResponseBuilder:
     def _build_citations(
         self, selected: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
-        """Citations 리스트 구성"""
+        """Citations 리스트 구성
+
+        Note:
+            _encode_file_ref는 DB 연결을 수반하므로,
+            같은 filename에 대해 캐싱하여 중복 호출 방지.
+        """
         citations = []
+        ref_cache: dict[str, Optional[str]] = {}  # filename → ref 캐시
+
         for c in selected:
             filename = c.get("filename") or c.get("doc_id") or c.get("title", "")
-            ref = _encode_file_ref(filename) if filename else None
+
+            # ref 캐싱 (동일 파일명 중복 DB 조회 방지)
+            if filename:
+                if filename not in ref_cache:
+                    ref_cache[filename] = _encode_file_ref(filename)
+                ref = ref_cache[filename]
+            else:
+                ref = None
 
             citations.append({
                 "doc_id": c.get("doc_id"),
@@ -269,13 +284,17 @@ class ResponseBuilder:
             )
 
 
-# 싱글톤 인스턴스
+# 싱글톤 인스턴스 (스레드 안전)
 _builder_instance: ResponseBuilder | None = None
+_builder_lock = threading.Lock()
 
 
 def get_response_builder() -> ResponseBuilder:
-    """ResponseBuilder 싱글톤 인스턴스 반환"""
+    """ResponseBuilder 싱글톤 인스턴스 반환 (스레드 안전)"""
     global _builder_instance
     if _builder_instance is None:
-        _builder_instance = ResponseBuilder()
+        with _builder_lock:
+            # Double-check locking
+            if _builder_instance is None:
+                _builder_instance = ResponseBuilder()
     return _builder_instance

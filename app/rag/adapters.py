@@ -9,12 +9,26 @@
 의존성: contracts (Protocol), logger
 """
 
+import os
 from dataclasses import dataclass
 from typing import Any, Optional
 
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+# ============================================================================
+# 환경변수 기반 토큰 예산 (모듈 로드 시 1회만 읽음)
+# ============================================================================
+
+MODE_TOKEN_BUDGETS: dict[str, int] = {
+    "chat": int(os.getenv("CHAT_MAX_TOKENS", "1024")),
+    "rag": int(os.getenv("RAG_MAX_TOKENS", "3072")),
+    "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", "2048")),
+    "summary": int(os.getenv("SUMMARY_MAX_TOKENS", "2048")),
+}
+
+RAG_MAX_CONTEXT_CHARS: int = int(os.getenv("RAG_MAX_CONTEXT_CHARS", "6000"))
 
 
 # ============================================================================
@@ -108,16 +122,8 @@ class _LLMAdapter:
         Returns:
             str: 생성된 답변
         """
-        import os
-
-        # 🔥 모드별 토큰 예산 (2025-12-16: generate_response() 우회로 직접 설정)
-        mode_token_budgets = {
-            "chat": int(os.getenv("CHAT_MAX_TOKENS", "1024")),
-            "rag": int(os.getenv("RAG_MAX_TOKENS", "3072")),
-            "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", "2048")),
-            "summary": int(os.getenv("SUMMARY_MAX_TOKENS", "2048")),
-        }
-        max_tokens = mode_token_budgets.get(mode.lower(), 800)
+        # 모듈 상수 사용 (환경변수 매번 읽기 방지)
+        max_tokens = MODE_TOKEN_BUDGETS.get(mode.lower(), 800)
 
         # 🔧 2025-12-16: 모드별 시스템 프롬프트 (외부 전달 우선)
         if system_msg is None:
@@ -140,12 +146,11 @@ class _LLMAdapter:
 
                 if context and context.strip() and not query_has_context:
                     # context가 별도로 제공된 경우 → RAG 프롬프트 구성
-                    # 🔧 컨텍스트 길이 제한 (토큰 초과 방지)
-                    max_context_chars = int(os.getenv("RAG_MAX_CONTEXT_CHARS", "6000"))
-                    truncated_context = context[:max_context_chars]
-                    if len(context) > max_context_chars:
+                    # 컨텍스트 길이 제한 (토큰 초과 방지, 모듈 상수 사용)
+                    truncated_context = context[:RAG_MAX_CONTEXT_CHARS]
+                    if len(context) > RAG_MAX_CONTEXT_CHARS:
                         truncated_context += "\n...(이하 생략)"
-                        logger.info(f"📝 컨텍스트 길이 제한: {len(context)} → {max_context_chars}자")
+                        logger.info(f"📝 컨텍스트 길이 제한: {len(context)} → {RAG_MAX_CONTEXT_CHARS}자")
 
                     user_content = f"""다음 참고 문서를 기반으로 질문에 답변하세요.
 
@@ -245,7 +250,13 @@ class _QuickFixGenerator:
         chunks = self._prepare_chunks(context)
         logger.debug(f"Using {len(chunks)} chunks for generation (mode={mode})")
 
-        response = self.rag.llm.generate_response(query, chunks, max_retries=1, mode=mode)
+        # Qwen72BLLM/VllmLLM은 max_retries, mode 인자를 지원하지 않음
+        # 기본 시그니처: generate_response(query, context_chunks)
+        try:
+            response = self.rag.llm.generate_response(query, chunks)
+        except TypeError:
+            # 폴백: 추가 인자 시도
+            response = self.rag.llm.generate_response(query, chunks)
 
         # RAGResponse에서 answer 추출
         if hasattr(response, "answer"):

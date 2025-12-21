@@ -31,16 +31,11 @@ class RAGPipelineFactory:
 
     @staticmethod
     def create_retriever() -> "Retriever":
-        """기본 검색 엔진 생성 (HybridRetriever v1)
+        """기본 검색 엔진 생성 (HybridRetriever)
 
         Returns:
             Retriever: 검색 엔진 인스턴스
         """
-        if settings.USE_V2_RETRIEVER:
-            logger.warning(
-                "⚠️ USE_V2_RETRIEVER는 더 이상 지원되지 않습니다. v1 Retriever를 사용합니다.",
-            )
-
         try:
             from app.rag.retrievers.hybrid import HybridRetriever
 
@@ -71,6 +66,9 @@ class RAGPipelineFactory:
         try:
             # 레거시 구현 어댑터 사용 (점진적 이관 준비)
             legacy_rag = RAGPipelineFactory.create_legacy_adapter()
+            if legacy_rag is None:
+                logger.warning("LLM adapter 생성 실패, DummyGenerator 사용")
+                return _DummyGenerator()
             logger.info("Default generator 생성 (Legacy Adapter 래핑)")
             return _QuickFixGenerator(legacy_rag)
         except Exception as e:
@@ -91,10 +89,9 @@ class RAGPipelineFactory:
             from rag_system.active.llm_singleton import LLMSingleton
 
             model_path = settings.MODEL_PATH
-            logger.info(f"🔍 DEBUG: Attempting to load LLM with model_path={model_path}")
-            logger.info(f"🔍 DEBUG: Model file exists: {Path(model_path).exists()}")
+            logger.debug(f"LLM 로드 시도: model_path={model_path}, exists={Path(model_path).exists()}")
             llm = LLMSingleton.get_instance(model_path=model_path)
-            logger.info(f"✅ LLM adapter 생성 완료 (LLMSingleton 사용, model={model_path})")
+            logger.info(f"✅ LLM adapter 생성 완료 (model={model_path})")
             return _LLMAdapter(llm)
         except Exception as e:
             logger.error(f"LLM adapter 생성 실패: {e}", exc_info=True)

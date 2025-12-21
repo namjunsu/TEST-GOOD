@@ -237,12 +237,15 @@ def is_simple_math(query: str) -> bool:
 
 
 def has_domain_keyword(query: str) -> bool:
-    """도메인 키워드 포함 여부 확인"""
+    """도메인 키워드 포함 여부 확인
+
+    Note:
+        DOMAIN_KEYWORDS는 set이지만, substring 검색이므로 O(n) 순회 필수.
+        키워드 수가 적으므로 성능 영향 미미. (현재 ~60개)
+    """
     q_lower = query.lower()
-    for keyword in DOMAIN_KEYWORDS:
-        if keyword in q_lower:
-            return True
-    return False
+    # any()로 첫 매칭 시 즉시 반환 (단축 평가)
+    return any(keyword in q_lower for keyword in DOMAIN_KEYWORDS)
 
 
 def get_keyword_coverage(query: str, results: list) -> int:
@@ -295,6 +298,12 @@ def force_chat_mode(query: str) -> tuple[bool, str]:
     return False, ""
 
 
+def _generate_file_token(filename: str) -> str:
+    """파일명 기반 해시 토큰 생성 (내부 헬퍼)"""
+    hash_len = QueryRoutingConfig.FILE_REF_HASH_LENGTH
+    return f"doc:{hashlib.sha1(filename.encode()).hexdigest()[:hash_len]}"
+
+
 def _encode_file_ref(filename: str) -> Optional[str]:
     """파일명을 토큰(해시)으로 변환 (보안 강화, 경로 노출 방지)
 
@@ -319,26 +328,22 @@ def _encode_file_ref(filename: str) -> Optional[str]:
             result = cursor.fetchone()
 
         if result and result[0]:
-            # 해시 토큰 생성 (filename 기준, N자 단축)
-            token = hashlib.sha1(filename.encode()).hexdigest()[:QueryRoutingConfig.FILE_REF_HASH_LENGTH]
-            return f"doc:{token}"
+            return _generate_file_token(filename)
 
-        # 2. Fallback: docs 폴더 검색
+        # 2. Fallback: docs 폴더 검색 (연도별)
         year_match = RE_YEAR_EXTRACT.search(filename)
         if year_match:
             year = year_match.group(1)
             file_path = Path(f"docs/year_{year}") / filename
             if file_path.exists():
-                token = hashlib.sha1(filename.encode()).hexdigest()[:QueryRoutingConfig.FILE_REF_HASH_LENGTH]
-                return f"doc:{token}"
+                return _generate_file_token(filename)
 
         # 3. Fallback2: docs 폴더 전체 검색
         docs_dir = Path("docs")
         if docs_dir.exists():
             for file_path in docs_dir.rglob(filename):
                 if file_path.is_file():
-                    token = hashlib.sha1(filename.encode()).hexdigest()[:QueryRoutingConfig.FILE_REF_HASH_LENGTH]
-                    return f"doc:{token}"
+                    return _generate_file_token(filename)
 
     except sqlite3.Error as e:
         logger.warning(f"⚠️ ref 토큰 DB 오류: {filename} - {e}")

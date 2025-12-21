@@ -4,7 +4,8 @@ pipeline.py에서 분리된 모드 결정 로직.
 검색 결과와 쿼리 특성을 기반으로 chat/rag 모드를 결정합니다.
 """
 
-from dataclasses import dataclass
+import threading
+from dataclasses import dataclass, field
 from typing import Any
 
 from app.config.settings import settings
@@ -34,11 +35,7 @@ class ModeDecision:
     mode: str
     top_score: float
     reason: str = ""
-    metrics: dict[str, Any] = None
-
-    def __post_init__(self):
-        if self.metrics is None:
-            self.metrics = {}
+    metrics: dict[str, Any] = field(default_factory=dict)
 
 
 class ModeResolver:
@@ -182,7 +179,7 @@ class ModeResolver:
 
     def _resolve_normalized_policy(
         self,
-        query: str,
+        query: str,  # noqa: ARG002 - 향후 쿼리 기반 로직 확장용
         top_score: float,
         metrics: dict[str, Any],
     ) -> ModeDecision:
@@ -203,13 +200,17 @@ class ModeResolver:
         )
 
 
-# 싱글톤 인스턴스
+# 싱글톤 인스턴스 (스레드 안전)
 _resolver_instance: ModeResolver | None = None
+_resolver_lock = threading.Lock()
 
 
 def get_mode_resolver() -> ModeResolver:
-    """ModeResolver 싱글톤 인스턴스 반환"""
+    """ModeResolver 싱글톤 인스턴스 반환 (스레드 안전)"""
     global _resolver_instance
     if _resolver_instance is None:
-        _resolver_instance = ModeResolver()
+        with _resolver_lock:
+            # Double-check locking
+            if _resolver_instance is None:
+                _resolver_instance = ModeResolver()
     return _resolver_instance

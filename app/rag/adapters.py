@@ -137,16 +137,28 @@ class _LLMAdapter:
             # document_handler가 이미 완전한 프롬프트를 제공한 경우 직접 호출 필요
             llm_instance = getattr(self.llm, "llm", None)
 
-            if llm_instance is not None:
+            # 🔧 2025-12-21: vLLM vs llama_cpp 분기 처리
+            # vLLM은 create_chat_completion 미지원, generate_response() 사용
+            is_vllm = hasattr(self.llm, "__class__") and "Vllm" in self.llm.__class__.__name__
+
+            if is_vllm:
+                # vLLM: generate_response() 사용 (직접 호출 불가)
+                logger.info("🚀 vLLM 모드: generate_response() 사용")
+                chunks = [{"snippet": context, "content": context}] if context else []
+                response = self.llm.generate_response(query, chunks)
+                if hasattr(response, "answer"):
+                    return response.answer
+                return str(response)
+
+            if llm_instance is not None and hasattr(llm_instance, "create_chat_completion"):
+                # llama_cpp: 직접 호출 가능
                 # 🔧 2025-12-16: RAG 모드에서는 context를 user prompt에 포함해야 함
-                # query가 이미 context를 포함하고 있는지 확인 (document_handler에서 build_qa_prompt 사용 시)
                 query_has_context = any(marker in query for marker in [
                     "참고 문서", "Context:", "[문서 내용]", "### 문서", "문서 정보:",
                 ])
 
                 if context and context.strip() and not query_has_context:
                     # context가 별도로 제공된 경우 → RAG 프롬프트 구성
-                    # 컨텍스트 길이 제한 (토큰 초과 방지, 모듈 상수 사용)
                     truncated_context = context[:RAG_MAX_CONTEXT_CHARS]
                     if len(context) > RAG_MAX_CONTEXT_CHARS:
                         truncated_context += "\n...(이하 생략)"
@@ -162,7 +174,6 @@ class _LLMAdapter:
 
 위 참고 문서 내용만을 기반으로 정확하게 답변하세요. 문서에 없는 내용은 답변하지 마세요."""
                 else:
-                    # query가 이미 완전한 프롬프트인 경우 (document_handler 등)
                     user_content = query
 
                 # llama_cpp.Llama 직접 접근
@@ -174,7 +185,6 @@ class _LLMAdapter:
                     max_tokens=max_tokens,
                     temperature=temperature,
                 )
-                # 🔧 content가 None일 수 있음 (안전 처리)
                 content = output["choices"][0]["message"].get("content")
                 answer = content.strip() if content else ""
                 return answer

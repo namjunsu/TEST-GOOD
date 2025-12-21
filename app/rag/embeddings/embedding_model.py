@@ -1,4 +1,4 @@
-"""임베딩 모델 v1.0
+"""임베딩 모델 v1.1
 
 sentence-transformers를 사용한 텍스트 임베딩 생성.
 
@@ -7,6 +7,10 @@ sentence-transformers를 사용한 텍스트 임베딩 생성.
 - 배치 처리로 효율적인 임베딩
 - GPU/CPU 자동 감지
 - 싱글톤 패턴으로 메모리 효율화
+
+2025-12-21 v1.1 변경사항:
+- 배치 크기를 EmbeddingsConfig로 외부화
+- H100 GPU 환경 최적화
 """
 
 import os
@@ -16,6 +20,7 @@ from typing import Optional, Union
 import numpy as np
 
 from app.core.logging import get_logger
+from config.constants import EmbeddingsConfig
 
 logger = get_logger(__name__)
 
@@ -94,7 +99,7 @@ class EmbeddingModel:
     def encode(
         self,
         texts: Union[str, list[str]],
-        batch_size: int = 32,
+        batch_size: int = EmbeddingsConfig.ENCODE_BATCH_SIZE,
         show_progress: bool = False,
     ) -> np.ndarray:
         """텍스트를 벡터로 인코딩
@@ -145,7 +150,7 @@ class EmbeddingModel:
     def encode_documents(
         self,
         documents: list[str],
-        batch_size: int = 64,
+        batch_size: int = EmbeddingsConfig.DOCUMENT_BATCH_SIZE,
         show_progress: bool = True,
     ) -> np.ndarray:
         """문서 임베딩 (대량 처리 최적화)

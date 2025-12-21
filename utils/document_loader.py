@@ -53,10 +53,16 @@ class DocumentLoader:
 
     # 기안자 이름 추출 시 제외할 키워드
     EXCLUDED_KEYWORDS = [
+        # 장비/기술 용어
         "영상", "카메라", "조명", "중계", "DVR", "스튜디오", "송출",
-        "구매", "수리", "교체", "검토", "폐기",
+        "포터블", "모니터", "마이크", "믹서", "스위처", "인코더",
+        # 업무 분류
+        "구매", "수리", "교체", "검토", "폐기", "설치", "이전",
+        # 부서명
         "방송기술팀", "영상취재팀", "영상제작팀", "기술관리팀",
-        "그래픽디자인파트",  # '명상제작팀' 제거 (오타로 보임)
+        "그래픽디자인파트",
+        # 회사/지명 (잘못 추출되는 케이스)
+        "광화문", "채널에이", "방송", "뉴스", "제작",
     ]
 
     def __init__(self, metadata_db: str = "metadata.db"):
@@ -174,6 +180,10 @@ class DocumentLoader:
             True if likely a Korean person name
         """
         if not name or name == "미확인":
+            return False
+
+        # 제외 키워드 체크 (부분 문자열 매칭)
+        if any(exc in name for exc in self.EXCLUDED_KEYWORDS):
             return False
 
         # 영문/숫자가 포함되면 장비명으로 간주

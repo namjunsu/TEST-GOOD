@@ -1,9 +1,10 @@
 """
-LLM 모델 정의 및 기본 클래스
+LLM 모델 정의 및 기본 클래스 v1.1
 
 GenerationConfig, RAGResponse 데이터 클래스 및 BaseRAGLLM 기본 클래스.
 
 2025-11-28: llm_wrapper.py에서 분리
+2025-12-21 v1.1: LLMGenerationConfig로 설정 외부화, H100 최적화
 """
 
 import logging
@@ -12,19 +13,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-# Generation 설정 상수 - L2 RAG 튜닝 (2025-10-25)
-# 일관성 향상: temperature 0.7 → 0.2
-# 효율성 향상: max_tokens 1200 → 512
-DEFAULT_TEMPERATURE = 0.2
-DEFAULT_MAX_TOKENS = 512
-DEFAULT_TOP_P = 0.9
-DEFAULT_TOP_K = 40
-DEFAULT_REPEAT_PENALTY = 1.1
+from config.constants import LLMGenerationConfig
+
+# Generation 설정 상수 (LLMGenerationConfig에서 참조)
+DEFAULT_TEMPERATURE = LLMGenerationConfig.DEFAULT_TEMPERATURE
+DEFAULT_MAX_TOKENS = LLMGenerationConfig.DEFAULT_MAX_TOKENS
+DEFAULT_TOP_P = LLMGenerationConfig.DEFAULT_TOP_P
+DEFAULT_TOP_K = LLMGenerationConfig.DEFAULT_TOP_K
+DEFAULT_REPEAT_PENALTY = LLMGenerationConfig.DEFAULT_REPEAT_PENALTY
 MAX_LLM_RETRY = int(os.getenv("MAX_LLM_RETRY", "1"))  # .env에서 읽기
 
 # 적응형 길이 설정 상수
-ADAPTIVE_LENGTH_ENABLED = True
-LENGTH_PREFERENCE_DEFAULT = "balanced"
+ADAPTIVE_LENGTH_ENABLED = LLMGenerationConfig.ADAPTIVE_LENGTH_ENABLED
+LENGTH_PREFERENCE_DEFAULT = LLMGenerationConfig.LENGTH_PREFERENCE_DEFAULT
 LENGTH_PREFERENCES = ["concise", "balanced", "detailed"]
 
 
@@ -61,14 +62,15 @@ class RAGResponse:
     adaptive_length_used: bool = False
 
 
-# 토큰 예산 단일 설정 (2025-12-08: 답변 품질 개선 - 토큰 증가)
+# 토큰 예산 단일 설정 (LLMGenerationConfig에서 참조, H100 최적화)
+_cfg = LLMGenerationConfig
 MODE_TOKEN_CONFIG = {
-    "chat": {"max": 512, "context": 1024},       # 64 → 512 (일반 대화도 충분한 응답)
-    "rag": {"max": 3072, "context": 4000},       # 160 → 3072 (.env RAG_MAX_TOKENS와 동기화)
-    "summarize": {"max": 2048, "context": 4000},  # 1200 → 2048 (상세 요약)
-    "full_document": {"max": 2048, "context": 4000},
-    "conversational": {"max": 2048, "context": 4000},
-    "default": {"max": 1024, "context": 2048},   # 512 → 1024
+    "chat": {"max": _cfg.MODE_CHAT_MAX, "context": _cfg.MODE_CHAT_CONTEXT},
+    "rag": {"max": _cfg.MODE_RAG_MAX, "context": _cfg.MODE_RAG_CONTEXT},  # H100: 4096/6000
+    "summarize": {"max": _cfg.MODE_SUMMARIZE_MAX, "context": _cfg.MODE_SUMMARIZE_CONTEXT},
+    "full_document": {"max": _cfg.MODE_FULL_DOC_MAX, "context": _cfg.MODE_FULL_DOC_CONTEXT},
+    "conversational": {"max": _cfg.MODE_CONVERSATIONAL_MAX, "context": _cfg.MODE_CONVERSATIONAL_CONTEXT},
+    "default": {"max": _cfg.MODE_DEFAULT_MAX, "context": _cfg.MODE_DEFAULT_CONTEXT},
 }
 
 

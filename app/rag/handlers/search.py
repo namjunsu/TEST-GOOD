@@ -649,49 +649,64 @@ class SearchHandler(BaseHandler):
         """기안자 문서 통계 + 샘플 응답 생성
 
         많은 문서(>10개)가 있을 때 전체 목록 대신 통계와 샘플을 제공합니다.
+
+        2025-12-21: year_filter가 있으면 해당 연도 문서만 표시하도록 수정
         """
         conn = self._db._get_conn()
 
-        # 1. 총 건수 조회
+        # 1. 총 건수 조회 (연도 필터 적용)
         total_sql = "SELECT COUNT(*) as cnt FROM documents WHERE drafter = ?"
         params: list = [drafter]
         if year_filter:
-            total_sql += " AND year = ?"
-            params.append(year_filter)
+            total_sql += " AND (year = ? OR date LIKE ? OR display_date LIKE ?)"
+            params.extend([year_filter, f"{year_filter}%", f"{year_filter}%"])
         total_count = conn.execute(total_sql, params).fetchone()["cnt"]
 
-        # 2. 연도별 분포
-        year_sql = """
-            SELECT year, COUNT(*) as cnt
-            FROM documents
-            WHERE drafter = ? AND year IS NOT NULL
-            GROUP BY year ORDER BY year DESC LIMIT 5
-        """
-        year_dist = conn.execute(year_sql, [drafter]).fetchall()
+        # 2. 연도별 분포 (연도 필터가 있으면 해당 연도만)
+        if year_filter:
+            # 연도 필터가 있으면 해당 연도 정보만 표시
+            year_dist = [{"year": year_filter, "cnt": total_count}]
+        else:
+            year_sql = """
+                SELECT year, COUNT(*) as cnt
+                FROM documents
+                WHERE drafter = ? AND year IS NOT NULL
+                GROUP BY year ORDER BY year DESC LIMIT 5
+            """
+            year_dist = conn.execute(year_sql, [drafter]).fetchall()
 
-        # 3. 카테고리별 분포
+        # 3. 카테고리별 분포 (연도 필터 적용)
         cat_sql = """
             SELECT category, COUNT(*) as cnt
             FROM documents
             WHERE drafter = ? AND category IS NOT NULL AND category != '미분류'
-            GROUP BY category ORDER BY cnt DESC LIMIT 5
         """
-        cat_dist = conn.execute(cat_sql, [drafter]).fetchall()
+        cat_params: list = [drafter]
+        if year_filter:
+            cat_sql += " AND (year = ? OR date LIKE ? OR display_date LIKE ?)"
+            cat_params.extend([year_filter, f"{year_filter}%", f"{year_filter}%"])
+        cat_sql += " GROUP BY category ORDER BY cnt DESC LIMIT 5"
+        cat_dist = conn.execute(cat_sql, cat_params).fetchall()
 
-        # 4. 최근 5건
+        # 4. 최근 문서 (연도 필터 적용)
         recent_sql = """
             SELECT filename, date, category
             FROM documents
             WHERE drafter = ?
-            ORDER BY date DESC LIMIT 5
         """
-        recent_docs = conn.execute(recent_sql, [drafter]).fetchall()
+        recent_params: list = [drafter]
+        if year_filter:
+            recent_sql += " AND (year = ? OR date LIKE ? OR display_date LIKE ?)"
+            recent_params.extend([year_filter, f"{year_filter}%", f"{year_filter}%"])
+        recent_sql += " ORDER BY date DESC LIMIT 5"
+        recent_docs = conn.execute(recent_sql, recent_params).fetchall()
 
         # 5. 응답 텍스트 생성
-        lines = [f"**{drafter}**님이 기안한 문서는 총 **{total_count}건**입니다.\n"]
+        year_text = f" **{year_filter}년**" if year_filter else ""
+        lines = [f"**{drafter}**님이 기안한{year_text} 문서는 총 **{total_count}건**입니다.\n"]
 
-        # 연도별 분포
-        if year_dist:
+        # 연도별 분포 (연도 필터가 없을 때만 표시)
+        if year_dist and not year_filter:
             lines.append("📊 **연도별 분포:**")
             for row in year_dist:
                 lines.append(f"  - {row['year']}년: {row['cnt']}건")
@@ -704,20 +719,22 @@ class SearchHandler(BaseHandler):
                 lines.append(f"  - {row['category']}: {row['cnt']}건")
             lines.append("")
 
-        # 최근 문서
+        # 문서 목록 (연도 필터 있으면 "최근" 대신 해당 연도 문서)
         if recent_docs:
-            lines.append("📄 **최근 문서 (5건):**")
+            doc_label = f"{year_filter}년 문서" if year_filter else "최근 문서 (5건)"
+            lines.append(f"📄 **{doc_label}:**")
             for i, row in enumerate(recent_docs, 1):
                 date_str = row["date"] or "날짜 없음"
                 fname = row["filename"].replace(".pdf", "")
                 lines.append(f"  {i}. {fname} ({date_str})")
             lines.append("")
 
-        # 안내 메시지
-        lines.append(
-            f'💡 더 자세히 보려면: "{drafter} 2024년 문서" 또는 '
-            f'"{drafter} 카메라 문서" 처럼 범위를 좁혀서 질문해주세요.'
-        )
+        # 안내 메시지 (연도 필터 없을 때만)
+        if not year_filter:
+            lines.append(
+                f'💡 더 자세히 보려면: "{drafter} 2024년 문서" 또는 '
+                f'"{drafter} 카메라 문서" 처럼 범위를 좁혀서 질문해주세요.'
+            )
 
         return {
             "mode": "SEARCH",

@@ -1,6 +1,8 @@
 """
-한국어 BM25 검색 구현
+한국어 BM25 검색 구현 v1.1
 kiwipiepy 기반 토크나이저 사용
+
+2025-12-21 v1.1: BM25Config로 설정 외부화, H100 최적화
 """
 
 import logging
@@ -14,6 +16,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from app.core.logging import get_logger
+from config.constants import BM25Config
 
 
 def _resolve_doc_id(metadata: dict, doc_idx: int) -> str:
@@ -94,7 +97,7 @@ except ImportError:
 
 
 # 토큰화 캐싱용 별도 함수
-@lru_cache(maxsize=2048)
+@lru_cache(maxsize=BM25Config.TOKENIZER_CACHE_SIZE)
 def _cached_basic_tokenize(text: str, pattern: str, min_len: int) -> tuple:
     """기본 토크나이저 (캐시됨)"""
     text = re.sub(pattern, " ", text)
@@ -109,7 +112,7 @@ class KoreanTokenizer:
     MIN_TOKEN_LENGTH = 1
     VALID_POS_TAGS = ["N", "V", "A", "M"]  # 명사, 동사, 형용사, 수식언
     TOKEN_PATTERN = r"[^\w\s가-힣]"  # 한글, 영문, 숫자 외 제거
-    CACHE_SIZE = 2048  # 토큰 캐시 크기
+    CACHE_SIZE = BM25Config.TOKENIZER_CACHE_SIZE  # 토큰 캐시 크기 (H100: 4096)
 
     # 클래스 속성 타입 선언
     logger: logging.Logger
@@ -208,10 +211,10 @@ def build_dynamic_stopwords(doc_freqs: dict[str, int], n_docs: int,
 class BM25Store:
     """BM25 키워드 검색 구현"""
 
-    # BM25 파라미터 기본값
-    DEFAULT_K1 = 1.2  # 용어 빈도 포화 매개변수
-    DEFAULT_B = 0.75  # 문서 길이 정규화 매개변수
-    DEFAULT_INDEX_PATH = "var/index/bm25_index.pkl"
+    # BM25 파라미터 기본값 (BM25Config에서 참조)
+    DEFAULT_K1 = BM25Config.DEFAULT_K1        # 용어 빈도 포화 매개변수
+    DEFAULT_B = BM25Config.DEFAULT_B          # 문서 길이 정규화 매개변수
+    DEFAULT_INDEX_PATH = BM25Config.DEFAULT_INDEX_PATH
 
     # 클래스 속성 타입 선언
     index_path: Path
@@ -484,13 +487,19 @@ class BM25Store:
             self.logger.error(f"BM25 문서 추가 실패: {e}")
             raise
 
-    def search(self, query: str, top_k: int = 5, snippet_max: int = 5000, **kwargs) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query: str,
+        top_k: int = BM25Config.DEFAULT_TOP_K,
+        snippet_max: int = BM25Config.SNIPPET_MAX_LENGTH,
+        **kwargs,
+    ) -> list[dict[str, Any]]:
         """BM25 스코어로 문서 검색 (성능 추적 포함)
 
         Args:
             query: 검색 쿼리
-            top_k: 반환할 최대 결과 수
-            snippet_max: 스니펫 최대 길이 (기본: 5000자)
+            top_k: 반환할 최대 결과 수 (기본: 10)
+            snippet_max: 스니펫 최대 길이 (H100: 8000자)
             **kwargs: 추가 옵션
         """
         if not self.documents:

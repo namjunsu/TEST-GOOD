@@ -181,7 +181,7 @@ class HybridRetriever:
         # Stage 2: DenseStage (벡터 기반 의미론적 검색)
         stages.append(DenseStage(
             enabled=_ENV_ENABLE_DENSE,
-            min_score=0.3,
+            min_score=HybridRetrieverConfig.DENSE_MIN_SCORE,
         ))
 
         # Stage 3: MetadataRoutingStage
@@ -397,7 +397,7 @@ class HybridRetriever:
             fused_results = self.hybrid_ranker.fuse(
                 bm25_results=bm25_results,
                 dense_results=dense_results,
-                top_k=context.top_k * 2,  # 여유있게
+                top_k=context.top_k * HybridRetrieverConfig.RRF_TOPK_MULTIPLIER,
             )
             return fused_results
 

@@ -1,4 +1,4 @@
-"""Dense Retrieval Stage v1.0
+"""Dense Retrieval Stage v1.1
 
 벡터 기반 의미론적 검색을 수행하는 Stage입니다.
 
@@ -6,6 +6,9 @@
 - sentence-transformers 기반 임베딩
 - FAISS 벡터 검색
 - BM25와 RRF(Reciprocal Rank Fusion)로 결합
+
+2025-12-21 v1.1 변경사항:
+- 하드코딩된 값들을 HybridRetrieverConfig로 외부화
 """
 
 import os
@@ -13,6 +16,7 @@ from typing import Any, Optional
 
 from app.core.logging import get_logger
 from app.rag.retrievers.stages.base import BaseSearchStage, SearchContext, StageResult
+from config.constants import HybridRetrieverConfig
 
 logger = get_logger(__name__)
 
@@ -117,7 +121,7 @@ class DenseStage(BaseSearchStage):
             # 벡터 검색
             results = self._vector_store.search(
                 query=context.query,
-                top_k=context.top_k * 2,  # RRF용으로 더 많이 검색
+                top_k=context.top_k * HybridRetrieverConfig.DENSE_TOPK_MULTIPLIER,
             )
 
             # 최소 점수 필터링
@@ -166,7 +170,7 @@ class DenseStage(BaseSearchStage):
             normalized.append({
                 "filename": r.get("doc_id", ""),
                 "doc_id": r.get("doc_id", ""),
-                "snippet": r.get("snippet", r.get("text", "")[:500]),
+                "snippet": r.get("snippet", r.get("text", "")[:HybridRetrieverConfig.DENSE_SNIPPET_MAX_LENGTH]),
                 "score": r.get("score", 0.0),
                 "page": r.get("metadata", {}).get("page", 1),
                 "chunk_id": r.get("chunk_id", ""),
@@ -191,9 +195,9 @@ class HybridRanker:
 
     def __init__(
         self,
-        k: int = 60,
-        bm25_weight: float = 0.5,
-        dense_weight: float = 0.5,
+        k: int = HybridRetrieverConfig.RRF_K,
+        bm25_weight: float = HybridRetrieverConfig.RRF_BM25_WEIGHT,
+        dense_weight: float = HybridRetrieverConfig.RRF_DENSE_WEIGHT,
     ):
         self.k = k
         self.bm25_weight = bm25_weight
@@ -280,8 +284,8 @@ _hybrid_ranker: Optional[HybridRanker] = None
 
 
 def get_hybrid_ranker(
-    bm25_weight: float = 0.5,
-    dense_weight: float = 0.5,
+    bm25_weight: float = HybridRetrieverConfig.RRF_BM25_WEIGHT,
+    dense_weight: float = HybridRetrieverConfig.RRF_DENSE_WEIGHT,
 ) -> HybridRanker:
     """HybridRanker 싱글톤 반환"""
     global _hybrid_ranker

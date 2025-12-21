@@ -1,4 +1,4 @@
-"""텍스트 청킹 모듈 v1.0
+"""텍스트 청킹 모듈 v1.1
 
 Sliding window + 오버랩 방식으로 문서를 청크 단위로 분할합니다.
 
@@ -7,6 +7,10 @@ Sliding window + 오버랩 방식으로 문서를 청크 단위로 분할합니�
 - 오버랩으로 경계 정보 손실 방지 (overlap)
 - 문장 경계 존중 (sentence-aware)
 - 청크별 메타데이터 보존
+
+2025-12-21 v1.1 변경사항:
+- 청킹 설정을 ChunkingConfig로 외부화
+- H100 GPU 환경 최적화 (더 큰 청크 크기)
 """
 
 import re
@@ -14,6 +18,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from app.core.logging import get_logger
+from config.constants import ChunkingConfig
 
 logger = get_logger(__name__)
 
@@ -70,9 +75,9 @@ class TextChunker:
 
     def __init__(
         self,
-        chunk_size: int = 768,  # 512 → 768 (2025-12-21: 한국어 컨텍스트 확대)
-        overlap: int = 192,  # 128 → 192 (25% 유지)
-        min_chunk_size: int = 50,
+        chunk_size: int = ChunkingConfig.CHUNK_SIZE,
+        overlap: int = ChunkingConfig.OVERLAP,
+        min_chunk_size: int = ChunkingConfig.MIN_CHUNK_SIZE,
         respect_sentences: bool = True,
     ):
         self.chunk_size = chunk_size
@@ -183,8 +188,8 @@ class TextChunker:
             조정된 끝 위치
         """
         # end 근처에서 문장 종료 패턴 검색
-        search_start = max(start, end - 100)  # 최대 100자 범위에서 검색
-        search_text = text[search_start:end + 50]  # 약간 더 넓게 검색
+        search_start = max(start, end - ChunkingConfig.SENTENCE_SEARCH_BACK)
+        search_text = text[search_start:end + ChunkingConfig.SENTENCE_SEARCH_FORWARD]
 
         matches = list(self.SENTENCE_END_PATTERN.finditer(search_text))
 
@@ -202,7 +207,7 @@ class TextChunker:
             distance = abs(match_end - target)
 
             # end를 크게 넘지 않는 선에서 가장 가까운 것
-            if match_end <= target + 20 and distance < best_distance:
+            if match_end <= target + ChunkingConfig.SENTENCE_TOLERANCE and distance < best_distance:
                 best_distance = distance
                 best_match = match
 
@@ -253,8 +258,8 @@ _chunker_instance: Optional[TextChunker] = None
 
 
 def get_text_chunker(
-    chunk_size: int = 768,  # 512 → 768 (2025-12-21)
-    overlap: int = 192,  # 128 → 192 (2025-12-21)
+    chunk_size: int = ChunkingConfig.CHUNK_SIZE,
+    overlap: int = ChunkingConfig.OVERLAP,
 ) -> TextChunker:
     """TextChunker 싱글톤 인스턴스 반환
 

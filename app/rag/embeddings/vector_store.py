@@ -1,4 +1,4 @@
-"""FAISS 벡터 스토어 v1.0
+"""FAISS 벡터 스토어 v1.1
 
 청크 임베딩을 저장하고 유사도 검색을 수행합니다.
 
@@ -7,6 +7,10 @@
 - 청크 메타데이터 관리
 - 인덱스 저장/로드
 - 증분 추가 지원
+
+2025-12-21 v1.1 변경사항:
+- 배치/검색 설정을 EmbeddingsConfig로 외부화
+- H100 GPU 환경 최적화
 """
 
 import os
@@ -20,6 +24,7 @@ import numpy as np
 from app.core.logging import get_logger
 from app.rag.chunking import Chunk
 from app.rag.embeddings.embedding_model import EmbeddingModel, get_embedding_model
+from config.constants import EmbeddingsConfig
 
 logger = get_logger(__name__)
 
@@ -108,7 +113,7 @@ class VectorStore:
     def add_chunks(
         self,
         chunks: list[Chunk],
-        batch_size: int = 64,
+        batch_size: int = EmbeddingsConfig.VECTOR_ADD_BATCH_SIZE,
         show_progress: bool = True,
     ) -> int:
         """청크 추가
@@ -158,7 +163,7 @@ class VectorStore:
     def search(
         self,
         query: str,
-        top_k: int = 10,
+        top_k: int = EmbeddingsConfig.DEFAULT_SEARCH_TOP_K,
         filter_doc_ids: Optional[list[str]] = None,
     ) -> list[dict[str, Any]]:
         """유사도 검색
@@ -204,7 +209,7 @@ class VectorStore:
                     "doc_id": chunk["doc_id"],
                     "chunk_id": chunk["chunk_id"],
                     "text": chunk["text"],
-                    "snippet": chunk["text"][:500],  # 호환성
+                    "snippet": chunk["text"][:EmbeddingsConfig.SNIPPET_MAX_LENGTH],
                     "score": float(score),
                     "chunk_index": chunk["chunk_index"],
                     "start_char": chunk["start_char"],
@@ -263,7 +268,7 @@ class VectorStore:
                 "doc_id": chunk["doc_id"],
                 "chunk_id": chunk["chunk_id"],
                 "text": chunk["text"],
-                "snippet": chunk["text"][:500],
+                "snippet": chunk["text"][:EmbeddingsConfig.SNIPPET_MAX_LENGTH],
                 "score": float(score),
                 "chunk_index": chunk["chunk_index"],
                 "start_char": chunk["start_char"],

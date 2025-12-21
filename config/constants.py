@@ -93,6 +93,41 @@ class LLMConfig:
 
 
 @dataclass(frozen=True)
+class LLMGenerationConfig:
+    """LLM 생성 파라미터 (llm_models.py용)
+
+    H100 GPU 80GB 환경 최적화 (2025-12-21):
+    - RAG max_tokens 증가 (3072 → 4096)
+    - context 증가 (4000 → 6000)
+    """
+
+    # Generation 설정 상수
+    DEFAULT_TEMPERATURE: float = 0.2      # RAG 일관성: 0.7 → 0.2
+    DEFAULT_MAX_TOKENS: int = 512
+    DEFAULT_TOP_P: float = 0.9
+    DEFAULT_TOP_K: int = 40
+    DEFAULT_REPEAT_PENALTY: float = 1.1
+
+    # 적응형 길이 설정
+    ADAPTIVE_LENGTH_ENABLED: bool = True
+    LENGTH_PREFERENCE_DEFAULT: str = "balanced"
+
+    # 모드별 토큰 예산 (H100 최적화)
+    MODE_CHAT_MAX: int = 512
+    MODE_CHAT_CONTEXT: int = 1024
+    MODE_RAG_MAX: int = 4096              # 3072 → 4096 (H100 최적화)
+    MODE_RAG_CONTEXT: int = 6000          # 4000 → 6000 (H100 최적화)
+    MODE_SUMMARIZE_MAX: int = 2048
+    MODE_SUMMARIZE_CONTEXT: int = 6000    # 4000 → 6000
+    MODE_FULL_DOC_MAX: int = 2048
+    MODE_FULL_DOC_CONTEXT: int = 6000     # 4000 → 6000
+    MODE_CONVERSATIONAL_MAX: int = 2048
+    MODE_CONVERSATIONAL_CONTEXT: int = 6000  # 4000 → 6000
+    MODE_DEFAULT_MAX: int = 1024
+    MODE_DEFAULT_CONTEXT: int = 2048
+
+
+@dataclass(frozen=True)
 class MetricsConfig:
     """메트릭 수집 관련 상수 (metrics_collector.py용)"""
 
@@ -143,6 +178,26 @@ class SearchQualityLoggerConfig:
 
 
 @dataclass(frozen=True)
+class ChunkingConfig:
+    """청킹 관련 상수 (chunking/text_chunker.py용)
+
+    2025-12-21: H100 GPU 환경 최적화
+    - Qwen72B의 넓은 컨텍스트 윈도우(32K) 활용
+    - 더 큰 청크로 문맥 정보 손실 최소화
+    """
+
+    # 청크 크기 설정 (H100: 한국어 문맥 보존 강화)
+    CHUNK_SIZE: int = 1024               # 청크 최대 크기 (H100: 768 → 1024)
+    OVERLAP: int = 256                   # 오버랩 크기 (H100: 192 → 256, 25% 유지)
+    MIN_CHUNK_SIZE: int = 80             # 최소 청크 크기 (H100: 50 → 80)
+
+    # 문장 경계 검색 설정 (H100: 더 넓은 범위 탐색)
+    SENTENCE_SEARCH_BACK: int = 150      # 문장 경계 뒤로 탐색 범위 (H100: 100 → 150)
+    SENTENCE_SEARCH_FORWARD: int = 80    # 문장 경계 앞으로 탐색 범위 (H100: 50 → 80)
+    SENTENCE_TOLERANCE: int = 30         # 문장 경계 허용 오차 (H100: 20 → 30)
+
+
+@dataclass(frozen=True)
 class OCRConfig:
     """OCR 처리 관련 상수"""
 
@@ -158,20 +213,23 @@ class OCRConfig:
 
 @dataclass(frozen=True)
 class RouterConfig:
-    """쿼리 라우터 관련 상수 (query_router.py용)"""
+    """쿼리 라우터 관련 상수 (query_router.py용)
+
+    2025-12-21: H100 GPU 환경 최적화 (더 많은 후보 검토)
+    """
 
     # 파일명 유사도 스코어링
     PARTIAL_MATCH_BASE: float = 0.8     # 부분 포함 시 기본 점수
     LENGTH_BONUS_MAX: float = 0.4       # 길이 보너스 최대값
     LENGTH_PENALTY_FACTOR: float = 0.01  # 길이 차이 페널티 계수
 
-    # 후보 선택 임계값
+    # 후보 선택 임계값 (H100: 더 많은 후보 검토)
     SINGLE_CANDIDATE_THRESHOLD: float = 0.66  # 단일 후보 확정 점수
-    TOP_CANDIDATES_COUNT: int = 2             # 상위 후보 선택 개수
+    TOP_CANDIDATES_COUNT: int = 5             # 상위 후보 선택 개수 (H100: 2 → 5)
 
     # Low-confidence 가드레일 기본값
     LOW_CONF_DELTA_DEFAULT: float = 0.05      # delta12 임계값 기본값
-    LOW_CONF_MIN_HITS_DEFAULT: int = 1        # 최소 hits 기본값
+    LOW_CONF_MIN_HITS_DEFAULT: int = 2        # 최소 hits 기본값 (H100: 1 → 2)
 
     # 라우팅 신뢰도 (높음 → 낮음)
     CONF_VERY_HIGH: float = 0.98   # SEARCH_CONTENT_ONLY (정밀 내용 검색)
@@ -225,70 +283,76 @@ class DocumentSimilarityConfig:
 
 @dataclass(frozen=True)
 class HandlerConfig:
-    """핸들러 관련 상수 (handlers/search.py용)"""
+    """핸들러 관련 상수 (handlers/search.py용)
 
-    # 검색 문서 수
-    BULK_SEARCH_TOP_K: int = 200   # 전체/목록 검색 시 top_k
-    NORMAL_SEARCH_TOP_K: int = 10  # 일반 검색 시 top_k
-    COST_SEARCH_TOP_K: int = 15    # 비용 조회 시 top_k
-    CONTENT_ONLY_TOP_K: int = 50   # 정밀 내용 검색 시 top_k
-    CONTENT_ONLY_RESULT_LIMIT: int = 10  # 정밀 검색 결과 제한
+    2025-12-21: H100 GPU 환경 최적화
+    """
+
+    # 검색 문서 수 (H100: 확대된 top_k로 더 많은 후보 검색)
+    BULK_SEARCH_TOP_K: int = 300             # 전체/목록 검색 시 top_k (H100: 200 → 300)
+    NORMAL_SEARCH_TOP_K: int = 15            # 일반 검색 시 top_k (H100: 10 → 15)
+    COST_SEARCH_TOP_K: int = 20              # 비용 조회 시 top_k (H100: 15 → 20)
+    CONTENT_ONLY_TOP_K: int = 80             # 정밀 내용 검색 시 top_k (H100: 50 → 80)
+    CONTENT_ONLY_RESULT_LIMIT: int = 15      # 정밀 검색 결과 제한 (H100: 10 → 15)
 
     # 텍스트 품질 검사 임계값
     MIN_TEXT_LENGTH: int = 10               # 최소 텍스트 길이
     MAX_SPECIAL_CHAR_RATIO: float = 0.2     # 특수문자 비율 상한
     MIN_KOREAN_CHAR_RATIO: float = 0.3      # 한글 비율 하한
 
-    # 텍스트 미리보기 길이
-    TEXT_PREVIEW_MAX: int = 400             # 텍스트 미리보기 최대 길이
-    TEXT_PREVIEW_SHORT: int = 100           # 짧은 텍스트 미리보기 길이
-    TITLE_FALLBACK_MAX: int = 160           # 제목 폴백 최대 길이
+    # 텍스트 미리보기 길이 (H100: 더 긴 미리보기)
+    TEXT_PREVIEW_MAX: int = 600             # 텍스트 미리보기 최대 길이 (H100: 400 → 600)
+    TEXT_PREVIEW_SHORT: int = 150           # 짧은 텍스트 미리보기 길이 (H100: 100 → 150)
+    TITLE_FALLBACK_MAX: int = 200           # 제목 폴백 최대 길이 (H100: 160 → 200)
 
-    # 유사 문서 설정
-    SIMILAR_SEARCH_TOP_K: int = 5           # 유사 문서 검색 수
+    # 유사 문서 설정 (H100: 더 많은 유사 문서 검색)
+    SIMILAR_SEARCH_TOP_K: int = 8           # 유사 문서 검색 수 (H100: 5 → 8)
     SIMILAR_MERGE_THRESHOLD: float = 0.7    # 유사도 병합 임계값
-    SIMILAR_DISPLAY_LIMIT: int = 3          # 유사 문서 표시 제한
+    SIMILAR_DISPLAY_LIMIT: int = 5          # 유사 문서 표시 제한 (H100: 3 → 5)
 
     # 응답 제한
-    MAX_COST_DOCS_DISPLAY: int = 10         # 비용 응답 시 최대 표시 문서 수
-    COUNT_QUERY_DISPLAY_LIMIT: int = 10     # 개수 질의 시 표시 제한
+    MAX_COST_DOCS_DISPLAY: int = 15         # 비용 응답 시 최대 표시 문서 수 (H100: 10 → 15)
+    COUNT_QUERY_DISPLAY_LIMIT: int = 15     # 개수 질의 시 표시 제한 (H100: 10 → 15)
 
-    # Evidence 생성
-    EVIDENCE_CHUNK_TOP_K: int = 1           # Evidence 청크 검색 수
-    EVIDENCE_SNIPPET_MAX: int = 400         # Evidence 스니펫 최대 길이
+    # Evidence 생성 (H100: 더 긴 스니펫)
+    EVIDENCE_CHUNK_TOP_K: int = 2           # Evidence 청크 검색 수 (H100: 1 → 2)
+    EVIDENCE_SNIPPET_MAX: int = 600         # Evidence 스니펫 최대 길이 (H100: 400 → 600)
 
 
 @dataclass(frozen=True)
 class DocumentHandlerConfig:
-    """문서 핸들러 관련 상수 (handlers/document.py용)"""
+    """문서 핸들러 관련 상수 (handlers/document.py용)
+
+    2025-12-21: H100 GPU 환경 최적화 (확장된 컨텍스트 윈도우)
+    """
 
     # 텍스트 길이 임계값
-    SHORT_TEXT_THRESHOLD: int = 500         # 짧은 문서 임계값 (원문 반환)
+    SHORT_TEXT_THRESHOLD: int = 800         # 짧은 문서 임계값 (H100: 500 → 800)
     MIN_TEXT_LENGTH: int = 10               # 최소 텍스트 길이
 
-    # 컨텍스트 윈도우 (LLM n_ctx=4096 기준, 한글 토큰당 ~1.3자)
-    CONTEXT_WINDOW: int = 3000              # LLM 컨텍스트 최대 길이 (프롬프트+응답 여유 확보)
-    CHUNK_CONTEXT_MAX: int = 12000          # 청크 결합 최대 길이
-    CHUNK_SNIPPET_MAX: int = 3000           # 개별 청크 최대 길이
+    # 컨텍스트 윈도우 (H100: Qwen72B n_ctx=32768 기준)
+    CONTEXT_WINDOW: int = 8000              # LLM 컨텍스트 최대 길이 (H100: 3000 → 8000)
+    CHUNK_CONTEXT_MAX: int = 24000          # 청크 결합 최대 길이 (H100: 12000 → 24000)
+    CHUNK_SNIPPET_MAX: int = 6000           # 개별 청크 최대 길이 (H100: 3000 → 6000)
 
-    # 미리보기 길이
-    DETAILED_PREVIEW_LEN: int = 3000        # 자세히 모드 미리보기
-    NORMAL_PREVIEW_LEN: int = 1500          # 일반 모드 미리보기
-    EVIDENCE_SNIPPET_LEN: int = 1000        # Evidence 스니펫 길이
+    # 미리보기 길이 (H100: 확장)
+    DETAILED_PREVIEW_LEN: int = 6000        # 자세히 모드 미리보기 (H100: 3000 → 6000)
+    NORMAL_PREVIEW_LEN: int = 3000          # 일반 모드 미리보기 (H100: 1500 → 3000)
+    EVIDENCE_SNIPPET_LEN: int = 1500        # Evidence 스니펫 길이 (H100: 1000 → 1500)
 
-    # 토큰 설정
-    DEFAULT_MAX_TOKENS: int = 800           # 기본 max_tokens
-    SUMMARY_MIN_TOKENS: int = 1000          # 요약 모드 최소 토큰
-    DETAILED_MIN_TOKENS: int = 300          # 자세히 모드 최소 토큰
-    NORMAL_MIN_TOKENS: int = 200            # 일반 모드 최소 토큰
+    # 토큰 설정 (H100: 더 많은 토큰 생성 가능)
+    DEFAULT_MAX_TOKENS: int = 1500          # 기본 max_tokens (H100: 800 → 1500)
+    SUMMARY_MIN_TOKENS: int = 2000          # 요약 모드 최소 토큰 (H100: 1000 → 2000)
+    DETAILED_MIN_TOKENS: int = 600          # 자세히 모드 최소 토큰 (H100: 300 → 600)
+    NORMAL_MIN_TOKENS: int = 400            # 일반 모드 최소 토큰 (H100: 200 → 400)
 
-    # 청크 로드
-    DEFAULT_CHUNK_TOP_K: int = 20           # 기본 청크 로드 수
-    FALLBACK_CHUNK_TOP_K: int = 10          # 폴백 청크 로드 수
-    SEARCH_FALLBACK_TOP_K: int = 20         # 검색 폴백 시 top_k
+    # 청크 로드 (H100: 더 많은 청크 처리)
+    DEFAULT_CHUNK_TOP_K: int = 30           # 기본 청크 로드 수 (H100: 20 → 30)
+    FALLBACK_CHUNK_TOP_K: int = 15          # 폴백 청크 로드 수 (H100: 10 → 15)
+    SEARCH_FALLBACK_TOP_K: int = 30         # 검색 폴백 시 top_k (H100: 20 → 30)
 
     # 검색 설정
-    IDENTIFY_SEARCH_TOP_K: int = 1          # 문서 식별 시 top_k
+    IDENTIFY_SEARCH_TOP_K: int = 3          # 문서 식별 시 top_k (H100: 1 → 3)
 
     # LLM 설정
     LLM_TEMPERATURE: float = 0.3            # LLM 생성 온도
@@ -375,8 +439,19 @@ class HybridRetrieverConfig:
     RETRIEVE_TOPK: int = 200                # 검색 top_k 기본값
     DISPLAY_LIMIT: int = 20                 # 표시 제한
 
-    # 병렬 처리
-    PARALLEL_MAX_WORKERS: int = 3           # 병렬 워커 수
+    # 병렬 처리 (H100 GPU 환경 최적화)
+    PARALLEL_MAX_WORKERS: int = 8           # 병렬 워커 수 (고사양 PC)
+
+    # Dense 검색 설정 (2025-12-21 추가)
+    DENSE_MIN_SCORE: float = 0.3            # Dense 검색 최소 점수 임계값
+    RRF_TOPK_MULTIPLIER: int = 2            # RRF 결합 시 top_k 배수
+    DENSE_TOPK_MULTIPLIER: int = 2          # Dense 검색 시 top_k 배수
+    DENSE_SNIPPET_MAX_LENGTH: int = 500     # Dense 결과 스니펫 최대 길이
+
+    # RRF (Reciprocal Rank Fusion) 설정
+    RRF_K: int = 60                         # RRF k 파라미터 (논문 권장값)
+    RRF_BM25_WEIGHT: float = 0.5            # BM25 가중치
+    RRF_DENSE_WEIGHT: float = 0.5           # Dense 가중치
 
     # 인덱스 경로
     DEFAULT_BM25_INDEX_PATH: str = "var/index/bm25_index.pkl"
@@ -562,17 +637,20 @@ class MergeExtractorConfig:
 
 @dataclass(frozen=True)
 class QueryExpanderConfig:
-    """쿼리 확장기 관련 상수 (query_expander.py용)"""
+    """쿼리 확장기 관련 상수 (query_expander.py용)
+
+    2025-12-21: H100 GPU 환경 최적화
+    """
 
     # 프롬프트 인젝션 방지
-    MAX_QUERY_LENGTH: int = 500              # 질의 길이 제한
+    MAX_QUERY_LENGTH: int = 800              # 질의 길이 제한 (H100: 500 → 800)
 
     # 캐시 설정
-    CACHE_TTL_SEC: int = 900                 # 캐시 TTL (15분)
-    CACHE_KEY_MAX_LENGTH: int = 200          # 캐시 키 최대 길이
+    CACHE_TTL_SEC: int = 1800                # 캐시 TTL (H100: 15분 → 30분)
+    CACHE_KEY_MAX_LENGTH: int = 300          # 캐시 키 최대 길이 (H100: 200 → 300)
 
     # FTS 쿼리 생성
-    MAX_FTS_TERMS: int = 24                  # FTS 쿼리 용어 제한
+    MAX_FTS_TERMS: int = 40                  # FTS 쿼리 용어 제한 (H100: 24 → 40)
 
 
 @dataclass(frozen=True)
@@ -593,6 +671,23 @@ class PersistentCacheConfig:
     # SQLite 타임아웃
     CONNECT_TIMEOUT_SEC: float = 5.0         # 연결 타임아웃 (초)
     BUSY_TIMEOUT_MS: int = 5000              # busy 타임아웃 (ms)
+
+
+@dataclass(frozen=True)
+class EmbeddingsConfig:
+    """임베딩/벡터스토어 관련 상수 (embeddings/*.py용)
+
+    2025-12-21: H100 GPU 환경 최적화
+    """
+
+    # 배치 크기 (H100 80GB VRAM 최적화)
+    ENCODE_BATCH_SIZE: int = 64              # 단일 인코딩 배치 (H100: 32 → 64)
+    DOCUMENT_BATCH_SIZE: int = 128           # 문서 대량 인코딩 (H100: 64 → 128)
+    VECTOR_ADD_BATCH_SIZE: int = 128         # 벡터 추가 배치 (H100: 64 → 128)
+
+    # 검색 설정
+    DEFAULT_SEARCH_TOP_K: int = 20           # 벡터 검색 기본 top_k (H100: 10 → 20)
+    SNIPPET_MAX_LENGTH: int = 600            # 스니펫 최대 길이 (H100: 500 → 600)
 
 
 @dataclass(frozen=True)
@@ -669,10 +764,15 @@ class QueryParserConfig:
 
 @dataclass(frozen=True)
 class ParallelExecutorConfig:
-    """병렬 실행기 관련 상수 (parallel_executor.py용)"""
+    """병렬 실행기 관련 상수 (parallel_executor.py용)
 
-    DEFAULT_MAX_WORKERS: int = 6             # 기본 병렬 워커 수
-    FALLBACK_TIMEOUT_SEC: float = 5.0        # 경쟁 실행 기본 타임아웃 (초)
+    H100 GPU 환경 최적화 (2025-12-21):
+    - 워커 수 증가 (6 → 12)
+    - 타임아웃 여유 (5초 → 10초)
+    """
+
+    DEFAULT_MAX_WORKERS: int = 12            # 기본 병렬 워커 수 (고사양 PC)
+    FALLBACK_TIMEOUT_SEC: float = 10.0       # 경쟁 실행 기본 타임아웃 (초)
 
 
 @dataclass(frozen=True)
@@ -691,6 +791,19 @@ class DocumentUtilsConfig:
     FALLBACK_SEARCH_TOP_K: int = 20          # 폴백 검색 상위 결과 수
     SUMMARY_SEARCH_TOP_K: int = 10           # 요약용 검색 상위 결과 수
     MAX_CHUNKS_COUNT: int = 10               # 최대 청크 수
+
+
+@dataclass(frozen=True)
+class ConversationLoggerConfig:
+    """대화 로거 관련 상수 (conversation_logger.py용)
+
+    2025-12-21: H100 환경 최적화
+    - 답변 저장 길이 증가
+    """
+
+    MAX_ANSWER_LENGTH: int = 4000            # 답변 최대 저장 길이 (H100: 2000 → 4000)
+    MAX_SOURCES: int = 15                    # 출처 문서 최대 개수 (H100: 10 → 15)
+    LOG_DIR: str = "logs/conversations"      # 로그 디렉토리
 
 
 @dataclass(frozen=True)
@@ -713,15 +826,20 @@ class AlertsConfig:
 
 @dataclass(frozen=True)
 class PipelineConfig:
-    """RAG 파이프라인 관련 상수"""
+    """RAG 파이프라인 관련 상수
 
-    # 컨텍스트 설정
-    CONTEXT_MAX_LENGTH: int = 10000          # hydrate_context max_len
-    SNIPPET_PREVIEW_LENGTH: int = 400        # 스니펫 미리보기 길이
-    FALLBACK_SNIPPET_LENGTH: int = 800       # 폴백 스니펫 길이
+    H100 GPU 80GB 환경 최적화 (2025-12-21):
+    - 컨텍스트 길이 증가 (10K → 16K)
+    - top_k 증가 (5 → 10)
+    """
 
-    # 기본 검색 설정
-    DEFAULT_TOP_K: int = 5                   # query() 기본 top_k
+    # 컨텍스트 설정 (H100 환경 최적화)
+    CONTEXT_MAX_LENGTH: int = 16000          # hydrate_context max_len (16K 컨텍스트)
+    SNIPPET_PREVIEW_LENGTH: int = 500        # 스니펫 미리보기 길이
+    FALLBACK_SNIPPET_LENGTH: int = 1000      # 폴백 스니펫 길이
+
+    # 기본 검색 설정 (H100 환경 최적화)
+    DEFAULT_TOP_K: int = 10                  # query() 기본 top_k (더 많은 문서 검색)
     DEFAULT_COMPRESSION_RATIO: float = 0.7   # 기본 압축 비율
 
     # 로그 미리보기 설정
@@ -741,6 +859,35 @@ class PipelineConfig:
 
     # Evidence 폴백
     EVIDENCE_FALLBACK_COUNT: int = 3         # raw_results 폴백 시 사용할 개수
+
+
+@dataclass(frozen=True)
+class BM25Config:
+    """BM25 검색 관련 상수 (bm25_store.py용)
+
+    H100 GPU 80GB 환경 최적화 (2025-12-21):
+    - 캐시 크기 증가 (2048 → 4096)
+    - 스니펫 최대 길이 증가 (5000 → 8000)
+    """
+
+    # BM25 알고리즘 파라미터 (표준 값)
+    DEFAULT_K1: float = 1.2              # term frequency saturation
+    DEFAULT_B: float = 0.75              # document length normalization
+
+    # 인덱스 경로
+    DEFAULT_INDEX_PATH: str = "var/index/bm25_index.pkl"
+
+    # 토크나이저 LRU 캐시 (H100: 2048 → 4096)
+    TOKENIZER_CACHE_SIZE: int = 4096
+
+    # 검색 스니펫 최대 길이 (H100: 5000 → 8000)
+    SNIPPET_MAX_LENGTH: int = 8000
+
+    # top_k 기본값
+    DEFAULT_TOP_K: int = 10
+
+    # 최소 점수 임계값
+    MIN_SCORE_THRESHOLD: float = 0.0
 
 
 # 환경변수 오버라이드 지원 함수

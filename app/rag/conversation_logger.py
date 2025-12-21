@@ -1,10 +1,11 @@
-"""
-대화 로깅 시스템
+"""대화 로깅 시스템 v1.1
+
 - 사용자 질문 + AI 답변 + 출처 문서 기록
 - 일별 JSONL 파일로 저장
 - 답변 품질 분석 및 개선에 활용
 
 2025-12-16: 초기 구현
+2025-12-21 v1.1: ConversationLoggerConfig로 설정 외부화
 """
 
 import json
@@ -15,13 +16,9 @@ from pathlib import Path
 from typing import Any, Optional
 
 from app.core.logging import get_logger
+from config.constants import ConversationLoggerConfig
 
 logger = get_logger(__name__)
-
-# 설정
-MAX_ANSWER_LENGTH = 2000  # 답변 최대 저장 길이
-MAX_SOURCES = 10  # 출처 문서 최대 개수
-LOG_DIR = "logs/conversations"
 
 
 @dataclass
@@ -39,7 +36,7 @@ class ConversationEntry:
 class ConversationLogger:
     """대화 로깅"""
 
-    def __init__(self, log_dir: str = LOG_DIR):
+    def __init__(self, log_dir: str = ConversationLoggerConfig.LOG_DIR):
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"💬 대화 로거 초기화: {self.log_dir}")
@@ -71,15 +68,16 @@ class ConversationLogger:
         # 출처 파일명 추출
         source_files = []
         if sources:
-            for src in sources[:MAX_SOURCES]:
+            for src in sources[:ConversationLoggerConfig.MAX_SOURCES]:
                 if isinstance(src, dict):
                     filename = src.get("filename") or src.get("meta", {}).get("filename", "")
                     if filename:
                         source_files.append(filename)
 
         # 답변 길이 제한
-        answer_truncated = answer[:MAX_ANSWER_LENGTH]
-        if len(answer) > MAX_ANSWER_LENGTH:
+        max_len = ConversationLoggerConfig.MAX_ANSWER_LENGTH
+        answer_truncated = answer[:max_len]
+        if len(answer) > max_len:
             answer_truncated += "... (truncated)"
 
         entry = ConversationEntry(

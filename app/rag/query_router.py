@@ -79,9 +79,17 @@ class QueryRouter:
         re.IGNORECASE,
     )
 
-    # 요약 패턴 (요약/정리/개요 + 다양한 변형)
+    # 요약/정리/상세 패턴 (LLM 답변 생성이 필요한 경우)
+    # 2025-12-21: "상세히", "자세히" 등 추가 - SEARCH보다 우선순위 높음
     SUMMARY_INTENT_PATTERN = re.compile(
-        r"(요약|정리|개요|내용.*요약|요약해|요약헤줘|정리해|개요.*알려)",
+        r"("
+        r"요약|정리|개요|"
+        r"요약해|정리해|"
+        r"상세히|자세히|자세하게|구체적으로|"
+        r"내용.*알려|내용.*설명|"
+        r"(요약|정리).*해\s*(줘|주세요)|"
+        r"(상세|자세).*보여"
+        r")",
         re.IGNORECASE,
     )
 
@@ -98,13 +106,15 @@ class QueryRouter:
     )
 
     # 정밀 내용 검색 패턴 (2025-11-19 추가)
-    # "내용에 X 들어간/포함된 문서만" 같은 정밀 검색 요청
+    # "내용에 X 들어간/포함된 문서만" 같은 정밀 검색 요청 (문서 목록 반환)
+    # 2025-12-21: "X 내용 알려줘" 패턴 제거 → QA 모드에서 LLM 답변 생성으로 처리
     CONTENT_ONLY_PATTERN = re.compile(
         r"("
         r"(내용|본문|텍스트)\s*(에|에서)?\s*.*(들어간|포함|포함된|있는)\s*(문서|파일)|"  # "내용에 X 들어간 문서"
         r"(문서|파일)\s*(내용|본문)\s*.*(들어간|포함|포함된)|"  # "문서내용에 X 들어간"
         r"본문\s*(에|에서)?\s*.*(들어간|포함|포함된|있는)|"  # "본문에 X 있는"
         r"실제로?\s*(내용|본문)\s*(에|에서)?\s*.*(들어간|포함|있는)"  # "실제 내용에 X 포함된"
+        # NOTE: "X 내용 알려줘" 패턴은 QA 모드로 처리 (LLM 답변 생성 필요)
         r")",
         re.IGNORECASE,
     )
@@ -281,7 +291,9 @@ class QueryRouter:
             query: 사용자 질의
 
         Returns:
-            의도 플래그 딕셔너리 {"cost": bool, "list": bool, "content": bool}
+            의도 플래그 딕셔너리 {"cost": bool, "list": bool, "content": bool, "summary": bool}
+
+        2025-12-21: "summary" 의도 추가 - 요약/정리/상세 요청 감지
         """
         ql = query.lower()
 
@@ -303,6 +315,8 @@ class QueryRouter:
                 or self.SUMMARY_INTENT_PATTERN.search(query) is not None
                 or any(k in ql for k in self.preview_keywords)
             ),
+            # 2025-12-21: 요약/정리/상세 의도 (SEARCH보다 우선)
+            "summary": self.SUMMARY_INTENT_PATTERN.search(query) is not None,
         }
 
     # ============================================================================
@@ -436,6 +450,38 @@ class QueryRouter:
             reason=reason,
             confidence=RouterConfig.CONF_MEDIUM,
             content_intent=True,  # 내용 기반 답변 생성
+            year=params.get("year"),
+            drafter=params.get("drafter"),
+        )
+
+    def _check_summary_intent(
+        self,
+        query: str,
+        params: dict[str, Any],
+        intents: dict[str, bool],
+    ) -> Optional[RouteDecision]:
+        """요약/정리 의도 체크 - LLM 답변 생성이 필요한 경우
+
+        2025-12-21 추가: "X 문서 요약해줘", "X 관련 문서 정리해줘", "X 문서 상세히 보여줘"
+        같은 패턴은 문서 목록이 아닌 LLM이 읽고 정리한 답변이 필요함.
+
+        list_intent가 있어도 summary_intent가 있으면 QA 모드로 라우팅.
+
+        Returns:
+            RouteDecision if matched, None otherwise
+        """
+        if not intents.get("summary"):
+            return None
+
+        # "문서" 키워드가 있어도 요약 의도가 있으면 QA 모드
+        logger.info("🎯 모드 결정: QA (요약/정리 의도)")
+        reason = "summary_intent"
+        self._log_routing_decision(query, QueryMode.QA, confidence=RouterConfig.CONF_MEDIUM, reason=reason)
+        return RouteDecision(
+            mode=QueryMode.QA,
+            reason=reason,
+            confidence=RouterConfig.CONF_MEDIUM,
+            content_intent=True,
             year=params.get("year"),
             drafter=params.get("drafter"),
         )
@@ -671,11 +717,14 @@ class QueryRouter:
         has_qa_intent = any(kw in query_lower for kw in self.qa_keywords)
 
         # 2. 우선순위에 따라 헬퍼 메서드 호출 (Chain of Responsibility 패턴)
+        # 2025-12-21: CONTENT_ONLY를 EXISTS_INTENT보다 먼저 체크 (더 구체적인 패턴 우선)
+        # 2025-12-21: SUMMARY_INTENT를 SEARCH보다 먼저 체크 (요약/정리 요청은 LLM 답변 필요)
         decision = (
-            self._check_exists_intent(query, params, has_filename, has_doc_reference)
-            or self._check_content_only(query, params)
+            self._check_content_only(query, params)  # "내용에 X 들어간 문서" → 정밀 검색
+            or self._check_exists_intent(query, params, has_filename, has_doc_reference)
             or self._check_cost_intent(query, params, intents)
             or self._check_qa_question(query, params, has_doc_reference)  # 정보 질의 ("IP 알려줘") → QA 모드 (문서 참조 없을 때만)
+            or self._check_summary_intent(query, params, intents)  # 요약/정리/상세 → QA 모드 (SEARCH보다 우선)
             or self._check_document_mode(query, params, intents, has_filename, has_doc_reference, has_doc_type_keyword)
             or self._check_search_mode(query, params, intents, has_filename, has_doc_reference)
             or self._check_qa_intent(query, params, has_qa_intent)

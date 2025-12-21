@@ -239,7 +239,7 @@ class FTSBM25Stage(BaseSearchStage):
                 return {
                     "doc_id": doc.get("filename", "unknown"),
                     "snippet": doc.get("text_preview") or "",
-                    "score": 99.9,
+                    "score": HybridSearchConfig.SELECTED_DOC_SCORE,
                     "page": 1,
                     "filename": doc.get("filename"),
                     "file_path": doc.get("path"),
@@ -374,7 +374,7 @@ class FTSBM25Stage(BaseSearchStage):
             for result in results:
                 if result.get("filename") == context.selected_filename:
                     selected_doc = result.copy()
-                    selected_doc["score"] = 99.9
+                    selected_doc["score"] = HybridSearchConfig.SELECTED_DOC_SCORE
                     break
 
             # 3. MetadataDB에서 직접 검색
@@ -387,7 +387,7 @@ class FTSBM25Stage(BaseSearchStage):
             results = [r for r in results if r.get("filename") != context.selected_filename]
             # 최상위에 강제 추가
             selected_doc_priority = selected_doc.copy()
-            selected_doc_priority["score"] = 99.9
+            selected_doc_priority["score"] = HybridSearchConfig.SELECTED_DOC_SCORE
             results = [selected_doc_priority] + results[:context.top_k - 1]
             logger.info(f"🎯 선택된 문서 최상위 강제 추가: {context.selected_filename}")
         else:

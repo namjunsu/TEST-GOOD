@@ -43,10 +43,11 @@ def _ocr_worker(args: tuple[str, dict]) -> tuple[str, str, dict]:
     from rag_system.active.enhanced_ocr_processor import EnhancedOCRProcessor
 
     # 워커 프로세스에서 별도 인스턴스 생성 (캐시 쓰기 비활성화)
-    processor = EnhancedOCRProcessor(cache_dir=options.get("cache_dir"))
+    cache_dir = options.get("cache_dir") or EnhancedOCRProcessor.DEFAULT_CACHE_DIR
+    processor = EnhancedOCRProcessor(cache_dir=cache_dir)
 
     # 워커는 캐시를 읽기만 하고 쓰지 않음
-    text, metadata = processor.extract_text_with_ocr(pdf_path, use_cache_write=False)
+    text, metadata = processor.extract_text_with_ocr(pdf_path)
     return pdf_path, text, metadata
 
 
@@ -68,14 +69,17 @@ class EnhancedOCRProcessor:
     MAX_KOREAN_WORD_LENGTH = 4  # 한글 단어 최대 길이 (합치기용)
     TEXT_LAYER_MIN_CHARS = 50  # 텍스트 레이어 존재 판단 최소 문자 수
 
-    def __init__(self, cache_dir: str = None):
+    def __init__(self, cache_dir: Optional[str] = None):
+        resolved_cache_dir: str
         if cache_dir is None:
             try:
-                from config import DOCS_DIR
-                cache_dir = DOCS_DIR
+                from config import DOCS_DIR  # type: ignore[import-not-found]
+                resolved_cache_dir = str(DOCS_DIR)  # 문자열 변환 보장
             except ImportError:
-                cache_dir = self.DEFAULT_CACHE_DIR
-        self.cache_dir = Path(cache_dir)
+                resolved_cache_dir = self.DEFAULT_CACHE_DIR
+        else:
+            resolved_cache_dir = cache_dir
+        self.cache_dir = Path(resolved_cache_dir)
         self.metadata_cache_file = self.cache_dir / ".metadata_cache.json"
         self.ocr_cache_file = self.cache_dir / ".ocr_cache.json"
 

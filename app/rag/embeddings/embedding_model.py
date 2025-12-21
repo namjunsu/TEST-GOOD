@@ -94,6 +94,7 @@ class EmbeddingModel:
     def dimension(self) -> int:
         """임베딩 차원 수 반환"""
         self._load_model()
+        assert self._dimension is not None, "_load_model() sets _dimension"
         return self._dimension
 
     def encode(
@@ -123,6 +124,8 @@ class EmbeddingModel:
         # 빈 텍스트 필터링
         texts = [t if t.strip() else " " for t in texts]
 
+        # type narrowing for Pylance
+        assert self._model is not None, "_load_model() initializes _model"
         embeddings = self._model.encode(
             texts,
             batch_size=batch_size,

@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Optional, Union
 
-from rag_system.active.llm_wrapper import QwenLLM, VllmLLM, Qwen72BLLM
+from rag_system.active.llm_wrapper import Qwen72BLLM, QwenLLM, VllmLLM
 
 
 class LLMSingleton:
@@ -68,13 +68,13 @@ class LLMSingleton:
                 # 백엔드에 따라 적절한 LLM 클래스 선택
                 if llm_backend == "qwen72b":
                     cls._logger.info("🚀 Transformers 사용 (Qwen2.5-72B-Instruct-AWQ on H100)")
-                    cls._instance = Qwen72BLLM(model_path=model_path, **kwargs)
+                    cls._instance = Qwen72BLLM(model_path=model_path, **kwargs)  # type: ignore[arg-type]
                 elif llm_backend == "vllm":
                     cls._logger.info("🚀 vLLM 엔진 사용 (Qwen2.5-72B-Instruct-AWQ)")
-                    cls._instance = VllmLLM(model_path=model_path, **kwargs)
+                    cls._instance = VllmLLM(model_path=model_path, **kwargs)  # type: ignore[arg-type]
                 else:
                     cls._logger.info("🔧 llama-cpp-python 사용 (Qwen2.5-7B-GGUF)")
-                    cls._instance = QwenLLM(model_path=model_path, **kwargs)
+                    cls._instance = QwenLLM(model_path=model_path, **kwargs)  # type: ignore[arg-type]
 
                 cls._load_time = time.time() - start_time
                 cls._initialized = True
@@ -141,9 +141,10 @@ class LLMSingleton:
             if cls._instance:
                 try:
                     # LLM 리소스 정리 시도
-                    if hasattr(cls._instance, "llm") and cls._instance.llm:
+                    llm_obj = getattr(cls._instance, "llm", None)
+                    if llm_obj is not None:
                         cls._logger.debug("LLM 객체 메모리 해제 중...")
-                        del cls._instance.llm
+                        del llm_obj
 
                     # 기타 리소스 정리 (있는 경우)
                     cls._instance = None

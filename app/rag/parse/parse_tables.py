@@ -20,7 +20,7 @@ v2.0 변경사항:
 import re
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import yaml
 
@@ -353,7 +353,7 @@ class TableParser:
                 else:
                     continue
 
-            rec = {
+            rec: dict[str, Union[str, int, None]] = {
                 "name": None,
                 "quantity": None,
                 "unit_price": None,

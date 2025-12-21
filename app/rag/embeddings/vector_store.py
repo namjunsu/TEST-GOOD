@@ -140,8 +140,9 @@ class VectorStore:
                 show_progress=show_progress,
             )
 
-            # FAISS에 추가
-            self._index.add(embeddings.astype(np.float32))
+            # FAISS에 추가 (type narrowing for Pylance)
+            assert self._index is not None, "_ensure_index() guarantees index exists"
+            self._index.add(embeddings.astype(np.float32))  # type: ignore[arg-type]
 
             # 메타데이터 저장
             start_idx = len(self._chunks)
@@ -155,8 +156,9 @@ class VectorStore:
                     self._doc_id_to_indices[doc_id] = []
                 self._doc_id_to_indices[doc_id].append(start_idx + i)
 
+            total_count = self._index.ntotal if self._index else 0
             logger.info(
-                f"✅ {len(chunks)}개 청크 추가 완료 (총 {self._index.ntotal}개)"
+                f"✅ {len(chunks)}개 청크 추가 완료 (총 {total_count}개)"
             )
             return len(chunks)
 
@@ -196,8 +198,9 @@ class VectorStore:
             if filter_doc_ids:
                 return self._filtered_search(query_vector, top_k, filter_doc_ids)
 
-            # 전체 검색
-            scores, indices = self._index.search(query_vector, top_k)
+            # 전체 검색 (type narrowing for Pylance)
+            assert self._index is not None, "checked above"
+            scores, indices = self._index.search(query_vector, top_k)  # type: ignore[arg-type]
 
             results = []
             for score, idx in zip(scores[0], indices[0]):
@@ -239,6 +242,10 @@ class VectorStore:
         # 해당 인덱스들만 추출하여 검색
         import faiss
 
+        # type narrowing for Pylance
+        if self._index is None:
+            return []
+
         target_indices = np.array(target_indices, dtype=np.int64)
 
         # 서브셋 생성
@@ -251,10 +258,10 @@ class VectorStore:
 
         # 임시 인덱스로 검색
         temp_index = faiss.IndexFlatIP(self.embedding_model.dimension)
-        temp_index.add(subset_vectors)
+        temp_index.add(subset_vectors)  # type: ignore[arg-type]
 
         k = min(top_k, len(target_indices))
-        scores, local_indices = temp_index.search(query_vector, k)
+        scores, local_indices = temp_index.search(query_vector, int(k))  # type: ignore[arg-type]
 
         results = []
         for score, local_idx in zip(scores[0], local_indices[0]):

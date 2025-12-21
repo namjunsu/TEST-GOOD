@@ -10,7 +10,7 @@ import re
 import time
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import yaml
 
@@ -79,7 +79,7 @@ class QwenLLM(BaseRAGLLM):
 
     """Qwen 모델 래퍼 클래스"""
 
-    def __init__(self, model_path: str, config: GenerationConfig = None, length_analyzer=None):
+    def __init__(self, model_path: str, config: Optional[GenerationConfig] = None, length_analyzer=None):
         super().__init__()  # BaseRAGLLM 초기화
         self.logger.info(f"🔍 DEBUG QwenLLM.__init__: Received model_path={model_path}")
         self.model_path = Path(model_path)
@@ -172,13 +172,13 @@ class QwenLLM(BaseRAGLLM):
 
             # config.py에서 GPU 최적화 설정 가져오기 (폴백용)
             try:
-                from config import F16_KV as CFG_F16_KV
-                from config import N_BATCH as CFG_N_BATCH
-                from config import N_CTX as CFG_N_CTX
-                from config import N_GPU_LAYERS as CFG_N_GPU_LAYERS
-                from config import N_THREADS as CFG_N_THREADS
-                from config import USE_MLOCK as CFG_USE_MLOCK
-                from config import USE_MMAP as CFG_USE_MMAP
+                from config import F16_KV as CFG_F16_KV  # type: ignore[attr-defined]
+                from config import N_BATCH as CFG_N_BATCH  # type: ignore[attr-defined]
+                from config import N_CTX as CFG_N_CTX  # type: ignore[attr-defined]
+                from config import N_GPU_LAYERS as CFG_N_GPU_LAYERS  # type: ignore[attr-defined]
+                from config import N_THREADS as CFG_N_THREADS  # type: ignore[attr-defined]
+                from config import USE_MLOCK as CFG_USE_MLOCK  # type: ignore[attr-defined]
+                from config import USE_MMAP as CFG_USE_MMAP  # type: ignore[attr-defined]
             except ImportError:
                 # config.py 없을 때 기본값 (GPU 최적화)
                 CFG_N_THREADS, CFG_N_CTX, CFG_N_BATCH = 8, 4096, 768
@@ -528,9 +528,11 @@ A:"""
                 else:
                     final_max_tokens = mode_max_tokens
 
-                # 생성
+                # 생성 (llm이 None이면 로드되지 않은 상태)
+                if self.llm is None:
+                    raise RuntimeError("LLM이 로드되지 않았습니다")
                 response = self.llm.create_chat_completion(
-                    messages=messages,
+                    messages=messages,  # type: ignore[arg-type]
                     temperature=self.config.temperature,
                     max_tokens=final_max_tokens,
                     top_p=self.config.top_p,
@@ -539,7 +541,10 @@ A:"""
                     stop=self.stop_tokens,
                 )
 
-                answer = response["choices"][0]["message"]["content"].strip()
+                # response는 dict 또는 Iterator - dict인 경우만 처리
+                choices = response["choices"]  # type: ignore[index]
+                content = choices[0]["message"]["content"]
+                answer = content.strip() if content else ""
                 # 외국어 텍스트 필터링
                 answer = self._remove_foreign_text(answer)
                 generation_time = time.time() - start_time
@@ -561,7 +566,7 @@ A:"""
                     length_adjustments = []
                     adjusted_answer = answer
 
-                    if self.config.enable_adaptive_length and length_recommendation:
+                    if self.config.enable_adaptive_length and length_recommendation and self.length_analyzer:
                         adjusted_answer, length_adjustments = self.length_analyzer.validate_and_adjust_answer(
                             answer, length_recommendation)
 
@@ -688,23 +693,33 @@ A:"""
         # 복합 질문의 특별 처리 (품질 우선으로 재시도 횟수 증가)
         quality_retries = max_retries + 1  # 품질을 위해 재시도 1회 추가
 
-        if question_analysis.question_type == QuestionType.COMPARISON:
+        q_type = question_analysis.get("question_type")
+        if q_type == QuestionType.COMPARISON:
             return self._handle_comparison_question(question_analysis, context_chunks, quality_retries)
-        if question_analysis.question_type == QuestionType.ANALYSIS:
+        if q_type == QuestionType.ANALYSIS:
             return self._handle_analysis_question(question_analysis, context_chunks, quality_retries)
-        if question_analysis.question_type == QuestionType.COMPLEX_MULTI:
+        if q_type == QuestionType.COMPLEX_MULTI:
             return self._handle_complex_multi_question(question_analysis, context_chunks, quality_retries)
 
         # 일반적인 구조화된 처리
-        structured_prompt = self.answer_templates.generate_structured_prompt(question_analysis, context_chunks)
-        template = self.answer_templates.get_template(question_analysis.question_type)
+        answer_templates = getattr(self, "answer_templates", None)
+        if answer_templates is None:
+            # answer_templates가 없으면 기본 응답 생성으로 폴백
+            return self.generate_response(
+                question_analysis.get("original_question", ""),
+                context_chunks,
+                max_retries=MAX_LLM_RETRY,
+                enable_complex_processing=False,
+            )
+        structured_prompt = answer_templates.generate_structured_prompt(question_analysis, context_chunks)
+        template = answer_templates.get_template(q_type)
 
         for attempt in range(max_retries + 1):
             try:
                 # 시스템 프롬프트에 구조화된 지침 추가
                 enhanced_system_prompt = self.create_system_prompt() + f"""
 
-🎯 특별 지침 (질문 유형: {question_analysis.question_type.value}):
+🎯 특별 지침 (질문 유형: {q_type.value if q_type else "GENERAL"}):
 - 최대 {template.max_length}자 이내
 - 템플릿 구조: {template.structure}
 - 필수 요소: {', '.join(template.required_fields)}
@@ -716,8 +731,10 @@ A:"""
                     {"role": "user", "content": structured_prompt},
                 ]
 
+                if self.llm is None:
+                    raise RuntimeError("LLM이 로드되지 않았습니다")
                 response = self.llm.create_chat_completion(
-                    messages=messages,
+                    messages=messages,  # type: ignore[arg-type]
                     temperature=self.config.temperature,
                     max_tokens=min(self.config.max_tokens, template.max_length + 50),
                     top_p=self.config.top_p,
@@ -726,14 +743,16 @@ A:"""
                     stop=self.stop_tokens,
                 )
 
-                raw_answer = response["choices"][0]["message"]["content"].strip()
+                choices = response["choices"]  # type: ignore[index]
+                content = choices[0]["message"]["content"]
+                raw_answer = content.strip() if content else ""
                 # 외국어 텍스트 필터링
                 raw_answer = self._remove_foreign_text(raw_answer)
                 generation_time = time.time() - start_time
 
                 # 답변 후처리 및 검증
-                processed_answer = self.answer_templates.post_process_answer(raw_answer, question_analysis)
-                validation = self.answer_templates.validate_answer_structure(processed_answer, template)
+                processed_answer = answer_templates.post_process_answer(raw_answer, question_analysis)
+                validation = answer_templates.validate_answer_structure(processed_answer, template)
 
                 # 인용 검증
                 citation_check = self._validate_citations(processed_answer, context_chunks)
@@ -764,12 +783,13 @@ A:"""
 
         # 구조화된 처리 실패 시 기본 모드로 폴백
         self.logger.warning("구조화된 처리 실패, 기본 모드로 폴백")
-        return self.generate_response(question_analysis.original_question, context_chunks,
+        original_q = question_analysis.get("original_question", "")
+        return self.generate_response(original_q, context_chunks,
                                     max_retries=MAX_LLM_RETRY, enable_complex_processing=False)
 
     def _handle_comparison_question(self, question_analysis: dict[str, Any],
                                   context_chunks: list[dict[str, Any]],
-                                  max_retries: int = None) -> RAGResponse:
+                                  max_retries: Optional[int] = None) -> RAGResponse:
         """비교 질문 특별 처리"""
 
         # .env에서 읽은 값 사용
@@ -786,10 +806,12 @@ A:"""
             self.logger.info(f"비교 질문: 단일 문서 모드 적용 - {Path(best_source).name if best_source else '(unknown)'}")
             context_chunks = filtered_chunks[:3]  # 최대 3개 청크만 사용
 
-        enhanced_prompt = f"""질문: {question_analysis.original_question}
+        original_question = question_analysis.get("original_question", "")
+        comparison_targets = question_analysis.get("comparison_targets", [])
+        enhanced_prompt = f"""질문: {original_question}
 
 🎯 비교 질문 전용 지침 (품질 최우선):
-1. 비교 대상: {', '.join(question_analysis.comparison_targets) if question_analysis.comparison_targets else '문서에서 찾아서 비교'}
+1. 비교 대상: {', '.join(comparison_targets) if comparison_targets else '문서에서 찾아서 비교'}
 2. 🚨 절대 중요: 문서에 정확히 명시된 숫자만 사용하세요 - 추정/변형 절대 금지
 3. 각 항목의 구체적 수치를 문서에서 정확히 복사하여 사용
 4. "A는 X, B는 Y입니다" 형식으로 명확한 대조 구조
@@ -834,7 +856,8 @@ A:"""
                                 max_retries: int = 2) -> RAGResponse:
         """분석 질문 특별 처리"""
 
-        enhanced_prompt = f"""질문: {question_analysis.original_question}
+        original_question = question_analysis.get("original_question", "")
+        enhanced_prompt = f"""질문: {original_question}
 
 🎯 분석 질문 전용 지침 (품질 최우선):
 1. 🔍 모든 관련 데이터를 철저히 검토하여 최대값/최소값/평균값 정확히 찾기
@@ -875,7 +898,9 @@ A:"""
                                      max_retries: int = 2) -> RAGResponse:
         """복합 다중 질문 특별 처리"""
 
-        enhanced_prompt = f"""질문: {question_analysis.original_question}
+        original_question = question_analysis.get("original_question", "")
+        required_info_types = question_analysis.get("required_info_types", [])
+        enhanced_prompt = f"""질문: {original_question}
 
 🎯 복합 질문 전용 지침:
 1. 질문을 단계별로 분해하여 처리
@@ -883,7 +908,7 @@ A:"""
 3. 정보가 부족한 부분은 명시
 4. 요약 + 세부사항 구조
 
-필요 정보 유형: {', '.join(question_analysis.required_info_types)}
+필요 정보 유형: {', '.join(required_info_types)}
 
 참고 문서:"""
 
@@ -931,8 +956,11 @@ A:"""
                     {"role": "user", "content": enhanced_prompt},
                 ]
 
+                if self.llm is None:
+                    raise RuntimeError("LLM이 로드되지 않았습니다")
+
                 response = self.llm.create_chat_completion(
-                    messages=messages,
+                    messages=messages,  # type: ignore[arg-type]
                     temperature=self.config.temperature,  # 기본 설정값 사용 (0.3)
                     max_tokens=self.config.max_tokens,     # 기본 설정값 사용 (800)
                     top_p=self.config.top_p,               # 기본 설정값 사용 (0.9)
@@ -941,7 +969,9 @@ A:"""
                     stop=self.stop_tokens,
                 )
 
-                answer = response["choices"][0]["message"]["content"].strip()
+                choices = response["choices"]  # type: ignore[index]
+                content = choices[0]["message"]["content"]
+                answer = content.strip() if content else ""
                 # 외국어 텍스트 필터링
                 answer = self._remove_foreign_text(answer)
                 generation_time = time.time() - start_time
@@ -1970,7 +2000,7 @@ class Qwen72BLLM(BaseRAGLLM):
             from transformers import AutoModelForCausalLM, AutoTokenizer
 
             self.logger.info(f"🚀 Qwen2.5-72B-Instruct-AWQ 로딩 중: {self.model_path}")
-            self.logger.info(f"   H100 GPU에서 로딩 (약 30-60초 소요)")
+            self.logger.info("   H100 GPU에서 로딩 (약 30-60초 소요)")
 
             # Tokenizer 로드
             self.tokenizer = AutoTokenizer.from_pretrained(
@@ -1983,7 +2013,7 @@ class Qwen72BLLM(BaseRAGLLM):
 
             # TF32 활성화 (H100 성능 향상)
             if torch.cuda.is_available():
-                torch.set_float32_matmul_precision('high')  # TF32
+                torch.set_float32_matmul_precision("high")  # TF32
                 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
             # 모델 로드 (AWQ quantization 자동 인식)
@@ -1997,9 +2027,12 @@ class Qwen72BLLM(BaseRAGLLM):
             # Flash Attention 활성화 (설치된 경우)
             if enable_flash_attn:
                 try:
-                    import flash_attn
-                    model_kwargs["attn_implementation"] = "flash_attention_2"
-                    self.logger.info("⚡ Flash Attention 2 활성화됨")
+                    import importlib.util
+                    if importlib.util.find_spec("flash_attn") is not None:
+                        model_kwargs["attn_implementation"] = "flash_attention_2"
+                        self.logger.info("⚡ Flash Attention 2 활성화됨")
+                    else:
+                        self.logger.warning("⚠️ flash-attn 미설치 - 기본 어텐션 사용")
                 except ImportError:
                     self.logger.warning("⚠️ flash-attn 미설치 - 기본 어텐션 사용")
 
@@ -2139,7 +2172,7 @@ class Qwen72BLLM(BaseRAGLLM):
             # 배치 토크나이징 (패딩 적용 - Flash Attention은 left padding 필요)
             max_context = int(os.getenv("LLM_N_CTX", "16384"))
             original_padding_side = self.tokenizer.padding_side
-            self.tokenizer.padding_side = 'left'
+            self.tokenizer.padding_side = "left"
 
             model_inputs = self.tokenizer(
                 prompts,

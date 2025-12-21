@@ -139,10 +139,11 @@ class DenseStage(BaseSearchStage):
             )
 
             return StageResult(
-                results=normalized,
-                should_continue=True,  # BM25 결과와 결합
-                stage_name=self.name,
-                metadata={
+                normalized,  # results (positional)
+                True,  # should_continue: BM25 결과와 결합
+                self.name,  # stage_name
+                len(normalized),  # hit_count
+                {  # metadata
                     "raw_count": len(results),
                     "filtered_count": len(normalized),
                     "min_score": self.min_score,

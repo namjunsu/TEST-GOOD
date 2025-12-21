@@ -14,6 +14,7 @@ import os
 import shutil
 import sys
 import time
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
@@ -215,7 +216,7 @@ def reindex_bm25(source_dir: Path, output_path: Path) -> bool:
         bm25.documents = []
         bm25.metadata = []
         bm25.term_freqs = []
-        bm25.doc_freqs = {}
+        bm25.doc_freqs = defaultdict(int)
         bm25.doc_lens = []
         bm25.vocab = set()
 

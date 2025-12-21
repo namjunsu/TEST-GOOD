@@ -58,7 +58,7 @@ class RAGResponse:
     # 적응형 길이 조정 관련 정보
     length_recommendation: Optional[Any] = None
     original_length: Optional[int] = None
-    length_adjustments: list[str] = None
+    length_adjustments: Optional[list[str]] = None
     adaptive_length_used: bool = False
 
 

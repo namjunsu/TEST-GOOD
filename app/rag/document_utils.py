@@ -108,8 +108,8 @@ class DocumentUtils:
 
         try:
             # BM25 인덱스에서 직접 해당 문서 찾기 (검색 대신 직접 접근)
-            if hasattr(self.retriever, "bm25") and self.retriever.bm25:
-                bm25_store = self.retriever.bm25
+            bm25_store = getattr(self.retriever, "bm25", None)
+            if bm25_store is not None:
 
                 # metadata에서 filename이 일치하는 문서의 인덱스 찾기
                 target_indices = []
@@ -210,7 +210,7 @@ class DocumentUtils:
             # pytesseract 실패 시 paddleocr 시도
             logger.info("🔄 paddleocr 폴백 시도...")
             try:
-                from paddleocr import PaddleOCR
+                from paddleocr import PaddleOCR  # type: ignore[import-not-found]
                 ocr = PaddleOCR(use_angle_cls=True, lang="korean")
 
                 text = ""

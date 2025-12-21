@@ -141,7 +141,7 @@ def extract_amount_candidates(
             continue
         ctx = text[max(0, s - window): min(len(text), e + window)]
         raw = text[s:e]
-        out.append(AmountCandidate(raw, value, s, e, ctx, kind))
+        out.append(AmountCandidate(raw=raw, value=value, start=s, end=e, context=ctx, kind=kind))
 
     # 2) 콤마/원 표기
     for m in RE_KRW.finditer(text):
@@ -162,7 +162,7 @@ def extract_amount_candidates(
             continue
 
         ctx = text[max(0, s - window): min(len(text), e + window)]
-        out.append(AmountCandidate(raw, val, s, e, ctx, "krw"))
+        out.append(AmountCandidate(raw=raw, value=val, start=s, end=e, context=ctx, kind="krw"))
 
     # 3) 중복 제거: (value, start) 기준 유니크
     seen = set()
@@ -188,10 +188,12 @@ def extract_line_items(text: str) -> list[tuple[int, int]]:
             continue
 
         # 검증: 단가/수량 범위 (방송장비 고가 품목 대응)
+        if price is None:
+            continue
         cfg = AmountParserConfig
         price_ok = cfg.LINE_ITEM_MIN_PRICE <= price <= cfg.LINE_ITEM_MAX_PRICE
         qty_ok = cfg.LINE_ITEM_MIN_QTY <= qty <= cfg.LINE_ITEM_MAX_QTY
-        if price is not None and price_ok and qty_ok:
+        if price_ok and qty_ok:
             items.append((price, qty))
             logger.debug(f"Line item found: {price:,}원 × {qty} = {price * qty:,}원")
 

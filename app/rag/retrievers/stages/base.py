@@ -5,9 +5,12 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from app.core.logging import get_logger
+
+if TYPE_CHECKING:
+    from rag_system.active.bm25_store import BM25Store
 
 logger = get_logger(__name__)
 
@@ -84,10 +87,12 @@ class BaseSearchStage(ABC):
     Attributes:
         name: Stage 이름 (로깅/디버깅용)
         priority: 실행 우선순위 (낮을수록 먼저 실행)
+        bm25: BM25Store 인스턴스 (선택적, 일부 Stage에서 사용)
     """
 
     name: str = "BaseStage"
     priority: int = 100
+    bm25: Optional["BM25Store"] = None  # 일부 Stage에서 사용 (동적 업데이트 지원)
 
     @abstractmethod
     def execute(self, context: SearchContext) -> StageResult:

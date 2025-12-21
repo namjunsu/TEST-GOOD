@@ -67,10 +67,11 @@ class ExactMatchStage(BaseSearchStage):
                     "하위 Stage 스킵"
                 )
                 return StageResult(
-                    results=exact_results[:context.top_k],
-                    should_continue=False,  # 조기 종료
-                    stage_name=self.name,
-                    metadata={"match_types": self._get_match_types(exact_results)},
+                    exact_results[:context.top_k],  # results
+                    False,  # should_continue: 조기 종료
+                    self.name,  # stage_name
+                    len(exact_results[:context.top_k]),  # hit_count
+                    {"match_types": self._get_match_types(exact_results)},  # metadata
                 )
 
             return self._make_empty_result("코드 패턴 없음")

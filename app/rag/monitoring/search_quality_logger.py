@@ -13,7 +13,7 @@ import json
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from config.constants import SearchQualityLoggerConfig
 
@@ -34,7 +34,7 @@ class SearchQualityLogger:
         self.log_file = self.log_dir / "search_quality.jsonl"
 
     def log_search(self, query: str, results: list[dict[str, Any]],
-                   score_stats: dict[str, Any], metadata: dict[str, Any] = None):
+                   score_stats: dict[str, Any], metadata: Optional[dict[str, Any]] = None):
         """검색 로깅
 
         Args:

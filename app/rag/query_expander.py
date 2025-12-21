@@ -332,13 +332,12 @@ class QueryExpander:
 
         try:
             # LLM 호출 (타임아웃 포함)
+            # NOTE: QwenLLM만 max_retries, enable_complex_processing, mode 지원
+            # VllmLLM/Qwen72BLLM은 기본 시그니처만 사용
             response = self.llm.generate_response(
                 question=prompt,
                 context_chunks=[],
-                max_retries=1,  # 빠른 실패
-                enable_complex_processing=False,
-                mode="tool",  # 도구 모드 (키워드 추출 전용)
-            )
+            )  # type: ignore[call-arg]
 
             # JSON 추출 및 파싱
             if hasattr(response, "answer"):

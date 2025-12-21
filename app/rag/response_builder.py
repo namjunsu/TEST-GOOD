@@ -77,9 +77,9 @@ class ResponseBuilder:
 
         # 출처 결정
         max_sources = self._get_max_sources(query)
-        final_source_docs = (
+        final_source_docs: list[str] = (
             [] if determined_mode == "chat"
-            else [c.get("doc_id") for c in results[:max_sources]]
+            else [c.get("doc_id", "") for c in results[:max_sources]]
         )
         final_evidence_chunks = [] if determined_mode == "chat" else compressed
 

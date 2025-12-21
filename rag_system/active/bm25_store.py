@@ -89,9 +89,10 @@ BUSINESS_KEYWORDS_WHITELIST = {
 
 # kiwipiepy 토크나이저 (한국어 특화)
 try:
-    from kiwipiepy import Kiwi
+    from kiwipiepy import Kiwi  # type: ignore[import-not-found]
     KIWIPIEPY_AVAILABLE = True
 except ImportError:
+    Kiwi = None  # type: ignore[misc, assignment]
     KIWIPIEPY_AVAILABLE = False
     get_logger(__name__).warning("kiwipiepy 사용 불가(AVX-VNNI 등), basic tokenizer로 동작")
 
@@ -132,7 +133,7 @@ class KoreanTokenizer:
         self.tokenize_count = 0
         self.cache_hits = 0
 
-        if KIWIPIEPY_AVAILABLE:
+        if KIWIPIEPY_AVAILABLE and Kiwi is not None:
             try:
                 # AVX-VNNI 문제 해결을 위해 num_workers=0으로 설정
                 self.kiwi = Kiwi(num_workers=0)
@@ -140,8 +141,10 @@ class KoreanTokenizer:
                 self.logger.info("Kiwi 한국어 토크나이저 로드 완료")
             except Exception as e:
                 self.logger.warning(f"Kiwi 초기화 실패, 기본 토크나이저 사용: {e}")
+                self.kiwi = None
                 self.use_kiwi = False
         else:
+            self.kiwi = None
             self.use_kiwi = False
 
     def tokenize(self, text: str) -> list[str]:
@@ -152,7 +155,7 @@ class KoreanTokenizer:
             return []
 
         try:
-            if self.use_kiwi:
+            if self.use_kiwi and self.kiwi is not None:
                 # Kiwi로 형태소 분석
                 result = self.kiwi.analyze(text)
                 tokens = []
@@ -178,7 +181,7 @@ class KoreanTokenizer:
 
 def build_dynamic_stopwords(doc_freqs: dict[str, int], n_docs: int,
                            df_threshold: float = 0.75, max_token_len: int = 3,
-                           whitelist: set = None) -> set:
+                           whitelist: Optional[set[str]] = None) -> set[str]:
     """문서 빈도 기반 동적 불용어 도출
 
     Args:

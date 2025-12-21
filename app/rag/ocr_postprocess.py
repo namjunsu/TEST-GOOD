@@ -7,9 +7,8 @@ pytesseract OCR 결과의 품질을 개선하기 위해 로컬 LLM(Qwen)을 사�
 2025-12-16: 초기 구현
 """
 
-import logging
 import re
-from typing import Optional
+from typing import Any, Optional
 
 from app.core.logging import get_logger
 
@@ -75,8 +74,13 @@ def correct_ocr_with_llm(
 
         logger.info(f"LLM OCR 교정 시작: {len(ocr_text)}자 → max_tokens={max_tokens}")
 
-        # LLM 호출
-        result = llm.generate(prompt, max_tokens=max_tokens)
+        # LLM 호출 (동적 메서드 - generate 또는 generate_response)
+        if hasattr(llm, "generate"):
+            result: Any = llm.generate(prompt, max_tokens=max_tokens)  # type: ignore[attr-defined]
+        else:
+            # generate_response는 RAGResponse 반환, answer 필드 추출
+            response = llm.generate_response(prompt, [])
+            result = getattr(response, "answer", str(response))
 
         if result and len(result.strip()) > 50:
             logger.info(f"LLM OCR 교정 완료: {len(ocr_text)}자 → {len(result)}자")

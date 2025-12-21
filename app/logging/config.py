@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import Optional
 
 # --- 안전한 컨텍스트 전파 (contextvars + Filter) ---
-_req_id_var = contextvars.ContextVar("req_id", default=None)
-_trace_id_var = contextvars.ContextVar("trace_id", default=None)
+_req_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("req_id", default=None)
+_trace_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("trace_id", default=None)
 
 
 def set_request_ids(req_id: Optional[str], trace_id: Optional[str]):
@@ -63,9 +63,9 @@ class StructuredFormatter(logging.Formatter):
 
         # Add context IDs if present
         if hasattr(record, "trace_id"):
-            log_data["trace_id"] = record.trace_id
+            log_data["trace_id"] = getattr(record, "trace_id")
         if hasattr(record, "req_id"):
-            log_data["req_id"] = record.req_id
+            log_data["req_id"] = getattr(record, "req_id")
 
         # Add RAG-specific fields if present
         for field in ("mode", "has_code", "stage0_count", "stage1_count",

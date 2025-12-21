@@ -303,7 +303,7 @@ class MetadataDB:
                         sum_match,
                     ),
                 )
-                return cur.lastrowid
+                return cur.lastrowid or -1
 
         except sqlite3.IntegrityError as e:
             logger.warning(f"⚠️ 문서 추가 무결성 오류 (중복?): {e}")

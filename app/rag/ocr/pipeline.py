@@ -34,7 +34,7 @@ def _get_paddleocr():
         with _paddle_ocr_lock:
             # Double-check locking pattern
             if _paddle_ocr_instance is None:
-                from paddleocr import PaddleOCR
+                from paddleocr import PaddleOCR  # type: ignore[import-not-found]
                 logger.info("PaddleOCR 초기화 중...")
                 _paddle_ocr_instance = PaddleOCR(
                     use_textline_orientation=True,

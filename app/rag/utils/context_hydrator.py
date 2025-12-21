@@ -1,23 +1,29 @@
 #!/usr/bin/env python3
 """
 Context Hydrator - 청크에서 텍스트 추출 및 PDF 보강
+
+2025-12-21 v1.1 변경사항:
+- 환경변수 캐싱 (os.getenv 반복 호출 제거)
+- 프로젝트 표준 로거 사용 (app.core.logging)
 """
 
-import logging
 import os
 import re
 import time
 from pathlib import Path
 from typing import Any
 
+from app.core.logging import get_logger
 from config.constants import ContextHydratorConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ============================================================================
-# 문장 스코어링 휴리스틱 가중치 (환경변수 오버라이드 가능)
+# 환경변수 캐싱 (모듈 로드 시 1회만 읽음)
 # ============================================================================
+
+# 문장 스코어링 휴리스틱 가중치
 SCORE_WEIGHTS = {
     "numeric": int(os.getenv("HYDRATOR_W_NUMERIC", "3")),        # 금액/날짜/수량
     "keyword": int(os.getenv("HYDRATOR_W_KEYWORD", "1")),        # 도메인 키워드
@@ -30,6 +36,12 @@ IGNORE_SEMVER_IN_NUMERIC = os.getenv("IGNORE_SEMVER_IN_NUMERIC", "false").lower(
 
 # 말미 가중치 (마지막 문장/문단 보정)
 END_BONUS = int(os.getenv("END_BONUS", "1"))
+
+# Context 관련 환경변수 캐싱
+_ENV_CONTEXT_MAX_TOKENS = int(os.getenv("CONTEXT_MAX_TOKENS", "1200"))
+_ENV_TOKENS_PER_CHAR = float(os.getenv("TOKENS_PER_CHAR", "0.33"))
+_ENV_RAG_STYLE_COMPACT = os.getenv("RAG_STYLE_COMPACT", "true").lower() == "true"
+_ENV_DOCS_DIR = os.getenv("DOCS_DIR", "docs")
 
 
 def hydrate_context(chunks: list[dict[str, Any]], max_len: int = 10000, mode: str = "rag") -> tuple[str, dict[str, Any]]:
@@ -46,17 +58,12 @@ def hydrate_context(chunks: list[dict[str, Any]], max_len: int = 10000, mode: st
     """
     start_time = time.perf_counter()
 
-    # 🎯 환경 변수에서 컨텍스트 토큰 상한 읽기
-    context_max_tokens = int(os.getenv("CONTEXT_MAX_TOKENS", "1200"))
-
-    # 🎯 토큰↔문자 변환 계수 (모델별 편차 고려)
-    # 기본값 0.33: 1 char ≈ 0.33 token (즉, 1 token ≈ 3 chars)
-    tokens_per_char = float(os.getenv("TOKENS_PER_CHAR", "0.33"))
+    # 캐싱된 환경변수 사용 (모듈 로드 시 1회만 읽음)
+    context_max_tokens = _ENV_CONTEXT_MAX_TOKENS
+    tokens_per_char = _ENV_TOKENS_PER_CHAR
     context_max_chars = int(context_max_tokens / max(tokens_per_char, 1e-6))
     effective_max_len = min(max_len, context_max_chars)
-
-    # 🎯 RAG 스타일 압축 모드 확인
-    rag_style_compact = os.getenv("RAG_STYLE_COMPACT", "true").lower() == "true"
+    rag_style_compact = _ENV_RAG_STYLE_COMPACT
 
     metrics = {
         "chunks_received": len(chunks),
@@ -222,7 +229,8 @@ def _is_under_docs(path: Path) -> bool:
         docs 하위 여부
     """
     try:
-        base_docs = Path(os.getenv("DOCS_DIR", "docs")).resolve()
+        # 캐싱된 환경변수 사용
+        base_docs = Path(_ENV_DOCS_DIR).resolve()
         resolved_path = path.resolve()
         return base_docs in resolved_path.parents or resolved_path == base_docs
     except Exception:

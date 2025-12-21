@@ -3,13 +3,14 @@
 모든 검색 쿼리, 결과, 점수를 로깅하여 품질 분석 가능
 
 사용법:
-    from app.rag.monitoring.search_quality_logger import SearchQualityLogger
+    from app.rag.monitoring.search_quality_logger import get_search_quality_logger
 
-    logger = SearchQualityLogger()
+    logger = get_search_quality_logger()  # 싱글톤
     logger.log_search(query, results, score_stats)
 """
 
 import json
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -167,3 +168,29 @@ class SearchQualityLogger:
             "avg_top1_score": round(avg_top1, 2),
             "low_confidence_ratio": quality_counts.get("LOW_CONFIDENCE", 0) / len(logs),
         }
+
+
+# ============================================================================
+# 싱글톤 인스턴스 (스레드 안전)
+# ============================================================================
+
+_logger_instance: SearchQualityLogger | None = None
+_logger_lock = threading.Lock()
+
+
+def get_search_quality_logger(log_dir: str = "logs") -> SearchQualityLogger:
+    """SearchQualityLogger 싱글톤 인스턴스 반환 (스레드 안전)
+
+    Args:
+        log_dir: 로그 디렉토리 (첫 호출 시에만 적용)
+
+    Returns:
+        SearchQualityLogger 싱글톤 인스턴스
+    """
+    global _logger_instance
+    if _logger_instance is None:
+        with _logger_lock:
+            # Double-check locking
+            if _logger_instance is None:
+                _logger_instance = SearchQualityLogger(log_dir)
+    return _logger_instance

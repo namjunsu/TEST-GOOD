@@ -5,18 +5,24 @@ Stage 기반 아키텍처로 검색 로직을 분리하여 유지보수성 향�
 Stage 순서:
 - Stage 0: StrictContentStage (정밀 내용 검색, strict_content=True일 때만)
 - Stage 1: ExactMatchStage (모델/부품 코드 정확일치)
-- Stage 2: MetadataRoutingStage (YEAR + NAME 패턴)
-- Stage 3: FTSBM25Stage (FTS + BM25 하이브리드)
+- Stage 2: DenseStage (벡터 기반 의미론적 검색)
+- Stage 3: MetadataRoutingStage (YEAR + NAME 패턴)
+- Stage 4: FTSBM25Stage (FTS + BM25 하이브리드)
 
 2025-12-12 v3.0 변경사항:
 - Stage 패턴으로 검색 로직 분리 (SRP)
 - RelevanceScorer 클래스로 스코어링 로직 분리
 - HybridSearchConfig로 Magic Number 외부화
 - 기존 API 완전 호환 유지
+
+2025-12-21 v3.1 변경사항:
+- 환경변수 캐싱 (os.getenv 중복 호출 제거)
+- SearchQualityLogger 싱글톤 사용
 """
 
 import os
 import threading
+import traceback
 from pathlib import Path
 from typing import Any, Optional
 
@@ -45,6 +51,20 @@ from rag_system.active.bm25_store import BM25Store
 logger = get_logger(__name__)
 
 
+# ============================================================================
+# 환경변수 캐싱 (모듈 로드 시 1회만 읽음)
+# ============================================================================
+
+_ENV_SNIPPET_MAX_LENGTH = int(os.getenv("SNIPPET_MAX_LENGTH", str(HybridRetrieverConfig.SNIPPET_MAX_LENGTH)))
+_ENV_RETRIEVE_TOPK = int(os.getenv("RETRIEVE_TOPK", str(HybridRetrieverConfig.RETRIEVE_TOPK)))
+_ENV_DISPLAY_LIMIT = int(os.getenv("DISPLAY_LIMIT", str(HybridRetrieverConfig.DISPLAY_LIMIT)))
+_ENV_USE_BM25 = os.getenv("RETRIEVER_BACKEND", "bm25").lower() == "bm25"
+_ENV_ENABLE_PARALLEL = os.getenv("ENABLE_PARALLEL_SEARCH", "true").lower() == "true"
+_ENV_ENABLE_DENSE = os.getenv("ENABLE_DENSE_RETRIEVAL", "true").lower() == "true"
+_ENV_ENABLE_EXACT_MATCH = os.getenv("ENABLE_EXACT_MATCH", "true").lower() == "true"
+_ENV_BM25_INDEX_PATH = os.getenv("BM25_INDEX_PATH", HybridRetrieverConfig.DEFAULT_BM25_INDEX_PATH)
+
+
 class ResultsWithStats(list):
     """검색 결과 리스트 + 점수 통계 (duck typing용)
 
@@ -71,12 +91,13 @@ class HybridRetriever:
     def __init__(self) -> None:
         """초기화 - Stage들과 공유 리소스 설정"""
         try:
-            # 설정 로드 (환경변수 → 상수 기본값)
-            self.snippet_max_length = int(os.getenv("SNIPPET_MAX_LENGTH", str(HybridRetrieverConfig.SNIPPET_MAX_LENGTH)))
-            self.retrieve_topk = int(os.getenv("RETRIEVE_TOPK", str(HybridRetrieverConfig.RETRIEVE_TOPK)))
-            self.display_limit = int(os.getenv("DISPLAY_LIMIT", str(HybridRetrieverConfig.DISPLAY_LIMIT)))
-            self.use_bm25 = os.getenv("RETRIEVER_BACKEND", "bm25").lower() == "bm25"
-            self.enable_parallel = os.getenv("ENABLE_PARALLEL_SEARCH", "true").lower() == "true"
+            # 설정 로드 (캐싱된 환경변수 사용)
+            self.snippet_max_length = _ENV_SNIPPET_MAX_LENGTH
+            self.retrieve_topk = _ENV_RETRIEVE_TOPK
+            self.display_limit = _ENV_DISPLAY_LIMIT
+            self.use_bm25 = _ENV_USE_BM25
+            self.enable_parallel = _ENV_ENABLE_PARALLEL
+            self.enable_dense = _ENV_ENABLE_DENSE
 
             # 공유 리소스 초기화
             self._init_shared_resources()
@@ -87,8 +108,7 @@ class HybridRetriever:
             # 스코어러 초기화
             self.scorer: RelevanceScorer = get_relevance_scorer()
 
-            # Dense Retrieval 활성화 여부
-            self.enable_dense = os.getenv("ENABLE_DENSE_RETRIEVAL", "true").lower() == "true"
+            # Dense Retrieval Hybrid Ranker
             self.hybrid_ranker: Optional[HybridRanker] = None
             if self.enable_dense:
                 self.hybrid_ranker = get_hybrid_ranker()
@@ -121,18 +141,17 @@ class HybridRetriever:
             self.parallel_executor = get_parallel_executor(max_workers=HybridRetrieverConfig.PARALLEL_MAX_WORKERS)
             logger.info("✅ Parallel search execution enabled")
 
-        # BM25Store
+        # BM25Store (캐싱된 환경변수 사용)
         self.bm25: Optional[BM25Store] = None
         if self.use_bm25:
-            index_path = os.getenv("BM25_INDEX_PATH", HybridRetrieverConfig.DEFAULT_BM25_INDEX_PATH)
-            if Path(index_path).exists():
-                self.bm25 = BM25Store(index_path=index_path)
+            if Path(_ENV_BM25_INDEX_PATH).exists():
+                self.bm25 = BM25Store(index_path=_ENV_BM25_INDEX_PATH)
                 logger.info(f"✅ BM25Store 로드 완료 ({len(self.bm25.documents)}개 문서)")
             else:
-                logger.warning(f"⚠️ BM25 인덱스 없음: {index_path}")
+                logger.warning(f"⚠️ BM25 인덱스 없음: {_ENV_BM25_INDEX_PATH}")
 
-        # ExactMatchRetriever
-        self.exact_match_enabled = os.getenv("ENABLE_EXACT_MATCH", "true").lower() == "true"
+        # ExactMatchRetriever (캐싱된 환경변수 사용)
+        self.exact_match_enabled = _ENV_ENABLE_EXACT_MATCH
         self.exact_match: Optional[ExactMatchRetriever] = None
         if self.exact_match_enabled:
             self.exact_match = ExactMatchRetriever(db=self.metadata_db)
@@ -159,10 +178,9 @@ class HybridRetriever:
             enabled=self.exact_match_enabled,
         ))
 
-        # Stage 2: DenseStage (NEW - 벡터 기반 의미론적 검색)
-        enable_dense = os.getenv("ENABLE_DENSE_RETRIEVAL", "true").lower() == "true"
+        # Stage 2: DenseStage (벡터 기반 의미론적 검색)
         stages.append(DenseStage(
-            enabled=enable_dense,
+            enabled=_ENV_ENABLE_DENSE,
             min_score=0.3,
         ))
 
@@ -247,8 +265,7 @@ class HybridRetriever:
         """인덱스 파일의 수정 시간 반환"""
         if not self.use_bm25:
             return 0.0
-        index_path = os.getenv("BM25_INDEX_PATH", HybridRetrieverConfig.DEFAULT_BM25_INDEX_PATH)
-        return os.path.getmtime(index_path) if Path(index_path).exists() else 0.0
+        return os.path.getmtime(_ENV_BM25_INDEX_PATH) if Path(_ENV_BM25_INDEX_PATH).exists() else 0.0
 
     def _reload_if_index_rotated(self) -> None:
         """인덱스 파일이 갱신되면 자동 리로드 (스레드 안전)"""
@@ -258,11 +275,11 @@ class HybridRetriever:
         current_mtime = self._get_index_mtime()
         if current_mtime > self._last_index_mtime:
             with self._reload_lock:
+                # Double-check locking
                 current_mtime = self._get_index_mtime()
                 if current_mtime > self._last_index_mtime:
                     logger.info("🔄 인덱스 파일 갱신 감지, 재로드 중...")
-                    index_path = os.getenv("BM25_INDEX_PATH", HybridRetrieverConfig.DEFAULT_BM25_INDEX_PATH)
-                    self.bm25 = BM25Store(index_path=index_path)
+                    self.bm25 = BM25Store(index_path=_ENV_BM25_INDEX_PATH)
                     self._last_index_mtime = current_mtime
 
                     # Stage들의 BM25 참조 업데이트
@@ -333,7 +350,6 @@ class HybridRetriever:
 
         except Exception as e:
             logger.error(f"❌ 검색 실패: {e}")
-            import traceback
             logger.error(traceback.format_exc())
             return ResultsWithStats([], self._empty_score_stats())
 
@@ -434,8 +450,8 @@ class HybridRetriever:
         )
 
         try:
-            from app.rag.monitoring.search_quality_logger import SearchQualityLogger
-            quality_logger = SearchQualityLogger()
+            from app.rag.monitoring.search_quality_logger import get_search_quality_logger
+            quality_logger = get_search_quality_logger()  # 싱글톤 사용
             quality_logger.log_search(
                 query=query,
                 results=results,

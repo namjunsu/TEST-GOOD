@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import Any, Optional
 
 from app.core.logging import get_logger
-from app.rag.utils.text import get_query_token_count
 from app.utils.sqlite_helpers import connect_metadata
 from config.constants import ResponseBuilderConfig
 
@@ -24,42 +23,10 @@ logger = get_logger(__name__)
 
 
 # ============================================================================
-# 상수 정의
+# 상수 정의 (정규식 패턴만 - 다른 모듈에서 import됨)
 # ============================================================================
 
-# 스몰토크 패턴
-SMALLTALK_PATTERNS = {
-    "hi", "hello", "hey",
-    "안녕", "안녕하세요", "안녕하십니까",
-    "감사", "고마워", "감사합니다", "고마워요",
-    "thanks", "thank you",
-    "bye", "goodbye", "잘가", "안녕히",
-}
-
-# 도메인 키워드
-DOMAIN_KEYWORDS = {
-    # 장비
-    "nvr", "sync", "eco8000", "lvm-180a", "odin", "vmix", "faiss",
-    "tri-level", "sdi", "lut", "intercom", "di box", "dibox",
-    "무선마이크", "마이크", "카메라", "렌즈", "삼각대", "케이블",
-    "건전지", "배터리", "소모품", "장비", "중계차",
-    # 프로젝트/프로그램
-    "돌직구쇼", "뉴스", "스튜디오", "광화문", "오픈스튜디오",
-    "중계", "방송", "채널에이",
-    # 기술/문서
-    "기안서", "구매", "수리", "교체", "검토", "기술검토",
-    "오버홀", "도입", "노후화", "단종",
-    "작성", "작성된", "문서", "리스트", "목록",
-    # 작성자 (실제 기안자 이름)
-    "최새름", "유인혁", "남준수", "박준서", "이원구",
-    "최정은", "한건희", "김경현", "김수연", "김창수", "송경원",
-}
-
 # 컴파일된 정규식 패턴 (모듈 로드 시 1회 컴파일)
-RE_SMALLTALK = re.compile(
-    r"^(안녕|안녕하세요|안녕하십니까|감사합니다?|고마워요?|"
-    r"thanks|thank you|hi|hello|hey|bye|goodbye|잘가|안녕히)[.!?\s]*$"
-)
 RE_SIMPLE_MATH = re.compile(r"^\s*\d+\s*[\+\-\*/]\s*\d+\s*(=\s*\d+)?\s*[은?]*\s*$")
 RE_UI_TAG = re.compile(r"🏷[^·]+·\s*")
 RE_UI_DATE = re.compile(r"📅[^·]+·\s*")
@@ -74,62 +41,32 @@ RE_YEAR_EXTRACT = re.compile(r"(\d{4})-")
 
 
 # ============================================================================
-# 쿼리 분류 함수들
+# 쿼리 분류 함수들 (query_routing.py에서 import하여 재노출)
 # ============================================================================
 
+# 순환 참조 방지: 런타임 import
 def is_smalltalk(query: str) -> bool:
-    """스몰토크/인사/감탄사 감지"""
-    s = query.strip().lower()
-
-    # 1. 직접 패턴 일치
-    if s in SMALLTALK_PATTERNS:
-        return True
-
-    # 2. 정규식 패턴 (컴파일된 RE_SMALLTALK 사용)
-    if RE_SMALLTALK.fullmatch(s):
-        return True
-
-    return False
+    """스몰토크/인사/감탄사 감지 (query_routing으로 위임)"""
+    from app.rag.query_routing import is_smalltalk as _is_smalltalk
+    return _is_smalltalk(query)
 
 
 def is_simple_math(query: str) -> bool:
-    """단순 산술 질의 감지"""
-    q_stripped = query.strip()
-    return bool(RE_SIMPLE_MATH.match(q_stripped))
+    """단순 산술 질의 감지 (query_routing으로 위임)"""
+    from app.rag.query_routing import is_simple_math as _is_simple_math
+    return _is_simple_math(query)
 
 
 def has_domain_keyword(query: str) -> bool:
-    """도메인 키워드 포함 여부 확인"""
-    q_lower = query.lower()
-    for keyword in DOMAIN_KEYWORDS:
-        if keyword in q_lower:
-            return True
-    return False
-
-
-# get_query_token_count → app.rag.utils.text에서 import
+    """도메인 키워드 포함 여부 확인 (query_routing으로 위임)"""
+    from app.rag.query_routing import has_domain_keyword as _has_domain_keyword
+    return _has_domain_keyword(query)
 
 
 def force_chat_mode(query: str) -> tuple:
-    """강제 CHAT 모드 적용 여부 판단
-
-    Returns:
-        (should_force, reason)
-    """
-    # 1. 스몰토크
-    if is_smalltalk(query):
-        return True, "smalltalk"
-
-    # 2. 단순 산술
-    if is_simple_math(query):
-        return True, "simple_math"
-
-    # 3. 짧은 질의 - 단, 도메인 키워드가 있으면 제외
-    tokens = get_query_token_count(query)
-    if tokens < ResponseBuilderConfig.SHORT_QUERY_TOKEN_THRESHOLD and not has_domain_keyword(query):
-        return True, "short_query"
-
-    return False, ""
+    """강제 CHAT 모드 적용 여부 판단 (query_routing으로 위임)"""
+    from app.rag.query_routing import force_chat_mode as _force_chat_mode
+    return _force_chat_mode(query)
 
 
 # ============================================================================
@@ -255,6 +192,12 @@ def build_file_path(filename: str) -> str:
     return f"docs/{filename}"
 
 
+def _generate_file_token(filename: str) -> str:
+    """파일명 기반 해시 토큰 생성 (내부 헬퍼)"""
+    hash_len = ResponseBuilderConfig.FILE_REF_TOKEN_LEN
+    return f"doc:{hashlib.sha1(filename.encode()).hexdigest()[:hash_len]}"
+
+
 def encode_file_ref(filename: str) -> Optional[str]:
     """파일명을 토큰(해시)으로 변환
 
@@ -278,25 +221,22 @@ def encode_file_ref(filename: str) -> Optional[str]:
             result = cursor.fetchone()
 
         if result and result[0]:
-            token = hashlib.sha1(filename.encode()).hexdigest()[:ResponseBuilderConfig.FILE_REF_TOKEN_LEN]
-            return f"doc:{token}"
+            return _generate_file_token(filename)
 
-        # 2. Fallback: docs 폴더 검색
+        # 2. Fallback: docs 폴더 검색 (연도별)
         year_match = RE_YEAR_EXTRACT.search(filename)
         if year_match:
             year = year_match.group(1)
             file_path = Path(f"docs/year_{year}") / filename
             if file_path.exists():
-                token = hashlib.sha1(filename.encode()).hexdigest()[:ResponseBuilderConfig.FILE_REF_TOKEN_LEN]
-                return f"doc:{token}"
+                return _generate_file_token(filename)
 
         # 3. Fallback2: docs 폴더 전체 검색
         docs_dir = Path("docs")
         if docs_dir.exists():
             for file_path in docs_dir.rglob(filename):
                 if file_path.is_file():
-                    token = hashlib.sha1(filename.encode()).hexdigest()[:ResponseBuilderConfig.FILE_REF_TOKEN_LEN]
-                    return f"doc:{token}"
+                    return _generate_file_token(filename)
 
     except sqlite3.OperationalError as e:
         logger.warning(f"⚠️ DB 일시 오류 (ref 토큰): {filename} - {e}")
@@ -311,25 +251,13 @@ def encode_file_ref(filename: str) -> Optional[str]:
 
 
 # ============================================================================
-# 키워드 분석 함수들
+# 키워드 분석 함수들 (query_routing.py로 위임)
 # ============================================================================
 
 def get_keyword_coverage(query: str, results: list[dict]) -> int:
-    """쿼리와 검색 결과 간 도메인 키워드 교집합 개수 계산"""
-    q_lower = query.lower()
-    query_keywords = {kw for kw in DOMAIN_KEYWORDS if kw in q_lower}
-
-    if not query_keywords:
-        return 0
-
-    found_keywords = set()
-    for result in results[:ResponseBuilderConfig.KEYWORD_COVERAGE_MAX_RESULTS]:
-        chunk_text = normalize_chunk_text(result)
-        for kw in query_keywords:
-            if kw in chunk_text:
-                found_keywords.add(kw)
-
-    return len(found_keywords)
+    """쿼리와 검색 결과 간 도메인 키워드 교집합 개수 계산 (query_routing으로 위임)"""
+    from app.rag.query_routing import get_keyword_coverage as _get_keyword_coverage
+    return _get_keyword_coverage(query, results)
 
 
 # ============================================================================

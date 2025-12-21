@@ -76,17 +76,37 @@ EOF
 # 시스템 정보 표시
 show_system_info() {
   local cpu_model mem_total mem_used mem_pct model_name doc_count
+  local gpu_name gpu_mem_used gpu_mem_total gpu_info
 
+  # CPU 정보
   cpu_model=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2 | xargs || echo "Unknown")
-  mem_total=$(free -h 2>/dev/null | awk '/Mem:/ {print $2}' || echo "?")
-  mem_used=$(free -h 2>/dev/null | awk '/Mem:/ {print $3}' || echo "?")
-  mem_pct=$(free 2>/dev/null | awk '/Mem:/ {printf "%.0f", $3/$2*100}' || echo "?")
+
+  # Memory 정보 (GB 단위) - 로케일 무관 (2번째 라인 = 메모리)
+  mem_total=$(free -g 2>/dev/null | awk 'NR==2 {print $2"GB"}' || echo "?")
+  mem_used=$(free -g 2>/dev/null | awk 'NR==2 {print $3"GB"}' || echo "?")
+  mem_pct=$(free 2>/dev/null | awk 'NR==2 {printf "%.0f", $3/$2*100}' || echo "?")
+
+  # GPU 정보 (nvidia-smi)
+  if command -v nvidia-smi &>/dev/null; then
+    gpu_name=$(nvidia-smi --query-gpu=name --format=csv,noheader,nounits 2>/dev/null | head -1 | xargs || echo "Unknown")
+    gpu_mem_used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | head -1 || echo "0")
+    gpu_mem_total=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -1 || echo "0")
+    # MB → GB 변환
+    gpu_mem_used_gb=$((gpu_mem_used / 1024))
+    gpu_mem_total_gb=$((gpu_mem_total / 1024))
+    gpu_info="${gpu_name} (${gpu_mem_used_gb}/${gpu_mem_total_gb}GB)"
+  else
+    gpu_info="Not detected"
+  fi
+
+  # Model/Docs 정보
   model_name=$(basename "${MODEL_PATH:-unknown}")
   doc_count=$(sqlite3 "${PROJECT_ROOT}/metadata.db" "SELECT COUNT(*) FROM documents" 2>/dev/null || echo "?")
 
   printf "\033[0;90m"
   echo "  ┌─────────────────────────────────────────────────┐"
   printf "  │  \033[0;37mCPU:\033[0;90m    %-38s │\n" "${cpu_model:0:38}"
+  printf "  │  \033[0;32mGPU:\033[0;90m    %-38s │\n" "${gpu_info:0:38}"
   printf "  │  \033[0;37mMemory:\033[0;90m %-17s \033[0;90m(%s%%)\033[0;90m               │\n" "${mem_used} / ${mem_total}" "${mem_pct}"
   printf "  │  \033[0;37mModel:\033[0;90m  %-38s │\n" "${model_name:0:38}"
   printf "  │  \033[0;37mDocs:\033[0;90m   %-38s │\n" "${doc_count}개"

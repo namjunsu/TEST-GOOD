@@ -1,12 +1,16 @@
-"""JSON 파싱 유틸리티 (강건한 파서)"""
+"""JSON 파싱 유틸리티 (강건한 파서)
+
+2025-12-21 v1.1 변경사항:
+- 프로젝트 표준 로거 사용 (app.core.logging)
+"""
 import json
-import logging
 import re
 from typing import Any, Optional
 
+from app.core.logging import get_logger
 from config.constants import JsonUtilsConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _mask_sensitive_data(obj: Any, max_length: int = JsonUtilsConfig.MASK_OUTPUT_MAX_LEN) -> str:
@@ -233,12 +237,8 @@ def validate_numeric_fields(json_data: dict[str, Any], source_text: str) -> dict
     Returns:
         검증된 JSON 데이터 + __validation__ 섹션
     """
-    import re
-
-    from app.core.logging import get_logger
+    # 런타임 import (순환 참조 방지)
     from app.data.amount_parser_v2 import nearest_amount_to_keyword
-
-    logger = get_logger(__name__)
 
     # 원문에서 금액 추출
     source_amounts = extract_amounts_from_text(source_text)

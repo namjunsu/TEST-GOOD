@@ -24,10 +24,10 @@ class SearchConfig:
     SEARCH_TOP_K: int = 10
     ALL_DOCS_TOP_K: int = 200  # "전부", "모두" 쿼리용
 
-    # 점수 임계값
-    RAG_MIN_SCORE: float = 0.35
+    # 점수 임계값 (2025-12-21: 저품질 문서 필터링 강화)
+    RAG_MIN_SCORE: float = 0.45  # 0.35 → 0.45
     BM25_MIN_ABS: float = 5.0
-    VEC_MIN_ABS: float = 0.25
+    VEC_MIN_ABS: float = 0.40  # 0.25 → 0.40
 
     # 키워드 검색
     MIN_KEYWORD_COVERAGE: int = 2

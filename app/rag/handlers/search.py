@@ -744,28 +744,36 @@ class SearchHandler(BaseHandler):
         drafter_filter: Optional[str],
         year_filter: Optional[str],
     ) -> list[dict[str, Any]]:
-        """파일명 목록에서 문서 상세 정보 조회"""
+        """파일명 목록에서 문서 상세 정보 조회 (2025-12-21: 배치 쿼리로 최적화)"""
+        if not filenames:
+            return []
+
         doc_details = []
         conn = self._db._get_conn()
 
+        # 배치 쿼리로 한 번에 조회 (N+1 문제 해결)
+        placeholders = ",".join(["?" for _ in filenames])
+        sql = f"SELECT * FROM documents WHERE filename IN ({placeholders})"
+        params = list(filenames)
+
+        if drafter_filter:
+            sql += " AND drafter = ?"
+            params.append(drafter_filter)
+
+        if year_filter:
+            sql += " AND (date LIKE ? OR display_date LIKE ?)"
+            params.extend([f"{year_filter}%", f"{year_filter}%"])
+
+        cursor = conn.execute(sql, params)
+        rows = cursor.fetchall()
+
+        # 결과를 filename 기준으로 매핑
+        row_map = {dict(row)["filename"]: dict(row) for row in rows}
+
+        # 원래 순서 유지하며 결과 구성
         for filename in filenames:
-            sql = "SELECT * FROM documents WHERE filename = ?"
-            params = [filename]
-
-            if drafter_filter:
-                sql += " AND drafter = ?"
-                params.append(drafter_filter)
-
-            if year_filter:
-                sql += " AND (date LIKE ? OR display_date LIKE ?)"
-                params.extend([f"{year_filter}%", f"{year_filter}%"])
-
-            sql += " LIMIT 1"
-            cursor = conn.execute(sql, params)
-            row = cursor.fetchone()
-
-            if row:
-                doc = dict(row)
+            if filename in row_map:
+                doc = row_map[filename]
                 doc_details.append({
                     "filename": filename,
                     "drafter": doc.get("drafter", "작성자 미상"),
@@ -788,19 +796,28 @@ class SearchHandler(BaseHandler):
         return doc_details
 
     def _get_content_only_details(self, filenames: list[str]) -> list[dict[str, Any]]:
-        """정밀 검색용 문서 상세 정보 조회"""
+        """정밀 검색용 문서 상세 정보 조회 (2025-12-21: 배치 쿼리로 최적화)"""
+        if not filenames:
+            return []
+
         doc_details = []
         conn = self._db._get_conn()
 
-        for filename in filenames:
-            cursor = conn.execute(
-                "SELECT * FROM documents WHERE filename = ? LIMIT 1",
-                [filename],
-            )
-            row = cursor.fetchone()
+        # 배치 쿼리로 한 번에 조회 (N+1 문제 해결)
+        placeholders = ",".join(["?" for _ in filenames])
+        cursor = conn.execute(
+            f"SELECT * FROM documents WHERE filename IN ({placeholders})",
+            filenames,
+        )
+        rows = cursor.fetchall()
 
-            if row:
-                doc = dict(row)
+        # 결과를 filename 기준으로 매핑
+        row_map = {dict(row)["filename"]: dict(row) for row in rows}
+
+        # 원래 순서 유지하며 결과 구성
+        for filename in filenames:
+            if filename in row_map:
+                doc = row_map[filename]
                 doc_details.append({
                     "filename": filename,
                     "title": doc.get("title", filename),

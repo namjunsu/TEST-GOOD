@@ -371,7 +371,9 @@ else
 fi
 
 # ---------- API 기동 ----------
-"${PY}" -m uvicorn app.api.main:app --host 0.0.0.0 --port "${API_PORT}" --log-level warning \
+# H100 멀티코어 활용: workers=4 (2025-12-21)
+"${PY}" -m uvicorn app.api.main:app --host 0.0.0.0 --port "${API_PORT}" \
+  --workers 4 --log-level warning \
   > "${LOG_DIR}/api_$(date +%Y%m%d_%H%M%S).log" 2>&1 &
 API_PID=$!
 

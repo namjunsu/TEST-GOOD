@@ -132,10 +132,9 @@ def main():
             progress_bar = st.progress(0)
             status_text = st.empty()
 
-            # 단계별 로딩 표시
+            # 단계별 로딩 표시 (2025-12-21: 불필요한 sleep 제거)
             status_text.text("📋 문서 메타데이터 로드 중...")
             progress_bar.progress(25)
-            time.sleep(0.5)
 
             status_text.text("🤖 AI 모델 초기화 중...")
             progress_bar.progress(50)
@@ -145,11 +144,9 @@ def main():
 
             status_text.text("🔍 검색 엔진 준비 중...")
             progress_bar.progress(75)
-            time.sleep(0.3)
 
             status_text.text("✅ 시스템 준비 완료!")
             progress_bar.progress(100)
-            time.sleep(0.5)
 
             # 로딩 컨테이너 비우기
             loading_container.empty()

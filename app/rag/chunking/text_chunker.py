@@ -70,8 +70,8 @@ class TextChunker:
 
     def __init__(
         self,
-        chunk_size: int = 512,
-        overlap: int = 128,
+        chunk_size: int = 768,  # 512 → 768 (2025-12-21: 한국어 컨텍스트 확대)
+        overlap: int = 192,  # 128 → 192 (25% 유지)
         min_chunk_size: int = 50,
         respect_sentences: bool = True,
     ):
@@ -253,8 +253,8 @@ _chunker_instance: Optional[TextChunker] = None
 
 
 def get_text_chunker(
-    chunk_size: int = 512,
-    overlap: int = 128,
+    chunk_size: int = 768,  # 512 → 768 (2025-12-21)
+    overlap: int = 192,  # 128 → 192 (2025-12-21)
 ) -> TextChunker:
     """TextChunker 싱글톤 인스턴스 반환
 

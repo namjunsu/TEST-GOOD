@@ -12,6 +12,12 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# 로깅 초기화 (2025-12-21: 추가)
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(levelname)s] %(message)s",
+)
+
 from rag_system.active.llm_singleton import LLMSingleton
 
 logger = logging.getLogger(__name__)
@@ -40,7 +46,10 @@ def preload_llm():
         logger.info("🔍 Testing model with warm-up query...")
         test_query = "안녕하세요"
         # generate_response requires context_chunks, so pass empty list for warmup
+        inference_start = time.time()
         test_response = generator.generate_response(test_query, context_chunks=[])
+        inference_time = time.time() - inference_start
+        logger.info(f"   - Warm-up inference: {inference_time:.2f}s")
 
         load_time = time.time() - start_time
 
@@ -56,6 +65,17 @@ def preload_llm():
         stats = LLMSingleton.get_stats()
         logger.info(f"   - Load time: {stats['load_time']:.2f}s")
         logger.info(f"   - Usage count: {stats['usage_count']}")
+
+        # GPU 메모리 상태 출력 (2025-12-21)
+        try:
+            import torch
+            if torch.cuda.is_available():
+                allocated = torch.cuda.memory_allocated() / 1024**3
+                reserved = torch.cuda.memory_reserved() / 1024**3
+                total = torch.cuda.get_device_properties(0).total_memory / 1024**3
+                logger.info(f"   - GPU Memory: {allocated:.1f}GB used / {total:.1f}GB total ({allocated/total*100:.0f}%)")
+        except Exception:
+            pass  # GPU 정보 없으면 무시
 
         # Keep the model in memory (don't exit)
         return generator

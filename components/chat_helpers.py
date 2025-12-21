@@ -39,11 +39,11 @@ ERROR_INVALID_INPUT = "입력이 너무 길다. 더 짧게 작성하라."
 CONTEXT_PREFIX = "이전 대화 맥락:"
 CURRENT_QUERY_PREFIX = "현재 질문:"
 
-# 제한값
+# 제한값 (2025-12-21: 대화 컨텍스트 확장)
 MAX_MESSAGES = 100
-MAX_CONTEXT_TURNS = 3
+MAX_CONTEXT_TURNS = 5  # 3 → 5 (더 긴 대화 맥락 유지)
 MAX_MESSAGE_LENGTH = 10000
-MAX_CONTEXT_LENGTH = 500
+MAX_CONTEXT_LENGTH = 1500  # 500 → 1500 (턴당 더 많은 컨텍스트)
 
 # Evidence 매칭
 MATCH_THRESHOLD = 0.3

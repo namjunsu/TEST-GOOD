@@ -1779,40 +1779,44 @@ class LlamaLLM(BaseRAGLLM):
 class VllmLLM(BaseRAGLLM):
     """vLLM 엔진 기반 LLM (Qwen2.5-72B-Instruct-AWQ on H100)"""
 
-    # 프롬프트 템플릿 (QwenLLM과 동일)
+    # 프롬프트 템플릿 (2025-12-21: GPT/Claude 수준 자연스러운 대화 + 출처 인용 강화)
     SYSTEM_ROLE = "한국 방송사의 전문 지식 검색 도우미"
     ANSWER_LANGUAGE = "한국어"
     CITATION_FORMAT = "[파일명.pdf]"
 
-    IMPROVED_SYSTEM_PROMPT = f"""당신은 {SYSTEM_ROLE}입니다.
+    IMPROVED_SYSTEM_PROMPT = f"""당신은 {SYSTEM_ROLE}입니다. 사용자와 자연스럽게 대화하며 문서 기반으로 정확한 정보를 제공합니다.
 
-[핵심 원칙 - 반드시 지켜주세요]
-★ 질문이 요청한 범위만 답변하세요. 요청하지 않은 정보는 포함하지 마세요.
-  - "개요만" → 개요 섹션만 답변
-  - "비용만" → 비용 정보만 답변
-  - "무슨 내용이야?" → 3-5문장으로 핵심 요약만
+[대화 스타일]
+- 친근하고 전문적인 톤으로 대화하세요.
+- 사용자의 질문 의도를 파악하고 핵심을 명확히 답변하세요.
+- 필요시 추가 정보나 관련 맥락을 제공하세요.
 
 [답변 규칙]
 1. 첫 문장에서 질문의 핵심 답변을 제시하세요.
-2. 문서에 있는 정보만 사용하세요. 추측 금지.
+2. 문서에 있는 정보만 사용하세요. 추측하지 마세요.
 3. 숫자/금액/날짜는 정확하게 인용하세요.
-4. 출처: [파일명.pdf] 형식으로 표시하세요.
+4. ★ 반드시 출처를 [파일명.pdf] 형식으로 명시하세요.
 5. 반드시 {ANSWER_LANGUAGE}로 답변하세요.
 
+[출처 인용 - 필수]
+- 모든 사실적 주장에는 반드시 출처를 표시하세요.
+- 형식: "~입니다. [파일명.pdf]" 또는 "~에 따르면 [파일명.pdf]"
+- 출처 없는 답변은 허용되지 않습니다.
+
 [금지사항]
-- 질문 범위를 넘어선 추가 정보 금지
-- 문서 전체를 나열하는 것 금지
+- 문서에 없는 정보 추측 금지
+- 출처 없이 사실 주장 금지
 - 과장이나 확대해석 금지"""
 
-    IMPROVED_QUERY_TEMPLATE = """문서 내용:
+    IMPROVED_QUERY_TEMPLATE = """참고 문서:
 {context}
 
-질문: {query}
+사용자 질문: {query}
 
-★ 위 질문이 요청한 범위만 답변하세요. 요청하지 않은 정보는 포함하지 마세요.
-- 금액 질문 → 금액만 답변
-- 개요/요약 질문 → 3-5문장으로 핵심만
-- 특정 항목 질문 → 해당 항목만
+위 문서를 참고하여 사용자 질문에 답변하세요.
+- 자연스럽고 이해하기 쉽게 설명하세요.
+- 반드시 [파일명.pdf] 형식으로 출처를 인용하세요.
+- 문서에 없는 내용은 "해당 정보는 문서에서 확인되지 않습니다"라고 답변하세요.
 
 답변:""".replace("{CITATION_FORMAT}", CITATION_FORMAT)
 
@@ -1826,11 +1830,13 @@ class VllmLLM(BaseRAGLLM):
         self.length_analyzer = length_analyzer
         self.llm = None
 
-        # vLLM 설정 로드
-        self.gpu_memory_utilization = float(os.getenv("VLLM_GPU_MEMORY_UTILIZATION", "0.9"))
-        self.max_model_len = int(os.getenv("VLLM_MAX_MODEL_LEN", "8192"))
+        # vLLM 설정 로드 (2025-12-21: H100 최적화)
+        self.gpu_memory_utilization = float(os.getenv("VLLM_GPU_MEMORY_UTILIZATION", "0.90"))
+        self.max_model_len = int(os.getenv("VLLM_MAX_MODEL_LEN", "32768"))
         self.tensor_parallel_size = int(os.getenv("VLLM_TENSOR_PARALLEL_SIZE", "1"))
         self.trust_remote_code = os.getenv("VLLM_TRUST_REMOTE_CODE", "true").lower() == "true"
+        self.enable_prefix_caching = os.getenv("VLLM_ENABLE_PREFIX_CACHING", "true").lower() == "true"
+        self.enforce_eager = os.getenv("VLLM_ENFORCE_EAGER", "false").lower() == "true"
 
         self._load_model()
 
@@ -1843,6 +1849,8 @@ class VllmLLM(BaseRAGLLM):
             self.logger.info(f"   - GPU 메모리 활용률: {self.gpu_memory_utilization}")
             self.logger.info(f"   - 최대 모델 길이: {self.max_model_len}")
             self.logger.info(f"   - 텐서 병렬화: {self.tensor_parallel_size}")
+            self.logger.info(f"   - 프리픽스 캐싱: {self.enable_prefix_caching}")
+            self.logger.info(f"   - Eager 모드: {self.enforce_eager}")
 
             self.llm = LLM(
                 model=str(self.model_path),
@@ -1852,7 +1860,8 @@ class VllmLLM(BaseRAGLLM):
                 trust_remote_code=self.trust_remote_code,
                 dtype="float16",  # AWQ 모델용
                 quantization="awq",  # AWQ 양자화 명시
-                enforce_eager=True,  # H100에서 안정성 향상
+                enforce_eager=self.enforce_eager,  # 환경변수로 제어 (false=CUDA 그래프 활성화)
+                enable_prefix_caching=self.enable_prefix_caching,  # 프롬프트 캐싱
             )
 
             self.logger.info("✅ vLLM 모델 로딩 완료 (Qwen2.5-72B-Instruct-AWQ)")

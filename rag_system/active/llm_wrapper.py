@@ -1199,10 +1199,13 @@ A:"""
 
         multiplier = length_multipliers.get(self.config.length_preference, 1.0)
 
-        # 조정된 길이 계산
-        adjusted_optimal = int(recommendation.optimal_length * multiplier)
-        adjusted_min = int(recommendation.min_length * multiplier)
-        adjusted_max = int(recommendation.max_length * multiplier)
+        # 조정된 길이 계산 (dict 접근 방식 사용)
+        optimal_length = recommendation.get("optimal_length", 150)
+        min_length = recommendation.get("min_length", 50)
+        max_length = recommendation.get("max_length", 300)
+        adjusted_optimal = int(optimal_length * multiplier)
+        adjusted_min = int(min_length * multiplier)
+        adjusted_max = int(max_length * multiplier)
 
         # 사용자 강제 설정 적용
         if self.config.min_length_override:
@@ -1213,13 +1216,16 @@ A:"""
         # 최소-최대 범위 보정
         adjusted_optimal = max(adjusted_min, min(adjusted_optimal, adjusted_max))
 
+        reasoning = recommendation.get("reasoning", "표준 길이")
+        content_density = recommendation.get("content_density", 0.5)
+        adjustment_factors = recommendation.get("adjustment_factors", [])
         return dict(
             optimal_length=adjusted_optimal,
             min_length=adjusted_min,
             max_length=adjusted_max,
-            reasoning=recommendation.reasoning + f" | 선호도 조정: {self.config.length_preference} (x{multiplier})",
-            content_density=recommendation.content_density,
-            adjustment_factors=recommendation.adjustment_factors + [f"길이선호도_{self.config.length_preference}"],
+            reasoning=reasoning + f" | 선호도 조정: {self.config.length_preference} (x{multiplier})",
+            content_density=content_density,
+            adjustment_factors=adjustment_factors + [f"길이선호도_{self.config.length_preference}"],
         )
 
     def _calculate_adaptive_max_tokens(self, recommendation: dict[str, Any]) -> int:
@@ -1271,16 +1277,16 @@ A:"""
 4. 출처 인용은 반드시 포함하세요 (길이에 포함되지 않음)
 
 ⚡ **효율적 답변 구성**:
-- 짧은 답변({recommendation.min_length}자 미만): 핵심 사실만
-- 적당한 답변({recommendation.min_length}-{recommendation.optimal_length}자): 핵심 + 간단한 설명
-- 긴 답변({recommendation.optimal_length}자 이상): 상세 설명 + 배경 정보"""
+- 짧은 답변({min_length}자 미만): 핵심 사실만
+- 적당한 답변({min_length}-{optimal_length}자): 핵심 + 간단한 설명
+- 긴 답변({optimal_length}자 이상): 상세 설명 + 배경 정보"""
 
         return base_prompt + adaptive_instructions
 
     def _generate_structured_response_with_adaptive_length(self, question_analysis: dict[str, Any],
                                                          context_chunks: list[dict[str, Any]],
                                                          max_retries: int,
-                                                         length_recommendation: dict[str, Any] = None) -> dict[str, Any]:
+                                                         length_recommendation: Optional[dict[str, Any]] = None) -> RAGResponse:
         """적응형 길이 조정을 포함한 구조화된 답변 생성"""
 
         # 기존 구조화된 응답 생성 (길이 조정 없이)
@@ -1292,6 +1298,8 @@ A:"""
 
         # 길이 조정 적용
         original_length = len(base_response.answer)
+        if self.length_analyzer is None:
+            return base_response
         adjusted_answer, length_adjustments = self.length_analyzer.validate_and_adjust_answer(
             base_response.answer, length_recommendation)
 
@@ -1412,8 +1420,11 @@ A:"""
                     {"role": "user", "content": conversational_prompt},
                 ]
 
+                if self.llm is None:
+                    raise RuntimeError("LLM이 로드되지 않았습니다")
+
                 response = self.llm.create_chat_completion(
-                    messages=messages,
+                    messages=messages,  # type: ignore[arg-type]
                     temperature=0.7,  # 더 자연스러운 응답
                     max_tokens=int(os.getenv("CONVERSATIONAL_MAX_TOKENS", "1500")),
                     top_p=0.9,
@@ -1422,7 +1433,9 @@ A:"""
                     stop=self.stop_tokens,
                 )
 
-                answer = response["choices"][0]["message"]["content"]
+                choices = response["choices"]  # type: ignore[index]
+                content = choices[0]["message"]["content"]
+                answer = content.strip() if content else ""
 
                 # 외국어 텍스트 필터링 (헬퍼 메서드 사용)
                 answer = self._remove_foreign_text(answer)
@@ -1549,8 +1562,11 @@ A:"""
                     {"role": "user", "content": full_doc_prompt},
                 ]
 
+                if self.llm is None:
+                    raise RuntimeError("LLM이 로드되지 않았습니다")
+
                 response = self.llm.create_chat_completion(
-                    messages=messages,
+                    messages=messages,  # type: ignore[arg-type]
                     temperature=self.config.temperature,
                     max_tokens=1200,  # 전체 문서 답변은 더 길 수 있음
                     top_p=self.config.top_p,
@@ -1559,7 +1575,9 @@ A:"""
                     stop=self.stop_tokens,
                 )
 
-                answer = response["choices"][0]["message"]["content"].strip()
+                choices = response["choices"]  # type: ignore[index]
+                content = choices[0]["message"]["content"]
+                answer = content.strip() if content else ""
                 generation_time = time.time() - start_time
 
                 # 첫 번째 답변을 최선의 답변으로 저장
@@ -1634,13 +1652,19 @@ A:"""
                 {"role": "user", "content": "안녕하세요?"},
             ]
 
+            if self.llm is None:
+                self.logger.error("모델 테스트 실패: LLM이 로드되지 않음")
+                return False
+
             response = self.llm.create_chat_completion(
-                messages=test_messages,
+                messages=test_messages,  # type: ignore[arg-type]
                 max_tokens=50,
                 temperature=0.1,
             )
 
-            answer = response["choices"][0]["message"]["content"].strip()
+            choices = response["choices"]  # type: ignore[index]
+            content = choices[0]["message"]["content"]
+            answer = content.strip() if content else ""
             self.logger.info(f"모델 테스트 성공: {answer[:50]}...")
             return True
 

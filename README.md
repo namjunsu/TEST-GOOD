@@ -56,9 +56,20 @@ streamlit run web_interface.py --port 8501
 - **Database**: SQLite with WAL mode
 - **Architecture**: RAG (Retrieval-Augmented Generation)
 - **Language**: Korean document support with OCR
-- **Python**: 3.11+
-- **Files**: 43 MD, 14 SH, 207 PY
-- **Last Updated**: 2025-12-09
+- **Python**: 3.12+
+- **GPU**: NVIDIA H100 80GB (vLLM backend)
+- **LLM**: Qwen2.5-72B-Instruct-AWQ
+- **Last Updated**: 2025-12-21
+
+### H100 GPU 최적화 (v2025.12.21)
+
+| 항목 | 기존값 | H100 최적화 |
+|------|--------|-------------|
+| RAG Context | 4,000 tokens | 6,000 tokens |
+| RAG Max Output | 3,072 tokens | 4,096 tokens |
+| BM25 Snippet | 5,000자 | 8,000자 |
+| Token Cache | 2,048 | 4,096 |
+| VRAM 사용 | - | ~77GB / 80GB |
 
 ## 🎯 Query Modes
 
@@ -257,6 +268,7 @@ make pre-commit # Run all hooks
 - **Scripts**: 14 SH files (중복 제거)
 - **Test Coverage**: 8/8 smoke tests passing
 - **Code Quality**: Ruff + Black + Pre-commit configured
+- **Config Classes**: 41개 외부화 완료 (`config/constants.py`)
 
 ## 🔒 Security
 
@@ -278,6 +290,6 @@ make pre-commit # Run all hooks
 
 ---
 
-**Version**: 2025.12.09
-**Status**: Production Ready
-**Last Updated**: 2025-12-09
+**Version**: 2025.12.21
+**Status**: Production Ready (H100 Optimized)
+**Last Updated**: 2025-12-21

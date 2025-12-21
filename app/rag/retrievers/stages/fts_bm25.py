@@ -51,6 +51,7 @@ class FTSBM25Stage(BaseSearchStage):
         self.bm25 = bm25
         self.metadata_db = metadata_db
         self._query_expander = query_expander
+        self._query_expander_failed = False  # 초기화 실패 플래그
         self.parallel_executor = parallel_executor
         self.device_pattern = device_pattern
         self.snippet_max_length = snippet_max_length
@@ -58,15 +59,15 @@ class FTSBM25Stage(BaseSearchStage):
     @property
     def query_expander(self) -> Optional["QueryExpander"]:
         """Query Expander (Lazy initialization)"""
-        if self._query_expander is None:
+        if self._query_expander is None and not self._query_expander_failed:
             try:
                 from app.rag.query_expander import get_query_expander
                 self._query_expander = get_query_expander()
                 logger.info("✅ Query Expander 초기화 완료 (lazy)")
             except Exception as e:
                 logger.warning(f"⚠️ Query Expander 초기화 실패: {e}")
-                self._query_expander = False  # 재시도 방지
-        return self._query_expander if self._query_expander is not False else None
+                self._query_expander_failed = True  # 재시도 방지
+        return self._query_expander
 
     def should_skip(self, context: SearchContext) -> bool:
         """strict_content 모드면 스킵"""

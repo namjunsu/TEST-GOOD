@@ -48,6 +48,9 @@ class AutoIndexer:
                                 "category_disposal", "category_consumables"]
         self.SPECIAL_FOLDERS = ["recent", "archive", "assets"]
 
+        # 모니터링용 카운터
+        self._check_count = 0
+
     def _load_index(self) -> dict:
         """기존 인덱스 로드"""
         if self.index_file.exists():
@@ -309,10 +312,7 @@ class AutoIndexer:
             while self.is_running:
                 try:
                     # 실패한 파일 재시도 (매 5번째 주기마다)
-                    if hasattr(self, "_check_count"):
-                        self._check_count += 1
-                    else:
-                        self._check_count = 1
+                    self._check_count += 1
 
                     if self._check_count % 5 == 0 and self.failed_files:
                         self._retry_failed_files()
@@ -377,13 +377,8 @@ class AutoIndexer:
 
         # 복구 전략
         try:
-            # 1. RAG 인스턴스 재생성 시도
-            print("  1️⃣ RAG 인스턴스 재생성 시도...")
-            if hasattr(self, "_rag_instance"):
-                del self._rag_instance
-
-            # 2. 파일별 개별 처리 시도
-            print(f"  2️⃣ {len(files)}개 파일 개별 처리 시도...")
+            # 파일별 개별 처리 시도
+            print(f"  📁 {len(files)}개 파일 개별 처리 시도...")
             success_count = 0
 
             for file_path in files[:5]:  # 처음 5개만 재시도

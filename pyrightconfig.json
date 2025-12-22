@@ -1,9 +1,12 @@
 {
   "include": [
+    "app",
     "apps",
-    "src",
+    "config",
     "scripts",
-    "tests"
+    "src",
+    "tests",
+    "utils"
   ],
   "exclude": [
     "**/__pycache__",

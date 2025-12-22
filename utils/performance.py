@@ -13,7 +13,9 @@ import logging
 import os
 import time
 from functools import wraps
-from typing import Any, Optional
+from typing import Any, Callable, Optional, TypeVar, overload
+
+F = TypeVar("F", bound=Callable[..., Any])
 
 import pandas as pd
 import streamlit as st
@@ -29,8 +31,24 @@ class PerformanceMonitor:
     SLOW_THRESHOLD = 1.0
     CRITICAL_THRESHOLD = 5.0
 
+    @overload
     @classmethod
-    def measure(cls, func=None, *, name: Optional[str] = None, show_time: bool = True):
+    def measure(cls, func: F) -> F: ...
+
+    @overload
+    @classmethod
+    def measure(
+        cls, func: None = None, *, name: Optional[str] = None, show_time: bool = True
+    ) -> Callable[[F], F]: ...
+
+    @classmethod
+    def measure(
+        cls,
+        func: Optional[F] = None,
+        *,
+        name: Optional[str] = None,
+        show_time: bool = True,
+    ) -> F | Callable[[F], F]:
         """
         함수 실행 시간 측정 데코레이터
 

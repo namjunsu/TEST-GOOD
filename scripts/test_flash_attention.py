@@ -5,9 +5,9 @@ Flash Attention 메모리 절감 테스트 스크립트
 Flash Attention 활성화 전후의 GPU 메모리 사용량을 비교합니다.
 """
 
+import logging
 import os
 import sys
-import logging
 from pathlib import Path
 
 # 프로젝트 루트를 Python 경로에 추가
@@ -28,6 +28,7 @@ def test_memory_usage(enable_flash_attn: bool) -> dict:
         메모리 통계 딕셔너리
     """
     import torch
+
     from rag_system.active.llm_singleton import LLMSingleton
 
     # 환경변수 설정
@@ -106,21 +107,21 @@ def main():
         logger.info("=" * 80)
 
         logger.info("\n⚙️ Flash Attention OFF:")
-        logger.info(f"  - 모델 메모리: {stats_off['model_memory_gb']} GB")
-        logger.info(f"  - 추론 메모리: {stats_off['inference_memory_gb']} GB")
-        logger.info(f"  - 피크 메모리: {stats_off['peak_after_inference_gb']} GB")
-        logger.info(f"  - 생성 시간: {stats_off['generation_time']}초")
+        logger.info(f"  - 모델 메모리: {stats_off["model_memory_gb"]} GB")
+        logger.info(f"  - 추론 메모리: {stats_off["inference_memory_gb"]} GB")
+        logger.info(f"  - 피크 메모리: {stats_off["peak_after_inference_gb"]} GB")
+        logger.info(f"  - 생성 시간: {stats_off["generation_time"]}초")
 
         logger.info("\n⚡ Flash Attention ON:")
-        logger.info(f"  - 모델 메모리: {stats_on['model_memory_gb']} GB")
-        logger.info(f"  - 추론 메모리: {stats_on['inference_memory_gb']} GB")
-        logger.info(f"  - 피크 메모리: {stats_on['peak_after_inference_gb']} GB")
-        logger.info(f"  - 생성 시간: {stats_on['generation_time']}초")
+        logger.info(f"  - 모델 메모리: {stats_on["model_memory_gb"]} GB")
+        logger.info(f"  - 추론 메모리: {stats_on["inference_memory_gb"]} GB")
+        logger.info(f"  - 피크 메모리: {stats_on["peak_after_inference_gb"]} GB")
+        logger.info(f"  - 생성 시간: {stats_on["generation_time"]}초")
 
         # 메모리 절감률 계산
-        model_saving = (stats_off['model_memory_gb'] - stats_on['model_memory_gb']) / stats_off['model_memory_gb'] * 100
-        inference_saving = (stats_off['inference_memory_gb'] - stats_on['inference_memory_gb']) / stats_off['inference_memory_gb'] * 100
-        peak_saving = (stats_off['peak_after_inference_gb'] - stats_on['peak_after_inference_gb']) / stats_off['peak_after_inference_gb'] * 100
+        model_saving = (stats_off["model_memory_gb"] - stats_on["model_memory_gb"]) / stats_off["model_memory_gb"] * 100
+        inference_saving = (stats_off["inference_memory_gb"] - stats_on["inference_memory_gb"]) / stats_off["inference_memory_gb"] * 100
+        peak_saving = (stats_off["peak_after_inference_gb"] - stats_on["peak_after_inference_gb"]) / stats_off["peak_after_inference_gb"] * 100
 
         logger.info("\n💰 메모리 절감:")
         logger.info(f"  - 모델 메모리: {model_saving:+.1f}%")
@@ -128,7 +129,7 @@ def main():
         logger.info(f"  - 피크 메모리: {peak_saving:+.1f}%")
 
         # 속도 비교
-        speed_change = (stats_on['generation_time'] - stats_off['generation_time']) / stats_off['generation_time'] * 100
+        speed_change = (stats_on["generation_time"] - stats_off["generation_time"]) / stats_off["generation_time"] * 100
         logger.info(f"  - 생성 속도: {speed_change:+.1f}%")
 
         logger.info("\n✅ 테스트 완료!")

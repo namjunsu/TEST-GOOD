@@ -331,6 +331,11 @@ class HandlerConfig:
     CONTENT_ONLY_TOP_K: int = 80             # 정밀 내용 검색 시 top_k (H100: 50 → 80)
     CONTENT_ONLY_RESULT_LIMIT: int = 15      # 정밀 검색 결과 제한 (H100: 10 → 15)
 
+    # calculate_max_docs용 문서 수 제한 (query_processor.py)
+    SEARCH_DRAFTER_LIMIT: int = 50           # 기안자 필터 시 최대 문서 수
+    SEARCH_LIST_LIMIT: int = 100             # 리스트/전체 쿼리 시 최대 문서 수
+    SEARCH_DEFAULT_LIMIT: int = 10           # 기본 최대 문서 수
+
     # 텍스트 품질 검사 임계값
     MIN_TEXT_LENGTH: int = 10               # 최소 텍스트 길이
     MAX_SPECIAL_CHAR_RATIO: float = 0.2     # 특수문자 비율 상한

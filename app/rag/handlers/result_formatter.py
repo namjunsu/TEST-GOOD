@@ -11,8 +11,8 @@ from typing import Any
 from app.core.logging import get_logger
 from config.constants import HandlerConfig
 
-from .query_processor import is_count_query
-from .response import build_file_path, format_title_from_filename
+from app.rag.handlers.query_processor import is_count_query
+from app.rag.handlers.response import build_file_path, format_title_from_filename
 
 logger = get_logger(__name__)
 

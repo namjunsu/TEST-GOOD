@@ -32,9 +32,7 @@ __all__ = [
     "MODE_TOKEN_CONFIG",
     "MAX_LLM_RETRY",
     "QwenLLM",
-    "LlamaLLM",
     "VllmLLM",
-    "create_llm",
 ]
 
 
@@ -1715,113 +1713,6 @@ def test_qwen_llm():
         print(f"모델 파일 없음: {model_files[0]}")
 
 
-class LlamaLLM(BaseRAGLLM):
-    """Llama-3.1-Korean-8B-Instruct 모델 (Transformers 기반)"""
-
-    def __init__(self, model_path: str = None, length_analyzer=None):
-        super().__init__()  # BaseRAGLLM 초기화
-        if model_path is None:
-            try:
-                from config import LLAMA_MODEL_PATH
-                model_path = LLAMA_MODEL_PATH
-            except ImportError:
-                model_path = "./models/Llama-3.1-Korean-8B-Instruct"
-        self.model_path = model_path
-        self.model = None
-        self.tokenizer = None
-        self.length_analyzer = length_analyzer  # length_analyzer 주입 (None 가능)
-        self._load_model()
-
-    def _load_model(self):
-        """Llama 모델 로드"""
-        try:
-            import torch
-            from transformers import AutoModelForCausalLM, AutoTokenizer
-
-            self.logger.info(f"Llama 모델 로딩 중: {self.model_path}")
-
-            self.tokenizer = AutoTokenizer.from_pretrained(self.model_path)
-            self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_path,
-                torch_dtype=torch.float32,
-            )
-
-            if self.tokenizer.pad_token is None:
-                self.tokenizer.pad_token = self.tokenizer.eos_token
-
-            self.logger.info("✅ Llama 모델 로딩 완료")
-
-        except Exception as e:
-            self.logger.error(f"Llama 모델 로딩 실패: {e}")
-            raise
-
-    def generate_response(self, question: str, context_chunks: list[dict[str, Any]]) -> RAGResponse:
-        """Llama로 응답 생성"""
-        start_time = time.time()
-
-        try:
-            # 한국어 특화 프롬프트
-            context_text = self._format_context(context_chunks)
-
-            prompt = f"""다음 문서들을 바탕으로 질문에 정확하고 구체적으로 답해주세요.
-
-문서 내용:
-{context_text}
-
-질문: {question}
-
-답변 지침:
-- 문서에 있는 구체적인 정보를 우선적으로 사용하세요
-- "확인되지 않음"이나 "알 수 없습니다" 같은 애매한 답변은 피하세요
-- 날짜, 이름, 금액, 부서 등 구체적 정보가 있으면 반드시 포함하세요
-- 출처 파일명을 답변 마지막에 명시하세요
-
-답변:"""
-
-            import torch
-            from transformers import GenerationConfig
-
-            inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=4096)
-
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    inputs.input_ids,
-                    attention_mask=inputs.attention_mask,
-                    generation_config=GenerationConfig(
-                        max_new_tokens=800,
-                        temperature=0.8,
-                        top_p=LLMWrapperConfig.STREAMING_TOP_P,
-                        do_sample=True,
-                        eos_token_id=self.tokenizer.eos_token_id,
-                        pad_token_id=self.tokenizer.pad_token_id,
-                    ),
-                )
-
-            response_text = self.tokenizer.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
-
-            generation_time = time.time() - start_time
-
-            return RAGResponse(
-                answer=response_text.strip(),
-                sources_cited=self._extract_sources(context_chunks),
-                confidence=LLMWrapperConfig.SEARCH_HIGH_CONFIDENCE,
-                generation_time=generation_time,
-                has_proper_citation=True,
-                retry_count=0,
-            )
-
-        except Exception as e:
-            self.logger.error(f"Llama 응답 생성 실패: {e}")
-            return RAGResponse(
-                answer="응답 생성 실패",
-                sources_cited=[],
-                confidence=0.0,
-                generation_time=time.time() - start_time,
-                has_proper_citation=False,
-                retry_count=0,
-            )
-
-
 class VllmLLM(BaseRAGLLM):
     """vLLM 엔진 기반 LLM (Qwen2.5-72B-Instruct-AWQ on H100)"""
 
@@ -2259,19 +2150,6 @@ class Qwen72BLLM(BaseRAGLLM):
                 )
                 for _ in questions
             ]
-
-
-def create_llm(model_type: str = "llama", **kwargs) -> Any:
-    """LLM 팩토리 함수"""
-    if model_type.lower() == "qwen72b":
-        return Qwen72BLLM(**kwargs)
-    if model_type.lower() == "vllm":
-        return VllmLLM(**kwargs)
-    if model_type.lower() == "llama":
-        return LlamaLLM(**kwargs)
-    if model_type.lower() == "qwen":
-        return QwenLLM(**kwargs)
-    raise ValueError(f"지원되지 않는 모델 타입: {model_type}")
 
 
 if __name__ == "__main__":

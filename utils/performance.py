@@ -13,7 +13,7 @@ import logging
 import os
 import time
 from functools import wraps
-from typing import Any
+from typing import Any, Optional
 
 import pandas as pd
 import streamlit as st
@@ -30,7 +30,7 @@ class PerformanceMonitor:
     CRITICAL_THRESHOLD = 5.0
 
     @classmethod
-    def measure(cls, func=None, *, name: str = None, show_time: bool = True):
+    def measure(cls, func=None, *, name: Optional[str] = None, show_time: bool = True):
         """
         함수 실행 시간 측정 데코레이터
 
@@ -312,8 +312,8 @@ class Timer:
     def __init__(self, name: str = "Operation", show: bool = True):
         self.name = name
         self.show = show
-        self.start_time = None
-        self.duration = None
+        self.start_time: float = 0.0
+        self.duration: float = 0.0
 
     def __enter__(self):
         self.start_time = time.perf_counter()  # perf_counter로 변경

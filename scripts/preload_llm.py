@@ -71,9 +71,8 @@ def preload_llm():
             import torch
             if torch.cuda.is_available():
                 allocated = torch.cuda.memory_allocated() / 1024**3
-                reserved = torch.cuda.memory_reserved() / 1024**3
                 total = torch.cuda.get_device_properties(0).total_memory / 1024**3
-                logger.info(f"   - GPU Memory: {allocated:.1f}GB used / {total:.1f}GB total ({allocated/total*100:.0f}%)")
+                logger.info(f"   - GPU Memory: {allocated:.1f}GB used / {total:.1f}GB total ({allocated / total * 100:.0f}%)")
         except Exception:
             pass  # GPU 정보 없으면 무시
 

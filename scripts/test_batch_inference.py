@@ -5,9 +5,9 @@
 개별 추론 vs 배치 추론의 처리 시간을 비교합니다.
 """
 
+import logging
 import os
 import sys
-import logging
 import time
 from pathlib import Path
 
@@ -35,7 +35,7 @@ def test_individual_inference(llm, questions: list[str], contexts: list[list[dic
 
     responses = []
     for i, (question, context) in enumerate(zip(questions, contexts)):
-        logger.info(f"  [{i+1}/{len(questions)}] 처리 중...")
+        logger.info(f"  [{i + 1}/{len(questions)}] 처리 중...")
         response = llm.generate_response(question, context)
         responses.append(response)
 
@@ -67,7 +67,7 @@ def test_batch_inference(llm, questions: list[str], contexts: list[list[dict]]) 
     start_time = time.time()
 
     # 배치 메서드가 있는지 확인
-    if not hasattr(llm, 'generate_batch_responses'):
+    if not hasattr(llm, "generate_batch_responses"):
         logger.warning("⚠️ 배치 메서드 미지원 - 개별 처리로 대체")
         return test_individual_inference(llm, questions, contexts)
 
@@ -107,7 +107,7 @@ def main():
     ]
 
     test_contexts = [
-        [{"content": f"테스트 문서 {i+1}입니다.", "metadata": {"source": f"test{i+1}.txt", "page": 1}}]
+        [{"content": f"테스트 문서 {i + 1}입니다.", "metadata": {"source": f"test{i + 1}.txt", "page": 1}}]
         for i in range(len(test_questions))
     ]
 
@@ -130,18 +130,18 @@ def main():
         logger.info("=" * 80)
 
         logger.info("\n🔄 개별 추론:")
-        logger.info(f"  - 총 시간: {stats_individual['total_time']}초")
-        logger.info(f"  - 평균 시간: {stats_individual['avg_time']}초")
-        logger.info(f"  - 처리량: {stats_individual['throughput']} queries/sec")
+        logger.info(f"  - 총 시간: {stats_individual["total_time"]}초")
+        logger.info(f"  - 평균 시간: {stats_individual["avg_time"]}초")
+        logger.info(f"  - 처리량: {stats_individual["throughput"]} queries/sec")
 
         logger.info("\n⚡ 배치 추론:")
-        logger.info(f"  - 총 시간: {stats_batch['total_time']}초")
-        logger.info(f"  - 평균 시간: {stats_batch['avg_time']}초")
-        logger.info(f"  - 처리량: {stats_batch['throughput']} queries/sec")
+        logger.info(f"  - 총 시간: {stats_batch["total_time"]}초")
+        logger.info(f"  - 평균 시간: {stats_batch["avg_time"]}초")
+        logger.info(f"  - 처리량: {stats_batch["throughput"]} queries/sec")
 
         # 성능 향상률 계산
-        time_saving = (stats_individual['total_time'] - stats_batch['total_time']) / stats_individual['total_time'] * 100
-        throughput_gain = (stats_batch['throughput'] - stats_individual['throughput']) / stats_individual['throughput'] * 100
+        time_saving = (stats_individual["total_time"] - stats_batch["total_time"]) / stats_individual["total_time"] * 100
+        throughput_gain = (stats_batch["throughput"] - stats_individual["throughput"]) / stats_individual["throughput"] * 100
 
         logger.info("\n💰 성능 향상:")
         logger.info(f"  - 시간 절감: {time_saving:+.1f}%")
@@ -156,8 +156,8 @@ def main():
 
         # 응답 품질 검증
         logger.info("\n📝 응답 품질 검증:")
-        for i, (resp_ind, resp_batch) in enumerate(zip(stats_individual['responses'], stats_batch['responses'])):
-            logger.info(f"\n질의 {i+1}: {test_questions[i]}")
+        for i, (resp_ind, resp_batch) in enumerate(zip(stats_individual["responses"], stats_batch["responses"])):
+            logger.info(f"\n질의 {i + 1}: {test_questions[i]}")
             logger.info(f"  - 개별 응답 길이: {len(resp_ind.answer)}자")
             logger.info(f"  - 배치 응답 길이: {len(resp_batch.answer)}자")
 

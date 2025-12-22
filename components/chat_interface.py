@@ -110,7 +110,7 @@ def _add_message(
 # ============================================================================
 
 
-def _display_chat_history(messages: list[dict[str, str]]) -> None:
+def _display_chat_history(messages: list[dict[str, Any]]) -> None:
     """채팅 기록 표시
 
     Args:

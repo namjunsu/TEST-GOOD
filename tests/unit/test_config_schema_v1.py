@@ -162,7 +162,7 @@ class TestOCRRouting:
 
     def test_ocr_mode_off(self):
         """OCR off 모드"""
-        from scripts.ingest_from_docs import OCR_MODE_OFF, DocumentIngester
+        from scripts.ingest_from_docs import OCR_MODE_OFF, DocumentIngester  # type: ignore[import-not-found]
 
         ingester = DocumentIngester(ocr_mode="off", dry_run=True)
         assert ingester.ocr_mode == OCR_MODE_OFF
@@ -170,7 +170,7 @@ class TestOCRRouting:
 
     def test_ocr_mode_fallback(self):
         """OCR fallback 모드"""
-        from scripts.ingest_from_docs import OCR_MODE_FALLBACK, DocumentIngester
+        from scripts.ingest_from_docs import OCR_MODE_FALLBACK, DocumentIngester  # type: ignore[import-not-found]
 
         ingester = DocumentIngester(ocr_mode="fallback", dry_run=True)
         assert ingester.ocr_mode == OCR_MODE_FALLBACK
@@ -178,7 +178,7 @@ class TestOCRRouting:
 
     def test_ocr_mode_force(self):
         """OCR force 모드"""
-        from scripts.ingest_from_docs import OCR_MODE_FORCE, DocumentIngester
+        from scripts.ingest_from_docs import OCR_MODE_FORCE, DocumentIngester  # type: ignore[import-not-found]
 
         ingester = DocumentIngester(ocr_mode="force", dry_run=True)
         assert ingester.ocr_mode == OCR_MODE_FORCE
@@ -186,7 +186,7 @@ class TestOCRRouting:
 
     def test_ocr_enabled_backward_compat(self):
         """v0 호환: ocr_enabled=True → fallback 모드"""
-        from scripts.ingest_from_docs import OCR_MODE_FALLBACK, DocumentIngester
+        from scripts.ingest_from_docs import OCR_MODE_FALLBACK, DocumentIngester  # type: ignore[import-not-found]
 
         ingester = DocumentIngester(ocr_enabled=True, dry_run=True)
         assert ingester.ocr_mode == OCR_MODE_FALLBACK
@@ -194,7 +194,7 @@ class TestOCRRouting:
 
     def test_ocr_mode_priority(self):
         """ocr_mode가 ocr_enabled보다 우선"""
-        from scripts.ingest_from_docs import OCR_MODE_FORCE, DocumentIngester
+        from scripts.ingest_from_docs import OCR_MODE_FORCE, DocumentIngester  # type: ignore[import-not-found]
 
         ingester = DocumentIngester(
             ocr_mode="force", ocr_enabled=False, dry_run=True
@@ -216,7 +216,7 @@ class TestValidateOCRMode:
         """유효하지 않은 OCR 모드"""
         assert validate_ocr_mode("invalid") is False
         assert validate_ocr_mode("") is False
-        assert validate_ocr_mode(None) is False
+        assert validate_ocr_mode(None) is False  # type: ignore[arg-type]
 
 
 class TestIsLegacyConfig:

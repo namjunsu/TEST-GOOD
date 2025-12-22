@@ -171,17 +171,17 @@ def test_golden_scenarios():
 
             try:
                 # 파이프라인 실행
-                result = pipeline.run(query=scenario["query"])
+                result = pipeline.query(scenario["query"])
 
                 elapsed = time.time() - start_time
 
-                # 결과 구조화
+                # 결과 구조화 (RAGResponse dataclass 속성 접근)
                 structured_result = {
-                    "mode": result.get("mode", "UNKNOWN"),
-                    "response": result.get("response", ""),
-                    "context_length": result.get("context_length", 0),
+                    "mode": getattr(result, "mode", "UNKNOWN") if hasattr(result, "mode") else result.get("mode", "UNKNOWN") if isinstance(result, dict) else "UNKNOWN",
+                    "response": getattr(result, "answer", "") if hasattr(result, "answer") else result.get("response", "") if isinstance(result, dict) else "",
+                    "context_length": len(getattr(result, "answer", "")) if hasattr(result, "answer") else result.get("context_length", 0) if isinstance(result, dict) else 0,
                     "elapsed_sec": elapsed,
-                    "found": result.get("found", False),
+                    "found": getattr(result, "success", False) if hasattr(result, "success") else result.get("found", False) if isinstance(result, dict) else False,
                 }
 
                 # 검증
@@ -241,8 +241,8 @@ def test_context_length_minimum():
         failures = []
 
         for query, min_response_len in test_cases:
-            result = pipeline.answer(query=query)
-            response = result.get("text", "")
+            result = pipeline.query(query)
+            response = getattr(result, "answer", "") if hasattr(result, "answer") else result.get("text", "") if isinstance(result, dict) else ""
 
             # 응답 길이 검증 (context_length는 내부 상태라 접근 불가)
             if len(response) < min_response_len:
@@ -289,8 +289,8 @@ def test_forbidden_responses():
         failures = []
 
         for query in test_queries:
-            result = pipeline.answer(query=query)
-            response = result.get("text", "")
+            result = pipeline.query(query)
+            response = getattr(result, "answer", "") if hasattr(result, "answer") else result.get("text", "") if isinstance(result, dict) else ""
 
             for phrase in forbidden_phrases:
                 if phrase in response:

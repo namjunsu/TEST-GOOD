@@ -129,7 +129,7 @@ def process_single_pdf(
     dry_run: bool = False,
 ) -> dict[str, Any]:
     """단일 PDF 처리"""
-    result = {
+    result: dict[str, Any] = {
         "filename": pdf_path.name,
         "status": "unknown",
         "reason": "",
@@ -144,7 +144,7 @@ def process_single_pdf(
             return result
 
         # 2. 텍스트 정제
-        cleaned_text = text_cleaner.clean(text)
+        cleaned_text, _clean_meta = text_cleaner.clean(text)
 
         # 3. 메타데이터 파싱 (metadata dict, title, content 필요)
         meta = meta_parser.parse({}, title=pdf_path.name, content=text)

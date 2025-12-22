@@ -27,7 +27,7 @@ def test_consumables_summary():
         print(f"\n[테스트] {query}")
 
         start_time = time.time()
-        result = pipeline.answer(query=query)
+        result = pipeline.answer(query)  # positional-only argument
         elapsed = time.time() - start_time
 
         # 1. 응답 존재 확인

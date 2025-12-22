@@ -234,7 +234,7 @@ def display_document_list(
     years = sorted(
         [y for y in filtered_df["year_norm"].unique() if pd.notna(y)], reverse=True,
     )
-    if len(years) == 0 and filtered_df["year_norm"].isna().any():
+    if len(years) == 0 and bool(filtered_df["year_norm"].isna().any()):
         years = [0]  # 미상 전용 그룹
 
     for year in years:
@@ -614,7 +614,8 @@ def render_sidebar_library(rag_instance) -> None:
                 filtered_df = df if not df.empty else pd.DataFrame()
 
             # 검색 탭에서 문서 리스트 표시
-            display_document_list(filtered_df, df, "search")
+            if isinstance(filtered_df, pd.DataFrame):
+                display_document_list(filtered_df, df, "search")
 
         with tab2:
             # 연도 선택
@@ -623,7 +624,7 @@ def render_sidebar_library(rag_instance) -> None:
                 years = sorted(
                     [y for y in df["year_norm"].unique() if pd.notna(y)], reverse=True,
                 )
-                if len(years) == 0 and df["year_norm"].isna().any():
+                if len(years) == 0 and bool(df["year_norm"].isna().any()):
                     years = [0]  # 미상 전용
 
                 # 연도별 문서 개수 (year_norm 기반 - 빠름)
@@ -655,9 +656,11 @@ def render_sidebar_library(rag_instance) -> None:
 
                     # year_norm 기반 필터링 (apply(lambda) 제거)
                     if selected_year != 0:
-                        filtered_df = df[df["year_norm"] == selected_year]
+                        year_filtered = df[df["year_norm"] == selected_year]
                     else:
-                        filtered_df = df[df["year_norm"].isna()]
+                        year_filtered = df[df["year_norm"].isna()]
+                    # DataFrame 타입 보장
+                    filtered_df = year_filtered if isinstance(year_filtered, pd.DataFrame) else pd.DataFrame()
                 else:
                     filtered_df = pd.DataFrame()
 
@@ -668,7 +671,8 @@ def render_sidebar_library(rag_instance) -> None:
                     st.info(f"{int(selected_year)}년 문서 {len(filtered_df)}개")
 
                 # 연도별 탭에서 문서 리스트 표시
-                display_document_list(filtered_df, df, "year")
+                if isinstance(filtered_df, pd.DataFrame):
+                    display_document_list(filtered_df, df, "year")
             else:
                 st.info("문서가 없습니다")
 

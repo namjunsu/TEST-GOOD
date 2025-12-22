@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from app.config.settings import settings
 
 
-def get_filesystem_files(year: str = None) -> Dict[str, Set[str]]:
+def get_filesystem_files(year: str | None = None) -> Dict[str, Set[str]]:
     """파일 시스템에서 PDF 파일 목록 가져오기
 
     Returns:
@@ -49,7 +49,7 @@ def get_filesystem_files(year: str = None) -> Dict[str, Set[str]]:
     return result
 
 
-def get_db_files(year: str = None) -> Dict[str, Set[str]]:
+def get_db_files(year: str | None = None) -> Dict[str, Set[str]]:
     """메타데이터 DB에서 문서 목록 가져오기
 
     Returns:

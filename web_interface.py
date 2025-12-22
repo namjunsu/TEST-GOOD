@@ -8,7 +8,6 @@
 
 import os
 import sys
-import time
 import warnings
 from pathlib import Path
 
@@ -94,16 +93,16 @@ def main():
     st.markdown("<hr style='border: 1px solid rgba(255,255,255,0.3); margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.2);'>", unsafe_allow_html=True)
 
     # 문서 개수 동적 계산 (하드코딩 제거)
-    pdf_count, txt_count = count_docs_recursive(settings.DOCS_DIR)
+    pdf_count, txt_count = count_docs_recursive(str(settings.DOCS_DIR))
 
     # 현황 표시
     # 자동 인덱싱 시스템 초기화
     if "auto_indexer" not in st.session_state:
         from scripts.utils.auto_indexer import AutoIndexer
-        if not getattr(st, "_auto_indexer_started", False):
+        if not st.session_state.get("_auto_indexer_started", False):
             st.session_state.auto_indexer = AutoIndexer(check_interval=60)
             st.session_state.auto_indexer.start_monitoring()
-            st._auto_indexer_started = True
+            st.session_state["_auto_indexer_started"] = True
             st.toast("AutoIndexer 시작됨 (60s 주기)", icon="🧩")
 
     # RAG 시스템 초기화 (개선된 로딩 화면)

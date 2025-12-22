@@ -79,11 +79,13 @@ class ScenarioRunner:
                 elapsed = time.time() - start
 
                 success = response is not None and "text" in response
+                # RouteDecision.mode는 QueryMode 열거형
+                actual_mode = mode.mode.value if mode else None
                 self.results.append({
                     "scenario": i,
                     "query": query[:50],
                     "expected_mode": expected_mode,
-                    "actual_mode": mode.value if mode else None,
+                    "actual_mode": actual_mode,
                     "filters": filters,
                     "success": success,
                     "time": elapsed,
@@ -91,7 +93,7 @@ class ScenarioRunner:
                 })
 
                 status = "✅" if success else "❌"
-                print(f"  {status} Mode: {mode.value if mode else 'None'}, "
+                print(f"  {status} Mode: {actual_mode or 'None'}, "
                       f"Time: {elapsed:.2f}s\n")
 
             except Exception as e:

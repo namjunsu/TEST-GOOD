@@ -74,8 +74,8 @@ class TestSidebarCounts(unittest.TestCase):
         """케이스3: 중복 제거 검증"""
         print("\n=== 케이스3: 중복 제거 검증 ===")
 
-        # 전체 레코드 수
-        cursor = self.db.conn.execute("SELECT COUNT(*) as total FROM documents")
+        # 전체 레코드 수 (_get_conn으로 thread-safe 접근)
+        cursor = self.db._get_conn().execute("SELECT COUNT(*) as total FROM documents")
         total_records = cursor.fetchone()["total"]
 
         # 고유 문서 수

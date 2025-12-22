@@ -652,7 +652,7 @@ class SystemChecker:
         try:
             # 필수 설정 체크 (app.config.settings 모듈 사용)
             # app.config.settings 모듈 검증
-            import app.config.settings as settings
+            from app.config.settings import settings
 
             # 필수 설정이 정의되어 있는지 확인
             settings_dict = {

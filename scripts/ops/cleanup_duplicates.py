@@ -29,7 +29,7 @@ def get_file_hash(file_path: Path) -> str:
     return hasher.hexdigest()[:8]
 
 
-def get_db_files(db_path: str = None) -> set:
+def get_db_files(db_path: str | None = None) -> set:
     """DB에 등록된 파일 경로 목록"""
     conn = sqlite3.connect(db_path or settings.DB_PATHS["metadata"])
     cursor = conn.execute("SELECT path FROM documents")
@@ -38,7 +38,7 @@ def get_db_files(db_path: str = None) -> set:
     return paths
 
 
-def find_year_from_filename(filename: str) -> str:
+def find_year_from_filename(filename: str) -> str | None:
     """파일명에서 연도 추출"""
     import re
 

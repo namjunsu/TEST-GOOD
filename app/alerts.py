@@ -49,7 +49,7 @@ _SENSITIVE_KEYS = {
 }
 
 
-def _is_valid_webhook(url: str) -> bool:
+def _is_valid_webhook(url: str | None) -> bool:
     """Webhook URL 포맷 검증
 
     Args:
@@ -61,14 +61,14 @@ def _is_valid_webhook(url: str) -> bool:
     return bool(re.match(r"^https://hooks\.slack\.com/services/[A-Za-z0-9/_-]+$", url or ""))
 
 
-def _mask_value(val: str) -> str:
+def _mask_value(val: Any) -> Any:
     """민감 값 마스킹
 
     Args:
         val: 원본 값
 
     Returns:
-        마스킹된 값 (앞뒤 N자 + ****)
+        마스킹된 값 (앞뒤 N자 + ****), 비문자열은 그대로 반환
     """
     if not isinstance(val, str):
         return val
@@ -97,7 +97,7 @@ def _mask_sensitive(obj: Any) -> Any:
     return obj
 
 
-def _truncate_text(s: str, limit: int) -> tuple[str, bool]:
+def _truncate_text(s: str | None, limit: int) -> tuple[str, bool]:
     """텍스트 축약
 
     Args:

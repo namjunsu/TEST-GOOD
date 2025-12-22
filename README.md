@@ -5,6 +5,7 @@
 ## 🚀 Quick Start (10 minutes)
 
 ### Prerequisites
+
 - Python 3.12+
 - 2GB+ RAM
 - 10GB disk space
@@ -46,9 +47,10 @@ streamlit run web_interface.py --port 8501
 ```
 
 ### Access the Application
-- **Web UI**: http://localhost:8501
-- **API Docs**: http://localhost:7860/docs
-- **Health Check**: http://localhost:7860/_healthz
+
+- **Web UI**: <http://localhost:8501>
+- **API Docs**: <http://localhost:7860/docs>
+- **Health Check**: <http://localhost:7860/_healthz>
 
 ## 📊 System Information
 
@@ -64,7 +66,7 @@ streamlit run web_interface.py --port 8501
 ### H100 GPU 최적화 (v2025.12.21)
 
 | 항목 | 기존값 | H100 최적화 |
-|------|--------|-------------|
+| ---- | ------ | ----------- |
 | RAG Context | 4,000 tokens | 6,000 tokens |
 | RAG Max Output | 3,072 tokens | 4,096 tokens |
 | BM25 Snippet | 5,000자 | 8,000자 |
@@ -76,62 +78,77 @@ streamlit run web_interface.py --port 8501
 The system supports multiple query modes with automatic routing:
 
 ### SEARCH Mode
+
 Find documents by keyword or topic.
 
 **Examples:**
+
 - "중계차 카메라 렌즈관련 문서 찾아줘"
 - "유인혁 기안서 문서 검색"
 - "렌즈 오버홀 문서 있어?"
 
 **Features:**
+
 - BM25 keyword-based retrieval
 - Metadata enrichment (author, date, cost)
 - Card-style results with preview
 
 ### SUMMARY Mode
+
 Get detailed summaries of specific documents.
 
 **Examples:**
+
 - "2024-03-15_중계차_렌즈_오버홀.pdf 내용 요약해줘"
 - "이 문서 요약해줘" (with document selected)
 
 **Features:**
+
 - Document type detection (기안서, 검토서, etc.)
 - JSON-structured extraction
 - Spec details and cost information
 
 ### QA Mode
+
 Ask specific questions about documents.
 
 **Examples:**
+
 - "렌즈 오버홀 비용은 얼마였어?"
 - "유인혁이 작성한 문서의 주요 내용은?"
 
 **Features:**
+
 - Retrieval-augmented generation
 - Context-aware answers
 - Source citations
 
 ### LIST Mode
+
 Browse documents by author or year.
 
 **Examples:**
+
 - "2024년 남준수 문서 전부"
 - "year:2024 drafter:최새름"
 
 **Features:**
+
 - Structured metadata filtering
 - Chronological sorting
 - Compact 2-line cards
 
 ### COST_SUM Mode
+
 Get cost aggregates from documents.
 
 **Examples:**
+
 - "채널에이 중계차 보수 합계는?"
 - "2024년 총 비용"
 
 **Features:**
+
 - Direct DB aggregation
 - Drafter/year filtering
 - Fast numerical results
@@ -139,7 +156,8 @@ Get cost aggregates from documents.
 ## 🛠️ Development
 
 ### Project Structure
-```
+
+```text
 AI-CHAT/
 ├── app/                    # Main application code
 │   ├── api/                # REST API endpoints
@@ -184,10 +202,10 @@ python diagnose_qa_flow.py          # Test QA flow
 python scripts/analyze_usage.py     # Analyze code usage
 ```
 
-
 ## 📖 Documentation
 
 ### Core Documentation
+
 - [System Overview](docs/SYSTEM_OVERVIEW.md) - Architecture and components
 - [Architecture](docs/ARCHITECTURE.md) - Technical design and dependencies
 - [Runbook](docs/RUNBOOK.md) - Operations and troubleshooting
@@ -195,6 +213,7 @@ python scripts/analyze_usage.py     # Analyze code usage
 - [RAG Implementation](docs/RAG_V2_IMPLEMENTATION.md) - RAG v2 details
 
 ### Additional Resources
+
 - [ChatGPT Context](docs/CHATGPT_PROJECT_CONTEXT.md) - Full project context
 - [Cache Usage](docs/CACHE-USAGE-v2.md) - Caching guide
 - [Archived Docs](docs/archive/) - Historical reports
@@ -203,25 +222,29 @@ python scripts/analyze_usage.py     # Analyze code usage
 
 ### Common Issues
 
-**Port already in use**
+#### Port already in use
+
 ```bash
 lsof -i :8501  # Find process
 kill -9 <PID>   # Kill process
 ```
 
-**Database locked**
+#### Database locked
+
 ```bash
 rm metadata.db-shm metadata.db-wal
 sqlite3 metadata.db "PRAGMA integrity_check;"
 ```
 
-**No search results**
+#### No search results
+
 ```bash
 python check_db_content.py
 python rebuild_metadata.py
 ```
 
-**config.py not found**
+#### config.py not found
+
 ```bash
 git restore config.py
 # Or create minimal config
@@ -254,6 +277,7 @@ All tests should pass for a healthy system.
 ### Code Quality
 
 Before committing:
+
 ```bash
 make fmt        # Format code
 make lint       # Check linting

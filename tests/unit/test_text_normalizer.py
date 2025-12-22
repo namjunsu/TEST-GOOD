@@ -84,7 +84,7 @@ class TestNormalizeQuery:
     def test_empty_input(self):
         """빈 입력 처리"""
         assert normalize_query("") == ""
-        assert normalize_query(None) == ""
+        assert normalize_query(None) == ""  # type: ignore[arg-type]
         assert normalize_query("   ") == ""
 
 

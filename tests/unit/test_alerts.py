@@ -280,8 +280,8 @@ class TestPostSlackRetry:
 
         # 첫 2번 500 에러, 3번째 성공
         mock_urlopen.side_effect = [
-            HTTPError(None, 500, "Internal Server Error", {}, None),
-            HTTPError(None, 503, "Service Unavailable", {}, None),
+            HTTPError("", 500, "Internal Server Error", {}, None),  # type: ignore[arg-type]
+            HTTPError("", 503, "Service Unavailable", {}, None),  # type: ignore[arg-type]
             mock_success,
         ]
 
@@ -302,7 +302,7 @@ class TestPostSlackRetry:
         from urllib.error import HTTPError
 
         # 계속 500 에러
-        mock_urlopen.side_effect = HTTPError(None, 500, "Error", {}, None)
+        mock_urlopen.side_effect = HTTPError("", 500, "Error", {}, None)  # type: ignore[arg-type]
 
         from app.alerts import _post_slack
 
@@ -320,8 +320,8 @@ class TestPostSlackRetry:
         from urllib.error import HTTPError
 
         # 429 에러 (Retry-After 헤더 포함)
-        error = HTTPError(None, 429, "Too Many Requests", {}, None)
-        error.headers = {"Retry-After": "2"}
+        error = HTTPError("", 429, "Too Many Requests", {}, None)  # type: ignore[arg-type]
+        error.headers = {"Retry-After": "2"}  # type: ignore[assignment]
 
         # 두 번째 시도: 성공 응답
         mock_success = MagicMock()

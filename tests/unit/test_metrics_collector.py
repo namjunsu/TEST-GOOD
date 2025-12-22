@@ -38,7 +38,7 @@ class TestPercentileCalculation:
 
     def test_percentile_uniform(self):
         """균등분포 (1..100)"""
-        values = list(range(1, 101))
+        values = [float(x) for x in range(1, 101)]
         p50 = _percentile(values, 0.50)
         p95 = _percentile(values, 0.95)
 
@@ -367,7 +367,7 @@ if __name__ == "__main__":
     print("Running basic metrics tests...")
 
     # 백분위 테스트
-    values = list(range(1, 101))
+    values = [float(x) for x in range(1, 101)]
     p50 = _percentile(values, 0.50)
     p95 = _percentile(values, 0.95)
     print(f"✅ Percentile: p50={p50}, p95={p95}")

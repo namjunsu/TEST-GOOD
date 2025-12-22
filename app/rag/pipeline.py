@@ -437,13 +437,21 @@ class RAGPipeline:
             },
         }
 
-    def answer(self, query: str, top_k: Optional[int] = None, selected_filename: Optional[str] = None) -> dict:
+    def answer(
+        self,
+        query: str,
+        /,
+        top_k: Optional[int] = None,
+        selected_filename: Optional[str] = None,
+        **kwargs,
+    ) -> dict:
         """답변 생성 (Evidence 포함 구조화된 응답)
 
         Args:
             query: 사용자 질문
             top_k: 검색 결과 개수 (None이면 기본값 5)
             selected_filename: 선택된 문서 파일명 (우선 검색용, 선택사항)
+            **kwargs: 추가 옵션 (RAGProtocol 호환용)
 
         Returns:
             dict: {
@@ -457,6 +465,9 @@ class RAGPipeline:
                 }
             }
         """
+        # kwargs에서 top_k, selected_filename 추출 (호환성)
+        top_k = kwargs.get("top_k", top_k)
+        selected_filename = kwargs.get("selected_filename", selected_filename)
         # ✨ 2-tier Cache check - 메모리 캐시 → 영구 캐시
         cache_key = build_answer_cache_key(query, selected_filename)
 

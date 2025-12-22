@@ -103,6 +103,7 @@ render_index_status_panel(api_base_url=api_base_url)
 **원인:** FastAPI 백엔드가 실행되지 않았거나 포트가 다름
 
 **해결:**
+
 ```bash
 # 백엔드 실행 확인
 curl http://localhost:7860/metrics
@@ -116,6 +117,7 @@ ps aux | grep uvicorn
 **원인:** 드라이런 또는 재색인이 아직 실행되지 않음
 
 **해결:**
+
 ```bash
 # 드라이런 실행
 make ingest-dryrun
@@ -129,6 +131,7 @@ make check-consistency
 **원인:** DocStore와 인덱스 간 불일치
 
 **해결:**
+
 ```bash
 # 재색인 실행
 make reindex
@@ -167,4 +170,4 @@ status_icon = {
 
 ---
 
-**End of Guide**
+<!-- End of Guide -->

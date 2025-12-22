@@ -72,7 +72,7 @@ class ImportTracker:
 
         return resolved
 
-    def trace_dependencies(self, file_path: str, visited: set[str] = None):
+    def trace_dependencies(self, file_path: str, visited: set[str] | None = None):
         """Recursively trace all dependencies from a file."""
         if visited is None:
             visited = set()

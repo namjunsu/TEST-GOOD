@@ -99,21 +99,27 @@ class TestFastAPIIntegration:
 
     def test_to_http_basic(self):
         """to_http() 기본 변환"""
+        from typing import Any, cast
+
         err = SearchError("검색 실패", code=ErrorCode.E_RETRIEVE)
         http_exc = err.to_http()
+        detail = cast(dict[str, Any], http_exc.detail)
 
         assert http_exc.status_code == 500
-        assert http_exc.detail["error"] == "E_RETRIEVE"
-        assert http_exc.detail["message"] == "검색 실패"
+        assert detail["error"] == "E_RETRIEVE"
+        assert detail["message"] == "검색 실패"
 
     def test_to_http_with_details(self):
         """to_http() 상세 정보 포함"""
+        from typing import Any, cast
+
         err = DatabaseError("DB 오류", details="timeout 5s", code=ErrorCode.E_DB_LOCK)
         http_exc = err.to_http()
+        detail = cast(dict[str, Any], http_exc.detail)
 
         assert http_exc.status_code == 503
-        assert http_exc.detail["details"] == "timeout 5s"
-        assert http_exc.detail["error"] == "E_DB_LOCK"
+        assert detail["details"] == "timeout 5s"
+        assert detail["error"] == "E_DB_LOCK"
 
     def test_to_http_validation_error(self):
         """ValidationError HTTP 400 변환"""
@@ -195,12 +201,15 @@ class TestUsageExamples:
 
     def test_fastapi_workflow(self):
         """FastAPI 워크플로우"""
+        from typing import Any, cast
+
         try:
             raise DatabaseError("DB 연결 실패", details="타임아웃", code=ErrorCode.E_DB_BUSY)
         except DatabaseError as e:
             http_exc = e.to_http()
+            detail = cast(dict[str, Any], http_exc.detail)
             assert http_exc.status_code == 503
-            assert http_exc.detail["error"] == "E_DB_BUSY"
+            assert detail["error"] == "E_DB_BUSY"
 
 
 if __name__ == "__main__":

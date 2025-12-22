@@ -62,16 +62,19 @@ class StructuredFormatter(logging.Formatter):
         }
 
         # Add context IDs if present
-        if hasattr(record, "trace_id"):
-            log_data["trace_id"] = getattr(record, "trace_id")
-        if hasattr(record, "req_id"):
-            log_data["req_id"] = getattr(record, "req_id")
+        trace_id = getattr(record, "trace_id", None)
+        if trace_id is not None:
+            log_data["trace_id"] = trace_id
+        req_id = getattr(record, "req_id", None)
+        if req_id is not None:
+            log_data["req_id"] = req_id
 
         # Add RAG-specific fields if present
         for field in ("mode", "has_code", "stage0_count", "stage1_count",
                      "rrf_weight", "latency_ms", "doc_locked", "coverage"):
-            if hasattr(record, field):
-                log_data[field] = getattr(record, field)
+            value = getattr(record, field, None)
+            if value is not None:
+                log_data[field] = value
 
         # Exception info (일관된 키: exc_text)
         if record.exc_info:

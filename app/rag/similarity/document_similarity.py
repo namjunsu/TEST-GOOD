@@ -43,7 +43,7 @@ class DocumentSimilarity:
     def find_similar_documents(
         self,
         doc_id: str,
-        top_k: int = None,
+        top_k: Optional[int] = None,
         exclude_self: bool = True,
     ) -> list[dict[str, Any]]:
         """특정 문서와 유사한 문서 찾기
@@ -132,7 +132,7 @@ class DocumentSimilarity:
         self,
         query: str,
         reference_docs: list[str],
-        top_k: int = None,
+        top_k: Optional[int] = None,
     ) -> list[dict[str, Any]]:
         """쿼리 결과 문서들과 유사한 추가 문서 찾기
 

@@ -248,8 +248,8 @@ class TestSizeLimit:
 
     def test_size_limit_enforced(self, cache_db):
         """크기 제한 강제"""
-        # 매우 작은 제한 (0.1MB)
-        cache = PersistentCache(db_path=cache_db, ttl=3600, max_db_mb=0.1)
+        # 매우 작은 제한 (1MB - 최소 정수)
+        cache = PersistentCache(db_path=cache_db, ttl=3600, max_db_mb=1)
 
         # 큰 데이터 저장 (100개)
         for i in range(100):

@@ -13,7 +13,7 @@ import logging
 import os
 import time
 from functools import wraps
-from typing import Any, Callable, Optional, TypeVar, overload
+from typing import Any, Callable, Optional, TypeVar, cast, overload
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -106,14 +106,14 @@ class PerformanceMonitor:
                     cls.logger.error(f"{func_name} failed after {duration:.2f}s: {e}")
                     raise
 
-            return wrapper
+            return cast(F, wrapper)
 
         # 데코레이터가 인자 없이 사용된 경우
         if func is not None:
             return decorator(func)
 
         # 데코레이터가 인자와 함께 사용된 경우
-        return decorator
+        return cast(Callable[[F], F], decorator)
 
     @classmethod
     def _store_metric(cls, func_name: str, duration: float, error: bool = False):

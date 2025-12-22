@@ -69,7 +69,7 @@ class TestProfileMatcher:
 
         # 전각 하이픈
         text = "HRD－442"  # 전각 하이픈
-        normalized = pm.normalize_text(text)
+        normalized = pm.normalize_text(text)  # type: ignore[attr-defined]
         assert "HRD-442" in normalized  # 표준 하이픈으로 변환
 
     def test_singleton_pattern(self):
@@ -170,12 +170,12 @@ class TestAnchorScorer:
         # 높은 점수 (pass)
         text = "HRD-442 DVR 교체 건"
         result = scorer.score_document(text, "dvr_nvr")
-        assert result["pass"] is True
+        assert result is not None and result["pass"] is True
 
         # 낮은 점수 (fail)
         text2 = "일반 장비"
         result2 = scorer.score_document(text2, "dvr_nvr")
-        assert result2["pass"] is False
+        assert result2 is not None and result2["pass"] is False
 
     def test_profile_not_found(self):
         """존재하지 않는 프로파일"""
@@ -204,6 +204,7 @@ class TestIntegrationScenarios:
 
         # 앵커 스코어링
         result = scorer.score_document(doc_text, "dvr_nvr")
+        assert result is not None
         assert result["pass"] is True
         assert result["score"] >= 3.0  # high boost + medium boost
 
@@ -221,6 +222,7 @@ class TestIntegrationScenarios:
 
         # 앵커 스코어링
         result = scorer.score_document(doc_text, "video_switcher")
+        assert result is not None
         assert result["pass"] is True
 
     def test_scenario_intercom_expansion(self):
@@ -237,6 +239,7 @@ class TestIntegrationScenarios:
 
         # 앵커 스코어링
         result = scorer.score_document(doc_text, "intercom")
+        assert result is not None
         assert result["pass"] is True
         # proximity bonus (ODIN + 키패널)
         assert result["details"]["proximity_bonus"] > 0
@@ -255,6 +258,7 @@ class TestIntegrationScenarios:
 
         # 앵커 스코어링
         result = scorer.score_document(doc_text, "camera")
+        assert result is not None
         assert result["pass"] is True
         # proximity bonus (HDC + 렌즈)
         assert result["details"]["proximity_bonus"] > 0
@@ -273,6 +277,7 @@ class TestIntegrationScenarios:
 
         # 앵커 스코어링
         result = scorer.score_document(doc_text, "audio")
+        assert result is not None
         assert result["pass"] is True
         # proximity bonus (DME + Dante)
         assert result["details"]["proximity_bonus"] > 0

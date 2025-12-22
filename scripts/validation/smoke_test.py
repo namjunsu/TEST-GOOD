@@ -23,8 +23,8 @@ class SmokeTestRunner:
     """스모크 테스트 실행기"""
 
     def __init__(self):
-        self.pipeline = None
-        self.results = []
+        self.pipeline: RAGPipeline | None = None
+        self.results: list[dict[str, Any]] = []
         self.passed = 0
         self.failed = 0
 
@@ -60,6 +60,8 @@ class SmokeTestRunner:
         logger.info(f"📝 입력: {query}")
 
         try:
+            if self.pipeline is None:
+                raise RuntimeError("Pipeline not initialized")
             start_time = time.perf_counter()
             response: RAGResponse = self.pipeline.query(query, top_k=5)
             total_time = time.perf_counter() - start_time

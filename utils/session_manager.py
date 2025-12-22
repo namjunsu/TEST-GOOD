@@ -305,7 +305,7 @@ class SessionManager:
             for key in sorted(st.session_state.keys()):
                 value = st.session_state[key]
                 value_type = type(value).__name__
-                size = sizes.get(key, -1)
+                size = sizes.get(str(key), -1)
                 size_kb = size / 1024 if size > 0 else None
 
                 # 값 미리보기

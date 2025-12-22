@@ -380,9 +380,11 @@ class TableParser:
             if "amount" in mapping and mapping["amount"] < len(cells):
                 rec["amount"] = self.normalize_number(cells[mapping["amount"]])
 
-            rec["amount"] = self._infer_amount(
-                rec["quantity"], rec["unit_price"], rec["amount"],
-            )
+            # _infer_amount는 int|None만 받으므로 타입 검사
+            qty_val = rec["quantity"] if isinstance(rec["quantity"], int) else None
+            price_val = rec["unit_price"] if isinstance(rec["unit_price"], int) else None
+            amount_val = rec["amount"] if isinstance(rec["amount"], int) else None
+            rec["amount"] = self._infer_amount(qty_val, price_val, amount_val)
 
             # 행 유효성(이름 또는 금액 존재)
             if rec["name"] or rec["amount"]:

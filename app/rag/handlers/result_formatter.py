@@ -9,12 +9,18 @@ search.py에서 분리된 SRP 적용 모듈.
 from typing import Any
 
 from app.core.logging import get_logger
+from app.rag.handlers.response import build_file_path, format_title_from_filename
 from config.constants import HandlerConfig
 
-from app.rag.handlers.query_processor import is_count_query
-from app.rag.handlers.response import build_file_path, format_title_from_filename
-
 logger = get_logger(__name__)
+
+# 개수 질의 키워드 (query_processor.py와 동일, 순환 import 회피)
+_COUNT_KEYWORDS = ["몇개", "몆개", "몇 개", "몆 개", "개수", "총", "몇", "몆"]
+
+
+def _is_count_query(query: str) -> bool:
+    """개수를 묻는 쿼리인지 확인 (순환 import 회피용 로컬 구현)"""
+    return any(kw in query for kw in _COUNT_KEYWORDS)
 
 
 # 빈 값으로 간주할 값들 (UI 표시 시 필터링)
@@ -69,7 +75,7 @@ class ResultFormatter:
             cards.append("\n".join(card_lines))
 
         # 응답 텍스트 생성
-        if is_count_query(query):
+        if _is_count_query(query):
             answer_text = f"**'{keywords}' 관련 문서는 총 {len(doc_details)}개**입니다.\n\n"
             answer_text += "\n\n".join(cards[:HandlerConfig.COUNT_QUERY_DISPLAY_LIMIT])
             if len(cards) > HandlerConfig.COUNT_QUERY_DISPLAY_LIMIT:

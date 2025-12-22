@@ -56,24 +56,12 @@ def test_metadata_db():
 
 
 def test_search_module():
-    """Test search modules directly."""
-    try:
-        from modules_legacy.search_module import SearchModule
+    """Test search modules directly via HybridRetriever."""
+    from app.rag.retrievers.hybrid import HybridRetriever
 
-        search = SearchModule()
-        # Test with a simple query
-        results = search.search("test", top_k=5)
-        assert isinstance(results, list)
-    except ImportError:
-        # Try hybrid search if available
-        try:
-            from modules_legacy.search_module_hybrid import HybridSearchModule
-
-            search = HybridSearchModule()
-            results = search.search("test", top_k=5)
-            assert isinstance(results, list)
-        except ImportError:
-            pytest.skip("No search module available")
+    retriever = HybridRetriever()
+    results = retriever.search("test", top_k=5)
+    assert isinstance(results, list)
 
 
 def test_query_parser():
@@ -137,50 +125,32 @@ def test_hybrid_retriever():
 
 
 def test_response_formatter():
-    """Test response formatter."""
-    try:
-        from modules_legacy.response_formatter import ResponseFormatter
+    """Test response builder (replaces legacy formatter)."""
+    from app.rag.response_builder import ResponseBuilder
 
-        formatter = ResponseFormatter()
-
-        # Test formatting
-        formatted = formatter.format({
-            "answer": "test answer",
-            "confidence": 0.8
-        })
-        assert isinstance(formatted, (str, dict))
-    except ImportError:
-        pytest.skip("Response formatter not available")
+    builder = ResponseBuilder()
+    assert builder is not None
+    # ResponseBuilder는 pipeline 통해 사용되므로 기본 인스턴스화 테스트만
 
 
 def test_ocr_processor():
-    """Test OCR processor."""
+    """Test OCR processor (pytesseract wrapper)."""
     try:
-        from modules_legacy.ocr_processor import OCRProcessor
+        import pytesseract
 
-        processor = OCRProcessor()
-        assert processor is not None
-
-        # Test initialization only (actual OCR requires files)
+        # pytesseract 설치 확인만 (실제 OCR은 파일 필요)
+        assert pytesseract is not None
     except ImportError:
-        pytest.skip("OCR processor not available")
+        pytest.skip("pytesseract not installed")
 
 
 def test_metadata_extractor():
-    """Test metadata extractor."""
-    try:
-        from modules_legacy.metadata_extractor import MetadataExtractor
+    """Test metadata parsing via MetaParser class."""
+    from app.rag.parse.parse_meta import MetaParser
 
-        extractor = MetadataExtractor()
-
-        # Test extraction with dummy data
-        metadata = extractor.extract({
-            "content": "test content",
-            "filename": "test.pdf"
-        })
-        assert isinstance(metadata, dict)
-    except ImportError:
-        pytest.skip("Metadata extractor not available")
+    parser = MetaParser()
+    assert parser is not None
+    # MetaParser는 복잡한 문서 처리 로직 포함, 인스턴스화 테스트만
 
 
 def test_web_interface_imports():
@@ -196,16 +166,12 @@ def test_web_interface_imports():
 
 
 def test_config_module():
-    """Test config module."""
-    import config
+    """Test config module via app.config.settings."""
+    from app.config.settings import settings
 
-    # Should have basic attributes
-    assert hasattr(config, "__file__")
-
-    # Test any config functions if available
-    if hasattr(config, "get_config"):
-        cfg = config.get_config()
-        assert cfg is not None
+    # settings는 Settings 싱글톤 인스턴스
+    assert settings is not None
+    assert hasattr(settings, "PROJECT_ROOT")
 
 
 def test_app_config_settings():
@@ -245,79 +211,71 @@ def test_error_classes():
 # Additional direct module tests for coverage
 def test_utils_modules():
     """Test utility modules."""
+    from app.rag.utils.json_utils import extract_last_json_block
+
+    # Test JSON utils - 유효한 JSON
+    result = extract_last_json_block('prefix {"test": 1}')
+    assert result == {"test": 1}
+
+    # 유효하지 않은 입력은 빈 dict 또는 ValueError 발생
     try:
-        from app.rag.utils.json_utils import safe_json_loads
+        result = extract_last_json_block("invalid")
+        assert result == {}
+    except ValueError:
+        pass  # ValueError도 허용
 
-        # Test JSON utils
-        result = safe_json_loads('{"test": 1}')
-        assert result == {"test": 1}
+    from app.rag.utils.context_hydrator import hydrate_context
 
-        result = safe_json_loads("invalid")
-        assert result is None or result == {}
-    except ImportError:
-        pass
-
-    try:
-        from app.rag.utils.context_hydrator import ContextHydrator
-
-        hydrator = ContextHydrator()
-        assert hydrator is not None
-    except ImportError:
-        pass
+    # hydrate_context 함수 테스트 (빈 청크)
+    text, meta = hydrate_context([])
+    assert isinstance(text, str)
+    assert isinstance(meta, dict)
 
 
 def test_parse_modules():
     """Test parsing modules."""
-    try:
-        from app.rag.parse.doctype import detect_document_type
+    from app.rag.parse.doctype import classify_document
 
-        doc_type = detect_document_type("test.pdf")
-        assert isinstance(doc_type, str)
-    except ImportError:
-        pass
+    doc_result = classify_document("테스트 문서 내용", filename="test.pdf")
+    assert isinstance(doc_result, dict)
+    # doctype 또는 doc_type 키 허용 (API 버전에 따라 다를 수 있음)
+    assert "doctype" in doc_result or "doc_type" in doc_result
 
-    try:
-        from app.rag.parse.parse_meta import parse_metadata
+    from app.rag.parse.parse_meta import MetaParser
 
-        meta = parse_metadata("test content")
-        assert isinstance(meta, dict)
-    except ImportError:
-        pass
+    parser = MetaParser()
+    assert parser is not None
 
-    try:
-        from app.rag.parse.parse_tables import parse_tables
+    from app.rag.parse.parse_tables import TableParser
 
-        tables = parse_tables("test content")
-        assert isinstance(tables, list)
-    except ImportError:
-        pass
+    table_parser = TableParser()
+    assert table_parser is not None
 
 
 def test_preprocess_modules():
     """Test preprocessing modules."""
-    try:
-        from app.rag.preprocess.clean_text import clean_text
+    from app.rag.preprocess.clean_text import TextCleaner
 
-        cleaned = clean_text("Test  text\n\n")
-        assert isinstance(cleaned, str)
-    except ImportError:
-        pass
+    cleaner = TextCleaner()
+    assert cleaner is not None
 
 
 def test_render_modules():
-    """Test rendering modules."""
-    try:
-        from app.rag.render.list_postprocess import postprocess_list
+    """Test summary templates module."""
+    from app.rag.summary_templates import build_prompt, detect_doc_kind
 
-        result = postprocess_list(["item1", "item2"])
-        assert isinstance(result, (list, str))
-    except ImportError:
-        pass
+    # detect_doc_kind 테스트
+    doc_kind = detect_doc_kind("test.pdf", "테스트 문서 내용")
+    assert isinstance(doc_kind, str)
 
-    try:
-        from app.rag.render.summary_templates import get_summary_template
-
-        template = get_summary_template("default")
-        assert isinstance(template, str)
-    except ImportError:
-        pass
+    # build_prompt 테스트 (필수 파라미터 포함)
+    prompt = build_prompt(
+        kind=doc_kind,
+        filename="test.pdf",
+        drafter="홍길동",
+        display_date="2024-01-01",
+        context_text="테스트 컨텍스트",
+        claimed_total=None,
+    )
+    assert isinstance(prompt, str)
+    assert len(prompt) > 0

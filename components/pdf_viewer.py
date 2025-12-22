@@ -197,11 +197,11 @@ class PDFViewer:
 
         st.markdown("---")
 
-    def _get_available_modes(self, info: PDFInfo) -> tuple[list[ViewMode], ViewMode]:
+    def _get_available_modes(self, info: PDFInfo) -> tuple[list[ViewMode], ViewMode | None]:
         """사용 가능한 보기 모드 및 기본 모드 반환
 
         Returns:
-            (available_modes, default_mode)
+            (available_modes, default_mode) - default_mode는 모드가 없으면 None
         """
         if self.pymupdf_available:
             modes = [ViewMode.ORIGINAL, ViewMode.IMAGES, ViewMode.TEXT]
@@ -511,7 +511,7 @@ class PDFViewer:
             # 사용 가능한 보기 모드
             available_modes, default_mode = self._get_available_modes(self.info)
 
-            if not available_modes:
+            if not available_modes or default_mode is None:
                 self._render_fallback_download()
                 return False
 

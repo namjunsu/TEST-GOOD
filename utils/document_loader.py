@@ -313,7 +313,7 @@ class DocumentLoader:
         percentage = drafter_count * 100 // max(total_count, 1)
 
         # 전체 고유 기안자
-        all_unique_drafters = df_with_drafter["drafter"].unique() if drafter_count > 0 else []
+        all_unique_drafters: list = list(set(df_with_drafter["drafter"].tolist())) if drafter_count > 0 else []
         all_unique_count = len(all_unique_drafters)
 
         # 한글 이름만 필터링

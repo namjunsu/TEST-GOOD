@@ -59,7 +59,8 @@ def __getattr__(name: str):
 
 
 __all__ = [
-    "DOMAIN_KEYWORDS",  # 하위 호환성 (실제 값은 query_routing.py)
+    # DOMAIN_KEYWORDS는 __getattr__로 지연 로드 (PEP 562)
+    # Ruff F822 회피를 위해 __all__에서 제외하나, from text import DOMAIN_KEYWORDS 여전히 가능
     "get_keyword_coverage",  # 하위 호환성 (query_routing으로 위임)
     "get_query_token_count",
     "norm_chunk_text",

@@ -1,17 +1,18 @@
 """청킹 모듈 단위 테스트"""
 
 from app.rag.chunking import Chunk, TextChunker
+from config.constants import ChunkingConfig
 
 
 class TestTextChunker:
     """TextChunker 테스트"""
 
     def test_init_default(self):
-        """기본 초기화 테스트"""
+        """기본 초기화 테스트 (ChunkingConfig 기준)"""
         chunker = TextChunker()
-        assert chunker.chunk_size == 512
-        assert chunker.overlap == 128
-        assert chunker.stride == 384  # 512 - 128
+        assert chunker.chunk_size == ChunkingConfig.CHUNK_SIZE  # 1024
+        assert chunker.overlap == ChunkingConfig.OVERLAP  # 256
+        assert chunker.stride == ChunkingConfig.CHUNK_SIZE - ChunkingConfig.OVERLAP  # 768
 
     def test_init_custom(self):
         """커스텀 파라미터 초기화"""

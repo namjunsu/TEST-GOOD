@@ -15,9 +15,8 @@ from unittest.mock import MagicMock, Mock, patch
 # 프로젝트 루트 경로 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Mock streamlit
-st_mock = MagicMock()
-sys.modules["streamlit"] = st_mock
+# conftest.py에서 설정한 streamlit mock 참조 (덮어쓰지 않음)
+st_mock = sys.modules["streamlit"]
 
 
 class TestPDFViewerPathResolution:

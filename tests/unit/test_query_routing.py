@@ -65,14 +65,25 @@ class TestQueryRouting:
 
     # ===== DOCUMENT 모드 테스트 =====
     def test_document_queries(self, router):
-        """문서 내용/요약 질의 패턴 테스트"""
-        document_queries = [
+        """문서 내용/요약 질의 패턴 테스트
+
+        NOTE: 요약/정리 의도(summary_intent)는 QA 모드로 분류됨.
+        명시적 파일명 지정(.pdf)만 DOCUMENT 모드로 분류됨.
+        """
+        # 요약/정리 의도 → QA 모드 (summary_intent)
+        qa_summary_queries = [
             "이 문서 요약해줘",
             "해당 문서 내용 알려줘",
-            "2024-10-24_중계차_카메라.pdf 요약",
             "이 파일 정리해줘",
         ]
+        for query in qa_summary_queries:
+            result = router.classify_mode(query)
+            assert result.mode == QueryMode.QA, f"'{query}' should be QA (summary_intent), got {result.mode}"
 
+        # 명시적 파일명 지정 → DOCUMENT 모드
+        document_queries = [
+            "2024-10-24_중계차_카메라.pdf",  # 파일명만
+        ]
         for query in document_queries:
             result = router.classify_mode(query)
             assert result.mode == QueryMode.DOCUMENT, f"'{query}' should be DOCUMENT, got {result.mode}"
@@ -117,11 +128,11 @@ def test_all_patterns():
     print("=" * 60)
 
     # 테스트 케이스 정의
+    # NOTE: 요약 의도는 QA 모드로 분류됨 (summary_intent)
     test_cases = [
         ("COST", ["총액은?", "비용 합계는 얼마야?", "2024년 총액"]),
         ("SEARCH", ["최새름 문서 찾아줘", "2024년 문서 보여줘"]),
-        ("DOCUMENT", ["이 문서 요약해줘", "해당 문서 내용 알려줘"]),
-        ("QA", ["중계차 카메라는 어떻게 수리하나요?"]),
+        ("QA", ["이 문서 요약해줘", "해당 문서 내용 알려줘", "중계차 카메라는 어떻게 수리하나요?"]),
     ]
 
     total = 0

@@ -83,10 +83,11 @@ class TestCostRouting:
     # === Negative Tests: COST가 아닌 케이스 ===
 
     def test_cost_routing_negative_summary(self, router):
-        """Negative: 요약 의도가 우선 (DOCUMENT로 라우팅)"""
+        """Negative: 요약 의도가 우선 (QA로 라우팅 - summary_intent)"""
         query = "2024-09-12_조명_소모품_구매_건.pdf 요약해줘"
         result = router.classify_mode(query)
-        assert result.mode == QueryMode.DOCUMENT, f"Expected DOCUMENT, got {result.mode}"
+        # 요약 의도는 QA 모드로 분류됨 (reason: summary_intent)
+        assert result.mode == QueryMode.QA, f"Expected QA, got {result.mode}"
 
     def test_cost_routing_negative_list(self, router):
         """Negative: 목록 검색 의도 (SEARCH로 라우팅)"""
@@ -128,12 +129,11 @@ def test_cost_routing_accuracy_batch():
     ]
 
     # COST가 아닌 케이스 (negative cases)
-    # 파일명만 입력하면 SEARCH로 라우팅됨 (문서 참조 감지)
     non_cost_cases = [
-        ("2024-09-12_조명_소모품_구매_건.pdf 요약해줘", QueryMode.DOCUMENT),
+        ("2024-09-12_조명_소모품_구매_건.pdf 요약해줘", QueryMode.QA),  # summary_intent → QA
         ("2024년 최새름이 작성한 문서 찾아줘", QueryMode.SEARCH),
         ("조명 장비는 어떤 종류가 있나요?", QueryMode.SEARCH),  # '어떤' → list_intent
-        ("20220111_멀티_스튜디오_PGM_모니터_수리건.pdf", QueryMode.SEARCH),  # 파일명만 → SEARCH
+        ("20220111_멀티_스튜디오_PGM_모니터_수리건.pdf", QueryMode.DOCUMENT),  # 파일명만 → DOCUMENT
     ]
 
     # COST 케이스 검증

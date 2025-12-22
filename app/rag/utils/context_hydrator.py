@@ -58,12 +58,12 @@ def hydrate_context(chunks: list[dict[str, Any]], max_len: int = 10000, mode: st
     """
     start_time = time.perf_counter()
 
-    # 캐싱된 환경변수 사용 (모듈 로드 시 1회만 읽음)
-    context_max_tokens = _ENV_CONTEXT_MAX_TOKENS
-    tokens_per_char = _ENV_TOKENS_PER_CHAR
+    # 환경변수 동적 조회 (테스트 시 patch 가능)
+    context_max_tokens = int(os.getenv("CONTEXT_MAX_TOKENS", str(_ENV_CONTEXT_MAX_TOKENS)))
+    tokens_per_char = float(os.getenv("TOKENS_PER_CHAR", str(_ENV_TOKENS_PER_CHAR)))
     context_max_chars = int(context_max_tokens / max(tokens_per_char, 1e-6))
     effective_max_len = min(max_len, context_max_chars)
-    rag_style_compact = _ENV_RAG_STYLE_COMPACT
+    rag_style_compact = os.getenv("RAG_STYLE_COMPACT", str(_ENV_RAG_STYLE_COMPACT).lower()).lower() == "true"
 
     metrics = {
         "chunks_received": len(chunks),
@@ -229,8 +229,9 @@ def _is_under_docs(path: Path) -> bool:
         docs 하위 여부
     """
     try:
-        # 캐싱된 환경변수 사용
-        base_docs = Path(_ENV_DOCS_DIR).resolve()
+        # 환경변수 동적 조회 (테스트 시 patch 가능)
+        docs_dir = os.getenv("DOCS_DIR", _ENV_DOCS_DIR)
+        base_docs = Path(docs_dir).resolve()
         resolved_path = path.resolve()
         return base_docs in resolved_path.parents or resolved_path == base_docs
     except Exception:

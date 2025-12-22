@@ -17,32 +17,15 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Streamlit import 전에 환경 변수 설정 (테스트 모드)
 os.environ["TESTING"] = "true"
 
-# Mock streamlit 모듈
+# Mock 관련 import
 from unittest.mock import MagicMock, Mock, patch
 
-# streamlit 모듈 모킹
-st_mock = Mock()
+# conftest.py에서 설정한 streamlit mock 참조 (덮어쓰지 않음)
+st_mock = sys.modules["streamlit"]
 
-
-# 유연한 데코레이터 mock: @st.cache_data와 @st.cache_data(ttl=300) 모두 지원
-def flexible_decorator(*args, **kwargs):
-    """@decorator 또는 @decorator(args) 모두 지원"""
-    if args and callable(args[0]):
-        # @st.cache_data 형태 (인자 없이 직접 함수에 적용)
-        return args[0]
-    # @st.cache_data(ttl=300) 형태 (팩토리 패턴)
-    return lambda func: func
-
-
-st_mock.cache_data = flexible_decorator
-st_mock.cache_resource = flexible_decorator
-st_mock.warning = Mock()
-st_mock.error = Mock()
-st_mock.info = Mock()
-st_mock.download_button = Mock(return_value=False)
-
-sys.modules["streamlit"] = st_mock
-sys.modules["components.pdf_viewer"] = Mock()
+# pdf_viewer mock 설정 (아직 없으면)
+if "components.pdf_viewer" not in sys.modules:
+    sys.modules["components.pdf_viewer"] = Mock()
 
 # 이제 pdf_utils import
 from utils import pdf_utils

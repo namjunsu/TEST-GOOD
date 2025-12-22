@@ -198,24 +198,14 @@ def run_benchmark(golden_set_path: Optional[Path] = None, top_k: int = 5) -> Ben
 
     try:
         # 새 구조 (app/rag/pipeline.py)
-        from app.core.config import Config
+        from app.rag.pipeline import RAGPipeline
 
-        from app.rag.pipeline import RagPipeline
-
-        cfg = Config.get_instance()
-        pipeline = RagPipeline(cfg)
-        pipeline.warmup()
+        pipeline = RAGPipeline()
         print("✅ app.rag.pipeline 로드 완료")
 
-    except ImportError:
-        # 기존 구조 (hybrid_chat_rag_v2.py)
-        try:
-            from hybrid_chat_rag_v2 import UnifiedRAG as RagPipeline
-            pipeline = RagPipeline()
-            print("✅ hybrid_chat_rag_v2 로드 완료 (레거시)")
-        except ImportError:
-            print("❌ RAG 파이프라인을 찾을 수 없습니다.")
-            sys.exit(1)
+    except ImportError as e:
+        print(f"❌ RAG 파이프라인을 찾을 수 없습니다: {e}")
+        sys.exit(1)
 
     print()
 

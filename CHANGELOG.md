@@ -1,5 +1,71 @@
 # Changelog
 
+## [2025-12-22] 코드 품질 개선 - Pyright/Ruff/pytest 오류 제로
+
+**Impact**: 코드 품질, 테스트 안정성, 타입 안전성
+**Status**: Completed
+
+### Summary
+
+코드베이스 전체 품질 검사 통과 달성. Pyright 63개 오류 해결, pytest 20개 실패 수정, Ruff 린트 오류 0개 유지.
+
+### 결과
+
+- **Pyright 오류**: 63개 → 0개 (✅ -100%)
+- **pytest 실패**: 20개 → 0개 (✅ -100%)
+- **Ruff 오류**: 0개 → 0개 (✅ 유지)
+- **테스트 커버리지**: 55.11% (✅ 25% 임계값 충족)
+
+### 주요 변경 사항
+
+#### Pyright 타입 오류 수정 (63개)
+
+- **HTTPError 생성자**: `fp` 파라미터 `None` → `type: ignore[arg-type]`
+- **Optional 타입 처리**: `str | None` 변수에 대한 `in` 연산자 가드 추가
+- **Pandas boolean indexing**: DataFrame 필터링 결과 `item()` 메서드 사용
+- **함수 데코레이터 타입**: `PerformanceMonitor.measure` 오버로드 시그니처 추가
+- **dict vs Mapping**: `TypedDict` 대신 `dict[str, Any]` 사용으로 호환성 확보
+
+#### pytest 테스트 수정 (20개)
+
+- **test_chunking.py**: ChunkingConfig 기본값 변경 반영 (512→1024, 128→256)
+- **test_cost_routing.py**: 요약 의도(summary_intent) → QA 모드 라우팅 반영
+- **test_query_routing.py**: 요약/정리 패턴 QA 모드 라우팅 업데이트
+- **context_hydrator.py**: 모듈 로드 시 캐시된 환경변수 → 함수 내 동적 조회
+- **streamlit mock 오염 방지**: conftest.py의 공유 mock 사용 (덮어쓰기 제거)
+- **LLM 필요 테스트 스킵**: vLLM 로딩 실패 시 `@pytest.mark.skipif` 추가
+
+#### Handler 모듈 리팩토링
+
+- **search.py 분리**: 1056줄 → 791줄 (-25%)
+  - `query_processor.py`: 쿼리 전처리 로직 분리
+  - `result_formatter.py`: 결과 포맷팅 로직 분리
+- **순환 import 해결**: 절대 import 패턴 적용
+- **HandlerConfig 상수**: `config/constants.py`에 중앙화
+
+### 수정된 파일
+
+#### 타입 오류 수정
+
+- `app/alerts.py` - HTTPError, Optional 처리
+- `app/rag/parse/parse_tables.py` - Pandas boolean indexing
+- `utils/performance.py` - 데코레이터 타입 힌트
+- `utils/session_manager.py` - Optional 가드
+- `tests/unit/test_alerts.py` - HTTPError 타입 무시
+
+#### 테스트 수정
+
+- `tests/unit/test_chunking.py` - 기본값 업데이트
+- `tests/unit/test_cost_routing.py` - QA 모드 반영
+- `tests/unit/test_query_routing.py` - 라우팅 로직 업데이트
+- `tests/unit/test_pdf_utils.py` - streamlit mock 수정
+- `tests/unit/test_pdf_path_fix.py` - streamlit mock 수정
+- `tests/e2e/test_4mode_smoke.py` - 라우팅 테스트 수정
+- `tests/e2e/test_e2e_validation.py` - LLM 스킵 추가
+- `app/rag/utils/context_hydrator.py` - 환경변수 동적 조회
+
+---
+
 ## [2025-12-09] 프로젝트 정리 - 불필요한 파일 139개 삭제
 
 **Impact**: 프로젝트 구조, 유지보수성

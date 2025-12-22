@@ -91,7 +91,7 @@ def main():
         conn.commit()
         print(f"\n✅ 업데이트 완료: {updated}건")
     else:
-        print(f"\n🔍 Dry-run 결과:")
+        print("\n🔍 Dry-run 결과:")
         print(f"   업데이트 필요: {updated}건")
         print(f"   변경 없음: {skipped}건")
         print(f"   텍스트 없음: {no_txt}건")

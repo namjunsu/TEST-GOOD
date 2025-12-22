@@ -4,14 +4,19 @@ SEARCH, SEARCH_CONTENT_ONLY 모드를 처리하는 핸들러.
 pipeline.py의 _answer_search, _answer_search_content_only를 위임받아 처리.
 
 COST_SUM 모드는 cost_sum.py로 분리됨 (SRP 적용).
+쿼리 처리는 query_processor.py로 분리됨.
+결과 포맷팅은 result_formatter.py로 분리됨.
 
 Strangler Fig 패턴:
     1단계: pipeline.py의 메서드들이 이 핸들러를 호출
     2단계: 점진적으로 로직 이동
     3단계: pipeline.py는 facade만 유지
+
+2025-12-22: 리팩토링
+    - query_processor.py 분리 (쿼리 정제, 필터 추출)
+    - result_formatter.py 분리 (응답 빌드, evidence 생성)
 """
 
-import re
 import sqlite3
 from typing import TYPE_CHECKING, Any, Optional, TypedDict
 
@@ -21,36 +26,27 @@ from app.data.metadata_db import MetadataDB
 from config.constants import HandlerConfig
 
 from .base import BaseHandler
+from .query_processor import (
+    CONTENT_STOP_WORDS,
+    POSTPOSITIONS,
+    STOP_WORDS,
+    calculate_max_docs,
+    extract_drafter_filter,
+    extract_keywords,
+    extract_year_filter,
+    is_count_query,
+    needs_expanded_search,
+)
 from .response import (
     build_file_path,
     format_title_from_filename,
 )
+from .result_formatter import EMPTY_VALUES
 
 if TYPE_CHECKING:
     from app.rag.pipeline import RAGPipeline
 
 logger = get_logger(__name__)
-
-
-# ============================================================================
-# 상수 정의
-# ============================================================================
-
-# 불용어 목록
-STOP_WORDS = [
-    "문서", "파일", "기안서", "찾아줘", "찾아", "검색", "관련", "좀", "해줘",
-]
-
-# 정밀 검색용 추가 불용어
-CONTENT_STOP_WORDS = [
-    "내용", "본문", "들어간", "포함", "포함된", "있는", "만",
-]
-
-# 조사 (단어 경계에서만 제거)
-POSTPOSITIONS = [" 에 ", " 에서 ", " 이 ", " 가 ", " 을 ", " 를 "]
-
-# 빈 값으로 간주할 값들 (UI 표시 시 필터링)
-EMPTY_VALUES = frozenset({None, "", "None", "없음", "정보 없음", "기타", "작성자 미상", "날짜 없음"})
 
 
 # ============================================================================
@@ -89,269 +85,8 @@ class EvidenceItem(TypedDict, total=False):
     meta: dict[str, Any]
 
 
-# 기안자 목록 캐시 (앱 시작 시 DB에서 로드)
-_DRAFTERS_CACHE: list[str] | None = None
-
-
-# 폴백 기안자 목록
-_FALLBACK_DRAFTERS = [
-    "유인혁", "최새름", "하승범", "신규호", "노규민", "남준수",
-    "이권형", "이승현", "윤상현", "장다운", "정다운", "김승룡",
-    "총무팀", "강병규", "박연수", "이호영", "이승헌", "이의주",
-]
-
-
-def get_common_drafters() -> list[str]:
-    """DB에서 기안자 목록을 동적으로 로드 (캐싱 적용)"""
-    global _DRAFTERS_CACHE
-    if _DRAFTERS_CACHE is not None:
-        return _DRAFTERS_CACHE
-
-    try:
-        conn = sqlite3.connect("metadata.db")
-        rows = conn.execute(
-            "SELECT DISTINCT drafter FROM documents WHERE drafter IS NOT NULL AND drafter != ''"
-        ).fetchall()
-        conn.close()
-        _DRAFTERS_CACHE = [row[0] for row in rows if row[0]]
-        logger.info(f"기안자 목록 로드: {len(_DRAFTERS_CACHE)}명")
-
-    except sqlite3.OperationalError as e:
-        # DB 락 또는 연결 문제 - 재시도 가능
-        logger.warning(f"기안자 목록 로드 실패 (DB 일시 오류), 폴백 사용: {e}")
-        _DRAFTERS_CACHE = _FALLBACK_DRAFTERS
-
-    except sqlite3.Error as e:
-        # 기타 DB 오류
-        logger.warning(f"기안자 목록 로드 실패 (DB 오류), 폴백 사용: {e}")
-        _DRAFTERS_CACHE = _FALLBACK_DRAFTERS
-
-    except Exception as e:
-        # 예상치 못한 오류
-        logger.warning(f"기안자 목록 로드 실패 ({type(e).__name__}), 폴백 사용: {e}")
-        _DRAFTERS_CACHE = _FALLBACK_DRAFTERS
-
-    return _DRAFTERS_CACHE
-
-
-# 개수 질의 키워드
-COUNT_KEYWORDS = ["몇개", "몆개", "몇 개", "몆 개", "개수", "총", "몇", "몆"]
-
-# 리스트/전체 질의 키워드 (2025-12-09: "알려" 제거 - 정보 질의 의도와 리스트 요청 구분)
-LIST_KEYWORDS = ["리스트", "목록", "보여"]
-ALL_KEYWORDS = ["전부", "모두", "모든", "전체", "all"]
-
-# 명시적 리스트 키워드
-EXPLICIT_LIST_KEYWORDS = {"리스트", "목록", "전체 목록", "all"}
-
-# 상세 요청 감지 키워드
-DETAIL_INDICATORS = {"1)", "2)", "3)", "내용", "부분만", "요약", "설명", "자세히"}
-
-# 대량 검색 패턴
-BULK_PATTERNS = [
-    r"(전부|모두|모든).*(알려|보여|찾아)",
-    r"(알려|보여|찾아).*(전부|모두)",
-]
-
-
-# ============================================================================
-# 헬퍼 함수
-# ============================================================================
-
-def _clean_query(query: str) -> str:
-    """쿼리에서 이모지, 특수문자, UI 형식 제거
-
-    웹 UI에서 복사한 문서 제목 형식을 정리:
-    - 이모지 제거 (📅, 👤, ✅ 등)
-    - UI 구분자 제거 (|)
-    - 연속 공백 정리
-    """
-    import re
-
-    # 이모지 제거 (유니코드 이모지 범위)
-    emoji_pattern = re.compile(
-        "["
-        "\U0001F600-\U0001F64F"  # 이모티콘
-        "\U0001F300-\U0001F5FF"  # 기호 및 픽토그램
-        "\U0001F680-\U0001F6FF"  # 교통 및 지도
-        "\U0001F1E0-\U0001F1FF"  # 국기
-        "\U00002702-\U000027B0"  # 딩뱃
-        "\U0001F900-\U0001F9FF"  # 보조 기호
-        "\U0001FA00-\U0001FA6F"  # 체스 기호
-        "\U0001FA70-\U0001FAFF"  # 기호 확장
-        "\U00002600-\U000026FF"  # 기타 기호
-        "]+",
-        flags=re.UNICODE,
-    )
-    cleaned = emoji_pattern.sub(" ", query)
-
-    # UI 구분자 제거
-    cleaned = cleaned.replace("|", " ")
-
-    # 연속 공백을 단일 공백으로
-    cleaned = re.sub(r"\s+", " ", cleaned)
-
-    return cleaned.strip()
-
-
-def extract_keywords(query: str, stop_words: list[str]) -> str:
-    """쿼리에서 불용어를 제거하고 키워드 추출
-
-    Args:
-        query: 사용자 원본 쿼리
-        stop_words: 제거할 불용어 목록
-
-    Returns:
-        불용어가 제거된 키워드 문자열
-    """
-    # 먼저 이모지/특수문자 정리
-    keywords = _clean_query(query)
-
-    # 불용어 제거
-    for word in stop_words:
-        keywords = keywords.replace(word, " ")
-
-    # 연속 공백 정리
-    import re
-    keywords = re.sub(r"\s+", " ", keywords)
-
-    return keywords.strip()
-
-
-def extract_drafter_filter(query: str) -> Optional[str]:
-    """쿼리에서 기안자명 추출
-
-    Args:
-        query: 사용자 쿼리
-
-    Returns:
-        추출된 기안자명. 없으면 None
-    """
-    for name in get_common_drafters():
-        if name in query:
-            logger.info(f"🔍 기안자 필터 적용: {name}")
-            return name
-    return None
-
-
-def extract_year_filter(query: str) -> Optional[str]:
-    """쿼리에서 연도 추출
-
-    Args:
-        query: 사용자 쿼리
-
-    Returns:
-        추출된 연도 문자열 (예: "2024"). 없으면 None
-    """
-    year_match = re.search(r"(20\d{2})년?", query)
-    if year_match:
-        year = year_match.group(1)
-        logger.info(f"📅 연도 필터 적용: {year}")
-        return year
-    return None
-
-
-def is_readable_text(text: str) -> bool:
-    """텍스트가 읽을 만한 품질인지 확인 (OCR 품질 필터)
-
-    Args:
-        text: 검사할 텍스트
-
-    Returns:
-        품질이 좋으면 True, 저품질이면 False
-
-    Notes:
-        - MIN_TEXT_LENGTH 미만은 의미 없음
-        - MAX_SPECIAL_CHAR_RATIO 초과면 OCR 오류 가능성
-        - MIN_KOREAN_CHAR_RATIO 미만이면 깨진 텍스트
-    """
-    if not text or len(text) < HandlerConfig.MIN_TEXT_LENGTH:
-        return False
-
-    # 특수문자 비율 체크
-    special_chars = sum(1 for c in text if c in '\\/"\'{}[]|<>_')
-    if special_chars / len(text) > HandlerConfig.MAX_SPECIAL_CHAR_RATIO:
-        return False
-
-    # 한글 비율 체크
-    korean_chars = sum(1 for c in text if "\uac00" <= c <= "\ud7a3")
-    if korean_chars / len(text) < HandlerConfig.MIN_KOREAN_CHAR_RATIO:
-        return False
-
-    return True
-
-
-def is_count_query(query: str) -> bool:
-    """개수만 묻는 질의인지 확인
-
-    Args:
-        query: 사용자 쿼리
-
-    Returns:
-        "몇개", "개수" 등이 포함되면 True
-    """
-    return any(kw in query.lower() for kw in COUNT_KEYWORDS)
-
-
-def is_list_query(query: str) -> bool:
-    """리스트 요청 질의인지 확인
-
-    Args:
-        query: 사용자 쿼리
-
-    Returns:
-        "리스트", "목록" 등이 포함되면 True
-    """
-    return any(kw in query.lower() for kw in LIST_KEYWORDS)
-
-
-def is_all_query(query: str) -> bool:
-    """전체 요청 질의인지 확인
-
-    Args:
-        query: 사용자 쿼리
-
-    Returns:
-        "전부", "모두" 등이 포함되면 True
-    """
-    return any(kw in query.lower() for kw in ALL_KEYWORDS)
-
-
-def needs_expanded_search(query: str, drafter_filter: Optional[str]) -> bool:
-    """확장 검색이 필요한지 확인
-
-    Args:
-        query: 사용자 쿼리
-        drafter_filter: 기안자 필터 (있으면 확장 검색)
-
-    Returns:
-        전체/리스트 요청이거나 기안자 필터가 있으면 True
-    """
-    needs_all = is_all_query(query) or is_count_query(query)
-    wants_list = is_list_query(query)
-    return needs_all or wants_list or bool(drafter_filter)
-
-
-def calculate_max_docs(query: str, drafter_filter: Optional[str]) -> int:
-    """검색할 최대 문서 수 계산
-
-    Args:
-        query: 사용자 쿼리
-        drafter_filter: 기안자 필터
-
-    Returns:
-        BULK_SEARCH_TOP_K(200) 또는 NORMAL_SEARCH_TOP_K(10)
-    """
-    is_detail = any(ind in query for ind in DETAIL_INDICATORS)
-    is_explicit_list = any(kw in query.lower() for kw in EXPLICIT_LIST_KEYWORDS)
-    is_bulk = any(re.search(p, query) for p in BULK_PATTERNS)
-
-    wants_list = (is_explicit_list or is_bulk) and not is_detail
-    return HandlerConfig.BULK_SEARCH_TOP_K if wants_list or drafter_filter else HandlerConfig.NORMAL_SEARCH_TOP_K
-
-
-# NOTE: format_title_from_filename, build_file_path, clean_text_preview 함수는
-# response.py에서 import하여 사용 (코드 중복 제거)
+# NOTE: 상수 및 헬퍼 함수는 query_processor.py로 분리됨 (2025-12-22)
+# NOTE: format_title_from_filename, build_file_path 함수는 response.py에서 import
 
 
 # ============================================================================

@@ -14,7 +14,7 @@ import hashlib
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 # 프로젝트 루트를 sys.path에 추가
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -125,7 +125,7 @@ def process_single_pdf(
     meta_parser: MetaParser,
     table_parser: TableParser,
     text_cleaner: TextCleaner,
-    db: MetadataDB,
+    db: Optional[MetadataDB],
     dry_run: bool = False,
 ) -> dict[str, Any]:
     """단일 PDF 처리"""
@@ -146,23 +146,25 @@ def process_single_pdf(
         # 2. 텍스트 정제
         cleaned_text = text_cleaner.clean(text)
 
-        # 3. 메타데이터 파싱
-        meta = meta_parser.parse(text, pdf_path.name)
+        # 3. 메타데이터 파싱 (metadata dict, title, content 필요)
+        meta = meta_parser.parse({}, title=pdf_path.name, content=text)
 
-        # 4. 문서 유형 분류
-        doctype = classify_document(text, pdf_path.name, meta)
+        # 4. 문서 유형 분류 (text, filename만 필요)
+        doctype_result = classify_document(text, pdf_path.name)
+        doctype = doctype_result.get("doctype", "미분류") if isinstance(doctype_result, dict) else str(doctype_result)
 
-        # 5. 표 파싱 (결과는 meta에 병합됨)
-        _table_data = table_parser.parse(text, pdf_path.name)
+        # 5. 표 파싱 (text만 필요)
+        _table_data = table_parser.parse(text)
 
         # 6. DB 저장
-        if not dry_run:
+        if not dry_run and db is not None:
             # 추출 텍스트 저장
+            EXTRACTED_DIR.mkdir(parents=True, exist_ok=True)
             txt_path = EXTRACTED_DIR / (pdf_path.stem + ".txt")
             txt_path.write_text(cleaned_text, encoding="utf-8")
 
-            # DB upsert
-            doc_data = {
+            # DB add_document (upsert 역할)
+            doc_data: dict[str, Any] = {
                 "filename": pdf_path.name,
                 "path": str(pdf_path.relative_to(PROJECT_ROOT)),
                 "date": meta.get("date"),
@@ -174,7 +176,7 @@ def process_single_pdf(
                 "file_hash": compute_hash(pdf_path),
                 "text_length": len(cleaned_text),
             }
-            db.upsert_document(doc_data)
+            db.add_document(doc_data)
 
         result["status"] = "success"
         result["doctype"] = doctype

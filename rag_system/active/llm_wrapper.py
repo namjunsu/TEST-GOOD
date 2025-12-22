@@ -282,6 +282,49 @@ class QwenLLM(BaseRAGLLM):
             self.logger.error(f"모델 로드 실패: {e}")
             raise
 
+    def _chat_complete(
+        self,
+        messages: list[dict[str, str]],
+        max_tokens: int,
+        temperature: Optional[float] = None,
+        top_p: Optional[float] = None,
+        top_k: Optional[int] = None,
+        repeat_penalty: Optional[float] = None,
+    ) -> str:
+        """통합 chat completion 호출 (중복 제거용 헬퍼)
+
+        Args:
+            messages: 메시지 리스트 [{"role": "system/user", "content": "..."}]
+            max_tokens: 최대 생성 토큰 수
+            temperature: 생성 온도 (None이면 config 기본값)
+            top_p: top_p 값 (None이면 config 기본값)
+            top_k: top_k 값 (None이면 config 기본값)
+            repeat_penalty: 반복 패널티 (None이면 config 기본값)
+
+        Returns:
+            생성된 텍스트 (strip 적용됨)
+
+        Raises:
+            RuntimeError: LLM이 로드되지 않은 경우
+        """
+        if self.llm is None:
+            raise RuntimeError("LLM이 로드되지 않았습니다")
+
+        response = self.llm.create_chat_completion(
+            messages=messages,  # type: ignore[arg-type]
+            temperature=temperature if temperature is not None else self.config.temperature,
+            max_tokens=max_tokens,
+            top_p=top_p if top_p is not None else self.config.top_p,
+            top_k=top_k if top_k is not None else self.config.top_k,
+            repeat_penalty=repeat_penalty if repeat_penalty is not None else self.config.repeat_penalty,
+            stop=self.stop_tokens,
+        )
+
+        # response는 dict 또는 Iterator - dict인 경우만 처리
+        choices = response["choices"]  # type: ignore[index]
+        content = choices[0]["message"]["content"]
+        return content.strip() if content else ""
+
     @lru_cache(maxsize=32)  # noqa: B019 - 의도적 메서드 캐싱 (성능 최적화)
     def create_system_prompt(self) -> str:
         """최적화된 시스템 프롬프트 (캐시됨)"""
@@ -538,23 +581,8 @@ A:"""
                 else:
                     final_max_tokens = mode_max_tokens
 
-                # 생성 (llm이 None이면 로드되지 않은 상태)
-                if self.llm is None:
-                    raise RuntimeError("LLM이 로드되지 않았습니다")
-                response = self.llm.create_chat_completion(
-                    messages=messages,  # type: ignore[arg-type]
-                    temperature=self.config.temperature,
-                    max_tokens=final_max_tokens,
-                    top_p=self.config.top_p,
-                    top_k=self.config.top_k,
-                    repeat_penalty=self.config.repeat_penalty,
-                    stop=self.stop_tokens,
-                )
-
-                # response는 dict 또는 Iterator - dict인 경우만 처리
-                choices = response["choices"]  # type: ignore[index]
-                content = choices[0]["message"]["content"]
-                answer = content.strip() if content else ""
+                # 생성 (헬퍼 메서드 사용)
+                answer = self._chat_complete(messages, max_tokens=final_max_tokens)
                 # 외국어 텍스트 필터링
                 answer = self._remove_foreign_text(answer)
                 generation_time = time.time() - start_time
@@ -741,21 +769,10 @@ A:"""
                     {"role": "user", "content": structured_prompt},
                 ]
 
-                if self.llm is None:
-                    raise RuntimeError("LLM이 로드되지 않았습니다")
-                response = self.llm.create_chat_completion(
-                    messages=messages,  # type: ignore[arg-type]
-                    temperature=self.config.temperature,
+                raw_answer = self._chat_complete(
+                    messages,
                     max_tokens=min(self.config.max_tokens, template.max_length + 50),
-                    top_p=self.config.top_p,
-                    top_k=self.config.top_k,
-                    repeat_penalty=self.config.repeat_penalty,
-                    stop=self.stop_tokens,
                 )
-
-                choices = response["choices"]  # type: ignore[index]
-                content = choices[0]["message"]["content"]
-                raw_answer = content.strip() if content else ""
                 # 외국어 텍스트 필터링
                 raw_answer = self._remove_foreign_text(raw_answer)
                 generation_time = time.time() - start_time
@@ -966,22 +983,7 @@ A:"""
                     {"role": "user", "content": enhanced_prompt},
                 ]
 
-                if self.llm is None:
-                    raise RuntimeError("LLM이 로드되지 않았습니다")
-
-                response = self.llm.create_chat_completion(
-                    messages=messages,  # type: ignore[arg-type]
-                    temperature=self.config.temperature,  # 기본 설정값 사용 (0.3)
-                    max_tokens=self.config.max_tokens,     # 기본 설정값 사용 (800)
-                    top_p=self.config.top_p,               # 기본 설정값 사용 (0.9)
-                    top_k=self.config.top_k,               # 기본 설정값 사용 (40)
-                    repeat_penalty=self.config.repeat_penalty,
-                    stop=self.stop_tokens,
-                )
-
-                choices = response["choices"]  # type: ignore[index]
-                content = choices[0]["message"]["content"]
-                answer = content.strip() if content else ""
+                answer = self._chat_complete(messages, max_tokens=self.config.max_tokens)
                 # 외국어 텍스트 필터링
                 answer = self._remove_foreign_text(answer)
                 generation_time = time.time() - start_time
@@ -1430,25 +1432,17 @@ A:"""
                     {"role": "user", "content": conversational_prompt},
                 ]
 
-                if self.llm is None:
-                    raise RuntimeError("LLM이 로드되지 않았습니다")
-
-                response = self.llm.create_chat_completion(
-                    messages=messages,  # type: ignore[arg-type]
-                    temperature=LLMWrapperConfig.CONVERSATIONAL_TEMPERATURE,
+                answer = self._chat_complete(
+                    messages,
                     max_tokens=int(os.getenv(
                         "CONVERSATIONAL_MAX_TOKENS",
                         str(LLMWrapperConfig.CONVERSATIONAL_MAX_TOKENS),
                     )),
+                    temperature=LLMWrapperConfig.CONVERSATIONAL_TEMPERATURE,
                     top_p=LLMWrapperConfig.CONVERSATIONAL_TOP_P,
                     top_k=40,
                     repeat_penalty=1.1,
-                    stop=self.stop_tokens,
                 )
-
-                choices = response["choices"]  # type: ignore[index]
-                content = choices[0]["message"]["content"]
-                answer = content.strip() if content else ""
 
                 # 외국어 텍스트 필터링 (헬퍼 메서드 사용)
                 answer = self._remove_foreign_text(answer)
@@ -1575,22 +1569,10 @@ A:"""
                     {"role": "user", "content": full_doc_prompt},
                 ]
 
-                if self.llm is None:
-                    raise RuntimeError("LLM이 로드되지 않았습니다")
-
-                response = self.llm.create_chat_completion(
-                    messages=messages,  # type: ignore[arg-type]
-                    temperature=self.config.temperature,
+                answer = self._chat_complete(
+                    messages,
                     max_tokens=LLMWrapperConfig.FULL_DOC_MAX_TOKENS,
-                    top_p=self.config.top_p,
-                    top_k=self.config.top_k,
-                    repeat_penalty=self.config.repeat_penalty,
-                    stop=self.stop_tokens,
                 )
-
-                choices = response["choices"]  # type: ignore[index]
-                content = choices[0]["message"]["content"]
-                answer = content.strip() if content else ""
                 generation_time = time.time() - start_time
 
                 # 첫 번째 답변을 최선의 답변으로 저장
@@ -1665,19 +1647,16 @@ A:"""
                 {"role": "user", "content": "안녕하세요?"},
             ]
 
-            if self.llm is None:
-                self.logger.error("모델 테스트 실패: LLM이 로드되지 않음")
+            try:
+                answer = self._chat_complete(
+                    test_messages,
+                    max_tokens=LLMWrapperConfig.TEST_MODEL_MAX_TOKENS,
+                    temperature=0.1,
+                )
+            except RuntimeError as e:
+                self.logger.error(f"모델 테스트 실패: {e}")
                 return False
 
-            response = self.llm.create_chat_completion(
-                messages=test_messages,  # type: ignore[arg-type]
-                max_tokens=LLMWrapperConfig.TEST_MODEL_MAX_TOKENS,
-                temperature=0.1,
-            )
-
-            choices = response["choices"]  # type: ignore[index]
-            content = choices[0]["message"]["content"]
-            answer = content.strip() if content else ""
             self.logger.info(f"모델 테스트 성공: {answer[:50]}...")
             return True
 

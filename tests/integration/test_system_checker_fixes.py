@@ -261,7 +261,7 @@ class TestConfigCheckPolicy:
                 assert "app.config.settings" in config_item.message
 
                 # action이 "필요시" 같은 선택적 표현 포함 확인
-                assert "필요시" in config_item.action
+                assert config_item.action is not None and "필요시" in config_item.action
 
     def test_config_check_continues_without_config_py(self, tmp_path):
         """config.py가 없어도 검사가 계속 진행되는지 확인"""

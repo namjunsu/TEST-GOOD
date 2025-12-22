@@ -15,6 +15,7 @@ from typing import Any, Optional
 import yaml
 
 from app.core.types import QuestionType
+from config.constants import LLMWrapperConfig
 from rag_system.active.llm_models import (
     MAX_LLM_RETRY,
     MODE_TOKEN_CONFIG,
@@ -121,15 +122,18 @@ class QwenLLM(BaseRAGLLM):
     def _load_optimization_config(self):
         """LLM 최적화 설정 로드"""
         self.use_optimized_prompts = False
-        self.max_context_tokens = 4000
-        self.max_response_tokens = 1200
+        self.max_context_tokens = LLMWrapperConfig.MAX_CONTEXT_TOKENS
+        self.max_response_tokens = LLMWrapperConfig.MAX_RESPONSE_TOKENS
 
         config_path = Path(__file__).parent.parent / "config" / "llm_optimization.yaml"
 
         # 환경 변수로 최적화 강제 활성화
         if os.environ.get("USE_OPTIMIZED_PROMPTS", "false").lower() == "true":
             self.use_optimized_prompts = True
-            self.max_context_tokens = int(os.environ.get("MAX_CONTEXT_TOKENS", "2000"))
+            self.max_context_tokens = int(os.environ.get(
+                "MAX_CONTEXT_TOKENS",
+                str(LLMWrapperConfig.MAX_CONTEXT_TOKENS),
+            ))
             self.logger.info("환경변수로 최적화 활성화")
 
         # YAML 설정 파일 로드
@@ -139,8 +143,14 @@ class QwenLLM(BaseRAGLLM):
                     opt_config = yaml.safe_load(f)
                     if opt_config and "prompts" in opt_config:
                         self.use_optimized_prompts = opt_config["prompts"].get("use_optimized", False)
-                        self.max_context_tokens = opt_config["prompts"].get("max_context_tokens", 4000)
-                        self.max_response_tokens = opt_config["prompts"].get("max_response_tokens", 1200)
+                        self.max_context_tokens = opt_config["prompts"].get(
+                            "max_context_tokens",
+                            LLMWrapperConfig.MAX_CONTEXT_TOKENS,
+                        )
+                        self.max_response_tokens = opt_config["prompts"].get(
+                            "max_response_tokens",
+                            LLMWrapperConfig.MAX_RESPONSE_TOKENS,
+                        )
                         self.logger.info(f"최적화 설정 로드: {config_path}")
             except Exception as e:
                 self.logger.warning(f"최적화 설정 로드 실패: {e}")
@@ -1425,9 +1435,12 @@ A:"""
 
                 response = self.llm.create_chat_completion(
                     messages=messages,  # type: ignore[arg-type]
-                    temperature=0.7,  # 더 자연스러운 응답
-                    max_tokens=int(os.getenv("CONVERSATIONAL_MAX_TOKENS", "1500")),
-                    top_p=0.9,
+                    temperature=LLMWrapperConfig.CONVERSATIONAL_TEMPERATURE,
+                    max_tokens=int(os.getenv(
+                        "CONVERSATIONAL_MAX_TOKENS",
+                        str(LLMWrapperConfig.CONVERSATIONAL_MAX_TOKENS),
+                    )),
+                    top_p=LLMWrapperConfig.CONVERSATIONAL_TOP_P,
                     top_k=40,
                     repeat_penalty=1.1,
                     stop=self.stop_tokens,
@@ -1568,7 +1581,7 @@ A:"""
                 response = self.llm.create_chat_completion(
                     messages=messages,  # type: ignore[arg-type]
                     temperature=self.config.temperature,
-                    max_tokens=1200,  # 전체 문서 답변은 더 길 수 있음
+                    max_tokens=LLMWrapperConfig.FULL_DOC_MAX_TOKENS,
                     top_p=self.config.top_p,
                     top_k=self.config.top_k,
                     repeat_penalty=self.config.repeat_penalty,
@@ -1627,7 +1640,7 @@ A:"""
             return RAGResponse(
                 answer=best_answer["answer"],
                 sources_cited=[],
-                confidence=self._calculate_confidence(best_answer["answer"], [full_doc_chunk]) * 0.7,
+                confidence=self._calculate_confidence(best_answer["answer"], [full_doc_chunk]) * LLMWrapperConfig.FULL_DOC_CONFIDENCE_MULTIPLIER,
                 generation_time=best_answer["generation_time"],
                 has_proper_citation=False,
                 retry_count=best_answer["retry_count"],
@@ -1658,7 +1671,7 @@ A:"""
 
             response = self.llm.create_chat_completion(
                 messages=test_messages,  # type: ignore[arg-type]
-                max_tokens=50,
+                max_tokens=LLMWrapperConfig.TEST_MODEL_MAX_TOKENS,
                 temperature=0.1,
             )
 
@@ -1798,7 +1811,7 @@ class LlamaLLM(BaseRAGLLM):
                     generation_config=GenerationConfig(
                         max_new_tokens=800,
                         temperature=0.8,
-                        top_p=0.95,
+                        top_p=LLMWrapperConfig.STREAMING_TOP_P,
                         do_sample=True,
                         eos_token_id=self.tokenizer.eos_token_id,
                         pad_token_id=self.tokenizer.pad_token_id,
@@ -1812,7 +1825,7 @@ class LlamaLLM(BaseRAGLLM):
             return RAGResponse(
                 answer=response_text.strip(),
                 sources_cited=self._extract_sources(context_chunks),
-                confidence=0.9,
+                confidence=LLMWrapperConfig.SEARCH_HIGH_CONFIDENCE,
                 generation_time=generation_time,
                 has_proper_citation=True,
                 retry_count=0,
@@ -1885,9 +1898,18 @@ class VllmLLM(BaseRAGLLM):
         self.llm = None
 
         # vLLM 설정 로드 (2025-12-21: H100 최적화)
-        self.gpu_memory_utilization = float(os.getenv("VLLM_GPU_MEMORY_UTILIZATION", "0.90"))
-        self.max_model_len = int(os.getenv("VLLM_MAX_MODEL_LEN", "32768"))
-        self.tensor_parallel_size = int(os.getenv("VLLM_TENSOR_PARALLEL_SIZE", "1"))
+        self.gpu_memory_utilization = float(os.getenv(
+            "VLLM_GPU_MEMORY_UTILIZATION",
+            str(LLMWrapperConfig.VLLM_GPU_MEMORY_UTILIZATION),
+        ))
+        self.max_model_len = int(os.getenv(
+            "VLLM_MAX_MODEL_LEN",
+            str(LLMWrapperConfig.VLLM_MAX_MODEL_LEN),
+        ))
+        self.tensor_parallel_size = int(os.getenv(
+            "VLLM_TENSOR_PARALLEL_SIZE",
+            str(LLMWrapperConfig.VLLM_TENSOR_PARALLEL_SIZE),
+        ))
         self.trust_remote_code = os.getenv("VLLM_TRUST_REMOTE_CODE", "true").lower() == "true"
         self.enable_prefix_caching = os.getenv("VLLM_ENABLE_PREFIX_CACHING", "true").lower() == "true"
         self.enforce_eager = os.getenv("VLLM_ENFORCE_EAGER", "false").lower() == "true"
@@ -1972,7 +1994,7 @@ class VllmLLM(BaseRAGLLM):
             return RAGResponse(
                 answer=response_text.strip(),
                 sources_cited=sources,
-                confidence=0.95,  # 72B 모델은 더 높은 신뢰도
+                confidence=LLMWrapperConfig.RAG_HIGH_CONFIDENCE,
                 generation_time=generation_time,
                 has_proper_citation=has_citation,
                 retry_count=0,
@@ -2133,7 +2155,7 @@ class Qwen72BLLM(BaseRAGLLM):
             return RAGResponse(
                 answer=response_text.strip(),
                 sources_cited=sources,
-                confidence=0.95,
+                confidence=LLMWrapperConfig.RAG_HIGH_CONFIDENCE,
                 generation_time=generation_time,
                 has_proper_citation=has_citation,
                 retry_count=0,
@@ -2235,7 +2257,7 @@ class Qwen72BLLM(BaseRAGLLM):
                 responses.append(RAGResponse(
                     answer=response_text.strip(),
                     sources_cited=sources,
-                    confidence=0.95,
+                    confidence=LLMWrapperConfig.RAG_HIGH_CONFIDENCE,
                     generation_time=avg_time,  # 평균 시간 사용
                     has_proper_citation=has_citation,
                     retry_count=0,

@@ -128,6 +128,42 @@ class LLMGenerationConfig:
 
 
 @dataclass(frozen=True)
+class LLMWrapperConfig:
+    """LLM Wrapper 설정 (llm_wrapper.py용)
+
+    하드코딩된 매직넘버를 중앙화하여 관리.
+    2025-12-22: 설정 외부화 1단계
+    """
+
+    # === 컨텍스트/응답 토큰 설정 ===
+    MAX_CONTEXT_TOKENS: int = 4000          # 최대 컨텍스트 토큰
+    MAX_RESPONSE_TOKENS: int = 1200         # 기본 최대 응답 토큰
+
+    # === 모드별 max_tokens ===
+    CONVERSATIONAL_MAX_TOKENS: int = 1500   # 대화 모드
+    FULL_DOC_MAX_TOKENS: int = 1200         # 전체 문서 모드
+    TEST_MODEL_MAX_TOKENS: int = 50         # 모델 테스트용
+
+    # === 생성 파라미터 ===
+    CONVERSATIONAL_TEMPERATURE: float = 0.7  # 대화 모드 온도 (더 자연스러운 응답)
+    CONVERSATIONAL_TOP_P: float = 0.9        # 대화 모드 top_p
+    STREAMING_TOP_P: float = 0.95            # 스트리밍 모드 top_p
+
+    # === 신뢰도 계수 ===
+    FULL_DOC_CONFIDENCE_MULTIPLIER: float = 0.7   # 전체 문서 신뢰도 조정
+    RAG_HIGH_CONFIDENCE: float = 0.95             # RAG 고신뢰도
+    SEARCH_HIGH_CONFIDENCE: float = 0.9           # 검색 고신뢰도
+
+    # === vLLM 설정 ===
+    VLLM_GPU_MEMORY_UTILIZATION: float = 0.90     # GPU 메모리 사용률
+    VLLM_TENSOR_PARALLEL_SIZE: int = 2            # 텐서 병렬 크기
+    VLLM_MAX_MODEL_LEN: int = 16384               # 최대 모델 길이
+
+    # === Transformers 설정 ===
+    TRANSFORMERS_MAX_NEW_TOKENS: int = 2048       # Transformers 최대 새 토큰
+
+
+@dataclass(frozen=True)
 class MetricsConfig:
     """메트릭 수집 관련 상수 (metrics_collector.py용)"""
 
@@ -932,6 +968,8 @@ __all__ = [
     "HybridSearchConfig",
     "JsonUtilsConfig",
     "LLMConfig",
+    "LLMGenerationConfig",
+    "LLMWrapperConfig",
     "MergeExtractorConfig",
     "MetaParserConfig",
     "MetricsConfig",

@@ -8,10 +8,9 @@
 - ErrorCode Enum 사용
 """
 
-import pytest
-
-pytestmark = pytest.mark.skip(reason="인터페이스 변경으로 재작성 필요")
 import logging
+
+import pytest
 
 from app.core.errors import (
     ERROR_MESSAGES,
@@ -132,22 +131,30 @@ class TestFastAPIIntegration:
 class TestLogging:
     """로깅 유틸리티 테스트"""
 
-    def test_log_error_basic(self, caplog):
-        """log_error() 기본 로깅"""
-        with caplog.at_level(logging.ERROR):
+    def test_log_error_basic(self):
+        """log_error() 기본 로깅 - mock 사용"""
+        from unittest.mock import patch
+
+        with patch("app.core.errors.logger") as mock_logger:
             err = SearchError("검색 실패", details="인덱스 로드 오류", code=ErrorCode.E_INDEX_LOAD)
             log_error(err)
 
-        assert len(caplog.records) == 1
-        assert "검색 실패" in caplog.text
+            mock_logger.log.assert_called_once()
+            call_args = mock_logger.log.call_args
+            assert call_args[0][0] == logging.ERROR
+            assert "검색 실패" in call_args[0][1]
 
-    def test_log_error_level(self, caplog):
-        """log_error() 로그 레벨 지정"""
-        with caplog.at_level(logging.WARNING):
+    def test_log_error_level(self):
+        """log_error() 로그 레벨 지정 - mock 사용"""
+        from unittest.mock import patch
+
+        with patch("app.core.errors.logger") as mock_logger:
             err = ValidationError("입력 검증 실패")
             log_error(err, level=logging.WARNING)
 
-        assert len(caplog.records) == 1
+            mock_logger.log.assert_called_once()
+            call_args = mock_logger.log.call_args
+            assert call_args[0][0] == logging.WARNING
 
 
 class TestErrorCode:
@@ -185,9 +192,11 @@ class TestUsageExamples:
         assert err.message == "검색 실패"
         assert err.code == ErrorCode.E_TIMEOUT
 
-    def test_logging_workflow(self, caplog):
-        """로깅 워크플로우"""
-        with caplog.at_level(logging.ERROR):
+    def test_logging_workflow(self):
+        """로깅 워크플로우 - mock 사용"""
+        from unittest.mock import patch
+
+        with patch("app.core.errors.logger") as mock_logger:
             try:
                 # 가상 검색 실패
                 raise Exception("인덱스 파일 없음")
@@ -196,8 +205,9 @@ class TestUsageExamples:
                 log_error(err)
                 # 실제로는 여기서 raise err 하겠지만 테스트에서는 생략
 
-        assert len(caplog.records) == 1
-        assert "검색 중 오류" in caplog.text
+            mock_logger.log.assert_called_once()
+            call_args = mock_logger.log.call_args
+            assert "검색 중 오류" in call_args[0][1]
 
     def test_fastapi_workflow(self):
         """FastAPI 워크플로우"""

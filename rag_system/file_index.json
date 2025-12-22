@@ -1,23 +1,5 @@
 {
   "files": {
-    "/home/user/Desktop/AI/AI-CHAT/docs/AS_IS_TREE.txt": {
-      "hash": "be75e954b923acfeb80d32ccae0df7d4",
-      "size": 2800,
-      "modified": 1761647929.0,
-      "added": "2025-12-19T05:28:53.097262"
-    },
-    "/home/user/Desktop/AI/AI-CHAT/docs/ENTRYPOINT_HITS.txt": {
-      "hash": "a4d7223c1d2ea3eb72f97229f322f3e7",
-      "size": 7341,
-      "modified": 1761647929.0,
-      "added": "2025-12-19T05:28:53.097989"
-    },
-    "/home/user/Desktop/AI/AI-CHAT/docs/IMPORT_GRAPH.txt": {
-      "hash": "1cc19f29f137e09c7d70eb3856e6c55b",
-      "size": 31727,
-      "modified": 1761647929.0,
-      "added": "2025-12-19T05:28:53.098987"
-    },
     "/home/user/Desktop/AI/AI-CHAT/docs/year_2017/2017-10-16_조명_소모품_구매.pdf": {
       "hash": "f55f923b4e78a2efeb6347d2b54e5c81",
       "size": 222213,
@@ -2825,7 +2807,25 @@
       "size": 101409,
       "modified": 1761647930.0,
       "added": "2025-12-19T05:29:04.080054"
+    },
+    "/home/user/Desktop/AI/AI-CHAT/docs/archive/AS_IS_TREE.txt": {
+      "hash": "be75e954b923acfeb80d32ccae0df7d4",
+      "size": 2800,
+      "modified": 1761647929.0,
+      "added": "2025-12-22T07:48:02.375951"
+    },
+    "/home/user/Desktop/AI/AI-CHAT/docs/archive/ENTRYPOINT_HITS.txt": {
+      "hash": "a4d7223c1d2ea3eb72f97229f322f3e7",
+      "size": 7341,
+      "modified": 1761647929.0,
+      "added": "2025-12-22T07:48:02.379329"
+    },
+    "/home/user/Desktop/AI/AI-CHAT/docs/archive/IMPORT_GRAPH.txt": {
+      "hash": "1cc19f29f137e09c7d70eb3856e6c55b",
+      "size": 31727,
+      "modified": 1761647929.0,
+      "added": "2025-12-22T07:48:02.388824"
     }
   },
-  "last_update": "2025-12-19T05:29:04.092136"
+  "last_update": "2025-12-22T07:48:02.389757"
 }

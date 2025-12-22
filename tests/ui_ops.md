@@ -21,7 +21,9 @@ streamlit run web_interface.py --server.port 8501 --server.headless true
 ```
 
 **상태**: ⏳ 수동 확인 필요
+
 **결과**:
+
 - [ ] FastAPI 응답 OK
 - [ ] Streamlit 정상 기동
 
@@ -34,11 +36,13 @@ streamlit run web_interface.py --server.port 8501 --server.headless true
 #### 1.1 기본 목록 (20개 제한)
 
 **테스트 절차**:
+
 1. 질의 입력: "최새름 문서 찾아줘"
 2. 응답 결과 확인
 3. 출처(evidence) 개수 확인
 
 **예상 결과**:
+
 - 최대 20개 문서 표시
 - `display_limit=20` 적용 확인
 
@@ -52,6 +56,7 @@ streamlit run web_interface.py --server.port 8501 --server.headless true
 #### 1.2 전체 목록 ("전부/전체" 키워드)
 
 **테스트 절차**:
+
 1. 질의 입력: "최새름 문서 전부 보여줘"
 2. 응답 결과 확인
 3. 다른 키워드 테스트:
@@ -60,6 +65,7 @@ streamlit run web_interface.py --server.port 8501 --server.headless true
    - "최새름 문서 모두 보여줘"
 
 **예상 결과**:
+
 - 모든 매칭 문서 표시 (예: 134개)
 - `display_limit` 무제한 적용
 - Evidence(출처)도 동일하게 전체 표시
@@ -76,11 +82,13 @@ streamlit run web_interface.py --server.port 8501 --server.headless true
 #### 2.1 단일 파일 미리보기
 
 **테스트 절차**:
+
 1. 문서 목록에서 "🔎 미리보기" 버튼 클릭
 2. 미리보기 창 표시 확인
 3. 다시 버튼 클릭하여 닫기
 
 **예상 결과**:
+
 - 버튼 상태 변경: "🔎 미리보기" ↔ "📖 미리보는중"
 - PDF 미리보기 정상 표시
 - 토글 시 상태 유지
@@ -95,12 +103,14 @@ streamlit run web_interface.py --server.port 8501 --server.headless true
 #### 2.2 다중 파일 동시 미리보기
 
 **테스트 절차**:
+
 1. 첫 번째 문서 미리보기 열기
 2. 두 번째 문서 미리보기 열기
 3. 세 번째 문서 미리보기 열기
 4. 각각 개별적으로 닫기
 
 **예상 결과**:
+
 - 각 파일의 토글 상태 독립적으로 유지
 - `st.rerun()` 후에도 상태 유지
 - 해시 기반 키 동작 정상
@@ -117,18 +127,22 @@ streamlit run web_interface.py --server.port 8501 --server.headless true
 #### 3.1 특정 파일 지정 요약
 
 **테스트 절차**:
+
 1. 질의 입력: "2025-09-11_돌직구쇼_백업_무선마이크_구매_건.pdf 요약해줘"
 2. 백엔드 로그 확인: `grep "doc_locked" logs/ai-chat.log`
 3. 응답 출처 확인
 
 **예상 결과**:
+
 - 로그에 `doc_locked=True` 표시
 - 해당 문서의 청크만 사용
 - 다른 문서 청크 미포함
 
 **실제 결과**: ⏳ 수동 테스트 필요
+
 **로그 출력**:
-```
+
+```text
 [검증 필요] grep "doc_locked" logs/ai-chat.log
 ```
 
@@ -141,12 +155,14 @@ streamlit run web_interface.py --server.port 8501 --server.headless true
 #### 4.1 SUMMARY 모드 트리거
 
 **테스트 절차**:
+
 1. 질의 입력 (각각 테스트):
    - "검토서 요약해줘"
    - "기안서 요약해줘"
    - "최새름 작성 문서 요약해줘"
 
 **예상 결과**:
+
 - 응답 모드: `SUMMARY`
 - 구조화된 JSON 응답
 - 필수 필드: title, drafter, date, main_content
@@ -161,11 +177,13 @@ streamlit run web_interface.py --server.port 8501 --server.headless true
 #### 4.2 QA 모드 + 인용 보장
 
 **테스트 절차**:
+
 1. 질의 입력: "EX-3 관련 문서 찾아줘"
 2. has_code=True 확인
 3. 인용(sources) 존재 확인
 
 **예상 결과**:
+
 - 응답 모드: `QA`
 - has_code: `True`
 - 출처 인용 보장 (Citation Rate = 1.0)
@@ -182,11 +200,13 @@ streamlit run web_interface.py --server.port 8501 --server.headless true
 #### 5.1 삭제된 파일 처리
 
 **테스트 절차**:
+
 1. 임시로 파일 이동: `mv docs/year_2025/test.pdf /tmp/`
 2. 해당 파일 미리보기 시도
 3. 오류 메시지 확인
 
 **예상 결과**:
+
 - 사용자 친화적 오류 메시지 표시
 - "파일을 찾을 수 없습니다" 등의 가이드 문구
 - 애플리케이션 크래시 없음
@@ -201,11 +221,13 @@ streamlit run web_interface.py --server.port 8501 --server.headless true
 #### 5.2 JSON 파싱 실패 폴백
 
 **테스트 절차**:
+
 1. 복잡한 질의로 JSON 파싱 실패 유도
 2. 응답 형식 확인
 3. 배너 메시지 확인
 
 **예상 결과**:
+
 - 자유 형식 요약으로 폴백
 - "구조화된 형식 생성 실패, 자유 요약으로 제공합니다" 배너 표시
 - 응답 내용은 여전히 유용함
@@ -222,18 +244,22 @@ streamlit run web_interface.py --server.port 8501 --server.headless true
 #### 6.1 Mutex 동작 확인
 
 **테스트 절차**:
+
 1. 자동 인덱서 동작 중 확인: `ls -la var/reindexing.lock`
 2. UI에서 Drop&Rebuild 시도
 3. 상호배제 메시지 확인
 
 **예상 결과**:
+
 - `var/reindexing.lock` 존재 시 재색인 거부
 - 사용자 메시지: "재색인이 이미 진행 중입니다"
 - 크래시 없음
 
 **실제 결과**: ⏳ 수동 테스트 필요
+
 **로그 출력**:
-```
+
+```text
 [검증 필요] Lock 파일 상태 및 UI 응답
 ```
 
@@ -244,6 +270,7 @@ streamlit run web_interface.py --server.port 8501 --server.headless true
 #### 6.2 /metrics 갱신 확인
 
 **테스트 절차**:
+
 1. 재색인 완료 후 `/metrics` 확인
 2. 지표 값 검증
 
@@ -272,10 +299,12 @@ curl -s http://localhost:7860/metrics | jq '.'
 #### 7.1 키보드 내비게이션
 
 **테스트 절차**:
+
 1. Tab 키로 순회
 2. 이동 순서 확인: 입력창 → 목록 → 버튼 → 미리보기
 
 **예상 결과**:
+
 - 논리적인 Tab 순서
 - 포커스 표시 명확
 - Enter 키로 버튼 활성화 가능
@@ -312,6 +341,7 @@ curl -s http://localhost:7860/metrics | jq '{
 ```
 
 **예상**:
+
 - `stale_index_entries`: 0
 - `fs_file_count` ≈ `index_file_count`
 
@@ -361,6 +391,7 @@ curl -s http://localhost:7860/metrics | jq '{
 ## 비고
 
 이 문서는 수동 테스트를 위한 체크리스트입니다. 실제 테스트 수행 시:
+
 1. 각 항목을 순서대로 실행
 2. 스크린샷 캡처 (`screenshots/` 디렉토리)
 3. 로그 출력 첨부

@@ -34,17 +34,6 @@ DOCUMENT_STOP_WORDS = [
     "보여줘", "보여", "자세하게", "자세히", "요약", "정리",
 ]
 
-# 섹션 키워드 매핑
-SECTION_KEYWORDS = {
-    "검토": ["검토", "검토내용", "검토 내용", "검토 세부", "리뷰", "검토의견", "검토 의견"],
-    "배경": ["배경", "목적", "배경/목적", "추진배경", "추진 배경", "사유"],
-    "개요": ["개요 부분", "개요만", "개요 세부"],
-    "비교": ["비교", "대안", "비교대안", "비교 대안", "방안", "옵션"],
-    "선정": ["선정", "권고", "추천", "제안", "선정사유"],
-    "내역": ["내역", "세부내역", "세부 내역", "상세내역", "상세"],
-    "예산": ["예산", "비용", "금액", "합계", "총액"],
-}
-
 # 데이터 디렉토리
 EXTRACTED_DIR = Path("data/extracted")
 
@@ -84,30 +73,6 @@ def extract_keywords_for_document(query: str) -> str:
     for word in DOCUMENT_STOP_WORDS:
         keywords = keywords.replace(word, " ")
     return " ".join(keywords.split())
-
-
-def detect_section(query: str) -> Optional[str]:
-    """쿼리에서 섹션 키워드 감지"""
-    query_lower = query.lower()
-    for section, keywords in SECTION_KEYWORDS.items():
-        for kw in keywords:
-            if kw in query_lower:
-                return section
-    return None
-
-
-def safe_filename(meta: Optional[dict[str, Any]] = None, doc_path: Optional[str] = None) -> str:
-    """파일명 안전 추출"""
-    import os
-
-    meta = meta or {}
-    return (
-        meta.get("fname")
-        or meta.get("filename")
-        or meta.get("doc_id")
-        or (os.path.basename(doc_path) if doc_path else None)
-        or "미상 문서"
-    )
 
 
 def load_document_text(filename: str) -> str:

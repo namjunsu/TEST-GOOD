@@ -152,7 +152,7 @@ def main():
         elif throughput_gain > 0:
             logger.info(f"\n✅ 배치 처리가 성능 향상에 기여합니다. (처리량 {throughput_gain:.1f}% 증가)")
         else:
-            logger.warning(f"\n⚠️ 배치 처리가 느립니다. 배치 크기를 조정하거나 개별 처리를 사용하세요.")
+            logger.warning("\n⚠️ 배치 처리가 느립니다. 배치 크기를 조정하거나 개별 처리를 사용하세요.")
 
         # 응답 품질 검증
         logger.info("\n📝 응답 품질 검증:")

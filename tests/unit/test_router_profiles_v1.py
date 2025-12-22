@@ -62,16 +62,6 @@ class TestProfileMatcher:
         profiles = pm.match_profiles(query)
         assert "dvr_nvr" in profiles or "camera" in profiles
 
-    @pytest.mark.skip(reason="normalize_text 메서드가 ProfileMatcher에서 제거됨")
-    def test_text_normalization(self):
-        """텍스트 정규화 - 더 이상 ProfileMatcher 책임 아님"""
-        pm = ProfileMatcher()
-
-        # 전각 하이픈
-        text = "HRD－442"  # 전각 하이픈
-        normalized = pm.normalize_text(text)  # type: ignore[attr-defined]
-        assert "HRD-442" in normalized  # 표준 하이픈으로 변환
-
     def test_singleton_pattern(self):
         """싱글톤 패턴"""
         from app.rag.routing import get_profile_matcher

@@ -85,32 +85,6 @@ class TestNumericExtraction:
         assert "details" in result
 
 
-@pytest.mark.skip(reason="_answer_list 메서드가 SearchHandler로 이관됨")
-class TestListFilter:
-    """목록 필터 테스트 - SearchHandler로 이관됨"""
-
-    def test_list_filter_handles_all_keywords(self):
-        """'전부', '전체' 등 키워드 처리 - 스킵"""
-        pass
-
-    def test_list_returns_total_count(self):
-        """total_count가 응답에 포함되는지 확인 - 스킵"""
-        pass
-
-
-@pytest.mark.skip(reason="_gather_summary_context가 DocumentUtils로 이관됨")
-class TestSummaryDocLock:
-    """요약 모드 문서 고정 테스트 - DocumentUtils로 이관됨"""
-
-    def test_doc_ref_locks_context(self):
-        """doc= 참조 시 문서 고정 컨텍스트 사용 - 스킵"""
-        pass
-
-    def test_doc_locked_uses_make_chunks(self):
-        """doc_locked=True일 때 _make_chunks_for_doc 사용 - 스킵"""
-        pass
-
-
 class TestFnameSafety:
     """fname 안전성 테스트 - DocumentUtils 사용"""
 

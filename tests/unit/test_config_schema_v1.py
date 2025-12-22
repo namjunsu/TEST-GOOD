@@ -156,13 +156,12 @@ class TestAuthorStoplist:
             assert parser._is_in_stoplist(author) is False
 
 
-@pytest.mark.skip(reason="scripts 모듈 경로 변경으로 재작성 필요")
 class TestOCRRouting:
-    """scripts.ingest_from_docs OCR 모드 테스트"""
+    """scripts.core.ingest_from_docs OCR 모드 테스트"""
 
     def test_ocr_mode_off(self):
         """OCR off 모드"""
-        from scripts.ingest_from_docs import OCR_MODE_OFF, DocumentIngester  # type: ignore[import-not-found]
+        from scripts.core.ingest_from_docs import OCR_MODE_OFF, DocumentIngester
 
         ingester = DocumentIngester(ocr_mode="off", dry_run=True)
         assert ingester.ocr_mode == OCR_MODE_OFF
@@ -170,7 +169,7 @@ class TestOCRRouting:
 
     def test_ocr_mode_fallback(self):
         """OCR fallback 모드"""
-        from scripts.ingest_from_docs import OCR_MODE_FALLBACK, DocumentIngester  # type: ignore[import-not-found]
+        from scripts.core.ingest_from_docs import OCR_MODE_FALLBACK, DocumentIngester
 
         ingester = DocumentIngester(ocr_mode="fallback", dry_run=True)
         assert ingester.ocr_mode == OCR_MODE_FALLBACK
@@ -178,7 +177,7 @@ class TestOCRRouting:
 
     def test_ocr_mode_force(self):
         """OCR force 모드"""
-        from scripts.ingest_from_docs import OCR_MODE_FORCE, DocumentIngester  # type: ignore[import-not-found]
+        from scripts.core.ingest_from_docs import OCR_MODE_FORCE, DocumentIngester
 
         ingester = DocumentIngester(ocr_mode="force", dry_run=True)
         assert ingester.ocr_mode == OCR_MODE_FORCE
@@ -186,7 +185,7 @@ class TestOCRRouting:
 
     def test_ocr_enabled_backward_compat(self):
         """v0 호환: ocr_enabled=True → fallback 모드"""
-        from scripts.ingest_from_docs import OCR_MODE_FALLBACK, DocumentIngester  # type: ignore[import-not-found]
+        from scripts.core.ingest_from_docs import OCR_MODE_FALLBACK, DocumentIngester
 
         ingester = DocumentIngester(ocr_enabled=True, dry_run=True)
         assert ingester.ocr_mode == OCR_MODE_FALLBACK
@@ -194,7 +193,7 @@ class TestOCRRouting:
 
     def test_ocr_mode_priority(self):
         """ocr_mode가 ocr_enabled보다 우선"""
-        from scripts.ingest_from_docs import OCR_MODE_FORCE, DocumentIngester  # type: ignore[import-not-found]
+        from scripts.core.ingest_from_docs import OCR_MODE_FORCE, DocumentIngester
 
         ingester = DocumentIngester(
             ocr_mode="force", ocr_enabled=False, dry_run=True

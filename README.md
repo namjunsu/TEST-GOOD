@@ -290,7 +290,7 @@ make pre-commit # Run all hooks
 - **Active Files**: 207 Python files (정리 완료)
 - **Documentation**: 43 MD files (핵심 문서만 유지)
 - **Scripts**: 14 SH files (중복 제거)
-- **Test Coverage**: 714 passed, 55.11% coverage
+- **Test Coverage**: 719 passed, 55.11% coverage
 - **Code Quality**: Pyright 0 errors, Ruff 0 errors
 - **Config Classes**: 41개 외부화 완료 (`config/constants.py`)
 

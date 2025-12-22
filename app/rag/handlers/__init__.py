@@ -25,10 +25,10 @@ pipeline.py의 대규모 메서드들을 분리하여 관리.
             return self._search_handler.handle(query)
 """
 
-from .base import BaseHandler, HandlerResponse
-from .cost_sum import CostSumHandler
-from .document import DocumentHandler
-from .query_processor import (
+from app.rag.handlers.base import BaseHandler, HandlerResponse
+from app.rag.handlers.cost_sum import CostSumHandler
+from app.rag.handlers.document import DocumentHandler
+from app.rag.handlers.query_processor import (
     CONTENT_STOP_WORDS,
     STOP_WORDS,
     calculate_max_docs,
@@ -39,7 +39,7 @@ from .query_processor import (
     is_list_query,
     needs_expanded_search,
 )
-from .response import (
+from app.rag.handlers.response import (
     build_empty_response,
     build_error_response,
     # Evidence 빌더
@@ -65,8 +65,8 @@ from .response import (
     is_smalltalk,
     normalize_chunk_text,
 )
-from .result_formatter import EMPTY_VALUES, ResultFormatter
-from .search import SearchHandler
+from app.rag.handlers.result_formatter import EMPTY_VALUES, ResultFormatter
+from app.rag.handlers.search import SearchHandler
 
 __all__ = [
     # 핸들러 클래스

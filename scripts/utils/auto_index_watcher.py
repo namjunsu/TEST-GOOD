@@ -30,7 +30,6 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 import pdfplumber
-from rag_system.korean_vector_store import KoreanVectorStore
 
 from rag_system.active.bm25_store import BM25Store
 
@@ -52,8 +51,7 @@ class AutoIndexWatcher:
         self.file_hashes = {}  # 파일 해시 저장 (변경 감지용)
 
         # RAG 스토어 초기화
-        self.bm25_store = None
-        self.vector_store = None
+        self.bm25_store: BM25Store | None = None
 
         # 로그 디렉토리 생성
         Path("logs").mkdir(exist_ok=True)
@@ -63,12 +61,6 @@ class AutoIndexWatcher:
         if self.bm25_store is None:
             logger.info("BM25Store 로드 중...")
             self.bm25_store = BM25Store(index_path="var/index/bm25_index.pkl")
-
-        if self.vector_store is None:
-            logger.info("KoreanVectorStore 로드 중...")
-            self.vector_store = KoreanVectorStore(
-                index_path="var/index/korean_vector_index.faiss",
-            )
 
     def _get_file_hash(self, file_path: Path) -> str:
         """파일 해시 계산 (변경 감지용)"""
@@ -108,32 +100,20 @@ class AutoIndexWatcher:
             # 문서 ID 생성
             doc_id = f"doc_{hashlib.md5(str(pdf_path).encode()).hexdigest()[:12]}"
 
-            # BM25 인덱스에 추가
-            self.bm25_store.add_document(
-                doc_id=doc_id,
-                content=text,
-                metadata={
-                    "filename": pdf_path.name,
-                    "path": str(pdf_path),
-                    "indexed_at": datetime.now().isoformat(),
-                },
-            )
+            # BM25 인덱스에 추가 (add_documents는 리스트를 받음)
+            if self.bm25_store is not None:
+                self.bm25_store.add_documents(
+                    texts=[text],
+                    metadatas=[{
+                        "filename": pdf_path.name,
+                        "path": str(pdf_path),
+                        "doc_id": doc_id,
+                        "indexed_at": datetime.now().isoformat(),
+                    }],
+                )
 
-            # Vector 인덱스에 추가
-            content_chunk = text[:5000]  # 최대 5000자
-            self.vector_store.add_document(
-                doc_id=doc_id,
-                content=content_chunk,
-                metadata={
-                    "filename": pdf_path.name,
-                    "path": str(pdf_path),
-                    "indexed_at": datetime.now().isoformat(),
-                },
-            )
-
-            # 인덱스 저장
-            self.bm25_store.save_index()
-            self.vector_store.save_index()
+                # 인덱스 저장
+                self.bm25_store.save_index()
 
             # 추적에 추가
             self.indexed_files.add(str(pdf_path))

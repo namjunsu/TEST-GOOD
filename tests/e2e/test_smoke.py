@@ -98,16 +98,16 @@ def test_query_router():
 
         router = QueryRouter()
 
-        # Test cases
+        # Test cases (LIST → SEARCH, COST_SUM → COST로 통합됨)
         test_cases = [
-            ("문서 목록 보여줘", QueryMode.LIST),
-            ("2024년 문서 찾아줘", QueryMode.LIST),
-            ("비용 합계", QueryMode.COST_SUM),
+            ("문서 목록 보여줘", QueryMode.SEARCH),
+            ("2024년 문서 찾아줘", QueryMode.SEARCH),
+            ("비용 합계", QueryMode.COST),
         ]
 
         for query, expected_mode in test_cases:
-            mode = router.classify_mode(query)
-            assert mode == expected_mode, f"Mode mismatch for '{query}': got {mode}, expected {expected_mode}"
+            decision = router.classify_mode(query)
+            assert decision.mode == expected_mode, f"Mode mismatch for '{query}': got {decision.mode}, expected {expected_mode}"
 
         print("✅ Query router working correctly")
         return True

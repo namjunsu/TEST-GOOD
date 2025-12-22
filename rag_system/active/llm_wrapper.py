@@ -1246,7 +1246,8 @@ A:"""
         # 목표 길이에서 토큰 수 계산 (여유분 20% 추가)
         # recommendation이 dict일 수도 있고 object일 수도 있으므로 안전하게 처리
         max_length = recommendation.get("max_length") if isinstance(recommendation, dict) else getattr(recommendation, "max_length", 200)
-        adaptive_tokens = int(max_length * tokens_per_char * 1.2)
+        max_length_value = max_length if max_length is not None else 200
+        adaptive_tokens = int(max_length_value * tokens_per_char * 1.2)
 
         # 최소/최대 토큰 수 제한 (환경변수 지원)
         min_tokens = int(os.getenv("ADAPTIVE_MIN_TOKENS", "50"))
@@ -1667,11 +1668,11 @@ A:"""
 def test_qwen_llm():
     """Qwen LLM 테스트"""
 
-    # 모델 경로 설정 (실제 모델 파일들을 합쳐서 사용)
-    try:
-        from config import QWEN_MODEL_PATH
-        model_files = [QWEN_MODEL_PATH]
-    except ImportError:
+    # 모델 경로 설정 (환경변수 또는 기본값)
+    model_path = os.getenv("QWEN_MODEL_PATH")
+    if model_path:
+        model_files = [model_path]
+    else:
         model_files = [
             "./models/qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf",
             "./models/qwen2.5-7b-instruct-q4_k_m-00002-of-00002.gguf",
@@ -1757,7 +1758,7 @@ class VllmLLM(BaseRAGLLM):
 
 답변:""".replace("{CITATION_FORMAT}", CITATION_FORMAT)
 
-    def __init__(self, model_path: str = None, config: GenerationConfig = None, length_analyzer=None):
+    def __init__(self, model_path: Optional[str] = None, config: Optional[GenerationConfig] = None, length_analyzer: Any = None):
         super().__init__()
         # model_path가 None이면 환경변수에서 가져옴
         if model_path is None:
@@ -1765,7 +1766,7 @@ class VllmLLM(BaseRAGLLM):
         self.model_path = Path(model_path)
         self.config = config or GenerationConfig()
         self.length_analyzer = length_analyzer
-        self.llm = None
+        self.llm: Any = None  # vllm.LLM 타입
 
         # vLLM 설정 로드 (2025-12-21: H100 최적화)
         self.gpu_memory_utilization = float(os.getenv(
@@ -1897,7 +1898,7 @@ class Qwen72BLLM(BaseRAGLLM):
 ★ 출처를 [파일명.pdf] 형식으로 표시하세요.
 ★ 반드시 {ANSWER_LANGUAGE}로 답변하세요."""
 
-    def __init__(self, model_path: str = None, config: GenerationConfig = None, length_analyzer=None):
+    def __init__(self, model_path: Optional[str] = None, config: Optional[GenerationConfig] = None, length_analyzer: Any = None):
         super().__init__()
         # model_path가 None이면 환경변수에서 가져옴
         if model_path is None:
@@ -1905,8 +1906,8 @@ class Qwen72BLLM(BaseRAGLLM):
         self.model_path = Path(model_path)
         self.config = config or GenerationConfig()
         self.length_analyzer = length_analyzer
-        self.model = None
-        self.tokenizer = None
+        self.model: Any = None  # transformers model
+        self.tokenizer: Any = None  # transformers tokenizer
         self._load_model()
 
     def _load_model(self):

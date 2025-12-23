@@ -29,6 +29,15 @@ if TYPE_CHECKING:
 # 상수 & 설정
 # ============================================================================
 
+# 문서유형 영문→한글 매핑
+DOCTYPE_MAP = {
+    "proposal": "기안서",
+    "report": "보고서",
+    "review": "검토서",
+    "unknown": "미분류",
+}
+DOCTYPE_MAP_REVERSE = {v: k for k, v in DOCTYPE_MAP.items()}
+
 PROJECT_ROOT = Path(__file__).parent.parent
 DOCS_DIR = PROJECT_ROOT / "docs"
 INCOMING_DIR = DOCS_DIR / "incoming"
@@ -580,7 +589,12 @@ def _render_edit_form(doc: Document) -> None:
         with col_b:
             new_date = st.text_input("날짜 (YYYY-MM-DD)", value=doc.date or "")
         with col_c:
-            new_doctype = st.text_input("문서유형", value=doc.doctype or "")
+            # 현재 doctype을 한글로 변환
+            current_korean = DOCTYPE_MAP.get(doc.doctype or "", doc.doctype or "미분류")
+            doctype_options = list(DOCTYPE_MAP.values())
+            current_idx = doctype_options.index(current_korean) if current_korean in doctype_options else 0
+            selected_korean = st.selectbox("문서유형", options=doctype_options, index=current_idx)
+            new_doctype = DOCTYPE_MAP_REVERSE.get(selected_korean, "unknown")
 
         col_save, col_cancel = st.columns(2)
 

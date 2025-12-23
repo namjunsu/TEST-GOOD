@@ -32,8 +32,9 @@ from config.constants import RouterConfig
 
 logger = get_logger(__name__)
 
-# LLM 의도 분류기 사용 여부 (환경변수로 제어)
-USE_LLM_INTENT_CLASSIFIER = os.getenv("USE_LLM_INTENT_CLASSIFIER", "true").lower() == "true"
+# LLM 의도 분류기 사용 여부 (환경변수로 제어, 기본값: OFF)
+# 정규식 기반이 더 빠르고 안정적. LLM은 복잡한 케이스용 백업.
+USE_LLM_INTENT_CLASSIFIER = os.getenv("USE_LLM_INTENT_CLASSIFIER", "false").lower() == "true"
 
 # 호환성을 위한 re-export
 __all__ = ["QueryRouter", "QueryMode", "RouteDecision", "ScoreStats"]

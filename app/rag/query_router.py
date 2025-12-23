@@ -32,6 +32,9 @@ from config.constants import RouterConfig
 
 logger = get_logger(__name__)
 
+# LLM 의도 분류기 사용 여부 (환경변수로 제어)
+USE_LLM_INTENT_CLASSIFIER = os.getenv("USE_LLM_INTENT_CLASSIFIER", "true").lower() == "true"
+
 # 호환성을 위한 re-export
 __all__ = ["QueryRouter", "QueryMode", "RouteDecision", "ScoreStats"]
 
@@ -231,10 +234,15 @@ class QueryRouter:
         # 패턴 설정 로더 (2025-12-23 추가: 외부 설정 기반 패턴)
         self.pattern_loader = get_pattern_loader()
 
+        # LLM 의도 분류기 (2025-12-23 추가: 정규식 대체)
+        self.intent_classifier = None  # lazy initialization (LLM 필요)
+        self._use_llm_classifier = USE_LLM_INTENT_CLASSIFIER
+
         logger.info(
             f"📋 모드 라우터 초기화: QA 키워드 {len(self.qa_keywords)}개, 미리보기 키워드 {len(self.preview_keywords)}개, "
             f"Low-conf delta={self.low_conf_delta}, min_hits={self.low_conf_min_hits}, "
-            f"QueryParser={'enabled' if query_parser else 'disabled'}",
+            f"QueryParser={'enabled' if query_parser else 'disabled'}, "
+            f"LLM_Intent={'enabled' if self._use_llm_classifier else 'disabled'}",
         )
 
     def _load_config(self, config_path: str) -> dict[str, Any]:
@@ -794,13 +802,26 @@ class QueryRouter:
 
         return params
 
+    def set_llm(self, llm: Any) -> None:
+        """LLM 인스턴스 설정 (의도 분류기 초기화)
+
+        Args:
+            llm: QwenLLM 또는 VllmLLM 인스턴스
+        """
+        if self._use_llm_classifier and llm is not None:
+            from app.rag.intent_classifier import IntentClassifier
+            self.intent_classifier = IntentClassifier(llm)
+            logger.info("🧠 LLM 의도 분류기 초기화 완료")
+
     def classify_mode(self, query: str) -> RouteDecision:
         """쿼리 모드 자동 분류 및 라우팅 (리팩토링 버전)
 
         Phase 12: 헬퍼 메서드로 분리하여 복잡도 감소 (224줄 → ~50줄)
         Phase 13 (2025-12-23): YAML 설정 기반 패턴 외부화
+        Phase 14 (2025-12-23): LLM 기반 의도 분류 (정규식 fallback)
 
         우선순위 (높음 → 낮음):
+            0. LLM 의도 분류 (활성화된 경우)
             1. YEAR_SUMMARY: 연도별 다중 문서 요약
             2. CONTENT_ONLY: 정밀 내용 검색
             3. EXISTS: 존재 확인 질의
@@ -815,10 +836,24 @@ class QueryRouter:
         Returns:
             RouteDecision: 모드 + 의도 플래그 + 추출된 파라미터
         """
+        # 0. LLM 의도 분류 (활성화된 경우)
+        if self._use_llm_classifier and self.intent_classifier is not None:
+            try:
+                result = self.intent_classifier.classify(query)
+                if result.confidence >= 0.7:
+                    decision = self.intent_classifier.to_route_decision(result, query)
+                    self._log_routing_decision(query, decision.mode, decision.confidence, "llm_intent")
+                    logger.info(f"🧠 LLM 분류 성공: mode={decision.mode.value}, drafter={decision.drafter}, year={decision.year}")
+                    return decision
+                else:
+                    logger.debug(f"⚠️ LLM 분류 신뢰도 낮음 ({result.confidence}), 정규식 fallback")
+            except Exception as e:
+                logger.warning(f"⚠️ LLM 분류 실패: {e}, 정규식 fallback")
+
+        # === 정규식 기반 분류 (fallback) ===
         query_lower = query.lower()
 
         # 설정 기반 분류 (보조 역할, 점진적 마이그레이션)
-        # TODO: Phase 14에서 하드코딩 패턴을 완전히 대체
         if self.pattern_loader.is_loaded:
             config_result = self.pattern_loader.classify_with_config(query)
             if config_result:
@@ -837,9 +872,6 @@ class QueryRouter:
         has_qa_intent = any(kw in query_lower for kw in self.qa_keywords)
 
         # 2. 우선순위에 따라 헬퍼 메서드 호출 (Chain of Responsibility 패턴)
-        # 2025-12-21: CONTENT_ONLY를 EXISTS_INTENT보다 먼저 체크 (더 구체적인 패턴 우선)
-        # 2025-12-21: SUMMARY_INTENT를 SEARCH보다 먼저 체크 (요약/정리 요청은 LLM 답변 필요)
-        # 2025-12-23: YEAR_SUMMARY를 최우선으로 체크 (연도별 다중 문서 요약)
         decision = (
             self._check_year_summary_intent(query, params)  # "2024년 문서 다 알려줘" → 연도별 요약
             or self._check_content_only(query, params)  # "내용에 X 들어간 문서" → 정밀 검색

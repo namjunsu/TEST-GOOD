@@ -90,6 +90,10 @@ class RAGPipeline:
         self.generator = generator or RAGPipelineFactory.create_generator()
         self.query_router = QueryRouter()  # 🎯 모드 라우터 초기화
 
+        # 🧠 LLM 의도 분류기 연결 (2025-12-23)
+        if hasattr(self.generator, "llm"):
+            self.query_router.set_llm(self.generator.llm)
+
         # 📄 문서 처리 유틸리티 (분리된 모듈)
         self._doc_utils = DocumentUtils(
             retriever=self.retriever,

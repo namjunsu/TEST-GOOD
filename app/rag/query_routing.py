@@ -48,6 +48,26 @@ SMALLTALK_PATTERNS = {
     "bye", "goodbye", "잘가", "안녕히",
 }
 
+# 일반 대화 패턴 (문서 검색이 아닌 순수 LLM 응답이 필요한 경우)
+# Claude/GPT처럼 자연스럽게 대화해야 하는 질문들
+GENERAL_CHAT_PATTERNS = [
+    # 자기소개/정체성 질문
+    re.compile(r"(누구|뭐야|정체|이름|뭐가\s*있어)", re.IGNORECASE),
+    re.compile(r"(너는|넌|니가|당신).*(뭐|뭘|무엇|누구)", re.IGNORECASE),
+    re.compile(r"(뭐|무엇|어떤\s*것).*(할\s*수\s*있|가능)", re.IGNORECASE),
+    # 의견/추천 요청
+    re.compile(r"(어떻게\s*생각|의견|추천|조언|제안).*(해|줘|주세요)?", re.IGNORECASE),
+    re.compile(r"(좋은|괜찮은|적합한).*(있을까|있어|추천)", re.IGNORECASE),
+    # 일반 질문/대화
+    re.compile(r"^(뭐해|뭐하고\s*있어|심심해|재밌는\s*거)", re.IGNORECASE),
+    re.compile(r"(도와줘|도움|헬프|help)", re.IGNORECASE),
+    # 설명 요청 (문서 관련이 아닌 일반 개념)
+    re.compile(r"(설명|알려).*(해줘|주세요|줄래)$", re.IGNORECASE),
+    # 잡담/감정 표현
+    re.compile(r"^(ㅋ+|ㅎ+|ㅠ+|ㅜ+|하하|헤헤|호호|웃기)", re.IGNORECASE),
+    re.compile(r"(재밌|웃기|신기|대단|좋아|싫어|멋지)", re.IGNORECASE),
+]
+
 # 도메인 키워드 (장비/프로젝트/기술 용어)
 DOMAIN_KEYWORDS = {
     # 장비
@@ -236,6 +256,28 @@ def is_simple_math(query: str) -> bool:
     return bool(RE_SIMPLE_MATH.match(q_stripped))
 
 
+def is_general_chat(query: str) -> bool:
+    """일반 대화 감지 (문서 검색이 아닌 순수 LLM 응답이 필요한 경우)
+
+    Claude/GPT처럼 자연스럽게 대화해야 하는 질문 감지:
+    - 자기소개/정체성 질문: "넌 뭐야?", "뭐 할 수 있어?"
+    - 의견/추천 요청: "어떻게 생각해?", "추천해줘"
+    - 일반 질문/잡담: "도와줘", "심심해"
+    """
+    s = query.strip()
+
+    # 도메인 키워드가 있으면 일반 대화가 아님 (문서 검색 필요)
+    if has_domain_keyword(s):
+        return False
+
+    # GENERAL_CHAT_PATTERNS 매칭
+    for pattern in GENERAL_CHAT_PATTERNS:
+        if pattern.search(s):
+            return True
+
+    return False
+
+
 def has_domain_keyword(query: str) -> bool:
     """도메인 키워드 포함 여부 확인
 
@@ -281,6 +323,11 @@ def force_chat_mode(query: str) -> tuple[bool, str]:
 
     Returns:
         (should_force, reason)
+
+    2025-12-23: 일반 대화 패턴 추가 (Claude/GPT 수준 자연어 이해)
+    - 자기소개/정체성 질문
+    - 의견/추천 요청
+    - 일반 질문/잡담
     """
     # 1. 스몰토크
     if is_smalltalk(query):
@@ -290,7 +337,12 @@ def force_chat_mode(query: str) -> tuple[bool, str]:
     if is_simple_math(query):
         return True, "simple_math"
 
-    # 3. 짧은 질의 (토큰 < N) - 단, 도메인 키워드가 있으면 제외
+    # 3. 일반 대화 (2025-12-23 추가)
+    # "넌 뭐야?", "뭐 할 수 있어?", "추천해줘" 등
+    if is_general_chat(query):
+        return True, "general_chat"
+
+    # 4. 짧은 질의 (토큰 < N) - 단, 도메인 키워드가 있으면 제외
     tokens = get_query_token_count(query)
     if tokens < QueryRoutingConfig.SHORT_QUERY_TOKEN_THRESHOLD and not has_domain_keyword(query):
         return True, "short_query"
@@ -360,6 +412,7 @@ __all__ = [
     "DIAG_RAG",
     "DOMAIN_KEYWORDS",
     # 상수
+    "GENERAL_CHAT_PATTERNS",
     "SMALLTALK_PATTERNS",
     "_encode_file_ref",
     # 함수
@@ -367,6 +420,7 @@ __all__ = [
     "force_chat_mode",
     "get_keyword_coverage",
     "has_domain_keyword",
+    "is_general_chat",
     "is_simple_math",
     "is_smalltalk",
     "route_query",

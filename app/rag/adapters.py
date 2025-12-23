@@ -26,6 +26,7 @@ MODE_TOKEN_BUDGETS: dict[str, int] = {
     "rag": int(os.getenv("RAG_MAX_TOKENS", "3072")),
     "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", "2048")),
     "summary": int(os.getenv("SUMMARY_MAX_TOKENS", "2048")),
+    "year_summary": int(os.getenv("YEAR_SUMMARY_MAX_TOKENS", "4096")),  # 다중 문서 요약용
 }
 
 RAG_MAX_CONTEXT_CHARS: int = int(os.getenv("RAG_MAX_CONTEXT_CHARS", "6000"))

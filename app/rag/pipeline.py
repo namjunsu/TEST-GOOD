@@ -926,27 +926,21 @@ class RAGPipeline:
 
             context = "\n".join(context_parts)
 
-            # LLM으로 요약 생성
-            prompt = f"""다음은 {year}년의 기술검토서/기안서 목록입니다. 사용자 질문에 맞게 간결하게 정리해주세요.
+            # LLM으로 요약 생성 (자연스러운 프롬프트)
+            prompt = f"""{year}년 문서 {doc_count}개를 정리해주세요.
 
 {context}
 
-사용자 질문: {query}
+위 문서들의 전체 현황을 자연스럽게 설명해주세요.
+카테고리별로 어떤 내용이 있는지 간략히 정리하면 됩니다."""
 
-답변 형식:
-- 전체 현황 요약 (문서 수, 주요 카테고리)
-- 카테고리별 주요 내용 (수리/구매/점검 등)
-- 필요시 금액 합계
-
-간결하게 작성하되, 핵심 정보는 빠뜨리지 마세요."""
-
-            # LLM 호출
+            # LLM 호출 (다중 문서 요약용 토큰 예산 사용)
             try:
                 answer = self.generator.generate(
                     query=prompt,
                     context=context,
                     temperature=0.3,  # 요약은 일관성 중요
-                    mode="summary",
+                    mode="year_summary",  # 4096 토큰 예산
                 )
             except Exception as e:
                 logger.error(f"LLM 호출 실패: {e}")

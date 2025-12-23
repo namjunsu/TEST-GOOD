@@ -452,36 +452,37 @@ class DocumentHandler(BaseHandler):
         else:
             mode = "rag"
 
-        # ===== 경로 1: _LLMAdapter.generate_from_context() 사용 (권장, 요약 모드 제외) =====
-        # 🔧 요약 모드에서는 경로 1 스킵 → QwenLLM이 별도 시스템 프롬프트를 사용하여 JSON 출력 지시가 무시됨
-        # 요약 모드는 경로 2(llama_cpp 직접 접근)로 처리하여 JSON 출력을 보장함
-        if not routing.get("needs_summary"):
-            rag_adapter = getattr(self.generator, "rag", None)
-            if rag_adapter is not None:
-                generate_fn = getattr(rag_adapter, "generate_from_context", None)
-                if generate_fn is not None:
-                    logger.info(f"🎯 _LLMAdapter.generate_from_context() 사용 (mode={mode})")
-                    raw_result: str = generate_fn(
-                        query=llm_prompt,
-                        context=context,
-                        temperature=DocumentHandlerConfig.LLM_TEMPERATURE,
-                        mode=mode,
-                        system_msg=system_msg,  # 🔧 시스템 프롬프트 전달
-                    )
-
-                    # 에러 응답 체크
-                    if raw_result.startswith("[E_GENERATE]"):
-                        raise RuntimeError(raw_result)
-
-                    return raw_result.strip()
-
-        # ===== 경로 2: llama_cpp.Llama 직접 접근 (폴백) =====
-        llm: Any = None
+        # ===== 경로 1: _LLMAdapter.generate_from_context() 사용 (vLLM/llama_cpp 자동 분기) =====
+        # 2025-12-23: vLLM 전환으로 모든 모드에서 이 경로 사용 (llama_cpp 레거시 제거)
         rag_adapter = getattr(self.generator, "rag", None)
+        if rag_adapter is not None:
+            generate_fn = getattr(rag_adapter, "generate_from_context", None)
+            if generate_fn is not None:
+                logger.info(f"🎯 _LLMAdapter.generate_from_context() 사용 (mode={mode})")
+                raw_result: str = generate_fn(
+                    query=llm_prompt,
+                    context=context,
+                    temperature=DocumentHandlerConfig.LLM_TEMPERATURE,
+                    mode=mode,
+                    system_msg=system_msg,
+                )
+
+                # 에러 응답 체크
+                if raw_result.startswith("[E_GENERATE]"):
+                    raise RuntimeError(raw_result)
+
+                # 요약 모드: JSON 포맷팅
+                if routing.get("needs_summary"):
+                    return self._format_summary_output(raw_result, metadata)
+
+                return raw_result.strip()
+
+        # ===== 경로 2: LLM generate_response 직접 호출 (폴백) =====
+        llm: Any = None
         if rag_adapter is not None:
             rag_llm = getattr(rag_adapter, "llm", None)
             if rag_llm is not None:
-                llm = rag_llm  # QwenLLM
+                llm = rag_llm
 
         if llm is None:
             generator_llm = getattr(self.generator, "llm", None)
@@ -492,51 +493,21 @@ class DocumentHandler(BaseHandler):
             logger.error(f"LLM 접근 실패: generator type={type(self.generator)}")
             raise RuntimeError("LLM 접근 실패")
 
-        # 토큰 제한 조정
-        max_tokens = self._calculate_max_tokens(
-            content_length=len(full_text),
-            routing=routing,
-        )
-
-        # llama_cpp.Llama 접근 (QwenLLM.llm)
-        from llama_cpp import Llama
-        llm_instance = getattr(llm, "llm", llm)
-        if isinstance(llm_instance, Llama):
-            import time
-            llm_start = time.time()
-            logger.info(f"🔧 LLM 호출: max_tokens={max_tokens}, prompt_len={len(llm_prompt)}")
-            output = llm_instance.create_chat_completion(
-                messages=[
-                    {"role": "system", "content": system_msg},
-                    {"role": "user", "content": llm_prompt},
-                ],
-                max_tokens=max_tokens,
-                temperature=DocumentHandlerConfig.LLM_TEMPERATURE,
-            )
-            # 타입 안전: content가 None일 수 있음
-            content = output["choices"][0]["message"]["content"]  # type: ignore[index]
-            raw_result: str = str(content) if content else ""
-            llm_elapsed = time.time() - llm_start
-
-            # 🔧 LLM 응답 로깅 (핵심 정보 + 미리보기)
-            logger.info(f"📤 LLM 응답: {len(raw_result)}자, {llm_elapsed:.2f}초")
-            logger.info(f"📤 응답 미리보기: {raw_result[:200].replace(chr(10), ' ')}...")
+        if hasattr(llm, "generate_response"):
+            logger.info("🔧 LLM generate_response 폴백 사용")
+            chunks = [{"snippet": context, "content": context}]
+            response = llm.generate_response(llm_prompt, chunks)
+            if hasattr(response, "answer"):
+                raw_result = response.answer
+            else:
+                raw_result = str(response)
 
             if routing.get("needs_summary"):
                 return self._format_summary_output(raw_result, metadata)
 
-            return raw_result.strip()
+            return raw_result.strip() if isinstance(raw_result, str) else str(raw_result)
 
-        # ===== 경로 3: generate_response 메서드 사용 (최후 폴백) =====
-        if hasattr(llm, "generate_response"):
-            logger.info("🔧 LLM generate_response 폴백 사용")
-            chunks = [{"snippet": context, "content": context}]
-            response = llm.generate_response(llm_prompt, chunks, max_retries=1, mode=mode)
-            if hasattr(response, "answer"):
-                return response.answer
-            return str(response)
-
-        raise RuntimeError(f"LLM 타입 불일치: {type(llm_instance)}")
+        raise RuntimeError(f"LLM 접근 불가: {type(llm)}")
 
     def _build_llm_prompt(
         self,

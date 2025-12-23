@@ -447,6 +447,7 @@ class RAGPipeline:
         /,
         top_k: Optional[int] = None,
         selected_filename: Optional[str] = None,
+        progress_callback: Optional[callable] = None,
         **kwargs,
     ) -> dict:
         """답변 생성 (Evidence 포함 구조화된 응답)
@@ -455,6 +456,9 @@ class RAGPipeline:
             query: 사용자 질문
             top_k: 검색 결과 개수 (None이면 기본값 5)
             selected_filename: 선택된 문서 파일명 (우선 검색용, 선택사항)
+            progress_callback: 진행 상태 콜백 함수 (선택사항)
+                - 호출 형식: callback(step: str, message: str)
+                - step: "routing", "search", "compress", "generate", "complete"
             **kwargs: 추가 옵션 (RAGProtocol 호환용)
 
         Returns:
@@ -469,15 +473,26 @@ class RAGPipeline:
                 }
             }
         """
-        # kwargs에서 top_k, selected_filename 추출 (호환성)
+        # kwargs에서 top_k, selected_filename, progress_callback 추출 (호환성)
         top_k = kwargs.get("top_k", top_k)
         selected_filename = kwargs.get("selected_filename", selected_filename)
+        progress_callback = kwargs.get("progress_callback", progress_callback)
+
+        # 진행 상태 콜백 헬퍼
+        def _notify(step: str, message: str) -> None:
+            if progress_callback:
+                try:
+                    progress_callback(step, message)
+                except Exception as e:
+                    logger.debug(f"Progress callback error: {e}")
 
         # 🎯 조기 라우팅: 캐시 키 생성을 위해 모드 먼저 결정
         # 2025-12-23: 동일 쿼리라도 모드에 따라 다른 결과가 나올 수 있음
         # 예: "2025년 문서" → search 모드 vs year_summary 모드
+        _notify("routing", "쿼리 분석 중...")
         early_route = self.query_router.classify_mode(query)
         route_mode = early_route.mode.value
+        _notify("routing", f"모드 결정: {route_mode}")
 
         # ✨ 2-tier Cache check - 메모리 캐시 → 영구 캐시
         cache_key = build_answer_cache_key(query, selected_filename, mode=route_mode)
@@ -607,30 +622,51 @@ class RAGPipeline:
 
             # 💰 COST 모드: 비용 합계 직접 조회
             if route_decision.mode == QueryMode.COST:
-                return self._answer_cost_sum(actual_query)
+                _notify("search", "비용 데이터 조회 중...")
+                _notify("generate", "합계 계산 중...")
+                result = self._answer_cost_sum(actual_query)
+                _notify("complete", "완료")
+                return result
 
             # 📄 DOCUMENT 모드: 문서 내용/요약 (통합: PREVIEW + SUMMARY)
             if route_decision.mode == QueryMode.DOCUMENT:
-                return self._answer_document(actual_query, selected_filename=selected_filename)
+                _notify("search", "문서 로드 중...")
+                _notify("generate", "AI 답변 생성 중...")
+                result = self._answer_document(actual_query, selected_filename=selected_filename)
+                _notify("complete", "완료")
+                return result
 
             # 🔍 SEARCH 모드: 문서 검색 (통합: LIST + SEARCH + LIST_FIRST)
             if route_decision.mode == QueryMode.SEARCH:
-                return self._answer_search(actual_query)
+                _notify("search", "문서 검색 중...")
+                result = self._answer_search(actual_query)
+                _notify("complete", "완료")
+                return result
 
             # 🎯 SEARCH_CONTENT_ONLY 모드: 정밀 내용 검색 (2025-11-19 추가)
             if route_decision.mode == QueryMode.SEARCH_CONTENT_ONLY:
-                return self._answer_search_content_only(actual_query)
+                _notify("search", "정밀 검색 중...")
+                result = self._answer_search_content_only(actual_query)
+                _notify("complete", "완료")
+                return result
 
             # 📊 YEAR_SUMMARY 모드: 연도별 다중 문서 요약 (2025-12-23 추가)
             if route_decision.mode == QueryMode.YEAR_SUMMARY:
-                return self._answer_year_summary(actual_query, route_decision.year, route_decision.drafter)
+                _notify("search", f"{route_decision.year}년 문서 검색 중...")
+                _notify("generate", "요약 생성 중...")
+                result = self._answer_year_summary(actual_query, route_decision.year, route_decision.drafter)
+                _notify("complete", "완료")
+                return result
 
             # 🔍 디버깅: 실제 pattern matching 대상 로깅
             logger.info(f"🔍 Pattern matching 대상 쿼리: '{actual_query[:100]}'")
 
             # ✅ P0: 파일명 직접 언급 패턴 감지 (레거시 호환, PREVIEW 모드 외)
             # 🔧 QA 모드도 actual_query로 검색 (대화 컨텍스트 오염 방지)
+            _notify("search", "관련 문서 검색 중...")
+            _notify("generate", "AI 답변 생성 중...")
             response = self.query(actual_query, top_k=top_k or PipelineConfig.DEFAULT_TOP_K, selected_filename=selected_filename)
+            _notify("complete", "완료")
 
             if response.success:
                 # 검색/압축에서 넘어온 정규화 청크 사용 (실제 page/snippet/meta 노출)

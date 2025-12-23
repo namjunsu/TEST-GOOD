@@ -252,6 +252,7 @@ def _generate_ai_response(
     rag_instance: RAGProtocol,
     message_placeholder: Any,
     selected_filename: str | None = None,
+    progress_callback: callable | None = None,
 ) -> dict | None:
     """AI 응답 생성
 
@@ -260,6 +261,7 @@ def _generate_ai_response(
         rag_instance: RAG 시스템 인스턴스
         message_placeholder: Streamlit placeholder 객체
         selected_filename: 선택된 문서 파일명
+        progress_callback: 진행 상태 콜백 (step, message)
 
     Returns:
         dict | None: 정규화된 응답 또는 None
@@ -278,6 +280,7 @@ def _generate_ai_response(
             query,
             top_k=top_k,
             selected_filename=selected_filename,
+            progress_callback=progress_callback,
         )
         logger.info(f"RAG query executed with top_k={top_k}, selected_filename={selected_filename}")
 
@@ -410,19 +413,35 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
         # AI 응답 생성 (단계별 진행 상태 표시)
         start_time = time.time()
 
+        # 진행 상태 placeholders (st.status 외부에서 정의)
+        progress_state = {"current_step": "routing", "message": ""}
+
         with st.status("🤖 처리 중...", expanded=True) as status:
-            # 1단계: 쿼리 분석
-            status.update(label="🔍 쿼리 분석 중...", state="running")
-            step1 = st.empty()
-            step1.write("✓ 질문 의도 파악")
+            # 진행 단계 표시용 placeholders
+            step_routing = st.empty()
+            step_search = st.empty()
+            step_generate = st.empty()
 
-            # 2단계: 문서 검색
-            status.update(label="📚 문서 검색 중...", state="running")
-            step2 = st.empty()
-            step2.write("⏳ 관련 문서 검색 중...")
+            step_routing.write("⏳ 쿼리 분석 중...")
 
-            # 3단계: 답변 생성 (placeholder)
-            step3 = st.empty()
+            # 콜백 함수 정의
+            def progress_callback(step: str, message: str) -> None:
+                progress_state["current_step"] = step
+                progress_state["message"] = message
+
+                if step == "routing":
+                    status.update(label="🔍 쿼리 분석 중...", state="running")
+                    step_routing.write(f"✓ {message}")
+                elif step == "search":
+                    status.update(label="📚 문서 검색 중...", state="running")
+                    step_routing.write("✓ 쿼리 분석 완료")
+                    step_search.write(f"⏳ {message}")
+                elif step == "generate":
+                    status.update(label="🤖 답변 생성 중...", state="running")
+                    step_search.write("✓ 문서 검색 완료")
+                    step_generate.write(f"⏳ {message}")
+                elif step == "complete":
+                    step_generate.write("✓ 답변 생성 완료")
 
             # RAG 호출 (실제 처리)
             response = _generate_ai_response(
@@ -430,14 +449,12 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                 unified_rag_instance,
                 message_placeholder,
                 selected_filename=selected_filename,
+                progress_callback=progress_callback,
             )
 
             elapsed = time.time() - start_time
 
             # 완료 상태 업데이트
-            step2.write("✓ 문서 검색 완료")
-            step3.write("✓ 답변 생성 완료")
-
             if response:
                 status.update(
                     label=f"✅ 완료 ({elapsed:.1f}초)",

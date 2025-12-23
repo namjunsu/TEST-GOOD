@@ -60,6 +60,7 @@ class RAGResponse:
     error: Optional[str] = None
     metrics: dict = field(default_factory=dict)
     diagnostics: dict = field(default_factory=dict)  # 진단 정보
+    similar_documents: list[dict[str, Any]] = field(default_factory=list)  # 유사 문서 추천
 
 
 # ============================================================================

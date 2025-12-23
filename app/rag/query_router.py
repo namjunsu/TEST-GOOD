@@ -93,6 +93,23 @@ class QueryRouter:
         re.IGNORECASE,
     )
 
+    # 연도별 다중 문서 요약 패턴 (2025-12-23 추가)
+    # "2024년 문서 다 알려줘", "올해 전체 문서 정리해줘", "2023년 문서 요약"
+    YEAR_SUMMARY_PATTERN = re.compile(
+        r"("
+        r"(\d{4})\s*년?\s*(문서|기안서|검토서)?\s*(다|전부|전체|모두|모든).*"
+        r"(알려|요약|정리|보여|읽|뭐야|뭔가요|어때|어떻게|있어)"
+        r"|"
+        r"(다|전부|전체|모두|모든)\s*(문서|기안서|검토서)?.*"
+        r"(\d{4})\s*년?"
+        r"|"
+        r"(올해|작년|금년|전년도|이번\s*해)\s*(문서|기안서|검토서)?\s*(다|전부|전체|모두|모든)"
+        r"|"
+        r"(\d{4})\s*년?\s*(문서|기안서)?\s*(요약|정리|개요)"
+        r")",
+        re.IGNORECASE,
+    )
+
     # 검색 패턴 (문서 찾기 요청)
     SEARCH_INTENT_PATTERN = re.compile(
         r"(관련\s*(문서|파일|기안서)|"  # "XX 관련 문서"
@@ -454,6 +471,52 @@ class QueryRouter:
             drafter=params.get("drafter"),
         )
 
+    def _check_year_summary_intent(
+        self,
+        query: str,
+        params: dict[str, Any],
+    ) -> Optional[RouteDecision]:
+        """연도별 다중 문서 요약 체크 (2025-12-23 추가)
+
+        "2024년 문서 다 알려줘", "올해 전체 문서 정리해줘" 같은 패턴은
+        해당 연도의 모든 문서를 조회하여 LLM이 종합 요약을 생성해야 함.
+
+        Returns:
+            RouteDecision if matched, None otherwise
+        """
+        match = self.YEAR_SUMMARY_PATTERN.search(query)
+        if not match:
+            return None
+
+        # 연도 추출
+        year = params.get("year")
+        if not year:
+            # 패턴에서 연도 추출 시도
+            year_match = re.search(r"(\d{4})", query)
+            if year_match:
+                year = int(year_match.group(1))
+            else:
+                # "올해", "작년" 등 상대 연도 처리
+                from datetime import datetime
+                current_year = datetime.now().year
+                if "올해" in query or "금년" in query or "이번" in query:
+                    year = current_year
+                elif "작년" in query or "전년" in query:
+                    year = current_year - 1
+
+        logger.info(f"🎯 모드 결정: YEAR_SUMMARY (연도별 다중 문서 요약, year={year})")
+        reason = "year_summary_pattern"
+        self._log_routing_decision(query, QueryMode.YEAR_SUMMARY, confidence=RouterConfig.CONF_HIGH, reason=reason)
+        return RouteDecision(
+            mode=QueryMode.YEAR_SUMMARY,
+            reason=reason,
+            confidence=RouterConfig.CONF_HIGH,
+            content_intent=True,
+            list_intent=True,  # 목록 + 요약 모두 필요
+            year=year,
+            drafter=params.get("drafter"),
+        )
+
     def _check_summary_intent(
         self,
         query: str,
@@ -719,8 +782,10 @@ class QueryRouter:
         # 2. 우선순위에 따라 헬퍼 메서드 호출 (Chain of Responsibility 패턴)
         # 2025-12-21: CONTENT_ONLY를 EXISTS_INTENT보다 먼저 체크 (더 구체적인 패턴 우선)
         # 2025-12-21: SUMMARY_INTENT를 SEARCH보다 먼저 체크 (요약/정리 요청은 LLM 답변 필요)
+        # 2025-12-23: YEAR_SUMMARY를 최우선으로 체크 (연도별 다중 문서 요약)
         decision = (
-            self._check_content_only(query, params)  # "내용에 X 들어간 문서" → 정밀 검색
+            self._check_year_summary_intent(query, params)  # "2024년 문서 다 알려줘" → 연도별 요약
+            or self._check_content_only(query, params)  # "내용에 X 들어간 문서" → 정밀 검색
             or self._check_exists_intent(query, params, has_filename, has_doc_reference)
             or self._check_cost_intent(query, params, intents)
             or self._check_qa_question(query, params, has_doc_reference)  # 정보 질의 ("IP 알려줘") → QA 모드 (문서 참조 없을 때만)

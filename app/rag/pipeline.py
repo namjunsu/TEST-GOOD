@@ -610,15 +610,126 @@ class RAGPipeline:
             if route_decision.mode == QueryMode.SEARCH_CONTENT_ONLY:
                 return self._answer_search_content_only(actual_query)
 
+            # 📊 YEAR_SUMMARY 모드: 연도별 다중 문서 요약 (2025-12-23 추가)
+            if route_decision.mode == QueryMode.YEAR_SUMMARY:
+                return self._answer_year_summary(actual_query, route_decision.year)
+
             # 🔍 디버깅: 실제 pattern matching 대상 로깅
             logger.info(f"🔍 Pattern matching 대상 쿼리: '{actual_query[:100]}'")
 
             # ✅ P0: 파일명 직접 언급 패턴 감지 (레거시 호환, PREVIEW 모드 외)
-        # 일반 쿼리는 기존 로직 사용
-        response = self.query(query, top_k=top_k or PipelineConfig.DEFAULT_TOP_K, selected_filename=selected_filename)
+            # 🔧 QA 모드도 actual_query로 검색 (대화 컨텍스트 오염 방지)
+            response = self.query(actual_query, top_k=top_k or PipelineConfig.DEFAULT_TOP_K, selected_filename=selected_filename)
+
+            if response.success:
+                # 검색/압축에서 넘어온 정규화 청크 사용 (실제 page/snippet/meta 노출)
+                evidence = [
+                    {
+                        "doc_id": c.get("doc_id"),
+                        "page": c.get("page", 1),
+                        "snippet": c.get("snippet", ""),
+                        "meta": c.get(
+                            "meta", {"doc_id": c.get("doc_id"), "page": c.get("page", 1)},
+                        ),
+                    }
+                    for c in (response.evidence_chunks or [])
+                ]
+
+                # CRITICAL: Evidence 최소 보장 (sources_cited가 비어도 검색 결과는 표시)
+                evidence_injected = False
+                if not evidence and response.raw_results:
+                    logger.info("Evidence empty, using raw_results[:3] as fallback")
+                    evidence = [
+                        {
+                            "doc_id": r.get("doc_id") or r.get("chunk_id", "unknown"),
+                            "page": 0,  # 검색 결과는 페이지 정보 없음
+                            "snippet": r.get("snippet") or r.get("text_preview", "")[:PipelineConfig.SNIPPET_PREVIEW_LENGTH],
+                            "meta": {
+                                "doc_id": r.get("doc_id") or r.get("chunk_id", "unknown"),
+                                "filename": r.get("filename", ""),
+                                "page": 0,
+                            },
+                        }
+                        for r in response.raw_results[:PipelineConfig.EVIDENCE_FALLBACK_COUNT]
+                    ]
+                    evidence_injected = True
+
+                # [DIAG] Evidence 진단 정보 추가
+                if DIAG_RAG and response.diagnostics:
+                    response.diagnostics["evidence_count"] = len(evidence)
+                    response.diagnostics["evidence_injected"] = evidence_injected
+
+                # 🔥 CRITICAL: status.found 플래그 - UI 판정 단일 소스
+                status = {
+                    "retrieved_count": len(response.raw_results or []),
+                    "selected_count": len(evidence),
+                    "found": len(evidence) > 0,
+                }
+
+                # 운영 표준 1행 요약 로그
+                author_mode = bool(re.search(r"(작성자|기안자|제안자)", actual_query))
+                search_ms = int(response.metrics.get("search_time", 0) * 1000)
+                generate_ms = int(response.metrics.get("generate_time", 0) * 1000)
+                total_ms = int(response.latency * 1000)
+
+                logger.info(
+                    f'[RAG] query="{actual_query[:50]}..." | '
+                    f"retrieved={status['retrieved_count']} | "
+                    f"selected={status['selected_count']} | "
+                    f"found={status['found']} | "
+                    f"author_mode={author_mode} | "
+                    f"search={search_ms}ms | gen={generate_ms}ms | total={total_ms}ms",
+                )
+
+                result = {
+                    "text": response.answer,
+                    "citations": evidence,
+                    "evidence": evidence,
+                    "status": status,
+                    "diagnostics": response.diagnostics if DIAG_RAG else None,
+                    "similar_documents": response.similar_documents,
+                }
+
+                # 캐싱
+                cache_query_result(cache_key, result)
+                cache_query_result_persistent(cache_key, result)
+
+                # 💬 대화 로깅
+                try:
+                    conv_logger = get_conversation_logger()
+                    conv_logger.log(
+                        query=actual_query,
+                        answer=response.answer,
+                        mode=route_decision.mode.value if route_decision else "qa",
+                        sources=evidence,
+                        confidence=route_decision.confidence if route_decision else 0.0,
+                        latency_ms=total_ms,
+                    )
+                except Exception as e:
+                    logger.warning(f"⚠️ 대화 로깅 실패 (무시): {e}")
+
+                return result
+
+            # 실패 시 에러 응답
+            return {
+                "text": response.answer or "검색 결과가 없습니다.",
+                "citations": [],
+                "evidence": [],
+                "status": {"retrieved_count": 0, "selected_count": 0, "found": False},
+            }
+
+        # hasattr(self.generator, "rag")가 False인 경우의 폴백
+        # 🔧 여기서도 actual_query 추출 적용 (대화 컨텍스트 오염 방지)
+        actual_query = query
+        if "현재 질문:" in query:
+            parts = query.split("현재 질문:")
+            if len(parts) > 1:
+                actual_query = parts[-1].strip()
+        actual_query = clean_ui_metadata(actual_query)
+
+        response = self.query(actual_query, top_k=top_k or PipelineConfig.DEFAULT_TOP_K, selected_filename=selected_filename)
 
         if response.success:
-            # 검색/압축에서 넘어온 정규화 청크 사용 (실제 page/snippet/meta 노출)
             evidence = [
                 {
                     "doc_id": c.get("doc_id"),
@@ -631,14 +742,13 @@ class RAGPipeline:
                 for c in (response.evidence_chunks or [])
             ]
 
-            # CRITICAL: Evidence 최소 보장 (sources_cited가 비어도 검색 결과는 표시)
             evidence_injected = False
             if not evidence and response.raw_results:
                 logger.info("Evidence empty, using raw_results[:3] as fallback")
                 evidence = [
                     {
                         "doc_id": r.get("doc_id") or r.get("chunk_id", "unknown"),
-                        "page": 0,  # 검색 결과는 페이지 정보 없음
+                        "page": 0,
                         "snippet": r.get("snippet") or r.get("text_preview", "")[:PipelineConfig.SNIPPET_PREVIEW_LENGTH],
                         "meta": {
                             "doc_id": r.get("doc_id") or r.get("chunk_id", "unknown"),
@@ -650,90 +760,59 @@ class RAGPipeline:
                 ]
                 evidence_injected = True
 
-            # [DIAG] Evidence 진단 정보 추가
             if DIAG_RAG and response.diagnostics:
                 response.diagnostics["evidence_count"] = len(evidence)
                 response.diagnostics["evidence_injected"] = evidence_injected
 
-            # 🔥 CRITICAL: status.found 플래그 - UI 판정 단일 소스
-            # retrieved_count: 검색된 원본 결과 수
-            # selected_count: 실제 사용된 증거 수 (evidence)
-            # found: 검색 성공 여부 (evidence가 1개 이상이면 True)
             status = {
                 "retrieved_count": len(response.raw_results or []),
                 "selected_count": len(evidence),
-                "found": len(evidence) > 0,  # 🔴 유일한 판정 기준
+                "found": len(evidence) > 0,
             }
 
-            # 운영 표준 1행 요약 로그 (필수)
-            author_mode = bool(re.search(r"(작성자|기안자|제안자)", query))
+            author_mode = bool(re.search(r"(작성자|기안자|제안자)", actual_query))
             search_ms = int(response.metrics.get("search_time", 0) * 1000)
             generate_ms = int(response.metrics.get("generate_time", 0) * 1000)
             total_ms = int(response.latency * 1000)
 
             logger.info(
-                f'[RAG] query="{query[:50]}..." | '
+                f'[RAG] query="{actual_query[:50]}..." | '
                 f"retrieved={status['retrieved_count']} | "
                 f"selected={status['selected_count']} | "
                 f"found={status['found']} | "
                 f"author_mode={author_mode} | "
-                f"backfill={evidence_injected} | "
-                f"search_ms={search_ms} | "
-                f"generate_ms={generate_ms} | "
-                f"total_ms={total_ms}",
+                f"search={search_ms}ms | gen={generate_ms}ms | total={total_ms}ms",
             )
-
-            # 📊 유사 문서 추천 - 비활성화 (2025-12-16)
-            # 사유: 쿼리 기반 검색으로 관련 없는 문서가 추천되는 문제
-            similar_documents = []
 
             result = {
                 "text": response.answer,
-                "citations": evidence,  # 🔴 표준 키 (필수)
-                "evidence": evidence,  # 하위 호환성 (동일 데이터)
-                "similar_documents": similar_documents,  # 📊 유사 문서 추천 (2025-12-08)
-                "status": status,  # UI에서 이것만 확인
+                "citations": evidence,
+                "evidence": evidence,
+                "similar_documents": [],
+                "status": status,
                 "diagnostics": response.diagnostics if DIAG_RAG else {},
             }
 
-            # ✨ Cache the successful result to both tiers
-            cache_key = build_answer_cache_key(query, selected_filename)
-            cache_query_result(cache_key, result)  # Memory cache
-            cache_query_result_persistent(cache_key, result)  # Persistent cache
-            logger.info(f"📝 Cached result to memory + persistent storage for query: {query[:50]}...")
-
-            # 💬 대화 로깅 (2025-12-16)
-            try:
-                conv_logger = get_conversation_logger()
-                conv_logger.log(
-                    query=query,
-                    answer=response.answer,
-                    mode=route_decision.mode.value if route_decision else "unknown",
-                    sources=evidence,
-                    confidence=route_decision.confidence if route_decision else 0.0,
-                    latency_ms=total_ms,
-                )
-            except Exception as e:
-                logger.warning(f"⚠️ 대화 로깅 실패 (무시): {e}")
+            cache_query_result(cache_key, result)
+            cache_query_result_persistent(cache_key, result)
 
             return result
-        # 에러 발생 시 (중립 톤, 사과 표현 금지)
+
         error_msg = ERROR_MESSAGES.get(
             ErrorCode.E_GENERATE, "답변 생성 중 오류가 발생했다.",
         )
         if response.error:
             error_msg = f"{error_msg}\n\n상세: {response.error}"
 
-        # 운영 표준 로그 (에러 케이스)
         logger.error(
-            f'[RAG] query="{query[:50]}..." | '
+            f'[RAG] query="{actual_query[:50]}..." | '
             f'status=ERROR | error="{response.error}"',
         )
 
         return {
             "text": error_msg,
-            "citations": [],  # 🔴 표준 키 (필수)
-            "evidence": [],  # 하위 호환성
+            "citations": [],
+            "evidence": [],
             "status": {"retrieved_count": 0, "selected_count": 0, "found": False},
         }
 
@@ -760,6 +839,147 @@ class RAGPipeline:
     def _answer_cost_sum(self, query: str) -> dict:
         """비용 합계 조회 - CostSumHandler로 위임 (Strangler Fig 패턴)"""
         return self._cost_sum_handler.handle(query)
+
+    def _answer_year_summary(self, query: str, year: Optional[int] = None) -> dict:
+        """연도별 다중 문서 요약 (2025-12-23 추가)
+
+        지정된 연도의 모든 문서를 조회하여 LLM이 종합 요약을 생성합니다.
+
+        Args:
+            query: 사용자 질의
+            year: 대상 연도 (None이면 쿼리에서 추출)
+
+        Returns:
+            dict: 답변 및 증거 포함
+        """
+        import sqlite3
+        from datetime import datetime
+
+        logger.info(f"📊 YEAR_SUMMARY 모드 실행: year={year}, query={query[:50]}...")
+
+        # 연도 확정
+        if not year:
+            # 쿼리에서 연도 추출
+            year_match = re.search(r"(\d{4})", query)
+            if year_match:
+                year = int(year_match.group(1))
+            else:
+                year = datetime.now().year  # 기본값: 올해
+
+        # metadata.db에서 해당 연도 문서 조회
+        try:
+            from app.config.settings import settings
+            db_path = getattr(settings, "METADATA_DB_PATH", None) or "metadata.db"
+
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT id, filename, title, date, drafter, doctype, claimed_total, text_preview
+                FROM documents
+                WHERE year = ?
+                ORDER BY date DESC
+            """, (str(year),))
+
+            rows = cursor.fetchall()
+            conn.close()
+
+            doc_count = len(rows)
+            logger.info(f"📄 {year}년 문서 {doc_count}개 조회됨")
+
+            if doc_count == 0:
+                return {
+                    "text": f"{year}년에 등록된 문서가 없습니다.",
+                    "citations": [],
+                    "evidence": [],
+                    "status": {"retrieved_count": 0, "selected_count": 0, "found": False},
+                }
+
+            # 문서 분류 (doctype별)
+            categories = {}
+            for row in rows:
+                doctype = row["doctype"] or "기타"
+                if doctype not in categories:
+                    categories[doctype] = []
+                categories[doctype].append(dict(row))
+
+            # LLM에 전달할 컨텍스트 생성 (요약용)
+            context_parts = [f"## {year}년 문서 현황 (총 {doc_count}개)\n"]
+
+            for doctype, docs in sorted(categories.items(), key=lambda x: -len(x[1])):
+                context_parts.append(f"\n### {doctype} ({len(docs)}건)")
+                for doc in docs[:10]:  # 각 카테고리당 최대 10개
+                    title = doc["title"] or doc["filename"]
+                    date = doc["date"] or "날짜 없음"
+                    drafter = doc["drafter"] or "기안자 없음"
+                    amount = doc["claimed_total"]
+                    amount_str = f" - {amount:,}원" if amount else ""
+                    context_parts.append(f"- [{date}] {title[:50]} (작성: {drafter}){amount_str}")
+
+            context = "\n".join(context_parts)
+
+            # LLM으로 요약 생성
+            prompt = f"""다음은 {year}년의 기술검토서/기안서 목록입니다. 사용자 질문에 맞게 간결하게 정리해주세요.
+
+{context}
+
+사용자 질문: {query}
+
+답변 형식:
+- 전체 현황 요약 (문서 수, 주요 카테고리)
+- 카테고리별 주요 내용 (수리/구매/점검 등)
+- 필요시 금액 합계
+
+간결하게 작성하되, 핵심 정보는 빠뜨리지 마세요."""
+
+            # LLM 호출
+            try:
+                answer = self.generator.generate(prompt, max_tokens=2048)
+            except Exception as e:
+                logger.error(f"LLM 호출 실패: {e}")
+                # 폴백: 기본 요약
+                answer = f"{year}년에 총 {doc_count}개의 문서가 있습니다.\n\n"
+                for doctype, docs in sorted(categories.items(), key=lambda x: -len(x[1])):
+                    answer += f"- {doctype}: {len(docs)}건\n"
+
+            # Evidence 생성 (상위 문서들)
+            evidence = [
+                {
+                    "doc_id": row["filename"],
+                    "page": 0,
+                    "snippet": (row["text_preview"] or "")[:200],
+                    "meta": {
+                        "doc_id": row["filename"],
+                        "filename": row["filename"],
+                        "title": row["title"],
+                        "date": row["date"],
+                        "drafter": row["drafter"],
+                    },
+                }
+                for row in rows[:5]  # 상위 5개만
+            ]
+
+            return {
+                "text": answer,
+                "citations": evidence,
+                "evidence": evidence,
+                "status": {
+                    "retrieved_count": doc_count,
+                    "selected_count": min(doc_count, 5),
+                    "found": True,
+                    "year": year,
+                },
+            }
+
+        except Exception as e:
+            logger.error(f"YEAR_SUMMARY 처리 실패: {e}", exc_info=True)
+            return {
+                "text": f"연도별 요약 처리 중 오류가 발생했습니다: {e}",
+                "citations": [],
+                "evidence": [],
+                "status": {"retrieved_count": 0, "selected_count": 0, "found": False},
+            }
 
     def _answer_document(self, query: str, selected_filename: Optional[str] = None) -> dict:
         """문서 내용 조회 - DocumentHandler로 위임 (Strangler Fig 패턴)"""

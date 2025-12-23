@@ -8,8 +8,9 @@ font="sans-serif"                  # 폰트 (Inter 등으로 변경 가능)
 
 [server]
 headless = true
+# CORS와 XSRF 충돌 해결: 내부 네트워크 전용이므로 XSRF 비활성화
 enableCORS = false
-enableXsrfProtection = true
+enableXsrfProtection = false
 
 [browser]
 gatherUsageStats = false

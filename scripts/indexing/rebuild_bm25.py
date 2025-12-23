@@ -38,9 +38,9 @@ def rebuild_bm25_index():
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT id, filename, content, year, drafter
+        SELECT id, filename, text_preview, year, drafter
         FROM documents
-        WHERE content IS NOT NULL AND content != ''
+        WHERE text_preview IS NOT NULL AND text_preview != ''
     """)
     rows = cursor.fetchall()
     conn.close()
@@ -56,10 +56,10 @@ def rebuild_bm25_index():
     metadata_list = []
 
     for row in rows:
-        doc_id, filename, content, year, drafter = row
-        documents.append(content)
+        doc_id, filename, text_preview, year, drafter = row
+        documents.append(text_preview)
         metadata_list.append({
-            "doc_id": doc_id,
+            "id": doc_id,  # BM25Store._resolve_doc_id()가 "id" 필드를 요구
             "filename": filename,
             "year": year,
             "drafter": drafter,
@@ -69,9 +69,15 @@ def rebuild_bm25_index():
     logger.info("🔨 BM25 인덱스 생성 중...")
 
     # 인덱스 디렉토리 생성
-    Path(index_path).parent.mkdir(parents=True, exist_ok=True)
+    index_path_obj = Path(index_path)
+    index_path_obj.parent.mkdir(parents=True, exist_ok=True)
 
-    # BM25Store로 인덱싱
+    # 기존 인덱스 삭제 (재빌드이므로 초기화 필요)
+    if index_path_obj.exists():
+        index_path_obj.unlink()
+        logger.info("🗑️ 기존 인덱스 삭제됨")
+
+    # BM25Store로 인덱싱 (빈 인덱스에서 시작)
     bm25_store = BM25Store(index_path=index_path)
     bm25_store.add_documents(documents, metadata_list)
     bm25_store.save_index()

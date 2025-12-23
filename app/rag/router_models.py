@@ -43,6 +43,7 @@ class QueryMode(Enum):
     SEARCH = "search"  # 문서 검색 (통합: LIST + SEARCH + LIST_FIRST)
     SEARCH_CONTENT_ONLY = "search_content_only"  # 정밀 내용 검색 (본문 일치만)
     QA = "qa"  # 질답 모드 (RAG 파이프라인, 기본)
+    YEAR_SUMMARY = "year_summary"  # 연도별 다중 문서 요약 (2025-12-23 추가)
 
 
 @dataclass

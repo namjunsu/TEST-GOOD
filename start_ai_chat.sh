@@ -49,7 +49,7 @@ spin() {
 run_with_spinner() {
   local msg=$1
   shift
-  "$@" >> "$LOG_FILE" 2>&1 &
+  PYTHONPATH="${PROJECT_ROOT}" "$@" >> "$LOG_FILE" 2>&1 &
   local pid=$!
   spin $pid "$msg"
   wait $pid

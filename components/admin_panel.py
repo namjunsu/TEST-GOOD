@@ -241,13 +241,19 @@ def delete_document(doc_id: int, filename: str, file_path: str) -> bool:
 
 def run_script(script_path: str, timeout: int) -> TaskResult:
     """외부 스크립트 실행"""
+    import os
     try:
+        # PYTHONPATH 설정하여 모듈 import 가능하게
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(PROJECT_ROOT)
+
         result = subprocess.run(
             [sys.executable, script_path],
             cwd=str(PROJECT_ROOT),
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=env,
         )
 
         output = result.stdout + result.stderr
@@ -268,7 +274,7 @@ def run_ingest() -> TaskResult:
 
 def run_rebuild_bm25() -> TaskResult:
     """BM25 인덱스 재빌드"""
-    return run_script("scripts/data/indexing/rebuild_bm25.py", BM25_TIMEOUT)
+    return run_script("scripts/indexing/rebuild_bm25.py", BM25_TIMEOUT)
 
 
 # ============================================================================

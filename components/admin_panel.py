@@ -286,6 +286,11 @@ def run_rebuild_bm25() -> TaskResult:
     return run_script("scripts/indexing/rebuild_bm25.py", BM25_TIMEOUT)
 
 
+def run_rebuild_vector() -> TaskResult:
+    """벡터 인덱스 재빌드"""
+    return run_script("scripts/indexing/rebuild_vector.py", BM25_TIMEOUT * 2)  # 임베딩은 더 오래 걸림
+
+
 # ============================================================================
 # Session State 관리
 # ============================================================================
@@ -440,16 +445,30 @@ def _run_auto_ingest(status, progress) -> None:
             st.code(ingest_result.output)
         return
 
-    status.text("🔍 검색 인덱스 업데이트 중...")
+    status.text("🔍 BM25 인덱스 업데이트 중...")
     bm25_result = run_rebuild_bm25()
+    progress.progress(70)
+
+    if bm25_result.status != TaskStatus.SUCCESS:
+        st.warning("⚠️ BM25 인덱스 재빌드 실패")
+        with st.expander("BM25 로그"):
+            st.code(bm25_result.output)
+
+    status.text("🧠 벡터 인덱스 업데이트 중...")
+    vector_result = run_rebuild_vector()
     progress.progress(100)
 
-    if bm25_result.status == TaskStatus.SUCCESS:
+    if vector_result.status != TaskStatus.SUCCESS:
+        st.warning("⚠️ 벡터 인덱스 재빌드 실패")
+        with st.expander("벡터 로그"):
+            st.code(vector_result.output)
+
+    if bm25_result.status == TaskStatus.SUCCESS and vector_result.status == TaskStatus.SUCCESS:
         st.success("✅ 시스템 등록 완료! 검색 가능합니다.")
+    elif bm25_result.status == TaskStatus.SUCCESS:
+        st.warning("⚠️ 인제스트 완료, 벡터 인덱스만 실패 (키워드 검색은 가능)")
     else:
-        st.warning("⚠️ 인제스트 완료, 인덱스 재빌드 실패")
-        with st.expander("인덱스 로그"):
-            st.code(bm25_result.output)
+        st.error("❌ 인덱스 재빌드 실패")
 
 
 def _render_incoming_status() -> None:
@@ -472,7 +491,7 @@ def render_ingest_section() -> None:
     """인제스트 & 인덱스 섹션"""
     st.subheader("🔄 인제스트 & 인덱싱")
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         if st.button("📥 인제스트 실행", use_container_width=True, help="새 문서를 시스템에 등록"):
@@ -481,10 +500,16 @@ def render_ingest_section() -> None:
             render_task_result(result, "인제스트 완료")
 
     with col2:
-        if st.button("🔍 BM25 인덱스 재빌드", use_container_width=True, help="검색 인덱스 재생성"):
-            with st.spinner("인덱스 재빌드 중... (최대 2분)"):
+        if st.button("🔍 BM25 재빌드", use_container_width=True, help="키워드 검색 인덱스 재생성"):
+            with st.spinner("BM25 인덱스 재빌드 중... (최대 2분)"):
                 result = run_rebuild_bm25()
-            render_task_result(result, "인덱스 재빌드 완료")
+            render_task_result(result, "BM25 인덱스 재빌드 완료")
+
+    with col3:
+        if st.button("🧠 벡터 재빌드", use_container_width=True, help="의미 검색 인덱스 재생성 (시간 소요)"):
+            with st.spinner("벡터 인덱스 재빌드 중... (최대 5분)"):
+                result = run_rebuild_vector()
+            render_task_result(result, "벡터 인덱스 재빌드 완료")
 
 
 def render_document_list() -> None:

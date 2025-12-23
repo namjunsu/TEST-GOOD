@@ -25,6 +25,7 @@ from typing import Any, Optional
 import yaml
 
 from app.core.logging import get_logger
+from app.rag.pattern_config import PatternConfigLoader, get_pattern_loader
 from app.rag.router_models import QueryMode, RouteDecision, ScoreStats
 from app.rag.routing_monitor import get_monitor
 from config.constants import RouterConfig
@@ -110,10 +111,11 @@ class QueryRouter:
         r"(다|전부|전체|모두|모든)\s*(문서|기안서|검토서)?.*"
         r"(\d{4})\s*년?"
         r"|"
-        # 패턴4: "올해/작년 문서들 내용 알려줘" (문서 키워드 필수)
+        # 패턴4: "올해/작년 문서들 다 알려줘" (문서 키워드 필수)
         # "작년 소모품 합계 알려줘" 같은 비용 쿼리와 구분하기 위해 문서 키워드 필수
+        # "알려줘"도 동사로 포함
         r"(올해|작년|금년|전년도|이번\s*해)\s+(문서|기안서|검토서)들?\s*(다|전부|전체|모두|모든)?"
-        r".*(내용|뭐|어떤|무슨|요약|정리)"
+        r".*(내용|뭐|어떤|무슨|요약|정리|알려)"
         r"|"
         # 패턴5: "2024년 문서 요약/정리/개요"
         r"(\d{4})\s*년?\s*(문서|기안서)?들?\s*(요약|정리|개요)"
@@ -222,6 +224,9 @@ class QueryRouter:
 
         # 라우팅 모니터 초기화
         self.monitor = get_monitor()
+
+        # 패턴 설정 로더 (2025-12-23 추가: 외부 설정 기반 패턴)
+        self.pattern_loader = get_pattern_loader()
 
         logger.info(
             f"📋 모드 라우터 초기화: QA 키워드 {len(self.qa_keywords)}개, 미리보기 키워드 {len(self.preview_keywords)}개, "
@@ -492,11 +497,23 @@ class QueryRouter:
         "2024년 문서 다 알려줘", "올해 전체 문서 정리해줘" 같은 패턴은
         해당 연도의 모든 문서를 조회하여 LLM이 종합 요약을 생성해야 함.
 
+        충돌 해결 (2025-12-23):
+        - "작년 소모품 합계 얼마" → COST (not YEAR_SUMMARY)
+        - 비용 키워드(합계/총액/얼마)가 명확하면 COST 우선
+
         Returns:
             RouteDecision if matched, None otherwise
         """
         match = self.YEAR_SUMMARY_PATTERN.search(query)
         if not match:
+            return None
+
+        # 충돌 해결: COST vs YEAR_SUMMARY
+        # 비용 키워드가 명확하면 COST 모드가 더 적합 → YEAR_SUMMARY 스킵
+        cost_keywords = ["합계", "총액", "얼마", "비용", "금액"]
+        has_explicit_cost = any(kw in query for kw in cost_keywords)
+        if has_explicit_cost:
+            logger.debug(f"ℹ️ YEAR_SUMMARY 패턴 감지, 비용 키워드({cost_keywords}) 있음 → COST 모드로 위임")
             return None
 
         # 연도 추출
@@ -762,14 +779,16 @@ class QueryRouter:
         """쿼리 모드 자동 분류 및 라우팅 (리팩토링 버전)
 
         Phase 12: 헬퍼 메서드로 분리하여 복잡도 감소 (224줄 → ~50줄)
+        Phase 13 (2025-12-23): YAML 설정 기반 패턴 외부화
 
         우선순위 (높음 → 낮음):
-            1. EXISTS: 존재 확인 질의
+            1. YEAR_SUMMARY: 연도별 다중 문서 요약
             2. CONTENT_ONLY: 정밀 내용 검색
-            3. COST: 비용 조회 질의
-            4. DOCUMENT: 문서 내용/요약 요청
-            5. SEARCH: 문서 검색
-            6. QA: 질답 모드 (기본)
+            3. EXISTS: 존재 확인 질의
+            4. COST: 비용 조회 질의
+            5. DOCUMENT: 문서 내용/요약 요청
+            6. SEARCH: 문서 검색
+            7. QA: 질답 모드 (기본)
 
         Args:
             query: 사용자 질의
@@ -778,6 +797,14 @@ class QueryRouter:
             RouteDecision: 모드 + 의도 플래그 + 추출된 파라미터
         """
         query_lower = query.lower()
+
+        # 설정 기반 분류 (보조 역할, 점진적 마이그레이션)
+        # TODO: Phase 14에서 하드코딩 패턴을 완전히 대체
+        if self.pattern_loader.is_loaded:
+            config_result = self.pattern_loader.classify_with_config(query)
+            if config_result:
+                mode_name, conf, rule_name = config_result
+                logger.debug(f"📊 설정 기반 분류: {mode_name} (conf={conf}, rule={rule_name})")
 
         # 1. 컨텍스트 추출
         params = self._extract_query_params(query)

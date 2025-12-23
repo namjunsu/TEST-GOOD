@@ -164,6 +164,98 @@ def test_all_patterns():
         return True
 
 
+class TestConflictResolution:
+    """모드 간 충돌 해결 테스트 (2025-12-23 추가)"""
+
+    @pytest.fixture
+    def router(self):
+        """라우터 인스턴스 생성"""
+        return QueryRouter()
+
+    def test_cost_over_year_summary(self, router):
+        """비용 키워드가 있으면 COST 모드 우선
+
+        "작년 소모품 합계 얼마" → COST (not YEAR_SUMMARY)
+        """
+        cost_priority_queries = [
+            "작년 소모품 합계 얼마",
+            "2024년 비용 총액",
+            "올해 구매 비용 합계",
+            "2024년 문서 총액은?",
+        ]
+
+        for query in cost_priority_queries:
+            result = router.classify_mode(query)
+            assert result.mode == QueryMode.COST, \
+                f"'{query}' should be COST (not YEAR_SUMMARY), got {result.mode}"
+
+    def test_year_summary_without_cost_keywords(self, router):
+        """비용 키워드 없으면 YEAR_SUMMARY 모드
+
+        "2024년 문서들은 어떤 내용이야" → YEAR_SUMMARY
+        """
+        year_summary_queries = [
+            "2024년 문서들은 어떤 내용이야",
+            "2025년 문서들은 어떤 내용이야?",
+            "2023년 문서는 어떤 내용이야?",
+            "작년 문서 요약해줘",
+            "올해 문서들 다 알려줘",
+            "2024년 기안서 전체 정리",
+        ]
+
+        for query in year_summary_queries:
+            result = router.classify_mode(query)
+            assert result.mode == QueryMode.YEAR_SUMMARY, \
+                f"'{query}' should be YEAR_SUMMARY, got {result.mode}"
+
+    def test_year_parameter_extraction(self, router):
+        """YEAR_SUMMARY 모드에서 연도 추출 확인"""
+        result = router.classify_mode("2024년 문서들은 어떤 내용이야")
+        assert result.mode == QueryMode.YEAR_SUMMARY
+        assert result.year == 2024
+
+        result = router.classify_mode("2025년 문서 요약")
+        assert result.mode == QueryMode.YEAR_SUMMARY
+        assert result.year == 2025
+
+
+class TestYearSummaryPatterns:
+    """YEAR_SUMMARY 패턴 테스트 (2025-12-23 추가)"""
+
+    @pytest.fixture
+    def router(self):
+        """라우터 인스턴스 생성"""
+        return QueryRouter()
+
+    def test_plural_and_singular_forms(self, router):
+        """단수/복수 형태 모두 매칭
+
+        "문서들은" (복수) vs "문서는" (단수) 모두 지원
+        """
+        # 복수형
+        result = router.classify_mode("2024년 문서들은 어떤 내용이야?")
+        assert result.mode == QueryMode.YEAR_SUMMARY
+
+        # 단수형
+        result = router.classify_mode("2024년 문서는 어떤 내용이야?")
+        assert result.mode == QueryMode.YEAR_SUMMARY
+
+    def test_various_year_formats(self, router):
+        """다양한 연도 표현 테스트"""
+        queries = [
+            ("2024년 문서 다 알려줘", 2024),
+            ("2023년 기안서 전체 정리", 2023),
+            ("2025 문서들 요약", 2025),
+        ]
+
+        for query, expected_year in queries:
+            result = router.classify_mode(query)
+            assert result.mode == QueryMode.YEAR_SUMMARY, \
+                f"'{query}' should be YEAR_SUMMARY, got {result.mode}"
+            assert result.year == expected_year, \
+                f"'{query}' should have year={expected_year}, got {result.year}"
+
+
 if __name__ == "__main__":
     # pytest가 없어도 실행 가능
     import sys

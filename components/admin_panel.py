@@ -536,9 +536,13 @@ def render_document_list() -> None:
 
     # 페이지네이션
     total_pages = max(1, (len(docs) - 1) // PAGE_SIZE + 1)
-    current_page = validate_page_range(get_admin_page(), total_pages)
+    saved_page = get_admin_page()
+    current_page = validate_page_range(saved_page, total_pages)
 
-    if current_page != get_admin_page():
+    # 편집/삭제 모드가 아닐 때만 페이지 보정 (편집 중 페이지 점프 방지)
+    if current_page != saved_page and not any(
+        is_editing(d.id) or is_confirming_delete(d.id) for d in docs
+    ):
         set_admin_page(current_page)
 
     _render_pagination(current_page, total_pages)

@@ -75,14 +75,25 @@ class ResultFormatter:
             cards.append("\n".join(card_lines))
 
         # 응답 텍스트 생성
+        total_count = len(filenames)  # 전체 검색 결과 수
+        display_count = len(doc_details)  # 표시되는 문서 수
+
         if _is_count_query(query):
-            answer_text = f"**'{keywords}' 관련 문서는 총 {len(doc_details)}개**입니다.\n\n"
+            answer_text = f"**'{keywords}' 관련 문서는 총 {total_count}개**입니다.\n\n"
             answer_text += "\n\n".join(cards[:HandlerConfig.COUNT_QUERY_DISPLAY_LIMIT])
             if len(cards) > HandlerConfig.COUNT_QUERY_DISPLAY_LIMIT:
                 answer_text += f"\n\n... 외 {len(cards) - HandlerConfig.COUNT_QUERY_DISPLAY_LIMIT}개 문서"
         else:
-            answer_text = f"📄 **'{keywords}' 관련 문서 ({len(doc_details)}건)**\n\n"
+            # 총 건수 vs 표시 건수 구분
+            if total_count > display_count:
+                answer_text = f"📄 **'{keywords}' 관련 문서 (총 {total_count}건 중 {display_count}건)**\n\n"
+            else:
+                answer_text = f"📄 **'{keywords}' 관련 문서 ({display_count}건)**\n\n"
             answer_text += "\n\n".join(cards)
+
+            # 더 많은 결과가 있으면 힌트 추가
+            if total_count > display_count:
+                answer_text += f"\n\n💡 전체 목록: \"{keywords} 문서 전부 보여줘\""
 
         # Evidence 생성
         evidence = self.build_evidence(doc_details)

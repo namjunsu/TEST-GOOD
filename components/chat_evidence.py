@@ -220,7 +220,13 @@ def display_evidence_section(evidence_list: list, msg_idx: int) -> None:
     display_evidence = evidence_list[:MAX_EVIDENCE_DISPLAY]
     has_more = len(evidence_list) > MAX_EVIDENCE_DISPLAY
 
-    with st.expander(f"📚 출처 문서 ({len(display_evidence)}건)", expanded=False):
+    # expander 열림 상태 유지 (미리보기 버튼 클릭 시 닫히는 현상 방지)
+    expander_key = f"evidence_expander_{msg_idx}"
+    is_expanded = st.session_state.get(expander_key, False)
+
+    with st.expander(f"📚 출처 문서 ({len(display_evidence)}건)", expanded=is_expanded):
+        # expander가 열리면 상태 저장
+        st.session_state[expander_key] = True
         for i, ev in enumerate(display_evidence, 1):
             # 메타데이터 추출
             ev_data = extract_evidence_metadata(ev)
@@ -272,7 +278,13 @@ def display_similar_documents_section(similar_docs: list, msg_idx: int) -> None:
     if not similar_docs:
         return
 
-    with st.expander(f"🔗 유사 문서 추천 ({len(similar_docs)}건)", expanded=False):
+    # expander 열림 상태 유지 (미리보기 버튼 클릭 시 닫히는 현상 방지)
+    expander_key = f"similar_expander_{msg_idx}"
+    is_expanded = st.session_state.get(expander_key, False)
+
+    with st.expander(f"🔗 유사 문서 추천 ({len(similar_docs)}건)", expanded=is_expanded):
+        # expander가 열리면 상태 저장
+        st.session_state[expander_key] = True
         for i, doc in enumerate(similar_docs, 1):
             filename = doc.get("filename", "unknown")
             similarity = doc.get("similarity", 0)

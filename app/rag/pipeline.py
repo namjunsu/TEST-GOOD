@@ -619,7 +619,7 @@ class RAGPipeline:
 
             # 📊 YEAR_SUMMARY 모드: 연도별 다중 문서 요약 (2025-12-23 추가)
             if route_decision.mode == QueryMode.YEAR_SUMMARY:
-                return self._answer_year_summary(actual_query, route_decision.year)
+                return self._answer_year_summary(actual_query, route_decision.year, route_decision.drafter)
 
             # 🔍 디버깅: 실제 pattern matching 대상 로깅
             logger.info(f"🔍 Pattern matching 대상 쿼리: '{actual_query[:100]}'")
@@ -847,7 +847,12 @@ class RAGPipeline:
         """비용 합계 조회 - CostSumHandler로 위임 (Strangler Fig 패턴)"""
         return self._cost_sum_handler.handle(query)
 
-    def _answer_year_summary(self, query: str, year: Optional[int] = None) -> dict:
+    def _answer_year_summary(
+        self,
+        query: str,
+        year: Optional[int] = None,
+        drafter: Optional[str] = None,
+    ) -> dict:
         """연도별 다중 문서 요약 (2025-12-23 추가)
 
         지정된 연도의 모든 문서를 조회하여 LLM이 종합 요약을 생성합니다.
@@ -855,6 +860,7 @@ class RAGPipeline:
         Args:
             query: 사용자 질의
             year: 대상 연도 (None이면 쿼리에서 추출)
+            drafter: 기안자 필터 (None이면 전체)
 
         Returns:
             dict: 답변 및 증거 포함
@@ -862,7 +868,13 @@ class RAGPipeline:
         import sqlite3
         from datetime import datetime
 
-        logger.info(f"📊 YEAR_SUMMARY 모드 실행: year={year}, query={query[:50]}...")
+        # 쿼리에서 기안자 추출 (RouteDecision에서 전달되지 않은 경우)
+        if not drafter:
+            drafter_match = re.search(r"([가-힣]{2,4})\s*(문서|기안서|작성|기안)", query)
+            if drafter_match:
+                drafter = drafter_match.group(1)
+
+        logger.info(f"📊 YEAR_SUMMARY 모드 실행: year={year}, drafter={drafter}, query={query[:50]}...")
 
         # 연도 확정
         if not year:
@@ -882,22 +894,33 @@ class RAGPipeline:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
-            cursor.execute("""
-                SELECT id, filename, title, date, drafter, doctype, claimed_total, text_preview
-                FROM documents
-                WHERE year = ?
-                ORDER BY date DESC
-            """, (str(year),))
+            # drafter 필터 조건 동적 생성
+            if drafter:
+                cursor.execute("""
+                    SELECT id, filename, title, date, drafter, doctype, claimed_total, text_preview
+                    FROM documents
+                    WHERE year = ? AND drafter = ?
+                    ORDER BY date DESC
+                """, (str(year), drafter))
+            else:
+                cursor.execute("""
+                    SELECT id, filename, title, date, drafter, doctype, claimed_total, text_preview
+                    FROM documents
+                    WHERE year = ?
+                    ORDER BY date DESC
+                """, (str(year),))
 
             rows = cursor.fetchall()
             conn.close()
 
             doc_count = len(rows)
-            logger.info(f"📄 {year}년 문서 {doc_count}개 조회됨")
+            drafter_info = f" (기안자: {drafter})" if drafter else ""
+            logger.info(f"📄 {year}년{drafter_info} 문서 {doc_count}개 조회됨")
 
             if doc_count == 0:
+                no_doc_msg = f"{year}년에 {drafter}님이 작성한 문서가 없습니다." if drafter else f"{year}년에 등록된 문서가 없습니다."
                 return {
-                    "text": f"{year}년에 등록된 문서가 없습니다.",
+                    "text": no_doc_msg,
                     "citations": [],
                     "evidence": [],
                     "status": {"retrieved_count": 0, "selected_count": 0, "found": False},
@@ -912,22 +935,24 @@ class RAGPipeline:
                 categories[doctype].append(dict(row))
 
             # LLM에 전달할 컨텍스트 생성 (요약용)
-            context_parts = [f"## {year}년 문서 현황 (총 {doc_count}개)\n"]
+            header = f"## {year}년 {drafter}님 문서 현황 (총 {doc_count}개)\n" if drafter else f"## {year}년 문서 현황 (총 {doc_count}개)\n"
+            context_parts = [header]
 
             for doctype, docs in sorted(categories.items(), key=lambda x: -len(x[1])):
                 context_parts.append(f"\n### {doctype} ({len(docs)}건)")
                 for doc in docs[:10]:  # 각 카테고리당 최대 10개
                     title = doc["title"] or doc["filename"]
                     date = doc["date"] or "날짜 없음"
-                    drafter = doc["drafter"] or "기안자 없음"
+                    doc_drafter = doc["drafter"] or "기안자 없음"
                     amount = doc["claimed_total"]
                     amount_str = f" - {amount:,}원" if amount else ""
-                    context_parts.append(f"- [{date}] {title[:50]} (작성: {drafter}){amount_str}")
+                    context_parts.append(f"- [{date}] {title[:50]} (작성: {doc_drafter}){amount_str}")
 
             context = "\n".join(context_parts)
 
             # LLM으로 요약 생성 (자연스러운 프롬프트)
-            prompt = f"""{year}년 문서 {doc_count}개를 정리해주세요.
+            subject = f"{year}년 {drafter}님" if drafter else f"{year}년"
+            prompt = f"""{subject} 문서 {doc_count}개를 정리해주세요.
 
 {context}
 

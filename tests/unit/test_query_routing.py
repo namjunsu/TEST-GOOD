@@ -255,6 +255,40 @@ class TestYearSummaryPatterns:
             assert result.year == expected_year, \
                 f"'{query}' should have year={expected_year}, got {result.year}"
 
+    def test_drafter_extraction(self, router):
+        """기안자 추출 테스트 (2025-12-23 추가)
+
+        "남준수 문서 2025년 정리해줘" → drafter="남준수"
+        """
+        drafter_queries = [
+            ("남준수 문서 2025년 정리해줘", "남준수", 2025),
+            ("홍길동님 기안서 2024년 요약", "홍길동", 2024),
+            ("김철수 2023년 문서 내용 알려줘", "김철수", 2023),
+        ]
+
+        for query, expected_drafter, expected_year in drafter_queries:
+            result = router.classify_mode(query)
+            assert result.mode == QueryMode.YEAR_SUMMARY, \
+                f"'{query}' should be YEAR_SUMMARY, got {result.mode}"
+            assert result.drafter == expected_drafter, \
+                f"'{query}' should have drafter='{expected_drafter}', got '{result.drafter}'"
+            assert result.year == expected_year, \
+                f"'{query}' should have year={expected_year}, got {result.year}"
+
+    def test_year_summary_without_drafter(self, router):
+        """기안자 없는 연도별 요약 쿼리 테스트"""
+        queries = [
+            "2024년 문서 전체 정리",
+            "올해 기안서들 요약해줘",
+        ]
+
+        for query in queries:
+            result = router.classify_mode(query)
+            assert result.mode == QueryMode.YEAR_SUMMARY, \
+                f"'{query}' should be YEAR_SUMMARY, got {result.mode}"
+            assert result.drafter is None, \
+                f"'{query}' should have drafter=None, got '{result.drafter}'"
+
 
 if __name__ == "__main__":
     # pytest가 없어도 실행 가능

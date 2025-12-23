@@ -117,8 +117,11 @@ class QueryRouter:
         r"(올해|작년|금년|전년도|이번\s*해)\s+(문서|기안서|검토서)들?\s*(다|전부|전체|모두|모든)?"
         r".*(내용|뭐|어떤|무슨|요약|정리|알려)"
         r"|"
-        # 패턴5: "2024년 문서 요약/정리/개요"
-        r"(\d{4})\s*년?\s*(문서|기안서)?들?\s*(요약|정리|개요)"
+        # 패턴5: "2024년 문서 요약/정리/개요" 또는 "2024년 문서 내용 정리"
+        r"(\d{4})\s*년?\s*(문서|기안서)?들?\s*(내용\s*)?(요약|정리|개요)"
+        r"|"
+        # 패턴6: "기안자 + 연도 + 문서 + 정리/요약" (예: "남준수 2025년 문서 정리해줘")
+        r"[가-힣]{2,4}\s*(문서|기안서)?\s*(\d{4})\s*년?\s*(문서)?\s*(내용\s*)?(요약|정리|알려)"
         r")",
         re.IGNORECASE,
     )
@@ -532,7 +535,19 @@ class QueryRouter:
                 elif "작년" in query or "전년" in query:
                     year = current_year - 1
 
-        logger.info(f"🎯 모드 결정: YEAR_SUMMARY (연도별 다중 문서 요약, year={year})")
+        # 기안자 추출 (쿼리에서 직접 추출)
+        drafter = params.get("drafter")
+        if not drafter:
+            # 패턴: "남준수 문서", "남준수님 기안서", "홍길동 2025년 문서"
+            # 제외: "올해", "작년", "금년" 등 연도 표현은 기안자가 아님
+            year_words = {"올해", "작년", "금년", "전년", "이번", "내년"}
+            drafter_match = re.search(r"([가-힣]{2,3})님?\s*(?:\d{4}년?\s*)?(문서|기안서|작성|기안)", query)
+            if drafter_match:
+                candidate = drafter_match.group(1)
+                if candidate not in year_words:
+                    drafter = candidate
+
+        logger.info(f"🎯 모드 결정: YEAR_SUMMARY (연도별 다중 문서 요약, year={year}, drafter={drafter})")
         reason = "year_summary_pattern"
         self._log_routing_decision(query, QueryMode.YEAR_SUMMARY, confidence=RouterConfig.CONF_HIGH, reason=reason)
         return RouteDecision(
@@ -542,7 +557,7 @@ class QueryRouter:
             content_intent=True,
             list_intent=True,  # 목록 + 요약 모두 필요
             year=year,
-            drafter=params.get("drafter"),
+            drafter=drafter,
         )
 
     def _check_summary_intent(
@@ -768,10 +783,14 @@ class QueryRouter:
         if year_match:
             params["year"] = int(year_match.group(1))
 
-        # 기안자 추출 (한글 이름 2-4자)
-        drafter_match = re.search(r"([가-힣]{2,4})\s*(문서|기안서|작성|기안|의)", query)
+        # 기안자 추출 (한글 이름 2-3자 + 선택적 "님" + 선택적 연도)
+        # 제외: "올해", "작년", "금년" 등 연도 표현은 기안자가 아님
+        year_words = {"올해", "작년", "금년", "전년", "이번", "내년"}
+        drafter_match = re.search(r"([가-힣]{2,3})님?\s*(?:\d{4}년?\s*)?(문서|기안서|작성|기안)", query)
         if drafter_match:
-            params["drafter"] = drafter_match.group(1)
+            candidate = drafter_match.group(1)
+            if candidate not in year_words:
+                params["drafter"] = candidate
 
         return params
 

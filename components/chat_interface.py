@@ -20,7 +20,7 @@ from __future__ import annotations
 import os
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import streamlit as st
 
@@ -252,7 +252,6 @@ def _generate_ai_response(
     rag_instance: RAGProtocol,
     message_placeholder: Any,
     selected_filename: str | None = None,
-    progress_callback: Callable[[str, str], None] | None = None,
 ) -> dict | None:
     """AI 응답 생성
 
@@ -261,7 +260,6 @@ def _generate_ai_response(
         rag_instance: RAG 시스템 인스턴스
         message_placeholder: Streamlit placeholder 객체
         selected_filename: 선택된 문서 파일명
-        progress_callback: 진행 상태 콜백 (step, message)
 
     Returns:
         dict | None: 정규화된 응답 또는 None
@@ -280,7 +278,6 @@ def _generate_ai_response(
             query,
             top_k=top_k,
             selected_filename=selected_filename,
-            progress_callback=progress_callback,
         )
         logger.info(f"RAG query executed with top_k={top_k}, selected_filename={selected_filename}")
 
@@ -410,59 +407,22 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                         f"(신뢰도={match_confidence:.2f})"
                     )
 
-        # AI 응답 생성 (단계별 진행 상태 표시)
+        # AI 응답 생성
         start_time = time.time()
 
-        # 진행 상태 placeholders (st.status 외부에서 정의)
-        progress_state = {"current_step": "routing", "message": ""}
-
-        with st.status("🤖 처리 중...", expanded=True) as status:
-            # 진행 단계 표시용 placeholders
-            step_routing = st.empty()
-            step_search = st.empty()
-            step_generate = st.empty()
-
-            step_routing.write("⏳ 쿼리 분석 중...")
-
-            # 콜백 함수 정의
-            def progress_callback(step: str, message: str) -> None:
-                progress_state["current_step"] = step
-                progress_state["message"] = message
-
-                if step == "routing":
-                    status.update(label="🔍 쿼리 분석 중...", state="running")
-                    step_routing.write(f"✓ {message}")
-                elif step == "search":
-                    status.update(label="📚 문서 검색 중...", state="running")
-                    step_routing.write("✓ 쿼리 분석 완료")
-                    step_search.write(f"⏳ {message}")
-                elif step == "generate":
-                    status.update(label="🤖 답변 생성 중...", state="running")
-                    step_search.write("✓ 문서 검색 완료")
-                    step_generate.write(f"⏳ {message}")
-                elif step == "complete":
-                    step_generate.write("✓ 답변 생성 완료")
-
-            # RAG 호출 (실제 처리)
+        # 간단한 스피너 (Streamlit 동기 특성상 실시간 업데이트 불가)
+        with st.spinner("🤖 AI가 문서를 검색하고 답변을 생성하는 중..."):
             response = _generate_ai_response(
                 enhanced_query,
                 unified_rag_instance,
                 message_placeholder,
                 selected_filename=selected_filename,
-                progress_callback=progress_callback,
             )
 
-            elapsed = time.time() - start_time
+        elapsed = time.time() - start_time
 
-            # 완료 상태 업데이트
-            if response:
-                status.update(
-                    label=f"✅ 완료 ({elapsed:.1f}초)",
-                    state="complete",
-                    expanded=False,
-                )
-            else:
-                status.update(label="❌ 오류 발생", state="error", expanded=False)
+        # 처리 시간 표시
+        st.caption(f"⏱️ 처리 시간: {elapsed:.1f}초")
 
         if not response:
             error_msg = "오류가 발생했다. 잠시 후 다시 시도하라."

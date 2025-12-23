@@ -18,7 +18,7 @@ Example:
 import re
 import sqlite3
 import time
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 from app.config.settings import settings
 from app.core.errors import ERROR_MESSAGES, ErrorCode, ModelError, SearchError
@@ -447,7 +447,6 @@ class RAGPipeline:
         /,
         top_k: Optional[int] = None,
         selected_filename: Optional[str] = None,
-        progress_callback: Optional[Callable[[str, str], None]] = None,
         **kwargs,
     ) -> dict:
         """답변 생성 (Evidence 포함 구조화된 응답)
@@ -456,9 +455,6 @@ class RAGPipeline:
             query: 사용자 질문
             top_k: 검색 결과 개수 (None이면 기본값 5)
             selected_filename: 선택된 문서 파일명 (우선 검색용, 선택사항)
-            progress_callback: 진행 상태 콜백 함수 (선택사항)
-                - 호출 형식: callback(step: str, message: str)
-                - step: "routing", "search", "compress", "generate", "complete"
             **kwargs: 추가 옵션 (RAGProtocol 호환용)
 
         Returns:
@@ -473,18 +469,13 @@ class RAGPipeline:
                 }
             }
         """
-        # kwargs에서 top_k, selected_filename, progress_callback 추출 (호환성)
+        # kwargs에서 top_k, selected_filename 추출 (호환성)
         top_k = kwargs.get("top_k", top_k)
         selected_filename = kwargs.get("selected_filename", selected_filename)
-        progress_callback = kwargs.get("progress_callback", progress_callback)
 
-        # 진행 상태 콜백 헬퍼
+        # 진행 상태 로깅 헬퍼 (터미널 확인용)
         def _notify(step: str, message: str) -> None:
-            if progress_callback:
-                try:
-                    progress_callback(step, message)
-                except Exception as e:
-                    logger.debug(f"Progress callback error: {e}")
+            logger.info(f"[{step.upper()}] {message}")
 
         # 🎯 조기 라우팅: 캐시 키 생성을 위해 모드 먼저 결정
         # 2025-12-23: 동일 쿼리라도 모드에 따라 다른 결과가 나올 수 있음

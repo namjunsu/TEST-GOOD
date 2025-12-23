@@ -611,19 +611,36 @@ class DocumentHandler(BaseHandler):
         content_length: int,
         routing: dict[str, Any],
     ) -> int:
-        """토큰 제한 계산"""
+        """토큰 제한 계산 (문서 길이에 따라 유동적)
+
+        긴 문서는 더 많은 토큰이 필요하므로 상한을 동적으로 조정합니다.
+        - 짧은 문서 (<10K): 기본값 사용
+        - 중간 문서 (10K-30K): 최대 4096
+        - 긴 문서 (>30K): 최대 6144
+        """
         base_max_tokens = routing.get("max_tokens", DocumentHandlerConfig.DEFAULT_MAX_TOKENS)
         detailed_mode = routing.get("detailed_mode", False)
         needs_summary = routing.get("needs_summary", False)
 
+        # 문서 길이에 따른 상한 조정 (유동적)
+        if content_length > 30000:
+            dynamic_cap = 6144  # 긴 문서
+        elif content_length > 10000:
+            dynamic_cap = 4096  # 중간 문서
+        else:
+            dynamic_cap = base_max_tokens  # 짧은 문서는 기본값
+
         # 요약 모드: JSON 출력을 위한 최소 토큰 보장 (불완전 요약 방지)
-        # 🔧 SUMMARY_MIN_TOKENS(1000)을 base_max_tokens보다 우선하여 JSON 응답이 잘리지 않도록 함
         if needs_summary:
-            return max(DocumentHandlerConfig.SUMMARY_MIN_TOKENS, content_length // 3)
+            calculated = max(DocumentHandlerConfig.SUMMARY_MIN_TOKENS, content_length // 3)
+            return min(dynamic_cap, calculated)
 
         if detailed_mode:
-            return min(base_max_tokens, max(DocumentHandlerConfig.DETAILED_MIN_TOKENS, content_length // 3))
-        return min(base_max_tokens, max(DocumentHandlerConfig.NORMAL_MIN_TOKENS, content_length // 4))
+            calculated = max(DocumentHandlerConfig.DETAILED_MIN_TOKENS, content_length // 3)
+            return min(dynamic_cap, calculated)
+
+        calculated = max(DocumentHandlerConfig.NORMAL_MIN_TOKENS, content_length // 4)
+        return min(dynamic_cap, calculated)
 
     def _format_summary_output(
         self,

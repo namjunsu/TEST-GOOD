@@ -18,7 +18,7 @@ Example:
 import re
 import sqlite3
 import time
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from app.config.settings import settings
 from app.core.errors import ERROR_MESSAGES, ErrorCode, ModelError, SearchError
@@ -92,7 +92,7 @@ class RAGPipeline:
 
         # 🧠 LLM 의도 분류기 연결 (2025-12-23)
         if hasattr(self.generator, "llm"):
-            self.query_router.set_llm(self.generator.llm)
+            self.query_router.set_llm(self.generator.llm)  # type: ignore[attr-defined]
 
         # 📄 문서 처리 유틸리티 (분리된 모듈)
         self._doc_utils = DocumentUtils(
@@ -447,7 +447,7 @@ class RAGPipeline:
         /,
         top_k: Optional[int] = None,
         selected_filename: Optional[str] = None,
-        progress_callback: Optional[callable] = None,
+        progress_callback: Optional[Callable[[str, str], None]] = None,
         **kwargs,
     ) -> dict:
         """답변 생성 (Evidence 포함 구조화된 응답)

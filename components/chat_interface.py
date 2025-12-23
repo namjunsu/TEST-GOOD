@@ -20,7 +20,7 @@ from __future__ import annotations
 import os
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 import streamlit as st
 
@@ -252,7 +252,7 @@ def _generate_ai_response(
     rag_instance: RAGProtocol,
     message_placeholder: Any,
     selected_filename: str | None = None,
-    progress_callback: callable | None = None,
+    progress_callback: Callable[[str, str], None] | None = None,
 ) -> dict | None:
     """AI 응답 생성
 

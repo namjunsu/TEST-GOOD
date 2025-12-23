@@ -95,6 +95,13 @@ class ChatConfig:
     SPINNER_GENERATE = "답변 생성 중..."
     DIVIDER = "---"
 
+    # 진행 상태 단계
+    PROGRESS_STEPS = [
+        ("🔍 쿼리 분석", "질문 의도 파악 중..."),
+        ("📚 문서 검색", "관련 문서 검색 중..."),
+        ("🤖 답변 생성", "AI 답변 생성 중..."),
+    ]
+
     # 옵션 기본값
     DEFAULT_TOP_K = 5
     DEFAULT_STREAMING_SPEED = "medium"

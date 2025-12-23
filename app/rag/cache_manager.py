@@ -287,14 +287,29 @@ def get_cache_stats() -> dict[str, Any]:
     return cache.get_stats()
 
 
-def build_answer_cache_key(query: str, selected_filename: Optional[str] = None) -> str:
+def build_answer_cache_key(
+    query: str,
+    selected_filename: Optional[str] = None,
+    mode: Optional[str] = None,
+) -> str:
     """answer() 메서드용 캐시 키 생성 (단일 소스)
 
     Args:
         query: 검색 질의
         selected_filename: 선택된 파일명 (있을 경우)
+        mode: 라우팅 모드 (year_summary, search, qa 등)
 
     Returns:
         캐시 키 문자열
+
+    Note:
+        2025-12-23: mode 파라미터 추가
+        - 동일 쿼리라도 모드에 따라 다른 결과가 나올 수 있음
+        - 예: "2025년 문서" → search 모드 vs year_summary 모드
     """
-    return f"{query}:{selected_filename}" if selected_filename else query
+    key_parts = [query]
+    if selected_filename:
+        key_parts.append(selected_filename)
+    if mode:
+        key_parts.append(mode)
+    return ":".join(key_parts)

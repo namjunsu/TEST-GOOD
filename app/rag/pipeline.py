@@ -468,13 +468,20 @@ class RAGPipeline:
         # kwargs에서 top_k, selected_filename 추출 (호환성)
         top_k = kwargs.get("top_k", top_k)
         selected_filename = kwargs.get("selected_filename", selected_filename)
+
+        # 🎯 조기 라우팅: 캐시 키 생성을 위해 모드 먼저 결정
+        # 2025-12-23: 동일 쿼리라도 모드에 따라 다른 결과가 나올 수 있음
+        # 예: "2025년 문서" → search 모드 vs year_summary 모드
+        early_route = self.query_router.classify_mode(query)
+        route_mode = early_route.mode.value
+
         # ✨ 2-tier Cache check - 메모리 캐시 → 영구 캐시
-        cache_key = build_answer_cache_key(query, selected_filename)
+        cache_key = build_answer_cache_key(query, selected_filename, mode=route_mode)
 
         # Tier 1: 메모리 캐시 확인 (가장 빠름)
         cached_result = get_cached_result(cache_key)
         if cached_result:
-            logger.info(f"🎯 Memory Cache HIT! Returning cached result for query: {query[:50]}...")
+            logger.info(f"🎯 Memory Cache HIT! mode={route_mode}, query: {query[:50]}...")
             if "status" in cached_result:
                 cached_result["status"]["from_cache"] = "memory"
             return cached_result
@@ -482,7 +489,7 @@ class RAGPipeline:
         # Tier 2: 영구 캐시 확인 (서버 재시작 후에도 유지)
         cached_result = get_cached_result_persistent(cache_key)
         if cached_result:
-            logger.info(f"💾 Persistent Cache HIT! Returning cached result for query: {query[:50]}...")
+            logger.info(f"💾 Persistent Cache HIT! mode={route_mode}, query: {query[:50]}...")
             # 영구 캐시에서 가져온 결과를 메모리 캐시에도 저장 (다음 접근을 위해)
             cache_query_result(cache_key, cached_result)
             if "status" in cached_result:

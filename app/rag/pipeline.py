@@ -942,7 +942,12 @@ class RAGPipeline:
 
             # LLM 호출
             try:
-                answer = self.generator.generate(prompt, max_tokens=2048)
+                answer = self.generator.generate(
+                    query=prompt,
+                    context=context,
+                    temperature=0.3,  # 요약은 일관성 중요
+                    mode="summary",
+                )
             except Exception as e:
                 logger.error(f"LLM 호출 실패: {e}")
                 # 폴백: 기본 요약

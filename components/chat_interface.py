@@ -18,6 +18,7 @@ ChatGPT 스타일의 채팅 인터페이스 UI 렌더링
 from __future__ import annotations
 
 import os
+import threading
 import time
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -407,22 +408,66 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                         f"(신뢰도={match_confidence:.2f})"
                     )
 
-        # AI 응답 생성
+        # AI 응답 생성 (실시간 진행 상태 표시)
         start_time = time.time()
 
-        # 간단한 스피너 (Streamlit 동기 특성상 실시간 업데이트 불가)
-        with st.spinner("🤖 AI가 문서를 검색하고 답변을 생성하는 중..."):
-            response = _generate_ai_response(
-                enhanced_query,
-                unified_rag_instance,
-                message_placeholder,
-                selected_filename=selected_filename,
-            )
+        # 공유 상태 (스레드 간 통신)
+        progress_state = {"step": "시작", "done": False, "response": None, "error": None}
 
+        def run_rag():
+            """백그라운드에서 RAG 실행"""
+            try:
+                progress_state["step"] = "🔍 쿼리 분석 중..."
+                result = _generate_ai_response(
+                    enhanced_query,
+                    unified_rag_instance,
+                    message_placeholder,
+                    selected_filename=selected_filename,
+                )
+                progress_state["response"] = result
+            except Exception as e:
+                progress_state["error"] = str(e)
+            finally:
+                progress_state["done"] = True
+
+        # 백그라운드 스레드 시작
+        thread = threading.Thread(target=run_rag, daemon=True)
+        thread.start()
+
+        # 진행 상태 표시 (폴링)
+        status_placeholder = st.empty()
+        steps = [
+            "🔍 쿼리 분석 중...",
+            "📚 문서 검색 중...",
+            "🤖 AI 답변 생성 중...",
+        ]
+        step_idx = 0
+        last_update = time.time()
+
+        while not progress_state["done"]:
+            elapsed = time.time() - start_time
+            current_step = steps[min(step_idx, len(steps) - 1)]
+
+            # 2초마다 다음 단계로 전환 (시각적 피드백)
+            if time.time() - last_update > 2.0 and step_idx < len(steps) - 1:
+                step_idx += 1
+                last_update = time.time()
+
+            status_placeholder.markdown(f"**{current_step}** ({elapsed:.1f}초)")
+            time.sleep(0.1)  # CPU 절약
+
+        # 완료 후 상태 표시 제거
         elapsed = time.time() - start_time
+        status_placeholder.markdown(f"✅ **완료** ({elapsed:.1f}초)")
+        time.sleep(0.3)  # 완료 메시지 잠깐 표시
+        status_placeholder.empty()
 
-        # 처리 시간 표시
-        st.caption(f"⏱️ 처리 시간: {elapsed:.1f}초")
+        # 결과 가져오기
+        if progress_state["error"]:
+            st.error(f"오류: {progress_state['error']}")
+            return
+
+        response = progress_state["response"]
 
         if not response:
             error_msg = "오류가 발생했다. 잠시 후 다시 시도하라."

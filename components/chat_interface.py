@@ -434,32 +434,15 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
         thread = threading.Thread(target=run_rag, daemon=True)
         thread.start()
 
-        # 진행 상태 표시 (폴링)
+        # 진행 상태 표시 (폴링) - 단순화: 일관된 메시지
         status_placeholder = st.empty()
-        steps = [
-            "🔍 쿼리 분석 중...",
-            "📚 문서 검색 중...",
-            "🤖 AI 답변 생성 중...",
-        ]
-        step_idx = 0
-        last_update = time.time()
 
         while not progress_state["done"]:
             elapsed = time.time() - start_time
-            current_step = steps[min(step_idx, len(steps) - 1)]
-
-            # 2초마다 다음 단계로 전환 (시각적 피드백)
-            if time.time() - last_update > 2.0 and step_idx < len(steps) - 1:
-                step_idx += 1
-                last_update = time.time()
-
-            status_placeholder.markdown(f"**{current_step}** ({elapsed:.1f}초)")
+            status_placeholder.markdown(f"**🤖 AI 답변 생성 중...** ({elapsed:.1f}초)")
             time.sleep(0.1)  # CPU 절약
 
         # 완료 후 상태 표시 제거
-        elapsed = time.time() - start_time
-        status_placeholder.markdown(f"✅ **완료** ({elapsed:.1f}초)")
-        time.sleep(0.3)  # 완료 메시지 잠깐 표시
         status_placeholder.empty()
 
         # 결과 가져오기

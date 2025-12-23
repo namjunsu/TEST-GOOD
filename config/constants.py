@@ -74,15 +74,25 @@ class ScoringConfig:
 
 @dataclass(frozen=True)
 class LLMConfig:
-    """LLM 생성 관련 상수"""
+    """LLM 생성 관련 상수
 
-    # 모드별 max_tokens
-    MAX_TOKENS_DETAILED: int = 3072  # 상세 모드: 충분한 토큰으로 완전한 답변 보장
-    MAX_TOKENS_SECTION: int = 900
-    MAX_TOKENS_SUMMARY: int = 600
-    MAX_TOKENS_QA: int = 800
+    2025-12-23: 토큰 설정 통합 (.env, adapters.py와 일관성 유지)
+    - 모든 토큰 값은 .env 환경변수를 Single Source of Truth로 사용
+    - 이 클래스는 환경변수가 없을 때의 기본값 역할
+    """
+
+    # 모드별 max_tokens (.env와 동기화)
+    MAX_TOKENS_CHAT: int = 1024       # CHAT_MAX_TOKENS (스몰토크/일반)
+    MAX_TOKENS_RAG: int = 4096        # RAG_MAX_TOKENS (근거 인용형)
+    MAX_TOKENS_DETAILED: int = 8192   # DETAILED_MAX_TOKENS (자세히 모드, H100 최대 활용)
+    MAX_TOKENS_SUMMARIZE: int = 2048  # SUMMARIZE_MAX_TOKENS (요약)
+    MAX_TOKENS_SUMMARY: int = 2048    # LLM_MAX_TOKENS_SUMMARY (요약 라우팅)
+    MAX_TOKENS_YEAR_SUMMARY: int = 4096  # YEAR_SUMMARY_MAX_TOKENS (다중 문서 요약)
+    MAX_TOKENS_SECTION: int = 900     # 섹션 추출용
+    MAX_TOKENS_QA: int = 800          # Q&A 모드
 
     # 기본값
+    DEFAULT_MAX_TOKENS: int = 4096    # LLM_MAX_TOKENS 기본값
     DEFAULT_TEMPERATURE: float = 0.1
     DEFAULT_COMPRESSION_RATIO: float = 0.7
 
@@ -101,9 +111,9 @@ class LLMGenerationConfig:
     - context 증가 (4000 → 6000)
     """
 
-    # Generation 설정 상수
+    # Generation 설정 상수 (H100: 확장된 토큰)
     DEFAULT_TEMPERATURE: float = 0.2      # RAG 일관성: 0.7 → 0.2
-    DEFAULT_MAX_TOKENS: int = 512
+    DEFAULT_MAX_TOKENS: int = 4096        # 512 → 4096 (H100: 긴 문서 응답 지원)
     DEFAULT_TOP_P: float = 0.9
     DEFAULT_TOP_K: int = 40
     DEFAULT_REPEAT_PENALTY: float = 1.1
@@ -112,12 +122,15 @@ class LLMGenerationConfig:
     ADAPTIVE_LENGTH_ENABLED: bool = True
     LENGTH_PREFERENCE_DEFAULT: str = "balanced"
 
-    # 모드별 토큰 예산 (H100 최적화)
-    MODE_CHAT_MAX: int = 512
-    MODE_CHAT_CONTEXT: int = 1024
-    MODE_RAG_MAX: int = 4096              # 3072 → 4096 (H100 최적화)
+    # 모드별 토큰 예산 (H100 최적화, .env와 동기화)
+    # 2025-12-23: LLMConfig와 일관성 유지
+    MODE_CHAT_MAX: int = 1024             # .env CHAT_MAX_TOKENS (512 → 1024 수정)
+    MODE_CHAT_CONTEXT: int = 2048         # 1024 → 2048 (컨텍스트도 증가)
+    MODE_RAG_MAX: int = 4096              # .env RAG_MAX_TOKENS
     MODE_RAG_CONTEXT: int = 6000          # 4000 → 6000 (H100 최적화)
-    MODE_SUMMARIZE_MAX: int = 2048
+    MODE_DETAILED_MAX: int = 8192         # .env DETAILED_MAX_TOKENS (신규)
+    MODE_DETAILED_CONTEXT: int = 8000     # 자세히 모드 컨텍스트 (신규)
+    MODE_SUMMARIZE_MAX: int = 2048        # .env SUMMARIZE_MAX_TOKENS
     MODE_SUMMARIZE_CONTEXT: int = 6000    # 4000 → 6000
     MODE_FULL_DOC_MAX: int = 2048
     MODE_FULL_DOC_CONTEXT: int = 6000     # 4000 → 6000

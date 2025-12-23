@@ -23,7 +23,8 @@ logger = get_logger(__name__)
 
 MODE_TOKEN_BUDGETS: dict[str, int] = {
     "chat": int(os.getenv("CHAT_MAX_TOKENS", "1024")),
-    "rag": int(os.getenv("RAG_MAX_TOKENS", "3072")),
+    "rag": int(os.getenv("RAG_MAX_TOKENS", "4096")),  # 3072 → 4096 (H100)
+    "detailed": int(os.getenv("DETAILED_MAX_TOKENS", "8192")),  # 자세히 모드: H100 최대 활용
     "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", "2048")),
     "summary": int(os.getenv("SUMMARY_MAX_TOKENS", "2048")),
     "year_summary": int(os.getenv("YEAR_SUMMARY_MAX_TOKENS", "4096")),  # 다중 문서 요약용
@@ -110,6 +111,7 @@ class _LLMAdapter:
         temperature: float = 0.1,
         mode: str = "rag",
         system_msg: Optional[str] = None,
+        max_tokens: Optional[int] = None,  # 2025-12-23: 동적 토큰 지원
     ) -> str:
         """컨텍스트 기반 답변 생성
 
@@ -117,14 +119,16 @@ class _LLMAdapter:
             query: 사용자 질문 (완전한 프롬프트 형식)
             context: 검색된 문서 컨텍스트 (텍스트 형식) - 이미 query에 포함된 경우 무시됨
             temperature: 생성 온도
-            mode: 생성 모드 (chat/rag/summarize)
+            mode: 생성 모드 (chat/rag/summarize/detailed)
             system_msg: 시스템 프롬프트 (None이면 기본값 사용)
+            max_tokens: 최대 생성 토큰 (None이면 모드 기본값 사용)
 
         Returns:
             str: 생성된 답변
         """
-        # 모듈 상수 사용 (환경변수 매번 읽기 방지)
-        max_tokens = MODE_TOKEN_BUDGETS.get(mode.lower(), 800)
+        # 2025-12-23: 외부 전달값 우선, 없으면 모드 기반 기본값
+        if max_tokens is None:
+            max_tokens = MODE_TOKEN_BUDGETS.get(mode.lower(), 800)
 
         # 🔧 2025-12-16: 모드별 시스템 프롬프트 (외부 전달 우선)
         if system_msg is None:
@@ -144,9 +148,10 @@ class _LLMAdapter:
 
             if is_vllm:
                 # vLLM: generate_response() 사용 (직접 호출 불가)
-                logger.info("🚀 vLLM 모드: generate_response() 사용")
+                # 2025-12-23: max_tokens 동적 전달 (응답 잘림 버그 수정)
+                logger.info(f"🚀 vLLM 모드: generate_response() 사용 (max_tokens={max_tokens})")
                 chunks = [{"snippet": context, "content": context}] if context else []
-                response = self.llm.generate_response(query, chunks)
+                response = self.llm.generate_response(query, chunks, max_tokens=max_tokens)
                 if hasattr(response, "answer"):
                     return response.answer
                 return str(response)

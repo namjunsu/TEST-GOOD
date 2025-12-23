@@ -1771,9 +1771,24 @@ class VllmLLM(BaseRAGLLM):
             self.logger.error(f"❌ vLLM 모델 로딩 실패: {e}")
             raise
 
-    def generate_response(self, question: str, context_chunks: list[dict[str, Any]]) -> RAGResponse:
-        """vLLM으로 응답 생성"""
+    def generate_response(
+        self,
+        question: str,
+        context_chunks: list[dict[str, Any]],
+        max_tokens: Optional[int] = None,  # 2025-12-23: 동적 토큰 지원
+    ) -> RAGResponse:
+        """vLLM으로 응답 생성
+
+        Args:
+            question: 사용자 질문
+            context_chunks: 컨텍스트 청크 리스트
+            max_tokens: 최대 생성 토큰 (None이면 self.config.max_tokens 사용)
+        """
         start_time = time.time()
+
+        # 2025-12-23: 동적 토큰 우선, 없으면 config 기본값
+        effective_max_tokens = max_tokens if max_tokens is not None else self.config.max_tokens
+        self.logger.info(f"🎯 vLLM generate_response: max_tokens={effective_max_tokens} (requested={max_tokens})")
 
         try:
             from vllm import SamplingParams
@@ -1793,10 +1808,10 @@ class VllmLLM(BaseRAGLLM):
                 {"role": "user", "content": user_prompt}
             ]
 
-            # vLLM 샘플링 파라미터
+            # vLLM 샘플링 파라미터 (동적 max_tokens 적용)
             sampling_params = SamplingParams(
                 temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens,
+                max_tokens=effective_max_tokens,  # 2025-12-23: 동적 토큰
                 top_p=self.config.top_p,
                 top_k=self.config.top_k,
                 repetition_penalty=self.config.repeat_penalty,

@@ -63,10 +63,12 @@ class RAGResponse:
 
 
 # 토큰 예산 단일 설정 (LLMGenerationConfig에서 참조, H100 최적화)
+# 2025-12-23: detailed 모드 추가 (.env, adapters.py와 동기화)
 _cfg = LLMGenerationConfig
 MODE_TOKEN_CONFIG = {
     "chat": {"max": _cfg.MODE_CHAT_MAX, "context": _cfg.MODE_CHAT_CONTEXT},
     "rag": {"max": _cfg.MODE_RAG_MAX, "context": _cfg.MODE_RAG_CONTEXT},  # H100: 4096/6000
+    "detailed": {"max": _cfg.MODE_DETAILED_MAX, "context": _cfg.MODE_DETAILED_CONTEXT},  # 자세히 모드: 8192/8000
     "summarize": {"max": _cfg.MODE_SUMMARIZE_MAX, "context": _cfg.MODE_SUMMARIZE_CONTEXT},
     "full_document": {"max": _cfg.MODE_FULL_DOC_MAX, "context": _cfg.MODE_FULL_DOC_CONTEXT},
     "conversational": {"max": _cfg.MODE_CONVERSATIONAL_MAX, "context": _cfg.MODE_CONVERSATIONAL_CONTEXT},

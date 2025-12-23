@@ -441,16 +441,28 @@ class DocumentHandler(BaseHandler):
             routing=routing,
         )
 
-        # 컨텍스트 준비
-        context = full_text[:DocumentHandlerConfig.CONTEXT_WINDOW]
-
         # 모드 결정
         if routing.get("detailed_mode"):
-            mode = "rag"
+            mode = "detailed"  # 자세히 모드: 별도 토큰 예산
         elif routing.get("needs_summary"):
             mode = "summarize"
         else:
             mode = "rag"
+
+        # 컨텍스트 준비 (모드별 차등 적용)
+        # 2025-12-23: 자세히 모드는 더 많은 컨텍스트 허용 (H100 32K 컨텍스트 활용)
+        if mode == "detailed":
+            context_limit = min(len(full_text), 24000)  # 자세히: 최대 24K자
+        else:
+            context_limit = DocumentHandlerConfig.CONTEXT_WINDOW  # 기본: 8K자
+        context = full_text[:context_limit]
+
+        # 🔧 2025-12-23: 동적 max_tokens 계산 (문서 길이에 따라)
+        calculated_max_tokens = self._calculate_max_tokens(len(full_text), routing)
+        logger.info(
+            f"📊 LLM 설정: mode={mode}, context_len={len(context)}, "
+            f"full_text_len={len(full_text)}, max_tokens={calculated_max_tokens}"
+        )
 
         # ===== 경로 1: _LLMAdapter.generate_from_context() 사용 (vLLM/llama_cpp 자동 분기) =====
         # 2025-12-23: vLLM 전환으로 모든 모드에서 이 경로 사용 (llama_cpp 레거시 제거)
@@ -458,13 +470,14 @@ class DocumentHandler(BaseHandler):
         if rag_adapter is not None:
             generate_fn = getattr(rag_adapter, "generate_from_context", None)
             if generate_fn is not None:
-                logger.info(f"🎯 _LLMAdapter.generate_from_context() 사용 (mode={mode})")
+                logger.info(f"🎯 _LLMAdapter.generate_from_context() 사용 (mode={mode}, max_tokens={calculated_max_tokens})")
                 raw_result: str = generate_fn(
                     query=llm_prompt,
                     context=context,
                     temperature=DocumentHandlerConfig.LLM_TEMPERATURE,
                     mode=mode,
                     system_msg=system_msg,
+                    max_tokens=calculated_max_tokens,  # 동적 토큰 전달
                 )
 
                 # 에러 응답 체크
@@ -585,13 +598,23 @@ class DocumentHandler(BaseHandler):
         """토큰 제한 계산 (문서 길이에 따라 유동적)
 
         긴 문서는 더 많은 토큰이 필요하므로 상한을 동적으로 조정합니다.
-        - 짧은 문서 (<10K): 기본값 사용
-        - 중간 문서 (10K-30K): 최대 4096
+        H100 GPU 환경에서 Qwen72B는 32K 컨텍스트를 지원하므로 충분한 토큰 허용.
+
+        2025-12-23 수정:
+        - detailed_mode: 8192 토큰까지 허용 (자세히 알려줘)
         - 긴 문서 (>30K): 최대 6144
+        - 중간 문서 (10K-30K): 최대 4096
+        - 짧은 문서 (<10K): 기본값 사용
         """
         base_max_tokens = routing.get("max_tokens", DocumentHandlerConfig.DEFAULT_MAX_TOKENS)
         detailed_mode = routing.get("detailed_mode", False)
         needs_summary = routing.get("needs_summary", False)
+
+        # 🔧 2025-12-23: detailed_mode일 때 상한 대폭 증가 (H100: 8192까지)
+        if detailed_mode:
+            dynamic_cap = 8192  # 자세히 모드: 최대 토큰
+            calculated = max(DocumentHandlerConfig.DETAILED_MIN_TOKENS, content_length // 2)
+            return min(dynamic_cap, calculated)
 
         # 문서 길이에 따른 상한 조정 (유동적)
         if content_length > 30000:
@@ -604,10 +627,6 @@ class DocumentHandler(BaseHandler):
         # 요약 모드: JSON 출력을 위한 최소 토큰 보장 (불완전 요약 방지)
         if needs_summary:
             calculated = max(DocumentHandlerConfig.SUMMARY_MIN_TOKENS, content_length // 3)
-            return min(dynamic_cap, calculated)
-
-        if detailed_mode:
-            calculated = max(DocumentHandlerConfig.DETAILED_MIN_TOKENS, content_length // 3)
             return min(dynamic_cap, calculated)
 
         calculated = max(DocumentHandlerConfig.NORMAL_MIN_TOKENS, content_length // 4)

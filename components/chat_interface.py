@@ -439,11 +439,14 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
 
         while not progress_state["done"]:
             elapsed = time.time() - start_time
-            status_placeholder.markdown(f"**🤖 AI 답변 생성 중...** ({elapsed:.1f}초)")
+            status_placeholder.markdown(f"**답변 생성 중...** ({elapsed:.1f}초)")
             time.sleep(0.1)  # CPU 절약
 
         # 완료 후 상태 표시 제거
         status_placeholder.empty()
+
+        # 총 소요 시간 계산
+        total_elapsed = time.time() - start_time
 
         # 결과 가져오기
         if progress_state["error"]:
@@ -460,6 +463,9 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
 
         # 응답 표시
         _display_response_with_streaming(response, message_placeholder)
+
+        # 응답 시간 표시
+        st.caption(f"⏱️ 응답 시간: {total_elapsed:.2f}초")
 
         # Evidence 표시
         if response.get("evidence") and st.session_state.chat_options.get("show_evidence", True):

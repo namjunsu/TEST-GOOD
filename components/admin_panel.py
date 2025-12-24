@@ -287,7 +287,10 @@ def run_rebuild_bm25() -> TaskResult:
 
 
 def run_rebuild_vector() -> TaskResult:
-    """벡터 인덱스 재빌드"""
+    """벡터 인덱스 재빌드
+
+    Note: 스크립트 내에서 GPU 메모리 부족 시 자동으로 CPU 모드로 전환됩니다.
+    """
     return run_script("scripts/indexing/rebuild_vector.py", BM25_TIMEOUT * 2)  # 임베딩은 더 오래 걸림
 
 

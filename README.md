@@ -262,6 +262,20 @@ git restore config.py
 echo "DOCS_DIR = 'docs'" > config.py
 ```
 
+#### GPU OOM during vector indexing
+
+벡터 인덱싱 중 GPU 메모리 부족이 발생하는 경우:
+
+```bash
+# 자동 해결: 스크립트가 GPU 메모리 부족 시 자동으로 CPU 모드로 전환
+python scripts/indexing/rebuild_vector.py
+
+# 수동 해결: CPU 모드로 명시적 실행
+CUDA_VISIBLE_DEVICES="" python scripts/indexing/rebuild_vector.py
+```
+
+**Note**: vLLM이 대부분의 GPU 메모리를 사용하는 경우, 벡터 인덱싱은 자동으로 CPU 모드로 전환됩니다 (최소 2GB 여유 필요).
+
 See [Runbook](docs/RUNBOOK.md) for detailed troubleshooting.
 
 ## 🧪 Testing

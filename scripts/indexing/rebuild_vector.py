@@ -3,6 +3,8 @@
 벡터(임베딩) 인덱스 재빌드 스크립트
 
 metadata.db의 문서들을 기반으로 FAISS 벡터 인덱스를 재생성합니다.
+
+GPU 메모리가 부족한 경우 자동으로 CPU 모드로 전환합니다.
 """
 
 import logging
@@ -21,8 +23,47 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def check_gpu_memory() -> tuple[bool, float]:
+    """GPU 메모리 여유 확인
+
+    Returns:
+        tuple[bool, float]: (사용 가능 여부, 여유 GB)
+    """
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            free_mb = float(result.stdout.strip().split('\n')[0])
+            free_gb = free_mb / 1024
+            # 최소 2GB 여유 필요 (임베딩 모델 + 작업 메모리)
+            has_enough = free_gb >= 2.0
+            logger.info(f"GPU 여유 메모리: {free_gb:.2f}GB (필요: 2.0GB)")
+            return has_enough, free_gb
+    except Exception as e:
+        logger.warning(f"GPU 메모리 확인 실패: {e}")
+
+    return False, 0.0
+
+
+def force_cpu_mode():
+    """CPU 모드 강제 설정"""
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
+    logger.info("⚙️  CPU 모드로 전환됨 (GPU 메모리 부족)")
+
+
 def rebuild_vector_index():
     """벡터 인덱스 재빌드"""
+
+    # GPU 메모리 체크 및 자동 CPU 모드 전환
+    if "CUDA_VISIBLE_DEVICES" not in os.environ:
+        has_gpu_memory, free_gb = check_gpu_memory()
+        if not has_gpu_memory:
+            force_cpu_mode()
 
     # 경로 설정
     index_path = os.getenv("VECTOR_INDEX_PATH", "data/vector_index")

@@ -698,3 +698,6 @@ def render_sidebar_library(rag_instance) -> None:
     **기간**: {year_range}
     """,
     )
+
+    # 제작자 크레딧
+    st.caption("Developed by Nam Junsu")

@@ -459,12 +459,16 @@ def _process_upload(uploaded_files: list, auto_ingest: bool) -> None:
 
 
 def _run_auto_ingest(status, progress) -> None:
-    """자동 인제스트 실행"""
-    status.text("📥 시스템에 등록 중...")
+    """자동 인제스트 실행
+
+    Note: 인제스트 스크립트(ingest_from_docs.py)가 자동으로 인덱스 재빌드를 실행하므로
+          여기서는 중복 실행하지 않습니다.
+    """
+    status.text("📥 시스템에 등록 중 (인덱스 자동 재빌드 포함)...")
     progress.progress(0)
 
     ingest_result = run_ingest()
-    progress.progress(50)
+    progress.progress(100)
 
     if ingest_result.status != TaskStatus.SUCCESS:
         st.error("❌ 인제스트 실패")
@@ -472,30 +476,17 @@ def _run_auto_ingest(status, progress) -> None:
             st.code(ingest_result.output)
         return
 
-    status.text("🔍 BM25 인덱스 업데이트 중...")
-    bm25_result = run_rebuild_bm25()
-    progress.progress(70)
-
-    if bm25_result.status != TaskStatus.SUCCESS:
-        st.warning("⚠️ BM25 인덱스 재빌드 실패")
-        with st.expander("BM25 로그"):
-            st.code(bm25_result.output)
-
-    status.text("🧠 벡터 인덱스 업데이트 중...")
-    vector_result = run_rebuild_vector()
-    progress.progress(100)
-
-    if vector_result.status != TaskStatus.SUCCESS:
-        st.warning("⚠️ 벡터 인덱스 재빌드 실패")
-        with st.expander("벡터 로그"):
-            st.code(vector_result.output)
-
-    if bm25_result.status == TaskStatus.SUCCESS and vector_result.status == TaskStatus.SUCCESS:
+    # 인제스트 스크립트가 자동으로 인덱스 재빌드를 실행함
+    # 출력에서 성공/실패 확인
+    if "검색 인덱스 리빌드 완료" in ingest_result.output:
         st.success("✅ 시스템 등록 완료! 검색 가능합니다.")
-    elif bm25_result.status == TaskStatus.SUCCESS:
-        st.warning("⚠️ 인제스트 완료, 벡터 인덱스만 실패 (키워드 검색은 가능)")
+    elif "인덱스 리빌드 실패" in ingest_result.output:
+        st.warning("⚠️ 인제스트 완료, 인덱스 재빌드 일부 실패")
+        with st.expander("상세 로그"):
+            st.code(ingest_result.output)
     else:
-        st.error("❌ 인덱스 재빌드 실패")
+        st.success("✅ 인제스트 완료!")
+        st.info("💡 인덱싱 탭에서 '검색 인덱스 재빌드'를 실행해주세요")
 
 
 def _render_incoming_status() -> None:

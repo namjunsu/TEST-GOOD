@@ -40,9 +40,9 @@ def check_gpu_memory() -> tuple[bool, float]:
         if result.returncode == 0:
             free_mb = float(result.stdout.strip().split('\n')[0])
             free_gb = free_mb / 1024
-            # 최소 2GB 여유 필요 (임베딩 모델 + 작업 메모리)
-            has_enough = free_gb >= 2.0
-            logger.info(f"GPU 여유 메모리: {free_gb:.2f}GB (필요: 2.0GB)")
+            # 최소 5GB 여유 필요 (임베딩 모델 2GB + 작업 메모리 1GB + 단편화 여유 2GB)
+            has_enough = free_gb >= 5.0
+            logger.info(f"GPU 여유 메모리: {free_gb:.2f}GB (필요: 5.0GB)")
             return has_enough, free_gb
     except Exception as e:
         logger.warning(f"GPU 메모리 확인 실패: {e}")
@@ -64,6 +64,11 @@ def rebuild_vector_index():
         has_gpu_memory, free_gb = check_gpu_memory()
         if not has_gpu_memory:
             force_cpu_mode()
+
+    # PyTorch 메모리 단편화 방지 설정
+    if "PYTORCH_CUDA_ALLOC_CONF" not in os.environ:
+        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+        logger.info("⚙️  PyTorch 메모리 단편화 방지 활성화")
 
     # 경로 설정
     index_path = os.getenv("VECTOR_INDEX_PATH", "data/vector_index")
@@ -142,6 +147,16 @@ def rebuild_vector_index():
         total_added += added
         logger.info(f"진행: {min(i + batch_size, len(chunks))}/{len(chunks)} ({total_added}개 추가됨)")
 
+        # GPU 사용 시 주기적 메모리 정리 (매 5배치마다)
+        if i > 0 and i % (batch_size * 5) == 0 and os.environ.get("CUDA_VISIBLE_DEVICES") != "":
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    logger.debug("🧹 GPU 캐시 정리 완료")
+            except ImportError:
+                pass
+
     # 저장
     vector_store.save()
 
@@ -155,7 +170,27 @@ if __name__ == "__main__":
         success = rebuild_vector_index()
         sys.exit(0 if success else 1)
     except Exception as e:
-        logger.error(f"인덱싱 실패: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+        error_msg = str(e)
+
+        # CUDA OOM 에러 감지
+        if "CUDA out of memory" in error_msg or "OutOfMemoryError" in error_msg:
+            logger.warning("⚠️  GPU 메모리 부족 감지 - CPU 모드로 재시도")
+
+            # CPU 모드로 강제 전환
+            force_cpu_mode()
+
+            try:
+                # 재시도
+                logger.info("🔄 CPU 모드로 재시도 중...")
+                success = rebuild_vector_index()
+                sys.exit(0 if success else 1)
+            except Exception as retry_error:
+                logger.error(f"재시도 실패: {retry_error}")
+                import traceback
+                traceback.print_exc()
+                sys.exit(1)
+        else:
+            logger.error(f"인덱싱 실패: {e}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)

@@ -589,7 +589,13 @@ class RAGPipeline:
                         logger.warning(f"⚠️ 문서명 추출 중 DB 오류 (무시): {e}")
 
             # 🎯 모드 라우팅: Q&A 의도 키워드가 있으면 파일명이 있어도 Q&A 모드 우선
-            route_decision = self.query_router.classify_mode(actual_query)
+            # 중복 방지: actual_query가 원본 query와 같으면 조기 라우팅 결과 재사용
+            if actual_query == query:
+                route_decision = early_route
+                logger.debug("🔄 조기 라우팅 결과 재사용 (중복 방지)")
+            else:
+                route_decision = self.query_router.classify_mode(actual_query)
+                logger.debug(f"🎯 쿼리 변경 감지, 재라우팅 실행: '{query[:30]}' → '{actual_query[:30]}'")
 
             # 🔧 selected_filename이 있으면 무조건 DOCUMENT 모드로 전환 (우선순위 최상위)
             # 문서가 선택된 상태에서는 모든 질문에 대해 LLM이 해당 문서 기반으로 답변

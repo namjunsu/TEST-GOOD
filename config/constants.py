@@ -494,7 +494,7 @@ class HybridRetrieverConfig:
     DISPLAY_LIMIT: int = 20                 # 표시 제한
 
     # 병렬 처리 (H100 GPU 환경 최적화)
-    PARALLEL_MAX_WORKERS: int = 8           # 병렬 워커 수 (고사양 PC)
+    PARALLEL_MAX_WORKERS: int = 10          # 병렬 워커 수 (48코어 환경, 보수적 증가)
 
     # Dense 검색 설정 (2025-12-21 추가)
     DENSE_MIN_SCORE: float = 0.3            # Dense 검색 최소 점수 임계값
@@ -825,7 +825,7 @@ class ParallelExecutorConfig:
     - 타임아웃 여유 (5초 → 10초)
     """
 
-    DEFAULT_MAX_WORKERS: int = 12            # 기본 병렬 워커 수 (고사양 PC)
+    DEFAULT_MAX_WORKERS: int = 10            # 기본 병렬 워커 수 (48코어 환경, 보수적 증가)
     FALLBACK_TIMEOUT_SEC: float = 10.0       # 경쟁 실행 기본 타임아웃 (초)
 
 

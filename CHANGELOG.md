@@ -1,5 +1,59 @@
 # Changelog
 
+## [2025-12-23] 토큰 설정 통합 및 vLLM 동적 max_tokens 전달
+
+**Impact**: 응답 품질, LLM 성능
+**Status**: Completed
+
+### Summary
+
+토큰 설정을 `.env`로 Single Source of Truth로 통합하고, vLLM에 동적 max_tokens를 전달하여 "자세히" 모드에서 응답이 잘리는 문제를 해결했습니다.
+
+### 문제점
+
+- 토큰 설정이 `.env`, `config/constants.py`, `adapters.py` 세 곳에 분산되어 불일치 발생
+- VllmLLM.generate_response()가 고정된 max_tokens만 사용 (동적 전달 불가)
+- "자세히" 모드에서 8K자 컨텍스트 제한으로 응답 잘림
+
+### 해결
+
+#### 1. Single Source of Truth (`.env`)
+
+| 모드 | 환경변수 | 토큰 | 컨텍스트 |
+| ---- | -------- | ---- | -------- |
+| Chat | `CHAT_MAX_TOKENS` | 1,024 | 2K자 |
+| RAG | `RAG_MAX_TOKENS` | 4,096 | 8K자 |
+| Detailed | `DETAILED_MAX_TOKENS` | 8,192 | 24K자 |
+| Summarize | `SUMMARIZE_MAX_TOKENS` | 2,048 | 6K자 |
+
+#### 2. 동적 토큰 전달 체인
+
+```text
+document.py (모드 결정)
+    ↓ max_tokens 계산
+adapters.py (LLM 호출)
+    ↓ max_tokens 전달
+llm_wrapper.py (vLLM 생성)
+    ↓ SamplingParams(max_tokens=...)
+vLLM 추론
+```
+
+#### 3. 컨텍스트 확대
+
+- 기본 모드: 8K자
+- 자세히 모드: 24K자 (3배 확대)
+
+### 수정된 파일
+
+- `.env` - DETAILED_MAX_TOKENS 등 추가
+- `config/constants.py` - LLMGenerationConfig 통합
+- `app/rag/adapters.py` - max_tokens 동적 전달
+- `app/rag/handlers/document.py` - 모드별 컨텍스트/토큰 분기
+- `rag_system/active/llm_wrapper.py` - generate_response()에 max_tokens 파라미터 추가
+- `rag_system/active/llm_models.py` - detailed 모드 추가
+
+---
+
 ## [2025-12-22] 코드 품질 개선 - Pyright/Ruff/pytest 오류 제로
 
 **Impact**: 코드 품질, 테스트 안정성, 타입 안전성

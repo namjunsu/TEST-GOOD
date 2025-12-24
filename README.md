@@ -61,17 +61,28 @@ streamlit run web_interface.py --port 8501
 - **Python**: 3.12+
 - **GPU**: NVIDIA H100 80GB (vLLM backend)
 - **LLM**: Qwen2.5-72B-Instruct-AWQ
-- **Last Updated**: 2025-12-22
+- **Last Updated**: 2025-12-23
 
-### H100 GPU 최적화 (v2025.12.21)
+### H100 GPU 최적화 (v2025.12.23)
 
 | 항목 | 기존값 | H100 최적화 |
 | ---- | ------ | ----------- |
 | RAG Context | 4,000 tokens | 6,000 tokens |
 | RAG Max Output | 3,072 tokens | 4,096 tokens |
+| Detailed Max Output | - | 8,192 tokens |
+| Detailed Context | - | 24,000자 |
 | BM25 Snippet | 5,000자 | 8,000자 |
 | Token Cache | 2,048 | 4,096 |
 | VRAM 사용 | - | ~77GB / 80GB |
+
+### 토큰 설정 (Single Source of Truth: `.env`)
+
+| 모드 | 환경변수 | 토큰 | 컨텍스트 |
+| ---- | -------- | ---- | -------- |
+| Chat | `CHAT_MAX_TOKENS` | 1,024 | 2K자 |
+| RAG | `RAG_MAX_TOKENS` | 4,096 | 8K자 |
+| Detailed | `DETAILED_MAX_TOKENS` | 8,192 | 24K자 |
+| Summarize | `SUMMARIZE_MAX_TOKENS` | 2,048 | 6K자 |
 
 ## 🎯 Query Modes
 

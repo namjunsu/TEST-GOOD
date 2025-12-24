@@ -289,9 +289,33 @@ def run_rebuild_bm25() -> TaskResult:
 def run_rebuild_vector() -> TaskResult:
     """벡터 인덱스 재빌드
 
-    Note: 스크립트 내에서 GPU 메모리 부족 시 자동으로 CPU 모드로 전환됩니다.
+    Note: GPU 메모리 부족 방지를 위해 CPU 모드로 강제 실행합니다.
     """
-    return run_script("scripts/indexing/rebuild_vector.py", BM25_TIMEOUT * 2)  # 임베딩은 더 오래 걸림
+    import os
+    # GPU OOM 방지: CPU 모드로 강제 실행
+    env_override = os.environ.copy()
+    env_override["CUDA_VISIBLE_DEVICES"] = ""
+    env_override["PYTHONPATH"] = str(PROJECT_ROOT)
+    env_override["EMBEDDING_MODEL"] = "intfloat/multilingual-e5-large"
+
+    try:
+        result = subprocess.run(
+            [sys.executable, "scripts/indexing/rebuild_vector.py"],
+            cwd=str(PROJECT_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=BM25_TIMEOUT * 4,  # CPU는 더 오래 걸림
+            env=env_override,
+        )
+
+        output = result.stdout + result.stderr
+        if result.returncode == 0:
+            return TaskResult(TaskStatus.SUCCESS, "완료", output)
+        return TaskResult(TaskStatus.FAILED, "실행 실패", output)
+    except subprocess.TimeoutExpired:
+        return TaskResult(TaskStatus.TIMEOUT, f"타임아웃 초과", "")
+    except OSError as e:
+        return TaskResult(TaskStatus.FAILED, str(e), "")
 
 
 # ============================================================================

@@ -18,6 +18,8 @@
 8. [트러블슈팅](#8-트러블슈팅)
 9. [보안 설정](#9-보안-설정)
 10. [SLO 및 품질 가드](#10-slo-및-품질-가드)
+11. [캐시 시스템](#11-캐시-시스템)
+12. [ExactMatch 모니터링](#12-exactmatch-모니터링)
 
 ---
 
@@ -651,5 +653,279 @@ A: 네, 원본 PDF만 있으면 나머지(텍스트, 메타데이터, 인덱스)
 
 ---
 
+## 11. 캐시 시스템
+
+### 11.1 개요
+
+QueryCache v2.0은 스레드 안전, 네임스페이스 분리, 캐시 스탬피드 방지를 제공하는 프로덕션 급 인메모리 캐시입니다.
+
+**주요 기능**:
+- ✅ 스레드 안전성 (threading.RLock)
+- ✅ 네임스페이스 (인덱스 버전/설정 자동 반영)
+- ✅ 캐시 스탬피드 방지 (in-flight de-duplication)
+- ✅ TTL + LRU (만료 + 용량 기반 축출)
+- ✅ Monotonic Clock (시계 변동 영향 제거)
+
+### 11.2 기본 사용법
+
+```python
+from app.rag.cache_manager import get_cache
+from app.rag.cache_namespace import current_retriever_namespace
+
+cache = get_cache()
+namespace = current_retriever_namespace()
+
+# 캐시 조회
+result = cache.get(query, mode="chat", namespace=namespace)
+
+if result is None:
+    # 캐시 미스 - 검색 수행
+    result = expensive_search(query, mode="chat")
+    cache.set(query, result, mode="chat", namespace=namespace)
+
+return result
+```
+
+### 11.3 캐시 스탬피드 방지 패턴
+
+동일 질의 동시 요청 시 중복 계산 방지:
+
+```python
+def search_with_cache(query: str, mode: str = "chat"):
+    cache = get_cache()
+    namespace = current_retriever_namespace()
+
+    # 1. 캐시 조회
+    result = cache.get(query, mode, namespace)
+    if result is not None:
+        return result
+
+    # 2. 계산 시작 신호
+    is_leader = cache.begin_inflight(query, mode, namespace)
+
+    if is_leader:
+        # 리더: 실제 검색 수행
+        try:
+            result = expensive_search(query, mode)
+            cache.set(query, result, mode, namespace)
+            return result
+        finally:
+            cache.end_inflight(query, mode, namespace)
+    else:
+        # 팔로워: 리더 대기 후 재조회
+        cache.wait_inflight(query, mode, namespace, timeout=10.0)
+        result = cache.get(query, mode, namespace)
+        if result is None:
+            result = expensive_search(query, mode)
+            cache.set(query, result, mode, namespace)
+        return result
+```
+
+### 11.4 네임스페이스 사용
+
+**자동 네임스페이스** (권장):
+```python
+from app.rag.cache_namespace import current_retriever_namespace
+
+# 인덱스 버전 + 설정 해시 자동 조합
+namespace = current_retriever_namespace()
+# 예: "bm25:v1699876543|conf:a1b2c3d4"
+```
+
+**효과**:
+- 인덱스 로테이션 시 자동으로 새 캐시 키 사용
+- 설정 변경 시 자동 캐시 무효화
+
+### 11.5 통계 조회
+
+```bash
+curl -s http://localhost:7860/cache/stats | jq '.'
+```
+
+**출력 예시**:
+```json
+{
+  "size": 45,
+  "max_size": 100,
+  "hits": 523,
+  "misses": 177,
+  "evictions": 3,
+  "expired": 12,
+  "hit_rate": "74.71%",
+  "inflight_count": 0
+}
+```
+
+### 11.6 환경 설정
+
+```bash
+# .env
+CACHE_MAX_SIZE=100   # 최대 캐시 항목 수
+CACHE_TTL=7200       # TTL (초, 기본 2시간)
+```
+
+### 11.7 성능 고려사항
+
+**메모리 사용량**:
+- 1개 항목: ~10KB
+- 100개 항목: ~1MB
+
+**TTL 전략**:
+| 용도 | 권장 TTL |
+|------|---------|
+| 일반 검색 | 2시간 (7200초) |
+| DOC_ANCHORED | 10분 (600초) |
+| 실험/개발 | 5분 (300초) |
+
+### 11.8 트러블슈팅
+
+**Q: 캐시 히트율이 낮아요 (< 30%)**
+- 원인: 질의 다양성 높음, 네임스페이스 자주 변경
+- 해결: max_size 증가 (100 → 200), TTL 증가 (2h → 4h)
+
+**Q: 메모리 사용량이 과다해요**
+- 원인: 대형 결과 캐싱, max_size 과다
+- 해결: max_size 감소 (100 → 50), TTL 감소 (2h → 1h)
+
+---
+
+## 12. ExactMatch 모니터링
+
+### 12.1 개요
+
+ExactMatchRetriever v2.0은 RAG 시스템의 Stage 0 (정확일치 단계)로, 모델번호/부품코드 질의에 대해 오검출 최소화를 최우선으로 하는 정밀 검색기입니다.
+
+**핵심 설계 원칙**:
+- 오검출 최소화 > 재현율 (False Positive 방지 최우선)
+- 빠른 실패 (코드 패턴 미발견 시 즉시 BM25로 위임)
+- 경계 제약 (`HRD-442` ≠ `HRD-4420`)
+
+### 12.2 메트릭 사양
+
+```bash
+curl -s http://localhost:7860/metrics | jq '.retriever_runtime.exact_match'
+```
+
+**주요 지표**:
+
+| 메트릭명 | 타입 | 설명 | 정상 범위 |
+|---------|------|------|----------|
+| `total_queries` | int | 누적 질의 수 | 증가 추세 |
+| `exact_hits` | int | 코드 정확일치 건수 | - |
+| `filename_hits` | int | 파일명 부분일치 건수 | - |
+| `exact_match_hit_rate` | float | 정확일치 적중률 | 0.35 ~ 0.65 |
+| `avg_query_time_ms` | float | 평균 검색 시간 (ms) | < 80 (p95) |
+
+### 12.3 알람 임계치
+
+**WARNING 레벨**:
+
+| 조건 | 임계치 | 조치 사항 |
+|-----|--------|---------|
+| 낮은 적중률 | hit_rate < 0.35 | 1. 코드 패턴 확인<br>2. 정규화 로직 점검<br>3. 신규 모델번호 DB 반영 확인 |
+| 높은 레이턴시 | avg_query_time_ms > 80 | 1. DB 인덱스 상태 확인<br>2. 커넥션 풀 사용률 확인 |
+| 과도한 파일명 의존 | filename_hits / total_queries > 0.25 | 코드 추출 정확도 저하 의심 |
+
+**CRITICAL 레벨**:
+
+| 조건 | 임계치 | 조치 사항 |
+|-----|--------|---------|
+| 극심한 레이턴시 | avg_query_time_ms > 150 | 1. Feature Flag OFF 검토<br>2. BM25 폴백 확인 |
+| API 장애 | 5xx_rate > 0.5% | 1. 롤백 준비<br>2. DB 무결성 검증 |
+
+### 12.4 Feature Flag 제어
+
+```bash
+# .env
+ENABLE_EXACT_MATCH=true   # v2.0 활성화 (기본값: true)
+```
+
+**런타임 토글** (재시작 필요):
+```bash
+# 비활성화
+export ENABLE_EXACT_MATCH=false
+pkill -f "uvicorn"
+uvicorn app.api.main:app --host 0.0.0.0 --port 7860 &
+
+# 검증
+curl -s http://localhost:7860/metrics | jq '.retriever_runtime.retriever_config'
+```
+
+### 12.5 데이터베이스 스키마
+
+**model_codes 테이블**:
+```sql
+CREATE TABLE model_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    doc_id TEXT NOT NULL,
+    page INTEGER NOT NULL,
+    code TEXT NOT NULL,           -- 원본 코드
+    norm_code TEXT NOT NULL,      -- 정규화 코드
+    padded_norm TEXT,             -- 경계 제약용
+    FOREIGN KEY (doc_id) REFERENCES documents(id)
+);
+
+-- 필수 인덱스
+CREATE INDEX idx_model_codes_norm ON model_codes(norm_code);
+CREATE INDEX idx_model_codes_padded ON model_codes(padded_norm);
+```
+
+**인덱스 검증**:
+```bash
+python scripts/verify_exact_match_indexes.py
+```
+
+### 12.6 롤백 절차
+
+**긴급 롤백** (< 5분):
+```bash
+# 1. Feature Flag OFF
+export ENABLE_EXACT_MATCH=false
+pkill -f "uvicorn"
+uvicorn app.api.main:app --host 0.0.0.0 --port 7860 &
+
+# 2. 검증
+curl -s http://localhost:7860/metrics | jq '.retriever_runtime.exact_match'
+# 출력: null (비활성화 확인)
+```
+
+**DB 롤백** (< 10분):
+```bash
+# 1. 백업 복구
+cp var/metadata.db var/metadata.db.broken
+cp var/backups/metadata.db.backup-YYYYMMDD var/metadata.db
+
+# 2. 인덱스 재생성
+python scripts/migrate_exact_match_indexes.py
+
+# 3. 검증
+python scripts/verify_exact_match_indexes.py
+```
+
+### 12.7 트러블슈팅
+
+**낮은 적중률 (hit_rate < 0.35)**:
+```bash
+# 최근 문서의 model_codes 개수 확인
+sqlite3 var/db/metadata.db "
+  SELECT doc_id, COUNT(*)
+  FROM model_codes
+  GROUP BY doc_id
+  ORDER BY id DESC
+  LIMIT 10;
+"
+```
+
+**높은 레이턴시 (p95 > 80ms)**:
+```bash
+# 인덱스 미사용 확인
+python scripts/verify_exact_match_indexes.py | grep "SCAN TABLE"
+
+# DB 공간 회수
+sqlite3 var/db/metadata.db "VACUUM;"
+```
+
+---
+
 **문서 버전**: 3.0.0 (통합본)
-**마지막 업데이트**: 2025-12-11
+**마지막 업데이트**: 2025-12-25

@@ -12,8 +12,8 @@ AI-CHAT은 RAG(Retrieval-Augmented Generation) 아키텍처 기반의 **채널A 
 
 ### 핵심 기능
 - PDF 문서 자동 인덱싱 (pdfplumber + Tesseract OCR)
-- 하이브리드 검색 (BM25 키워드 검색)
-- LLM 기반 질의응답 (로컬 LLM)
+- 하이브리드 검색 (BM25 키워드 + FAISS 벡터)
+- LLM 기반 질의응답 (vLLM + Qwen2.5-72B)
 - 메타데이터 자동 추출 (날짜, 작성자, 카테고리)
 - 쿼리 라우팅 (문서 유형별 최적화)
 
@@ -26,7 +26,8 @@ AI-CHAT은 RAG(Retrieval-Augmented Generation) 아키텍처 기반의 **채널A 
 | **프론트엔드** | Streamlit 1.38+ |
 | **백엔드 API** | FastAPI + Uvicorn |
 | **데이터베이스** | SQLite 3.x (WAL 모드) |
-| **검색 엔진** | BM25 (키워드 검색) |
+| **검색 엔진** | BM25 (키워드) + FAISS (벡터) |
+| **임베딩** | intfloat/multilingual-e5-large |
 | **OCR** | Tesseract 5.x |
 | **LLM** | vLLM + Qwen2.5-72B-Instruct-AWQ |
 | **GPU** | NVIDIA H100 80GB |
@@ -43,14 +44,14 @@ AI-CHAT은 RAG(Retrieval-Augmented Generation) 아키텍처 기반의 **채널A 
 
     ┌──────────────┐
     │   원본 PDF    │  ← Source of Truth
-    │  docs/year_* │     469개 PDF 파일
+    │  docs/year_* │     472개 PDF 파일
     └──────┬───────┘
            │
            │ (1) 텍스트 추출 (pdfplumber + OCR)
            ▼
     ┌──────────────┐
     │ 추출된 텍스트  │  ← 검색용 텍스트
-    │data/extracted│     469개 .txt 파일
+    │data/extracted│     472개 .txt 파일
     └──────┬───────┘
            │
            │ (2) 메타데이터 파싱
@@ -62,10 +63,10 @@ AI-CHAT은 RAG(Retrieval-Augmented Generation) 아키텍처 기반의 **채널A 
            │
            │ (3) 인덱싱
            ▼
-    ┌──────────────┐
-    │  BM25 인덱스  │  ← 키워드 검색용
-    │  var/index/  │     토큰화된 검색 인덱스
-    └──────────────┘
+    ┌──────────────────────────────┐
+    │  BM25 인덱스 + FAISS 벡터     │  ← 하이브리드 검색용
+    │  rag_system/db/              │     토큰화 + 임베딩
+    └──────────────────────────────┘
 ```
 
 ### 서비스 아키텍처
@@ -91,19 +92,19 @@ AI-CHAT은 RAG(Retrieval-Augmented Generation) 아키텍처 기반의 **채널A 
 │                  RAG Pipeline                            │
 │  ┌──────────────────────────────────────────────────┐  │
 │  │ 1. Query Router (문서 유형 분류)                  │  │
-│  │ 2. BM25 Retriever (키워드 검색)                  │  │
+│  │ 2. Hybrid Retriever (BM25 + FAISS)              │  │
 │  │ 3. Context Hydrator (메타데이터 보강)            │  │
-│  │ 4. LLM Generator (답변 생성)                     │  │
+│  │ 4. LLM Generator (vLLM 답변 생성)               │  │
 │  └──────────────────────────────────────────────────┘  │
 └────────────────────┬────────────────────────────────────┘
                      │
-        ┌────────────┼────────────┐
-        ▼            ▼            ▼
-┌──────────┐  ┌──────────┐  ┌──────────┐
-│ SQLite   │  │ BM25     │  │ Extracted│
-│ metadata │  │ Index    │  │ Text     │
-│   .db    │  │  .pkl    │  │  .txt    │
-└──────────┘  └──────────┘  └──────────┘
+        ┌────────────┼────────────┬────────────┐
+        ▼            ▼            ▼            ▼
+┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
+│ SQLite   │  │ BM25     │  │ FAISS    │  │ Extracted│
+│ metadata │  │ Index    │  │ Vector   │  │ Text     │
+│   .db    │  │  .pkl    │  │  .faiss  │  │  .txt    │
+└──────────┘  └──────────┘  └──────────┘  └──────────┘
 ```
 
 ---
@@ -145,13 +146,24 @@ AI-CHAT/
 │   └── extracted/            # 추출된 텍스트 (.txt)
 │
 ├── var/
-│   └── index/                # 검색 인덱스
-│       └── bm25_index.pkl
+│   ├── db/                   # 데이터베이스
+│   │   ├── metadata.db       # 메타데이터 DB (SQLite)
+│   │   └── everything_index.db  # Everything 인덱스
+│   ├── backups/              # DB 백업
+│   ├── log/                  # 로그 파일
+│   └── index/                # 검색 인덱스 (레거시)
+│
+├── rag_system/
+│   ├── db/                   # BM25/FAISS 인덱스
+│   │   ├── bm25_index.pkl
+│   │   └── korean_vector_index.faiss
+│   └── file_index.json       # 파일 인덱스
 │
 ├── config/
+│   ├── constants.py          # 설정 상수
+│   ├── query_routing_patterns.yaml  # 질의 라우팅 패턴
 │   └── document_processing.yaml  # 문서 처리 설정
 │
-├── metadata.db               # 메타데이터 DB (SQLite)
 └── web_interface.py          # Streamlit 진입점
 ```
 
@@ -189,7 +201,7 @@ PDF 파일 (docs/incoming/)
    │
    ▼
 [인덱스 빌드]
-   └─ BM25 인덱스 (var/index/bm25_index.pkl)
+   └─ BM25 + FAISS 인덱스 (rag_system/db/)
 ```
 
 ### 5.2 검색 (Retrieval)
@@ -199,11 +211,12 @@ PDF 파일 (docs/incoming/)
    │
    ▼
 [쿼리 라우팅]
-   │ └─ 의도 분류 (QA, SUMMARY, LIST, etc.)
+   │ └─ 의도 분류 (SEARCH, DOCUMENT, QA, COST, YEAR_SUMMARY)
    │
    ▼
-[BM25 검색]
-   │ └─ 키워드 기반 문서 검색
+[하이브리드 검색]
+   │ ├─ BM25 (키워드 기반, 가중치 0.8)
+   │ └─ FAISS (벡터 기반, 가중치 0.2)
    │
    ▼
 [메타데이터 보강]
@@ -211,7 +224,7 @@ PDF 파일 (docs/incoming/)
    │
    ▼
 [LLM 답변 생성]
-   │ └─ 로컬 LLM (llama.cpp)
+   │ └─ vLLM (Qwen2.5-72B-AWQ)
    │
    ▼
 응답 반환
@@ -227,11 +240,12 @@ PDF 파일 (docs/incoming/)
 - 메트릭 수집
 
 ### 6.2 Query Router (`app/rag/query_router.py`)
-- 쿼리 유형 분류 (QA, SUMMARY, LIST, PREVIEW)
-- 키워드 기반 라우팅
+- 쿼리 유형 분류 (SEARCH, DOCUMENT, QA, COST, YEAR_SUMMARY)
+- YAML 패턴 기반 라우팅 (`config/query_routing_patterns.yaml`)
 
-### 6.3 BM25 Store (`rag_system/active/bm25_store.py`)
-- 키워드 검색 인덱스
+### 6.3 Hybrid Retriever (`app/rag/retrievers/hybrid.py`)
+- BM25 키워드 검색 (가중치 0.8)
+- FAISS 벡터 검색 (가중치 0.2)
 - 한국어 토크나이저 (KiwiPy)
 
 ### 6.4 MetadataDB (`app/data/metadata_db.py`)
@@ -296,22 +310,24 @@ CREATE TABLE documents (
 
 | 지표 | 값 |
 |------|-----|
-| 문서 수 | 475개 |
+| 문서 수 | 472개 |
 | 인덱싱 속도 | ~5초/문서 (OCR 포함) |
 | 검색 응답시간 | <500ms |
 | LLM 생성시간 | ~6초 (vLLM H100) |
 | DB 크기 | ~3MB |
-| 인덱스 크기 | ~2MB |
+| BM25 인덱스 | ~2MB |
+| FAISS 인덱스 | ~5MB |
 | VRAM 사용 | ~39GB / 80GB (49%) |
 
 ---
 
 ## 10. 관련 문서
 
-- [운영 가이드](OPERATIONS.md) - 일상 운영, 문서 관리
-- [H100 이전 가이드](H100_워크스테이션_이전_가이드.md) - 서버 이전
+- [운영 가이드](OPERATIONS.md) - 일상 운영, 문서 관리, 캐시, 모니터링
+- [H100 완전 가이드](H100_COMPLETE_GUIDE.md) - H100 최적화, 이전, Flash Attention
+- [프레젠테이션](PRESENTATION_FINAL.md) - 시스템 소개 발표 자료
 
 ---
 
 **문서 버전**: 2.1.0
-**마지막 업데이트**: 2025-12-23
+**마지막 업데이트**: 2025-12-25

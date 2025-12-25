@@ -345,6 +345,18 @@ class QueryExpander:
             else:
                 response_text = str(response).strip()
 
+            # 자연어 응답 감지 (조기 Fallback)
+            suspicious_phrases = [
+                "해당 정보는", "답변", "질문", "확인되지 않습니다",
+                "문서에서", "찾을 수 없습니다", "제공할 수 없습니다"
+            ]
+            if any(phrase in response_text[:200] for phrase in suspicious_phrases):
+                logger.warning(
+                    f"⚠️ LLM이 QA 모드로 응답, fallback 사용\n"
+                    f"응답 (처음 100자): {response_text[:100]}"
+                )
+                return self._create_fallback_expansion(query)
+
             # JSON 블록 추출 (코드블록/설명 제거)
             json_text = _extract_json_block(response_text)
 
@@ -421,9 +433,11 @@ class QueryExpander:
             return result
 
         except json.JSONDecodeError as e:
-            logger.warning(f"⚠️ JSON 파싱 실패, fallback 사용: {e}")
-            if hasattr(response, "answer"):
-                logger.debug(f"LLM response: {response.answer[:500]}")
+            logger.warning(
+                f"⚠️ JSON 파싱 실패, fallback 사용\n"
+                f"원인: {e}\n"
+                f"LLM 응답 (처음 200자): {response_text[:200] if 'response_text' in locals() else 'N/A'}"
+            )
             return self._create_fallback_expansion(query)
 
         except (AttributeError, KeyError, TypeError) as e:

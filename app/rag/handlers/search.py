@@ -34,6 +34,7 @@ from .query_processor import (
     extract_drafter_filter,
     extract_keywords,
     extract_year_filter,
+    is_all_query,
     is_count_query,
     needs_expanded_search,
 )
@@ -187,7 +188,11 @@ class SearchHandler(BaseHandler):
             )
 
             # 7. 응답 생성
-            return self._build_search_response(keywords, query, doc_details, filenames)
+            # "문서 전부" 요청 시 메타데이터만 표시 (성능 최적화)
+            is_all_docs_query = is_all_query(query)
+            if is_all_docs_query:
+                logger.info("⚡ '문서 전부' 요청 감지 → 메타데이터만 표시 (성능 최적화)")
+            return self._build_search_response(keywords, query, doc_details, filenames, is_all_docs_query)
 
         except sqlite3.OperationalError as e:
             # DB 락 또는 연결 문제 - 재시도 가능
@@ -589,9 +594,19 @@ class SearchHandler(BaseHandler):
         query: str,
         doc_details: list[dict[str, Any]],
         filenames: list[str],
+        metadata_only: bool = False,
     ) -> dict[str, Any]:
-        """검색 응답 생성"""
+        """검색 응답 생성
+
+        Args:
+            keywords: 검색 키워드
+            query: 원본 쿼리
+            doc_details: 문서 상세 정보 리스트
+            filenames: 전체 파일명 리스트
+            metadata_only: True면 메타데이터만 표시 (전문 제외, 성능 최적화)
+        """
         # 카드 생성 (2025-12-11: 깔끔한 형식으로 개선)
+        # 2025-12-25: "문서 전부" 요청 시 메타데이터만 표시 (성능 최적화)
         cards = []
         for i, doc in enumerate(doc_details, 1):
             title = format_title_from_filename(doc["filename"])
@@ -628,17 +643,26 @@ class SearchHandler(BaseHandler):
                 answer_text = f"📄 **'{keywords}' 관련 문서 ({display_count}건)**\n\n"
             answer_text += "\n\n".join(cards)
 
+            # "문서 전부" 요청이면 성능 최적화 안내 추가
+            if metadata_only:
+                answer_text += "\n\n💡 **메타데이터 목록만 표시** (빠른 응답)\n"
+                answer_text += "상세 내용은 특정 문서명으로 조회하세요."
             # 더 많은 결과가 있으면 힌트 추가
-            if total_count > display_count:
-                answer_text += f"\n\n💡 전체 목록: \"{keywords} 문서 전부 보여줘\""
+            elif total_count > display_count:
+                answer_text += f'\n\n💡 전체 목록: "{keywords} 문서 전부 보여줘"'
 
         # Evidence 생성
-        evidence = self._build_evidence(doc_details)
+        # "문서 전부" 요청 시 증거는 메타데이터만 (성능 최적화)
+        if metadata_only:
+            evidence = []  # 전문 검색 없으므로 증거 제외
+        else:
+            evidence = self._build_evidence(doc_details)
 
         # 📊 유사 문서 추천 및 병합 (2025-12-08)
+        # "문서 전부" 요청 시에는 유사 문서 추천 건너뛰기 (성능 최적화)
         similar_documents = []
         merged_count = 0
-        if filenames and hasattr(self.pipeline, "_similarity_service"):
+        if not metadata_only and filenames and hasattr(self.pipeline, "_similarity_service"):
             try:
                 # 전체 출처 문서 제외하고 유사 문서 찾기
                 all_similar = self.pipeline._similarity_service.find_similar_by_query(

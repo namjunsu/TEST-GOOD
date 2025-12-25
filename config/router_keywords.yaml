@@ -65,10 +65,10 @@ doc_anchored:
     # 비디오 스위처 프로파일
     # ========================================================================
     video_switcher:
-      description: "Video Production Switcher (MVS, XVS, Carbonite, etc.)"
+      description: "Video Production Switcher (MVS, XVS, XVP, Carbonite, etc.)"
 
       allow:
-        - "(?i){KBL}(?:MVS|XVS|Kahuna|Carbonite)[-\\s]?\\w*{KBR}"
+        - "(?i){KBL}(?:MVS|XVS|XVP|Kahuna|Carbonite)[-\\s]?\\w*{KBR}"
         - "(?i){KBL}(?:M/E|ME|Keyer|USK|DSK|Crosspoint){KBR}"
         - "(?i)스위처|영상\\s*믹서"
 
@@ -80,6 +80,7 @@ doc_anchored:
         high:
           - "(?i){KBL}MVS-8000{KBR}"
           - "(?i){KBL}XVS-7000{KBR}"
+          - "(?i){KBL}XVP-3901{KBR}"
           - "(?i){KBL}Carbonite{KBR}"
         medium:
           - "(?i){KBL}(?:USK|DSK|Keyer|ME|M/E){KBR}"
@@ -144,10 +145,10 @@ doc_anchored:
     # 카메라 프로파일
     # ========================================================================
     camera:
-      description: "Broadcast Camera Systems (HDC, PXW, URSA, etc.)"
+      description: "Broadcast Camera Systems (HDC, PXW, PMW, EX, URSA, etc.)"
 
       allow:
-        - "(?i){KBL}(?:HDC|PXW|PDW|FX|URSA|AK[-\\s]?HC)[-\\s]?\\w+{KBR}"
+        - "(?i){KBL}(?:HDC|PXW|PMW|PDW|EX|FX|URSA|AK[-\\s]?HC)[-\\s]?\\w+{KBR}"
         - "(?i)카메라\\s*(헤드|바디|컨트롤|CCU|RCP)"
         - "(?i){KBL}(?:CCU|RCP|VF|Viewfinder){KBR}"
 
@@ -158,6 +159,9 @@ doc_anchored:
         high:
           - "(?i){KBL}HDC-4300{KBR}"
           - "(?i){KBL}PXW-Z450{KBR}"
+          - "(?i){KBL}PMW-500{KBR}"
+          - "(?i){KBL}EX-3{KBR}"
+          - "(?i){KBL}PMW-EX3{KBR}"
           - "(?i){KBL}URSA\\s*Broadcast{KBR}"
         medium:
           - "(?i){KBL}(?:RCP|CCU|VF|Baseband){KBR}"
@@ -219,6 +223,88 @@ doc_anchored:
         - {a: "(?i){KBL}(?:DME|SSL|Studer){KBR}", b: "(?i)(Dante|MADI|AES67)", window: 50, bonus: 1.0}
         - {a: "(?i){KBL}오디오{KBR}", b: "(?i)(콘솔|믹서|매트릭스)", window: 40, bonus: 0.8}
 
+    # ========================================================================
+    # 모니터 프로파일
+    # ========================================================================
+    monitor:
+      description: "Broadcast Monitor (LVM, PVM, BVM, etc.)"
+
+      allow:
+        - "(?i){KBL}(?:LVM|PVM|BVM)[-\\s]?\\w{3,8}{KBR}"
+        - "(?i){KBL}모니터{KBR}"
+        - "(?i){KBL}TVLogic{KBR}"
+        - "(?i){KBL}TV[-\\s]?Logic{KBR}"
+
+      deny:
+        - "(?i)짐벌|지미집|틸트"
+
+      boost:
+        high:
+          - "(?i){KBL}LVM-180A{KBR}"
+          - "(?i){KBL}LVM-172W{KBR}"
+          - "(?i){KBL}LVM-242W{KBR}"
+          - "(?i){KBL}LVM-243W{KBR}"
+        medium:
+          - "(?i){KBL}모니터{KBR}"
+          - "(?i)(Display|디스플레이|화면)"
+        vendor:
+          - "(?i){KBL}TVLogic{KBR}"
+          - "(?i){KBL}TV[-\\s]?Logic{KBR}"
+          - "(?i){KBL}티비로직{KBR}"
+          - "(?i){KBL}Sony{KBR}"
+
+      weights:
+        high: 3.0
+        medium: 1.5
+        vendor: 1.0
+
+      deny_penalty: -3.0
+      pass_threshold: 1.0
+
+      proximity_pairs:
+        - {a: "(?i){KBL}(?:LVM|PVM|BVM)[-\\s]?\\w{3,8}{KBR}", b: "(?i)(모니터|Display)", window: 40, bonus: 1.0}
+        - {a: "(?i){KBL}모니터{KBR}", b: "(?i)(교체|증설|보수)", window: 40, bonus: 0.8}
+
+    # ========================================================================
+    # 조명 프로파일
+    # ========================================================================
+    lighting:
+      description: "Broadcast Lighting Equipment"
+
+      allow:
+        - "(?i){KBL}(?:LED|PAR\\d+|Fresnel|OSRAM){KBR}"
+        - "(?i){KBL}조명{KBR}"
+        - "(?i)(조명.*소모품|조명.*용)"
+
+      deny:
+        - "(?i)짐벌|지미집"
+
+      boost:
+        high:
+          - "(?i){KBL}PAR64{KBR}"
+          - "(?i){KBL}Fresnel{KBR}"
+          - "(?i){KBL}PAR[-\\s]?64{KBR}"
+        medium:
+          - "(?i){KBL}LED{KBR}"
+          - "(?i)(조명|소모품|램프|전구)"
+        vendor:
+          - "(?i){KBL}OSRAM{KBR}"
+          - "(?i){KBL}Philips{KBR}"
+          - "(?i){KBL}오스람{KBR}"
+          - "(?i){KBL}필립스{KBR}"
+
+      weights:
+        high: 2.5
+        medium: 1.5
+        vendor: 1.0
+
+      deny_penalty: -2.0
+      pass_threshold: 0.8
+
+      proximity_pairs:
+        - {a: "(?i){KBL}조명{KBR}", b: "(?i)(소모품|램프|전구)", window: 40, bonus: 1.0}
+        - {a: "(?i){KBL}(?:LED|PAR\\d+){KBR}", b: "(?i)(교체|증설)", window: 40, bonus: 0.8}
+
 # ============================================================================
 # 프로파일 매칭 규칙 (쿼리 → 프로파일 후보 탐지)
 # ============================================================================
@@ -232,7 +318,7 @@ profile_matching:
       - "(?i)(녹화|보존.*용)"
 
     video_switcher:
-      - "(?i){KBL}(?:스위처|MVS|XVS|Carbonite|Kahuna){KBR}"
+      - "(?i){KBL}(?:스위처|MVS|XVS|XVP|Carbonite|Kahuna){KBR}"
       - "(?i){KBL}(?:ME|M/E|Keyer|USK|DSK){KBR}"
 
     intercom:
@@ -240,18 +326,28 @@ profile_matching:
       - "(?i)(Partyline|IFB|Tally|키패널)"
 
     camera:
-      - "(?i){KBL}(?:카메라|HDC|PXW|PDW|URSA){KBR}"
+      - "(?i){KBL}(?:카메라|HDC|PXW|PMW|PDW|EX|URSA){KBR}"
       - "(?i){KBL}(?:CCU|RCP|VF|Viewfinder){KBR}"
 
     audio:
       - "(?i){KBL}(?:오디오|Audio|DME|SSL|Studer){KBR}"
       - "(?i){KBL}(?:콘솔|Console|믹서|Mixer|MADI|Dante){KBR}"
 
+    monitor:
+      - "(?i){KBL}(?:모니터|Monitor|LVM|PVM|BVM){KBR}"
+      - "(?i){KBL}(?:TVLogic|TV[-\\s]?Logic|티비로직){KBR}"
+
+    lighting:
+      - "(?i){KBL}(?:조명|Lighting|LED|PAR\\d+|Fresnel){KBR}"
+      - "(?i){KBL}(?:OSRAM|오스람|조명.*소모품){KBR}"
+
   # 프로파일 우선순위 (동점 시)
   priority:
     - dvr_nvr
     - video_switcher
     - camera
+    - monitor
+    - lighting
     - intercom
     - audio
 
@@ -264,6 +360,8 @@ profile_matching:
       dvr_nvr: 1.0
       video_switcher: 1.0
       camera: 1.0
+      monitor: 1.0
+      lighting: 0.95
       intercom: 0.9
       audio: 0.9
 

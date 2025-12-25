@@ -501,3 +501,308 @@ connectors:
     - ifb
     - 인이어
     - In-Ear
+
+# ========== 추가 카메라/영상 브랜드 (2025-12-25) ==========
+additional_camera_brands:
+  dji:
+    - DJI
+    - 디제이아이
+    - dji
+
+  fujinon:
+    - Fujinon
+    - 후지논
+    - FUJINON
+    - fujinon
+
+  miller:
+    - Miller
+    - 밀러
+    - MILLER
+    - miller
+
+# ========== 추가 스위처/방송 장비 브랜드 (2025-12-25) ==========
+additional_switcher_brands:
+  k2e:
+    - K2E
+    - 케이투이
+    - k2e
+
+  grassvalley:
+    - Grass Valley
+    - GrassValley
+    - 그래스밸리
+    - 그라스밸리
+    - GV
+    - GVG
+    - GRASS VALLEY
+
+  miranda:
+    - Miranda
+    - 미란다
+    - MIRANDA
+    - miranda
+
+  evertz:
+    - Evertz
+    - 에버츠
+    - EVERTZ
+    - evertz
+
+# ========== 추가 오디오 브랜드 (2025-12-25) ==========
+additional_audio_brands:
+  야마하:
+    - Yamaha
+    - 야마하
+    - YAMAHA
+    - yamaha
+
+  junger:
+    - Jünger
+    - Junger
+    - 융거
+    - JUNGER
+
+  linearacoustic:
+    - Linear Acoustic
+    - LinearAcoustic
+    - 리니어어쿠스틱
+    - LINEAR ACOUSTIC
+
+# ========== 추가 조명 브랜드 (2025-12-25) ==========
+additional_lighting_brands:
+  arri:
+    - ARRI
+    - 아리
+    - Arri
+    - arri
+
+  alpha:
+    - Alpha
+    - 알파
+    - ALPHA
+    - alpha
+    - 알파라이트
+
+  philips:
+    - Philips
+    - 필립스
+    - PHILIPS
+    - philips
+
+# ========== 케이블/커넥터 브랜드 (2025-12-25) ==========
+cable_connector_brands:
+  canare:
+    - Canare
+    - 카나레
+    - CANARE
+    - canare
+
+  gepco:
+    - Gepco
+    - 겁코
+    - GEPCO
+    - gepco
+
+  neutrik:
+    - Neutrik
+    - 뉴트릭
+    - 노이트릭
+    - NEUTRIK
+    - neutrik
+
+# ========== 기타 장비 브랜드 (2025-12-25) ==========
+other_equipment_brands:
+  aja:
+    - AJA
+    - 에이제이에이
+    - aja
+
+  tvu:
+    - TVU
+    - 티브이유
+    - tvu
+
+  hp:
+    - HP
+    - 에이치피
+    - hp
+
+  sachtler:
+    - Sachtler
+    - 셔틀러
+    - 작틀러
+    - SACHTLER
+
+  vinten:
+    - Vinten
+    - 빈텐
+    - VINTEN
+    - vinten
+
+  adobe:
+    - Adobe
+    - 어도비
+    - ADOBE
+    - adobe
+
+  wacom:
+    - Wacom
+    - 와콤
+    - WACOM
+    - wacom
+
+# ========== 드론 모델명 (2025-12-25) ==========
+drone_models:
+  mavic:
+    - Mavic
+    - 매빅
+    - MAVIC
+    - mavic
+    - Mavic 2
+    - Mavic 3
+    - Mavic2
+    - Mavic3
+
+  phantom:
+    - Phantom
+    - 팬텀
+    - PHANTOM
+    - phantom
+    - Phantom 4
+    - Phantom4
+
+  neo:
+    - Neo
+    - 네오
+    - NEO
+    - neo
+
+  avata:
+    - Avata
+    - 아바타
+    - AVATA
+    - avata
+
+# ========== 추가 카메라 모델명 (2025-12-25) ==========
+additional_camera_models:
+  hdc1400r:
+    - HDC-1400R
+    - HDC1400R
+    - hdc-1400r
+    - hdc1400r
+
+  pxwx70:
+    - PXW-X70
+    - PXWX70
+    - pxw-x70
+    - pxwx70
+
+  hdvfel75:
+    - HDVF-EL75
+    - HDVF EL75
+    - HDVFEL75
+    - hdvf-el75
+
+# ========== 삼각대/지지대 모델 (2025-12-25) ==========
+tripod_models:
+  arrow:
+    - Arrow
+    - 애로우
+    - ARROW
+    - arrow
+    - Arrow 25
+    - ARROW25
+    - Arrow 55
+    - ARROW55
+
+  sprinter:
+    - Sprinter
+    - 스프린터
+    - SPRINTER
+    - sprinter
+
+  combiped:
+    - Combi Ped
+    - CombiPed
+    - 컴비페드
+    - COMBI PED
+    - Combi Ped 1-40
+
+# ========== 스위처 모델명 (2025-12-25) ==========
+switcher_models:
+  masterpiece:
+    - Masterpiece
+    - 마스터피스
+    - MASTERPIECE
+    - masterpiece
+
+  maestro:
+    - Maestro
+    - 마에스트로
+    - MAESTRO
+    - maestro
+
+  umc2016m:
+    - UMC-2016M
+    - UMC2016M
+    - umc-2016m
+    - umc2016m
+
+  nv5100mc:
+    - NV5100MC
+    - NV5100
+    - NV-5100MC
+    - nv5100mc
+
+# ========== 오디오 장비 모델 (2025-12-25) ==========
+audio_equipment_models:
+  aero2000:
+    - Aero 2000
+    - Aero2000
+    - 에어로2000
+    - AERO 2000
+
+  dap8:
+    - D*AP8
+    - DAP8
+    - dap8
+
+# ========== 워크스테이션 (2025-12-25) ==========
+workstation_models:
+  hpz:
+    - HP Z8
+    - HP Z6
+    - HP Z800
+    - HP Z840
+    - HPZ8
+    - HPZ6
+
+  xeon:
+    - Xeon
+    - 제온
+    - XEON
+    - xeon
+
+  quadro:
+    - Quadro
+    - 쿼드로
+    - QUADRO
+    - quadro
+
+# ========== 편집 소프트웨어 (2025-12-25) ==========
+editing_software:
+  edius:
+    - Edius
+    - 에디우스
+    - EDIUS
+    - edius
+    - Edius 7
+    - Edius X
+    - Edius PRO 8
+
+  inews:
+    - iNEWS
+    - 아이뉴스
+    - inews
+    - INEWS

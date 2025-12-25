@@ -107,18 +107,36 @@ query_tokens:
 domain_terms:
   # 원천 목록 (사람이 관리)
   base:
-    # 모니터 장비 (2025-11-28 추가)
+    # 모니터 장비
     - TVLogic
     - 티비로직
     - TVLOGIC
+    - LVM-180A
+    - LVM-172W
+    - LVM-242W
+    - LVM-243W
+    - PVM
+    - BVM
 
     # 카메라/영상 장비
-    - LVM-180A
     - XRN-1620B2
     - LMK-25M
     - HDC-4300
+    - HDC-1400R
     - PDW-850
     - PXW-Z450
+    - PXW-X70
+    - PMW-500
+    - PMW-EX3
+    - EX-3
+
+    # 스위처 장비
+    - XVP-3901
+    - XVP
+    - MVS-8000
+    - XVS-7000
+    - Carbonite
+    - Kahuna
 
     # 오디오 장비
     - SPG9000
@@ -144,6 +162,13 @@ domain_terms:
     - Grass Valley
     - Ross
     - NewTek
+
+    # 조명 장비
+    - PAR64
+    - PAR-64
+    - Fresnel
+    - OSRAM
+    - 오스람
 
     # 일반 용어
     - 뷰파인더

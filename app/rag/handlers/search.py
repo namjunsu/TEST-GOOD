@@ -36,6 +36,7 @@ from .query_processor import (
     extract_year_filter,
     is_all_query,
     is_count_query,
+    is_temporal_query,
     needs_expanded_search,
 )
 from .response import (
@@ -186,6 +187,15 @@ class SearchHandler(BaseHandler):
             doc_details = self._get_doc_details(
                 filenames[:max_docs], drafter_filter, year_filter,
             )
+
+            # 6.5 시간순 정렬 (2025-12-25: "언제", "이력" 등 키워드 시 최신순 정렬)
+            if is_temporal_query(query):
+                logger.info("⏰ 시간순 쿼리 감지 → 최신순 정렬 (날짜 역순)")
+                doc_details = sorted(
+                    doc_details,
+                    key=lambda x: x.get("date") or "0000-00-00",
+                    reverse=True,  # 최신순 (2024 → 2017)
+                )
 
             # 7. 응답 생성
             # "문서 전부" 요청 시 메타데이터만 표시 (성능 최적화)

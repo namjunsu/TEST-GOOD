@@ -39,6 +39,9 @@ COUNT_KEYWORDS = ["몇개", "몆개", "몇 개", "몆 개", "개수", "총", "�
 LIST_KEYWORDS = ["리스트", "목록", "보여"]
 ALL_KEYWORDS = ["전부", "모두", "모든", "전체", "all"]
 
+# 시간순 정렬 요청 키워드 (2025-12-25: 최신 이력 우선 답변)
+TEMPORAL_KEYWORDS = ["언제", "이력", "최근", "최신", "히스토리", "history"]
+
 # 명시적 리스트 키워드
 EXPLICIT_LIST_KEYWORDS = {"리스트", "목록", "전체 목록", "all"}
 
@@ -260,6 +263,29 @@ def is_all_query(query: str) -> bool:
         True면 전체 쿼리
     """
     return any(kw in query for kw in ALL_KEYWORDS)
+
+
+def is_temporal_query(query: str) -> bool:
+    """시간순 정렬이 필요한 쿼리인지 확인 (2025-12-25)
+
+    "언제", "이력", "최근" 등의 키워드가 있으면
+    검색 결과를 날짜 역순(최신순)으로 정렬해야 함
+
+    Args:
+        query: 사용자 쿼리
+
+    Returns:
+        True면 시간순 정렬 필요
+
+    Examples:
+        >>> is_temporal_query("무선 마이크는 언제 수리했어?")
+        True
+        >>> is_temporal_query("무선 마이크 최근 수리 이력")
+        True
+        >>> is_temporal_query("무선 마이크 문서 찾아줘")
+        False
+    """
+    return any(kw in query for kw in TEMPORAL_KEYWORDS)
 
 
 def needs_expanded_search(query: str, drafter_filter: Optional[str]) -> bool:

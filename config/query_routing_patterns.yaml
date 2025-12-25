@@ -28,6 +28,11 @@ priority_chain:
   - content_only      # 정밀 내용 검색 ("내용에 X 들어간 문서")
   - exists_intent     # 존재 확인 ("있어?", "있나요?")
   - cost_intent       # 비용 조회 ("총액은?", "얼마?")
+  - status_question   # 상태/장애 질문 (2025-12-25 추가)
+  - location_question # 위치/장소 질문 (2025-12-25 추가)
+  - quantity_question # 수량/개수 질문 (2025-12-25 추가)
+  - person_question   # 담당자/부서 질문 (2025-12-25 추가)
+  - temporal_question # 시간/날짜 질문 (2025-12-25 추가)
   - qa_question       # 정보 질의 ("IP 알려줘")
   - summary_intent    # 요약/정리 ("요약해줘", "정리해줘")
   - document          # 문서 내용 요청
@@ -193,6 +198,111 @@ patterns:
       - name: "info_request"
         pattern: "(?i)(알려줘|설명해|말해줘)"
         priority: 45
+
+  # --------------------------------------------------------------------------
+  # QUANTITY 모드: 수량/개수 질문 (2025-12-25 추가)
+  # --------------------------------------------------------------------------
+  quantity_question:
+    description: "수량/개수 질의 (메타데이터 우선 검색)"
+    confidence: 0.92
+    metadata_boost:
+      - field: "수량"
+        weight: 2.0
+      - field: "개수|대수"
+        weight: 1.8
+    rules:
+      # "몇 개", "몇 대", "수량"
+      - name: "quantity_interrogative"
+        pattern: "(?i)(몇|수량|개수|대수).*(개|대|EA|SET|식)"
+        priority: 95
+
+      # "수량 얼마"
+      - name: "quantity_amount"
+        pattern: "(?i)수량.*(얼마|알려|확인)"
+        priority: 90
+
+  # --------------------------------------------------------------------------
+  # TEMPORAL 모드: 시간/날짜 질문 (2025-12-25 추가)
+  # --------------------------------------------------------------------------
+  temporal_question:
+    description: "시간/날짜 질의"
+    confidence: 0.90
+    sort_preference: "date_desc"
+    metadata_boost:
+      - field: "기안일자|시행일자|도입.*년"
+        weight: 2.0
+    rules:
+      # "언제", "최근", "지난"
+      - name: "when_question"
+        pattern: "(?i)(언제|최근|지난|올해|작년|이번)"
+        priority: 85
+
+      # "X개월 전", "X년 전"
+      - name: "time_ago"
+        pattern: "(?i)([0-9]+)\\s*(개월|년|월|주|일).*전"
+        priority: 80
+
+  # --------------------------------------------------------------------------
+  # LOCATION 모드: 위치/장소 질문 (2025-12-25 추가)
+  # --------------------------------------------------------------------------
+  location_question:
+    description: "위치/장소 질의"
+    confidence: 0.93
+    metadata_boost:
+      - field: "location|장소"
+        weight: 2.5
+    rules:
+      # "어디", "장소", "위치"
+      - name: "where_question"
+        pattern: "(?i)(어디|장소|위치)"
+        priority: 90
+
+      # 구체적 장소명
+      - name: "specific_location"
+        pattern: "(?i)(광화문|상암|주조정실|부조정실|스튜디오|기계실|중계차)"
+        priority: 95
+
+  # --------------------------------------------------------------------------
+  # PERSON 모드: 담당자/부서 질문 (2025-12-25 추가)
+  # --------------------------------------------------------------------------
+  person_question:
+    description: "담당자/부서 질의"
+    confidence: 0.91
+    metadata_boost:
+      - field: "기안자|담당"
+        weight: 2.0
+      - field: "부서|팀"
+        weight: 1.8
+    rules:
+      # "누가", "담당", "기안자"
+      - name: "who_question"
+        pattern: "(?i)(누가|담당|기안자|작성자)"
+        priority: 90
+
+      # "팀", "파트", "부서"
+      - name: "department_question"
+        pattern: "(?i)(팀|파트|부서).*(어디|뭐|누구)"
+        priority: 85
+
+  # --------------------------------------------------------------------------
+  # STATUS 모드: 상태/장애 질문 (2025-12-25 추가)
+  # --------------------------------------------------------------------------
+  status_question:
+    description: "상태/장애 질의"
+    confidence: 0.94
+    doctype_boost:
+      repair: 2.0
+      replacement: 1.8
+    rules:
+      # "고장", "장애", "불량"
+      - name: "malfunction_question"
+        pattern: "(?i)(고장|장애|불량|오류|에러).*(뭐|무엇|어떤|확인)"
+        priority: 95
+
+      # "수리", "교체", "보수"
+      - name: "maintenance_question"
+        pattern: "(?i)(수리|교체|보수|정비).*(했|했어|했나|한|건)"
+        priority: 90
 
 # ============================================================================
 # 신뢰도 임계값

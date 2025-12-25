@@ -1,0 +1,297 @@
+# ============================================================================
+# 메타데이터 추출 규칙 설정 v1.0
+# ============================================================================
+# 2025-12-25: 472개 문서 분석 기반 메타데이터 추출 규칙
+#
+# 설계 원칙:
+#   1. 정규식 기반 필드 추출
+#   2. 타입별 자동 변환 (integer, float, date, string)
+#   3. 변환 함수 지원 (만원→원, 억→원)
+#   4. 필드별 우선순위 설정
+#
+# 추출 필드:
+#   - 금액: 단가, 총액, VAT 상태
+#   - 날짜: 기안일자, 시행일자, 도입년도
+#   - 담당자: 기안자, 기안부서
+#   - 장비: 제조사, 모델명, 수량
+#   - 위치: 장소, 건물
+
+schema_version: 1
+last_updated: "2025-12-25"
+
+# ============================================================================
+# 금액 추출 규칙
+# ============================================================================
+extraction_rules:
+  price:
+    # 단가 (원 단위)
+    - name: "unit_price_won"
+      pattern: "단가.*?([0-9,]+)원"
+      field: "unit_price"
+      type: "integer"
+      priority: 100
+      transform: "remove_comma"
+
+    # 총액 (원 단위)
+    - name: "total_amount_won"
+      pattern: "총액.*?([0-9,]+)원"
+      field: "total_amount"
+      type: "integer"
+      priority: 100
+      transform: "remove_comma"
+
+    # 합계 (원 단위)
+    - name: "sum_amount_won"
+      pattern: "합계.*?([0-9,]+)원"
+      field: "total_amount"
+      type: "integer"
+      priority: 95
+      transform: "remove_comma"
+
+    # 금액 (만원 단위)
+    - name: "amount_manwon"
+      pattern: "([0-9,]+)만원"
+      field: "amount_manwon"
+      type: "integer"
+      priority: 90
+      transform: "multiply_10000"
+      description: "만원 단위를 원 단위로 변환"
+
+    # 금액 (억 단위)
+    - name: "amount_eok"
+      pattern: "([0-9.]+)억"
+      field: "amount_eok"
+      type: "float"
+      priority: 90
+      transform: "multiply_100000000"
+      description: "억 단위를 원 단위로 변환"
+
+    # VAT 상태
+    - name: "vat_status"
+      pattern: "(VAT|부가세)\\s*(별도|포함|미포함)"
+      field: "vat_status"
+      type: "string"
+      priority: 80
+
+# ============================================================================
+# 날짜 추출 규칙
+# ============================================================================
+  date:
+    # 기안일자 (YYYY-MM-DD 형식)
+    - name: "draft_date"
+      pattern: "기안일자.*?([0-9]{4}-[0-9]{2}-[0-9]{2})"
+      field: "draft_date"
+      type: "date"
+      priority: 100
+
+    # 기안일자 (YYYY-MM-DD HH:mm 형식)
+    - name: "draft_datetime"
+      pattern: "기안일자.*?([0-9]{4}-[0-9]{2}-[0-9]{2}\\s+[0-9]{2}:[0-9]{2})"
+      field: "draft_datetime"
+      type: "datetime"
+      priority: 95
+
+    # 시행일자 (범위)
+    - name: "execution_date_range"
+      pattern: "시행일자.*?([0-9]{4}-[0-9]{2}-[0-9]{2}).*?~.*?([0-9]{4}-[0-9]{2}-[0-9]{2})"
+      field: "execution_date_range"
+      type: "date_range"
+      priority: 100
+      description: "시행 기간의 시작일과 종료일"
+
+    # 도입년도
+    - name: "introduction_year"
+      pattern: "도입.*?([0-9]{4})년"
+      field: "introduction_year"
+      type: "integer"
+      priority: 90
+
+    # 개국/설립 년도
+    - name: "foundation_year"
+      pattern: "(개국|설립).*?([0-9]{4})년"
+      field: "foundation_year"
+      type: "integer"
+      priority: 85
+      description: "채널A 개국: 2011년"
+
+    # 사용 기간 (N년)
+    - name: "usage_duration"
+      pattern: "([0-9]+)년\\s*(사용|경과|도입)"
+      field: "usage_years"
+      type: "integer"
+      priority: 80
+
+# ============================================================================
+# 담당자/부서 추출 규칙
+# ============================================================================
+  person:
+    # 기안자 (한글 이름)
+    - name: "drafter_name"
+      pattern: "기안자\\s*([가-힣]{2,4})"
+      field: "drafter"
+      type: "string"
+      priority: 100
+
+    # 기안자 (이름 + 소속)
+    - name: "drafter_with_dept"
+      pattern: "기안자\\s*([가-힣]{2,4})\\s*\\(([^)]+)\\)"
+      field: "drafter_full"
+      type: "string"
+      priority: 95
+      capture_groups: ["name", "department"]
+
+    # 기안부서
+    - name: "draft_department"
+      pattern: "기안부서\\s*([가-힣A-Za-z0-9\\-]+)"
+      field: "department"
+      type: "string"
+      priority: 100
+
+    # 팀-파트 형식
+    - name: "team_part_format"
+      pattern: "([가-힣]+팀)-([가-힣]+파트)"
+      field: "team_part"
+      type: "string"
+      priority: 90
+      capture_groups: ["team", "part"]
+
+# ============================================================================
+# 장비 정보 추출 규칙
+# ============================================================================
+  equipment:
+    # 제조사
+    - name: "manufacturer"
+      pattern: "제조사.*?([A-Za-z가-힣]+)"
+      field: "manufacturer"
+      type: "string"
+      priority: 95
+
+    # 모델명 (영문+숫자)
+    - name: "model_name_alphanum"
+      pattern: "모델명.*?([A-Z0-9-]+)"
+      field: "model_name"
+      type: "string"
+      priority: 100
+
+    # 수량 (개)
+    - name: "quantity_ea"
+      pattern: "수량.*?([0-9]+)\\s*개"
+      field: "quantity"
+      type: "integer"
+      priority: 100
+
+    # 수량 (대)
+    - name: "quantity_unit"
+      pattern: "수량.*?([0-9]+)\\s*대"
+      field: "quantity"
+      type: "integer"
+      priority: 100
+
+    # 수량 (EA/SET/식)
+    - name: "quantity_general"
+      pattern: "수량.*?([0-9]+)\\s*(?:EA|SET|식)"
+      field: "quantity"
+      type: "integer"
+      priority: 95
+
+    # 도입시기
+    - name: "introduction_date"
+      pattern: "도입.*?([0-9]{4})년\\s*([0-9]{1,2})월"
+      field: "introduction_date"
+      type: "string"
+      priority: 90
+      capture_groups: ["year", "month"]
+
+# ============================================================================
+# 위치 정보 추출 규칙
+# ============================================================================
+  location:
+    # 장소 (광화문/상암)
+    - name: "site_location"
+      pattern: "(광화문|상암|상암DDMC)"
+      field: "site"
+      type: "string"
+      priority: 100
+
+    # 상세 위치 (조정실/스튜디오)
+    - name: "detailed_location"
+      pattern: "(주조정실|부조정실|뉴스.*?스튜디오|멀티.*?스튜디오|오픈.*?스튜디오|기계실|서버실)"
+      field: "location"
+      type: "string"
+      priority: 95
+
+    # 중계차
+    - name: "ob_van"
+      pattern: "중계차\\s*([0-9]+호차|[가-힣0-9]+)"
+      field: "ob_van"
+      type: "string"
+      priority: 90
+
+    # 층수
+    - name: "floor_number"
+      pattern: "([0-9]+)층"
+      field: "floor"
+      type: "integer"
+      priority: 80
+
+# ============================================================================
+# 문서 분류 정보 추출
+# ============================================================================
+  document_type:
+    # 문서 유형 (구매/수리/교체)
+    - name: "doc_type_purchase"
+      pattern: "(구매|도입)\\s*(검토|신청|건)"
+      field: "doc_type"
+      type: "string"
+      priority: 95
+      default_value: "purchase"
+
+    - name: "doc_type_repair"
+      pattern: "(수리|고장|장애)\\s*(건|요청|경위)"
+      field: "doc_type"
+      type: "string"
+      priority: 95
+      default_value: "repair"
+
+    - name: "doc_type_replacement"
+      pattern: "(교체|리플레이스|업그레이드)\\s*(검토|건)"
+      field: "doc_type"
+      type: "string"
+      priority: 95
+      default_value: "replacement"
+
+# ============================================================================
+# 변환 함수 정의
+# ============================================================================
+transform_functions:
+  remove_comma:
+    description: "콤마 제거 (예: 1,000,000 → 1000000)"
+    example: "3,434,000 → 3434000"
+
+  multiply_10000:
+    description: "만원 단위를 원 단위로 변환"
+    example: "3,434 → 34,340,000"
+
+  multiply_100000000:
+    description: "억 단위를 원 단위로 변환"
+    example: "26.5 → 2,650,000,000"
+
+# ============================================================================
+# 추출 설정
+# ============================================================================
+extraction_settings:
+  # 동일 필드에 여러 값이 추출될 경우 우선순위 기준 선택
+  conflict_resolution: "highest_priority"
+
+  # 추출 실패 시 기본값 사용 여부
+  use_default_on_failure: true
+
+  # 정규식 매칭 타임아웃 (초)
+  regex_timeout: 2
+
+  # 추출된 메타데이터 캐싱 여부
+  cache_metadata: true
+  cache_ttl: 3600  # 1시간
+
+  # 로깅 레벨
+  log_level: "INFO"  # DEBUG | INFO | WARNING | ERROR

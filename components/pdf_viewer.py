@@ -351,6 +351,7 @@ class PDFViewer:
                             disabled=(current_page == 1),
                         ):
                             st.session_state[page_key] = max(1, current_page - 1)
+                            st.rerun()  # 2025-12-26: UI 갱신 (버튼 클릭 반영)
 
                     with col3:
                         st.markdown(
@@ -365,6 +366,7 @@ class PDFViewer:
                             disabled=(current_page == total_pages),
                         ):
                             st.session_state[page_key] = min(total_pages, current_page + 1)
+                            st.rerun()  # 2025-12-26: UI 갱신 (버튼 클릭 반영)
 
                 return True
 

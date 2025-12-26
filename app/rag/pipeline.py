@@ -477,6 +477,27 @@ class RAGPipeline:
         def _notify(step: str, message: str) -> None:
             logger.info(f"[{step.upper()}] {message}")
 
+        # 대화 로깅 헬퍼 (2025-12-26 추가)
+        import time
+        start_time = time.time()
+
+        def _log_and_return(result: dict, mode: str) -> dict:
+            """결과 반환 전 대화 로깅"""
+            try:
+                elapsed_ms = int((time.time() - start_time) * 1000)
+                conv_logger = get_conversation_logger()
+                conv_logger.log(
+                    query=query,  # 원본 쿼리 사용 (actual_query가 아닌)
+                    answer=result.get("text", ""),
+                    mode=mode,
+                    sources=result.get("evidence") or result.get("citations"),
+                    confidence=0.0,  # route_decision이 없을 수 있음
+                    latency_ms=elapsed_ms,
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ 대화 로깅 실패 (무시): {e}")
+            return result
+
         # 🎯 조기 라우팅: 캐시 키 생성을 위해 모드 먼저 결정
         # 2025-12-23: 동일 쿼리라도 모드에 따라 다른 결과가 나올 수 있음
         # 예: "2025년 문서" → search 모드 vs year_summary 모드
@@ -494,7 +515,7 @@ class RAGPipeline:
             logger.info(f"🎯 Memory Cache HIT! mode={route_mode}, query: {query[:50]}...")
             if "status" in cached_result:
                 cached_result["status"]["from_cache"] = "memory"
-            return cached_result
+            return _log_and_return(cached_result, route_mode)
 
         # Tier 2: 영구 캐시 확인 (서버 재시작 후에도 유지)
         cached_result = get_cached_result_persistent(cache_key)
@@ -504,7 +525,7 @@ class RAGPipeline:
             cache_query_result(cache_key, cached_result)
             if "status" in cached_result:
                 cached_result["status"]["from_cache"] = "persistent"
-            return cached_result
+            return _log_and_return(cached_result, route_mode)
 
         # 🚀 조기 단락: 선택된 문서가 있으면 즉시 DOCUMENT 모드로 처리
         # 검색·라우팅·압축 단계 완전 생략 → 성능 향상 (20~60% 지연시간 감소)
@@ -530,7 +551,7 @@ class RAGPipeline:
             cache_query_result(cache_key, result)
             cache_query_result_persistent(cache_key, result)
 
-            return result
+            return _log_and_return(result, "document")
 
         # 🔥 CRITICAL: 기안자/날짜 검색은 QuickFixRAG에 위임 (전문 로직 보유)
         if hasattr(self.generator, "rag"):
@@ -623,7 +644,7 @@ class RAGPipeline:
                 _notify("generate", "합계 계산 중...")
                 result = self._answer_cost_sum(actual_query)
                 _notify("complete", "완료")
-                return result
+                return _log_and_return(result, "cost")
 
             # 📄 DOCUMENT 모드: 문서 내용/요약 (통합: PREVIEW + SUMMARY)
             if route_decision.mode == QueryMode.DOCUMENT:
@@ -631,21 +652,21 @@ class RAGPipeline:
                 _notify("generate", "AI 답변 생성 중...")
                 result = self._answer_document(actual_query, selected_filename=selected_filename)
                 _notify("complete", "완료")
-                return result
+                return _log_and_return(result, "document")
 
             # 🔍 SEARCH 모드: 문서 검색 (통합: LIST + SEARCH + LIST_FIRST)
             if route_decision.mode == QueryMode.SEARCH:
                 _notify("search", "문서 검색 중...")
                 result = self._answer_search(actual_query)
                 _notify("complete", "완료")
-                return result
+                return _log_and_return(result, "search")
 
             # 🎯 SEARCH_CONTENT_ONLY 모드: 정밀 내용 검색 (2025-11-19 추가)
             if route_decision.mode == QueryMode.SEARCH_CONTENT_ONLY:
                 _notify("search", "정밀 검색 중...")
                 result = self._answer_search_content_only(actual_query)
                 _notify("complete", "완료")
-                return result
+                return _log_and_return(result, "search_content_only")
 
             # 📊 YEAR_SUMMARY 모드: 연도별 다중 문서 요약 (2025-12-23 추가)
             if route_decision.mode == QueryMode.YEAR_SUMMARY:
@@ -653,7 +674,7 @@ class RAGPipeline:
                 _notify("generate", "요약 생성 중...")
                 result = self._answer_year_summary(actual_query, route_decision.year, route_decision.drafter)
                 _notify("complete", "완료")
-                return result
+                return _log_and_return(result, "year_summary")
 
             # 🔍 디버깅: 실제 pattern matching 대상 로깅
             logger.info(f"🔍 Pattern matching 대상 쿼리: '{actual_query[:100]}'")
@@ -840,7 +861,7 @@ class RAGPipeline:
             cache_query_result(cache_key, result)
             cache_query_result_persistent(cache_key, result)
 
-            return result
+            return _log_and_return(result, "qa")
 
         error_msg = ERROR_MESSAGES.get(
             ErrorCode.E_GENERATE, "답변 생성 중 오류가 발생했다.",
@@ -853,12 +874,13 @@ class RAGPipeline:
             f'status=ERROR | error="{response.error}"',
         )
 
-        return {
+        error_result = {
             "text": error_msg,
             "citations": [],
             "evidence": [],
             "status": {"retrieved_count": 0, "selected_count": 0, "found": False},
         }
+        return _log_and_return(error_result, "error")
 
     def answer_text(self, query: str) -> str:
         """답변 텍스트만 반환 (하위 호환성)

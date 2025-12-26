@@ -672,10 +672,10 @@ class RAGPipeline:
             logger.info(f"🔍 Pattern matching 대상 쿼리: '{actual_query[:100]}'")
 
             # 📊 2025-12-26: 표 정리 요청 감지 (top_k 확대 + 프롬프트 강화)
-            # "표로 다 보여줘", "표로 정리해서 전부 알려줘" 등
+            # "표로 다 보여줘", "표로 알려줘", "표로 정리해서 전부 알려줘" 등
             table_request_detected = bool(
                 re.search(r"표(로|를)?", actual_query) and
-                any(kw in actual_query for kw in ["다", "전부", "모두", "전체", "모든"])
+                any(kw in actual_query for kw in ["다", "전부", "모두", "전체", "모든", "알려", "보여", "정리"])
             )
 
             enhanced_query = actual_query

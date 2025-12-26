@@ -4,9 +4,11 @@ BM25 기반 문서 간 유사도를 계산하고 유사 문서를 추천합니�
 sentence-transformers 없이 기존 BM25 인덱스를 활용합니다.
 
 2025-12-08: 초기 구현
+2025-12-26: 메타데이터 기반 필터링 강화 (카테고리, 작성자, 날짜 유사도)
 """
 
 import os
+from datetime import datetime
 from typing import Any, Optional
 
 from app.core.logging import get_logger
@@ -97,20 +99,27 @@ class DocumentSimilarity:
                 # 점수 정규화 (0-1)
                 score = result.get("score", 0)
                 divisor = DocumentSimilarityConfig.SCORE_NORMALIZE_DIVISOR
-                normalized_score = min(1.0, score / divisor) if score > 1 else score
+                base_score = min(1.0, score / divisor) if score > 1 else score
 
-                if normalized_score >= self.min_similarity:
-                    # 문서 메타데이터 가져오기
-                    similar_doc = self._db.get_by_filename(result_id)
-                    if similar_doc:
-                        similar_docs.append({
-                            "filename": result_id,
-                            "title": similar_doc.get("title", result_id),
-                            "similarity": round(normalized_score, 3),
-                            "date": similar_doc.get("display_date") or similar_doc.get("date", ""),
-                            "drafter": similar_doc.get("drafter", ""),
-                            "category": similar_doc.get("category", ""),
-                        })
+                # 문서 메타데이터 가져오기
+                similar_doc = self._db.get_by_filename(result_id)
+                if not similar_doc:
+                    continue
+
+                # 메타데이터 기반 유사도 보정 (2025-12-26)
+                boosted_score = self._boost_similarity_with_metadata(
+                    base_score, doc, similar_doc
+                )
+
+                if boosted_score >= self.min_similarity:
+                    similar_docs.append({
+                        "filename": result_id,
+                        "title": similar_doc.get("title", result_id),
+                        "similarity": round(boosted_score, 3),
+                        "date": similar_doc.get("display_date") or similar_doc.get("date", ""),
+                        "drafter": similar_doc.get("drafter", ""),
+                        "category": similar_doc.get("category", ""),
+                    })
 
                 if len(similar_docs) >= top_k:
                     break
@@ -156,6 +165,13 @@ class DocumentSimilarity:
             return []
 
         try:
+            # 기준 문서들의 메타데이터 수집 (카테고리 필터링용)
+            reference_metadata = []
+            for ref_id in reference_docs[:3]:  # 최대 3개만 참조
+                ref_meta = self._db.get_by_filename(ref_id)
+                if ref_meta:
+                    reference_metadata.append(ref_meta)
+
             search_buffer = DocumentSimilarityConfig.SEARCH_BUFFER
             search_results = self._retriever.search(
                 query, top_k=top_k + len(reference_docs) + search_buffer,
@@ -174,20 +190,31 @@ class DocumentSimilarity:
                 # 점수 정규화 (0-1)
                 score = result.get("score", 0)
                 divisor = DocumentSimilarityConfig.SCORE_NORMALIZE_DIVISOR
-                normalized_score = min(1.0, score / divisor) if score > 1 else score
+                base_score = min(1.0, score / divisor) if score > 1 else score
 
-                if normalized_score >= self.min_similarity:
-                    # 문서 메타데이터 가져오기
-                    similar_doc = self._db.get_by_filename(result_id)
-                    if similar_doc:
-                        similar_docs.append({
-                            "filename": result_id,
-                            "title": similar_doc.get("title", result_id),
-                            "similarity": round(normalized_score, 3),
-                            "date": similar_doc.get("display_date") or similar_doc.get("date", ""),
-                            "drafter": similar_doc.get("drafter", ""),
-                            "category": similar_doc.get("category", ""),
-                        })
+                # 문서 메타데이터 가져오기
+                similar_doc = self._db.get_by_filename(result_id)
+                if not similar_doc:
+                    continue
+
+                # 메타데이터 기반 유사도 보정 (2025-12-26)
+                # 기준: 첫 번째 reference 문서와 비교
+                if reference_metadata:
+                    boosted_score = self._boost_similarity_with_metadata(
+                        base_score, reference_metadata[0], similar_doc
+                    )
+                else:
+                    boosted_score = base_score
+
+                if boosted_score >= self.min_similarity:
+                    similar_docs.append({
+                        "filename": result_id,
+                        "title": similar_doc.get("title", result_id),
+                        "similarity": round(boosted_score, 3),
+                        "date": similar_doc.get("display_date") or similar_doc.get("date", ""),
+                        "drafter": similar_doc.get("drafter", ""),
+                        "category": similar_doc.get("category", ""),
+                    })
 
                 if len(similar_docs) >= top_k:
                     break
@@ -242,6 +269,76 @@ class DocumentSimilarity:
             parts.extend(words)
 
         return " ".join(parts)
+
+    def _boost_similarity_with_metadata(
+        self,
+        base_score: float,
+        ref_doc: dict,
+        candidate_doc: dict,
+    ) -> float:
+        """메타데이터 기반 유사도 보정
+
+        Args:
+            base_score: BM25 기반 기본 점수 (0-1)
+            ref_doc: 기준 문서 메타데이터
+            candidate_doc: 후보 문서 메타데이터
+
+        Returns:
+            보정된 유사도 점수 (0-1, 최대 1.0)
+        """
+        boosted_score = base_score
+        bonuses_applied = []
+
+        # 1. 카테고리 일치 보너스
+        ref_category = ref_doc.get("category", "")
+        cand_category = candidate_doc.get("category", "")
+        if ref_category and cand_category and ref_category == cand_category:
+            boosted_score += DocumentSimilarityConfig.CATEGORY_MATCH_BONUS
+            bonuses_applied.append(f"category({ref_category})")
+
+        # 2. 작성자 일치 보너스
+        ref_drafter = ref_doc.get("drafter", "")
+        cand_drafter = candidate_doc.get("drafter", "")
+        if ref_drafter and cand_drafter and ref_drafter == cand_drafter:
+            boosted_score += DocumentSimilarityConfig.DRAFTER_MATCH_BONUS
+            bonuses_applied.append(f"drafter({ref_drafter})")
+
+        # 3. 날짜 근접성 보너스 (1년 이내)
+        ref_date = self._parse_date(ref_doc.get("date", ""))
+        cand_date = self._parse_date(candidate_doc.get("date", ""))
+        if ref_date and cand_date:
+            days_diff = abs((ref_date - cand_date).days)
+            if days_diff <= 365:  # 1년 이내
+                boosted_score += DocumentSimilarityConfig.DATE_PROXIMITY_BONUS
+                bonuses_applied.append(f"date({days_diff}d)")
+
+        # 로깅 (보너스가 적용된 경우만)
+        if bonuses_applied and boosted_score > base_score:
+            cand_filename = candidate_doc.get("filename", "")[:40]
+            logger.debug(
+                f"📊 유사도 보정: {cand_filename}... "
+                f"{base_score:.2f} → {min(1.0, boosted_score):.2f} "
+                f"[{', '.join(bonuses_applied)}]"
+            )
+
+        # 최대 1.0으로 제한
+        return min(1.0, boosted_score)
+
+    def _parse_date(self, date_str: str) -> Optional[datetime]:
+        """날짜 문자열을 datetime으로 변환
+
+        Args:
+            date_str: 날짜 문자열 (YYYY-MM-DD 형식)
+
+        Returns:
+            datetime 객체 또는 None
+        """
+        if not date_str:
+            return None
+        try:
+            return datetime.strptime(date_str, "%Y-%m-%d")
+        except (ValueError, TypeError):
+            return None
 
     def clear_cache(self):
         """캐시 초기화"""

@@ -315,10 +315,15 @@ class AnchorScorerConfig:
 
 @dataclass(frozen=True)
 class DocumentSimilarityConfig:
-    """문서 유사도 관련 상수 (document_similarity.py용)"""
+    """문서 유사도 관련 상수 (document_similarity.py용)
+
+    2025-12-26: 유사도 추천 품질 개선
+    - 임계값 상향 (0.3 → 0.5)
+    - 메타데이터 기반 필터링 강화
+    """
 
     # 기본 설정
-    DEFAULT_MIN_SIMILARITY: float = 0.3
+    DEFAULT_MIN_SIMILARITY: float = 0.5  # 0.3 → 0.5 (50% 미만 제외)
     DEFAULT_MAX_RESULTS: int = 5
 
     # 검색 설정
@@ -328,6 +333,11 @@ class DocumentSimilarityConfig:
     # 키워드 추출
     TEXT_PREVIEW_LENGTH: int = 200
     MAX_KEYWORD_COUNT: int = 5
+
+    # 메타데이터 유사도 가중치 (2025-12-26 추가)
+    CATEGORY_MATCH_BONUS: float = 0.15  # 같은 카테고리 보너스
+    DRAFTER_MATCH_BONUS: float = 0.10   # 같은 작성자 보너스
+    DATE_PROXIMITY_BONUS: float = 0.05  # 날짜 근접성 보너스 (1년 이내)
 
 
 @dataclass(frozen=True)

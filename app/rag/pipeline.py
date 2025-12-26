@@ -671,11 +671,32 @@ class RAGPipeline:
             # 🔍 디버깅: 실제 pattern matching 대상 로깅
             logger.info(f"🔍 Pattern matching 대상 쿼리: '{actual_query[:100]}'")
 
+            # 📊 2025-12-26: 표 정리 요청 감지 (top_k 확대 + 프롬프트 강화)
+            # "표로 다 보여줘", "표로 정리해서 전부 알려줘" 등
+            table_request_detected = bool(
+                re.search(r"표(로|를)?", actual_query) and
+                any(kw in actual_query for kw in ["다", "전부", "모두", "전체", "모든"])
+            )
+
+            enhanced_query = actual_query
+            if table_request_detected:
+                logger.info("📊 표 정리 요청 감지: top_k 확대 (5 → 20), 프롬프트 강화")
+                top_k = 20  # 검색 범위 확대
+                # 지시사항을 쿼리에 명시적으로 포함 (LLM이 무시하지 못하도록)
+                enhanced_query = f"""{actual_query}
+
+[중요 지시사항]
+- 검색된 모든 문서의 정보를 빠짐없이 표에 포함할 것
+- 각 문서당 1개 행 (요약/생략 금지)
+- 표 컬럼: 날짜 | 문서명 | 주요내용 | 상태/결과
+- 원본 데이터 그대로 사용 (LLM이 재작성/추론 금지)
+- 표 아래에 '총 N개 문서' 명시"""
+
             # ✅ P0: 파일명 직접 언급 패턴 감지 (레거시 호환, PREVIEW 모드 외)
             # 🔧 QA 모드도 actual_query로 검색 (대화 컨텍스트 오염 방지)
             _notify("search", "관련 문서 검색 중...")
             _notify("generate", "AI 답변 생성 중...")
-            response = self.query(actual_query, top_k=top_k or PipelineConfig.DEFAULT_TOP_K, selected_filename=selected_filename)
+            response = self.query(enhanced_query, top_k=top_k or PipelineConfig.DEFAULT_TOP_K, selected_filename=selected_filename)
             _notify("complete", "완료")
 
             if response.success:

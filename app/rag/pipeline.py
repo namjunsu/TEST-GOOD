@@ -751,21 +751,8 @@ class RAGPipeline:
                 cache_query_result(cache_key, result)
                 cache_query_result_persistent(cache_key, result)
 
-                # 💬 대화 로깅
-                try:
-                    conv_logger = get_conversation_logger()
-                    conv_logger.log(
-                        query=actual_query,
-                        answer=response.answer,
-                        mode=route_decision.mode.value if route_decision else "qa",
-                        sources=evidence,
-                        confidence=route_decision.confidence if route_decision else 0.0,
-                        latency_ms=total_ms,
-                    )
-                except Exception as e:
-                    logger.warning(f"⚠️ 대화 로깅 실패 (무시): {e}")
-
-                return result
+                # 대화 로깅은 _log_and_return에서 처리
+                return _log_and_return(result, route_decision.mode.value if route_decision else "qa", actual_query)
 
             # 실패 시 에러 응답
             return {
@@ -1029,7 +1016,9 @@ class RAGPipeline:
             summary_header = f"## {year}년 문서 현황\n"
             summary_header += f"총 **{doc_count}개** 문서\n\n"
             summary_header += "### 카테고리별 분포\n"
-            for doctype, docs in top_categories:
+            # 2025-12-26: 전체 categories 표시 (top 5 → all categories)
+            all_categories_sorted = sorted(categories.items(), key=lambda x: -len(x[1]))
+            for doctype, docs in all_categories_sorted:
                 summary_header += f"- {doctype}: {len(docs)}건\n"
 
             # 2부: LLM 요약 (설명 역할만, context는 파라미터로만 전달)

@@ -1788,7 +1788,7 @@ class VllmLLM(BaseRAGLLM):
 
         # 2025-12-23: 동적 토큰 우선, 없으면 config 기본값
         effective_max_tokens = max_tokens if max_tokens is not None else self.config.max_tokens
-        self.logger.info(f"🎯 vLLM generate_response: max_tokens={effective_max_tokens} (requested={max_tokens})")
+        self.logger.info(f"🎯 vLLM generate_response: max_tokens={effective_max_tokens} (requested={max_tokens}, config.default={self.config.max_tokens})")
 
         try:
             from vllm import SamplingParams
@@ -1816,6 +1816,9 @@ class VllmLLM(BaseRAGLLM):
                 top_k=self.config.top_k,
                 repetition_penalty=self.config.repeat_penalty,
             )
+
+            # 2025-12-26: vLLM 호출 직전 최종 확인 로깅
+            self.logger.info(f"🚀 vLLM 호출 - SamplingParams(max_tokens={effective_max_tokens}, temperature={self.config.temperature})")
 
             # 추론 실행
             outputs = self.llm.chat(messages, sampling_params=sampling_params)

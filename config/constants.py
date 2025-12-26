@@ -967,12 +967,20 @@ def get_search_config() -> dict:
 
 
 def get_llm_config() -> dict:
-    """LLMConfig를 환경변수로 오버라이드"""
+    """LLMConfig를 환경변수로 오버라이드
+
+    2025-12-26: 모든 모드별 max_tokens 포함 (YEAR_SUMMARY_MAX_TOKENS 등 누락 수정)
+    환경변수 키 네이밍 통일: *_MAX_TOKENS 형식
+    """
     return {
-        "max_tokens_detailed": int(os.getenv("LLM_MAX_TOKENS_DETAILED", LLMConfig.MAX_TOKENS_DETAILED)),
-        "max_tokens_section": int(os.getenv("LLM_MAX_TOKENS_SECTION", LLMConfig.MAX_TOKENS_SECTION)),
-        "max_tokens_summary": int(os.getenv("LLM_MAX_TOKENS_SUMMARY", LLMConfig.MAX_TOKENS_SUMMARY)),
-        "max_tokens_qa": int(os.getenv("LLM_MAX_TOKENS_QA", LLMConfig.MAX_TOKENS_QA)),
+        "max_tokens_chat": int(os.getenv("CHAT_MAX_TOKENS", LLMConfig.MAX_TOKENS_CHAT)),
+        "max_tokens_rag": int(os.getenv("RAG_MAX_TOKENS", LLMConfig.MAX_TOKENS_RAG)),
+        "max_tokens_detailed": int(os.getenv("DETAILED_MAX_TOKENS", LLMConfig.MAX_TOKENS_DETAILED)),
+        "max_tokens_summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", LLMConfig.MAX_TOKENS_SUMMARIZE)),
+        "max_tokens_summary": int(os.getenv("SUMMARY_MAX_TOKENS", LLMConfig.MAX_TOKENS_SUMMARY)),
+        "max_tokens_year_summary": int(os.getenv("YEAR_SUMMARY_MAX_TOKENS", LLMConfig.MAX_TOKENS_YEAR_SUMMARY)),
+        "max_tokens_section": int(os.getenv("SECTION_MAX_TOKENS", LLMConfig.MAX_TOKENS_SECTION)),
+        "max_tokens_qa": int(os.getenv("QA_MAX_TOKENS", LLMConfig.MAX_TOKENS_QA)),
         "default_temperature": float(os.getenv("LLM_TEMPERATURE", LLMConfig.DEFAULT_TEMPERATURE)),
     }
 

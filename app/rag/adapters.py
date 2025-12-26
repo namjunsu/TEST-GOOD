@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from app.core.logging import get_logger
+from config.constants import LLMConfig
 
 logger = get_logger(__name__)
 
@@ -22,12 +23,12 @@ logger = get_logger(__name__)
 # ============================================================================
 
 MODE_TOKEN_BUDGETS: dict[str, int] = {
-    "chat": int(os.getenv("CHAT_MAX_TOKENS", "1024")),
-    "rag": int(os.getenv("RAG_MAX_TOKENS", "4096")),  # 3072 → 4096 (H100)
-    "detailed": int(os.getenv("DETAILED_MAX_TOKENS", "8192")),  # 자세히 모드: H100 최대 활용
-    "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", "2048")),
-    "summary": int(os.getenv("SUMMARY_MAX_TOKENS", "2048")),
-    "year_summary": int(os.getenv("YEAR_SUMMARY_MAX_TOKENS", "4096")),  # 다중 문서 요약용
+    "chat": int(os.getenv("CHAT_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_CHAT))),
+    "rag": int(os.getenv("RAG_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_RAG))),  # 3072 → 4096 (H100)
+    "detailed": int(os.getenv("DETAILED_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_DETAILED))),  # 자세히 모드: H100 최대 활용
+    "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_SUMMARIZE))),
+    "summary": int(os.getenv("SUMMARY_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_SUMMARY))),
+    "year_summary": int(os.getenv("YEAR_SUMMARY_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_YEAR_SUMMARY))),  # 4096 → 1024 (2025-12-26)
 }
 
 RAG_MAX_CONTEXT_CHARS: int = int(os.getenv("RAG_MAX_CONTEXT_CHARS", "6000"))

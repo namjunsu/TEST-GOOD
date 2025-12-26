@@ -89,7 +89,7 @@ class LLMConfig:
     MAX_TOKENS_SUMMARY: int = 2048    # LLM_MAX_TOKENS_SUMMARY (요약 라우팅)
     MAX_TOKENS_YEAR_SUMMARY: int = 1024  # YEAR_SUMMARY_MAX_TOKENS (다중 문서 요약, 4096 → 1024)
     MAX_TOKENS_SECTION: int = 900     # 섹션 추출용
-    MAX_TOKENS_QA: int = 800          # Q&A 모드
+    MAX_TOKENS_QA: int = 2048         # Q&A 모드 (800 → 2048, 신뢰성 최우선)
 
     # 기본값
     DEFAULT_MAX_TOKENS: int = 4096    # LLM_MAX_TOKENS 기본값
@@ -902,8 +902,8 @@ class PipelineConfig:
     SNIPPET_PREVIEW_LENGTH: int = 500        # 스니펫 미리보기 길이
     FALLBACK_SNIPPET_LENGTH: int = 1000      # 폴백 스니펫 길이
 
-    # 기본 검색 설정 (H100 환경 최적화)
-    DEFAULT_TOP_K: int = 10                  # query() 기본 top_k (더 많은 문서 검색)
+    # 기본 검색 설정 (신뢰성 최우선 2025-12-26)
+    DEFAULT_TOP_K: int = 20                  # query() 기본 top_k (10 → 20, 정보 누락 최소화)
     DEFAULT_COMPRESSION_RATIO: float = 0.7   # 기본 압축 비율
 
     # 로그 미리보기 설정

@@ -166,6 +166,39 @@ class PersistentCache:
 
     # ---- 핵심 API --------------------------------------------------------------
 
+    def _is_error_response(self, result: Any) -> bool:
+        """오류 응답인지 확인
+
+        Args:
+            result: 검사할 결과 객체
+
+        Returns:
+            오류 응답이면 True
+        """
+        # 문자열 오류 메시지 감지
+        if isinstance(result, str):
+            error_markers = ["[E_GENERATE]", "[E_RETRIEVE]", "[E_ROUTE]", "ERROR", "Exception"]
+            return any(marker in result for marker in error_markers)
+
+        # dict 형태의 응답 확인
+        if isinstance(result, dict):
+            # text 필드에 오류 메시지가 있는 경우
+            text = result.get("text", "")
+            if isinstance(text, str):
+                error_markers = ["[E_GENERATE]", "[E_RETRIEVE]", "[E_ROUTE]"]
+                if any(marker in text for marker in error_markers):
+                    return True
+
+            # error 필드가 있는 경우
+            if result.get("error"):
+                return True
+
+            # documents가 비어있고 text도 짧은 경우 (실패 가능성)
+            if not result.get("documents") and len(str(result.get("text", ""))) < 20:
+                return True
+
+        return False
+
     def get(self, query: str, mode: str | None = None) -> Optional[Any]:
         """캐시된 결과 조회
 
@@ -237,6 +270,11 @@ class PersistentCache:
             result: 캐시할 결과
             mode: 검색 모드
         """
+        # 오류 응답은 캐시하지 않음 (LLM 준비 전 오류 등)
+        if self._is_error_response(result):
+            logger.warning(f"⚠️ 오류 응답은 캐시하지 않음: {query[:50]}...")
+            return
+
         key = self._generate_key(query, mode)
         now = time.time()
         blob = _dumps(result, compress=self.compress)

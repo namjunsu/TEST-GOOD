@@ -994,12 +994,19 @@ class RAGPipeline:
                 categories[doctype].append(dict(row))
 
             # LLM에 전달할 컨텍스트 생성 (요약용)
+            # 2025-12-26: 컨텍스트 과다 방지 - 상위 카테고리만 표시
+            MAX_CATEGORIES_DISPLAY = 5  # 상위 5개 카테고리만
+            DOCS_PER_CATEGORY = 5       # 각 카테고리당 5개 문서만
+
             header = f"## {year}년 {drafter}님 문서 현황 (총 {doc_count}개)\n" if drafter else f"## {year}년 문서 현황 (총 {doc_count}개)\n"
             context_parts = [header]
 
-            for doctype, docs in sorted(categories.items(), key=lambda x: -len(x[1])):
+            # 상위 카테고리만 선택 (문서 수 기준 내림차순)
+            top_categories = sorted(categories.items(), key=lambda x: -len(x[1]))[:MAX_CATEGORIES_DISPLAY]
+
+            for doctype, docs in top_categories:
                 context_parts.append(f"\n### {doctype} ({len(docs)}건)")
-                for doc in docs[:10]:  # 각 카테고리당 최대 10개
+                for doc in docs[:DOCS_PER_CATEGORY]:  # 각 카테고리당 제한
                     title = doc["title"] or doc["filename"]
                     date = doc["date"] or "날짜 없음"
                     doc_drafter = doc["drafter"] or "기안자 없음"
@@ -1008,6 +1015,12 @@ class RAGPipeline:
                     context_parts.append(f"- [{date}] {title[:50]} (작성: {doc_drafter}){amount_str}")
 
             context = "\n".join(context_parts)
+
+            # 안전장치: 비정상적으로 긴 컨텍스트 제한 (버그 방어)
+            MAX_CONTEXT_CHARS = 10000
+            if len(context) > MAX_CONTEXT_CHARS:
+                logger.warning(f"⚠️ YEAR_SUMMARY 컨텍스트 과다 ({len(context)}자 → {MAX_CONTEXT_CHARS}자 제한)")
+                context = context[:MAX_CONTEXT_CHARS] + "\n... (이하 생략)"
 
             # LLM으로 요약 생성 (자연스러운 프롬프트)
             subject = f"{year}년 {drafter}님" if drafter else f"{year}년"

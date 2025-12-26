@@ -87,7 +87,7 @@ class LLMConfig:
     MAX_TOKENS_DETAILED: int = 8192   # DETAILED_MAX_TOKENS (자세히 모드, H100 최대 활용)
     MAX_TOKENS_SUMMARIZE: int = 2048  # SUMMARIZE_MAX_TOKENS (요약)
     MAX_TOKENS_SUMMARY: int = 2048    # LLM_MAX_TOKENS_SUMMARY (요약 라우팅)
-    MAX_TOKENS_YEAR_SUMMARY: int = 4096  # YEAR_SUMMARY_MAX_TOKENS (다중 문서 요약)
+    MAX_TOKENS_YEAR_SUMMARY: int = 1024  # YEAR_SUMMARY_MAX_TOKENS (다중 문서 요약, 4096 → 1024)
     MAX_TOKENS_SECTION: int = 900     # 섹션 추출용
     MAX_TOKENS_QA: int = 800          # Q&A 모드
 

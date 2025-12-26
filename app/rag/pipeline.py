@@ -477,17 +477,23 @@ class RAGPipeline:
         def _notify(step: str, message: str) -> None:
             logger.info(f"[{step.upper()}] {message}")
 
-        # 대화 로깅 헬퍼 (2025-12-26 추가)
+        # 대화 로깅 헬퍼 (2025-12-26 수정: actual_query 사용)
         import time
         start_time = time.time()
 
-        def _log_and_return(result: dict, mode: str) -> dict:
-            """결과 반환 전 대화 로깅"""
+        def _log_and_return(result: dict, mode: str, actual_query: str) -> dict:
+            """결과 반환 전 대화 로깅
+
+            Args:
+                result: 응답 딕셔너리
+                mode: 처리 모드
+                actual_query: 정제된 쿼리 (UI 메타데이터 제거 + "현재 질문:" 분리)
+            """
             try:
                 elapsed_ms = int((time.time() - start_time) * 1000)
                 conv_logger = get_conversation_logger()
                 conv_logger.log(
-                    query=query,  # 원본 쿼리 사용 (actual_query가 아닌)
+                    query=actual_query,  # 정제된 쿼리 사용 (query → actual_query)
                     answer=result.get("text", ""),
                     mode=mode,
                     sources=result.get("evidence") or result.get("citations"),
@@ -498,34 +504,42 @@ class RAGPipeline:
                 logger.warning(f"⚠️ 대화 로깅 실패 (무시): {e}")
             return result
 
-        # 🎯 조기 라우팅: 캐시 키 생성을 위해 모드 먼저 결정
+        # 2025-12-26: Phase 2-3 - 쿼리 정제를 최상단에서 먼저 수행 (라우팅/캐시 키 통일)
+        actual_query = query
+        if "현재 질문:" in query:
+            parts = query.split("현재 질문:")
+            if len(parts) > 1:
+                actual_query = parts[-1].strip()
+        actual_query = clean_ui_metadata(actual_query)
+
+        # 🎯 조기 라우팅: 정제된 쿼리로 모드 결정
         # 2025-12-23: 동일 쿼리라도 모드에 따라 다른 결과가 나올 수 있음
         # 예: "2025년 문서" → search 모드 vs year_summary 모드
         _notify("routing", "쿼리 분석 중...")
-        early_route = self.query_router.classify_mode(query)
+        early_route = self.query_router.classify_mode(actual_query)  # query → actual_query
         route_mode = early_route.mode.value
         _notify("routing", f"모드 결정: {route_mode}")
 
-        # ✨ 2-tier Cache check - 메모리 캐시 → 영구 캐시
-        cache_key = build_answer_cache_key(query, selected_filename, mode=route_mode)
+        # ✨ 2-tier Cache check - 메모리 캐시 → 영구 캐시 (정제된 쿼리로 키 생성)
+        cache_key = build_answer_cache_key(actual_query, selected_filename, mode=route_mode)
 
         # Tier 1: 메모리 캐시 확인 (가장 빠름)
         cached_result = get_cached_result(cache_key)
         if cached_result:
-            logger.info(f"🎯 Memory Cache HIT! mode={route_mode}, query: {query[:50]}...")
+            logger.info(f"🎯 Memory Cache HIT! mode={route_mode}, query: {actual_query[:50]}...")
             if "status" in cached_result:
                 cached_result["status"]["from_cache"] = "memory"
-            return _log_and_return(cached_result, route_mode)
+            return _log_and_return(cached_result, route_mode, actual_query)
 
         # Tier 2: 영구 캐시 확인 (서버 재시작 후에도 유지)
         cached_result = get_cached_result_persistent(cache_key)
         if cached_result:
-            logger.info(f"💾 Persistent Cache HIT! mode={route_mode}, query: {query[:50]}...")
+            logger.info(f"💾 Persistent Cache HIT! mode={route_mode}, query: {actual_query[:50]}...")
             # 영구 캐시에서 가져온 결과를 메모리 캐시에도 저장 (다음 접근을 위해)
             cache_query_result(cache_key, cached_result)
             if "status" in cached_result:
                 cached_result["status"]["from_cache"] = "persistent"
-            return _log_and_return(cached_result, route_mode)
+            return _log_and_return(cached_result, route_mode, actual_query)
 
         # 🚀 조기 단락: 선택된 문서가 있으면 즉시 DOCUMENT 모드로 처리
         # 검색·라우팅·압축 단계 완전 생략 → 성능 향상 (20~60% 지연시간 감소)
@@ -536,35 +550,18 @@ class RAGPipeline:
             normalized_filename = unicodedata.normalize("NFKC", selected_filename).strip()
             normalized_filename = re.sub(r"\s+", " ", normalized_filename)
 
-            # UI 메타데이터 제거
-            actual_query = clean_ui_metadata(query)
-
-            # 확장 쿼리에서 실제 질문 추출
-            if "현재 질문:" in actual_query:
-                parts = actual_query.split("현재 질문:")
-                if len(parts) > 1:
-                    actual_query = parts[-1].strip()
-
+            # actual_query는 이미 상단에서 정제됨 (Phase 2-3)
             result = self._answer_document(actual_query, selected_filename=normalized_filename)
 
             # 결과 캐싱
             cache_query_result(cache_key, result)
             cache_query_result_persistent(cache_key, result)
 
-            return _log_and_return(result, "document")
+            return _log_and_return(result, "document", actual_query)
 
         # 🔥 CRITICAL: 기안자/날짜 검색은 QuickFixRAG에 위임 (전문 로직 보유)
         if hasattr(self.generator, "rag"):
-            # ✅ 확장된 쿼리에서 실제 질문 추출 (chat_interface.py 대응)
-            actual_query = query
-            if "현재 질문:" in query:
-                parts = query.split("현재 질문:")
-                if len(parts) > 1:
-                    actual_query = parts[-1].strip()
-                    logger.info(f"📝 확장 쿼리에서 추출: '{actual_query[:50]}'")
-
-            # 🧹 UI 메타데이터 제거 (🏷 pdf · 📅 2024-10-24 · ✍ 등)
-            actual_query = clean_ui_metadata(actual_query)
+            # actual_query는 이미 상단에서 정제됨 (Phase 2-3, Line 507-513)
 
             # 🔍 쿼리에서 문서명 추출 (사용자가 직접 타이핑한 경우)
             # 패턴: "문서제목 이 문서/해당 문서 ..."
@@ -609,14 +606,9 @@ class RAGPipeline:
                     except sqlite3.Error as e:
                         logger.warning(f"⚠️ 문서명 추출 중 DB 오류 (무시): {e}")
 
-            # 🎯 모드 라우팅: Q&A 의도 키워드가 있으면 파일명이 있어도 Q&A 모드 우선
-            # 중복 방지: actual_query가 원본 query와 같으면 조기 라우팅 결과 재사용
-            if actual_query == query:
-                route_decision = early_route
-                logger.debug("🔄 조기 라우팅 결과 재사용 (중복 방지)")
-            else:
-                route_decision = self.query_router.classify_mode(actual_query)
-                logger.debug(f"🎯 쿼리 변경 감지, 재라우팅 실행: '{query[:30]}' → '{actual_query[:30]}'")
+            # 🎯 모드 라우팅: 조기 라우팅 결과 재사용 (이미 actual_query로 수행됨, Phase 2-3)
+            route_decision = early_route
+            logger.debug("🔄 조기 라우팅 결과 재사용 (actual_query 통일)")
 
             # 🔧 selected_filename이 있으면 무조건 DOCUMENT 모드로 전환 (우선순위 최상위)
             # 문서가 선택된 상태에서는 모든 질문에 대해 LLM이 해당 문서 기반으로 답변
@@ -644,7 +636,7 @@ class RAGPipeline:
                 _notify("generate", "합계 계산 중...")
                 result = self._answer_cost_sum(actual_query)
                 _notify("complete", "완료")
-                return _log_and_return(result, "cost")
+                return _log_and_return(result, "cost", actual_query)
 
             # 📄 DOCUMENT 모드: 문서 내용/요약 (통합: PREVIEW + SUMMARY)
             if route_decision.mode == QueryMode.DOCUMENT:
@@ -652,21 +644,21 @@ class RAGPipeline:
                 _notify("generate", "AI 답변 생성 중...")
                 result = self._answer_document(actual_query, selected_filename=selected_filename)
                 _notify("complete", "완료")
-                return _log_and_return(result, "document")
+                return _log_and_return(result, "document", actual_query)
 
             # 🔍 SEARCH 모드: 문서 검색 (통합: LIST + SEARCH + LIST_FIRST)
             if route_decision.mode == QueryMode.SEARCH:
                 _notify("search", "문서 검색 중...")
                 result = self._answer_search(actual_query)
                 _notify("complete", "완료")
-                return _log_and_return(result, "search")
+                return _log_and_return(result, "search", actual_query)
 
             # 🎯 SEARCH_CONTENT_ONLY 모드: 정밀 내용 검색 (2025-11-19 추가)
             if route_decision.mode == QueryMode.SEARCH_CONTENT_ONLY:
                 _notify("search", "정밀 검색 중...")
                 result = self._answer_search_content_only(actual_query)
                 _notify("complete", "완료")
-                return _log_and_return(result, "search_content_only")
+                return _log_and_return(result, "search_content_only", actual_query)
 
             # 📊 YEAR_SUMMARY 모드: 연도별 다중 문서 요약 (2025-12-23 추가)
             if route_decision.mode == QueryMode.YEAR_SUMMARY:
@@ -674,7 +666,7 @@ class RAGPipeline:
                 _notify("generate", "요약 생성 중...")
                 result = self._answer_year_summary(actual_query, route_decision.year, route_decision.drafter)
                 _notify("complete", "완료")
-                return _log_and_return(result, "year_summary")
+                return _log_and_return(result, "year_summary", actual_query)
 
             # 🔍 디버깅: 실제 pattern matching 대상 로깅
             logger.info(f"🔍 Pattern matching 대상 쿼리: '{actual_query[:100]}'")
@@ -784,14 +776,7 @@ class RAGPipeline:
             }
 
         # hasattr(self.generator, "rag")가 False인 경우의 폴백
-        # 🔧 여기서도 actual_query 추출 적용 (대화 컨텍스트 오염 방지)
-        actual_query = query
-        if "현재 질문:" in query:
-            parts = query.split("현재 질문:")
-            if len(parts) > 1:
-                actual_query = parts[-1].strip()
-        actual_query = clean_ui_metadata(actual_query)
-
+        # actual_query는 이미 상단에서 정제됨 (Phase 2-3, Line 507-513)
         response = self.query(actual_query, top_k=top_k or PipelineConfig.DEFAULT_TOP_K, selected_filename=selected_filename)
 
         if response.success:
@@ -861,7 +846,7 @@ class RAGPipeline:
             cache_query_result(cache_key, result)
             cache_query_result_persistent(cache_key, result)
 
-            return _log_and_return(result, "qa")
+            return _log_and_return(result, "qa", actual_query)
 
         error_msg = ERROR_MESSAGES.get(
             ErrorCode.E_GENERATE, "답변 생성 중 오류가 발생했다.",
@@ -880,7 +865,7 @@ class RAGPipeline:
             "evidence": [],
             "status": {"retrieved_count": 0, "selected_count": 0, "found": False},
         }
-        return _log_and_return(error_result, "error")
+        return _log_and_return(error_result, "error", actual_query)
 
     def answer_text(self, query: str) -> str:
         """답변 텍스트만 반환 (하위 호환성)
@@ -1007,12 +992,18 @@ class RAGPipeline:
             for doctype, docs in top_categories:
                 context_parts.append(f"\n### {doctype} ({len(docs)}건)")
                 for doc in docs[:DOCS_PER_CATEGORY]:  # 각 카테고리당 제한
-                    title = doc["title"] or doc["filename"]
+                    # 2025-12-26: filename 필드 추가 (팩트 추적/검증 강화)
+                    filename_display = doc["filename"]
+                    title = doc["title"] or filename_display
                     date = doc["date"] or "날짜 없음"
                     doc_drafter = doc["drafter"] or "기안자 없음"
                     amount = doc["claimed_total"]
-                    amount_str = f" - {amount:,}원" if amount else ""
-                    context_parts.append(f"- [{date}] {title[:50]} (작성: {doc_drafter}){amount_str}")
+                    amount_str = f" | amount={amount:,}원" if amount else ""
+                    # 구조화된 형식으로 변경 (LLM이 임의 변경 방지)
+                    context_parts.append(
+                        f"- date={date} | doctype={doctype} | title={title[:50]} | "
+                        f"filename={filename_display} | drafter={doc_drafter}{amount_str}"
+                    )
 
             context = "\n".join(context_parts)
 
@@ -1022,29 +1013,40 @@ class RAGPipeline:
                 logger.warning(f"⚠️ YEAR_SUMMARY 컨텍스트 과다 ({len(context)}자 → {MAX_CONTEXT_CHARS}자 제한)")
                 context = context[:MAX_CONTEXT_CHARS] + "\n... (이하 생략)"
 
-            # LLM으로 요약 생성 (자연스러운 프롬프트)
+            # LLM으로 요약 생성 (지시문과 컨텍스트 분리)
+            # 2025-12-26: 중복 삽입 제거 - prompt에는 지시문만, context는 파라미터로
             subject = f"{year}년 {drafter}님" if drafter else f"{year}년"
-            prompt = f"""{subject} 문서 {doc_count}개를 정리해주세요.
+            prompt = (
+                f"{subject} 문서 {doc_count}개를 정리하라.\n\n"
+                "[지시사항]\n"
+                "- 아래 컨텍스트의 팩트(date/title/doctype/drafter/claimed_total/filename)를 변경하지 말 것\n"
+                "- 카테고리별로 현황을 요약하되, 날짜/금액/파일명은 그대로 인용할 것\n"
+                "- 문서에 없는 정보를 추측하지 말 것"
+            )
 
-{context}
+            # 2025-12-26: Phase 2-1 - DB 집계 + LLM 요약 분리 (정확성 강화)
+            # 1부: DB 집계 결과 (코드가 직접 생성, 팩트 보장)
+            summary_header = f"## {year}년 문서 현황\n"
+            summary_header += f"총 **{doc_count}개** 문서\n\n"
+            summary_header += "### 카테고리별 분포\n"
+            for doctype, docs in top_categories:
+                summary_header += f"- {doctype}: {len(docs)}건\n"
 
-위 문서들의 전체 현황을 자연스럽게 설명해주세요.
-카테고리별로 어떤 내용이 있는지 간략히 정리하면 됩니다."""
-
-            # LLM 호출 (다중 문서 요약용 토큰 예산 사용)
+            # 2부: LLM 요약 (설명 역할만, context는 파라미터로만 전달)
             try:
-                answer = self.generator.generate(
-                    query=prompt,
-                    context=context,
-                    temperature=0.3,  # 요약은 일관성 중요
-                    mode="year_summary",  # 4096 토큰 예산
+                llm_explanation = self.generator.generate(
+                    query=prompt,           # 지시문만
+                    context=context,        # 팩트 데이터
+                    temperature=0.2,        # 일관성 강화 (0.3 → 0.2)
+                    mode="year_summary",    # 1024 토큰 예산 (constants.py에서 조정)
                 )
             except Exception as e:
                 logger.error(f"LLM 호출 실패: {e}")
-                # 폴백: 기본 요약
-                answer = f"{year}년에 총 {doc_count}개의 문서가 있습니다.\n\n"
-                for doctype, docs in sorted(categories.items(), key=lambda x: -len(x[1])):
-                    answer += f"- {doctype}: {len(docs)}건\n"
+                # 폴백: DB 집계만 사용 (LLM 없이도 동작)
+                llm_explanation = "상세 내역은 위 카테고리를 참고하세요."
+
+            # 최종 응답: 1부(팩트) + 2부(설명)
+            answer = f"{summary_header}\n### 상세 내역\n{llm_explanation}"
 
             # Evidence 생성 (상위 문서들)
             evidence = [

@@ -476,8 +476,9 @@ class QueryRouter:
         "IP 알려줘", "정보 알려줘" 같은 질의를 QA 모드로 라우팅하여
         문서 내용 기반 답변을 생성하도록 합니다.
 
-        단, "해당 문서", "이 문서" 같은 문서 참조가 있으면 DOCUMENT 모드가
-        더 적합하므로 스킵합니다.
+        단, 다음 경우는 스킵:
+        1. 문서 참조("해당 문서", "이 문서") → DOCUMENT 모드
+        2. 시간순 키워드("최근", "작년" 등) → SEARCH 모드 (2025-12-26)
 
         Returns:
             RouteDecision if matched, None otherwise
@@ -488,6 +489,17 @@ class QueryRouter:
         # 문서 참조가 있으면 DOCUMENT 모드가 더 적합 → 스킵
         if has_doc_reference:
             logger.debug("ℹ️ 정보 질의 패턴 감지, 문서 참조 있음 → DOCUMENT 모드로 전환")
+            return None
+
+        # 시간순 키워드가 있으면 SEARCH 모드가 더 적합 → 스킵 (2025-12-26)
+        # "최근 기안서 내용 알려줘", "작년 구매 정보 알려줘" 등
+        temporal_keywords = [
+            "언제", "이력", "최근", "최신", "히스토리", "history",
+            "작년", "올해", "금년", "전년도", "지난해",
+            "내역", "과거", "예전", "이전",
+        ]
+        if any(kw in query for kw in temporal_keywords):
+            logger.debug("ℹ️ 정보 질의 패턴 감지, 시간순 키워드 있음 → SEARCH 모드로 전환")
             return None
 
         logger.info("🎯 모드 결정: QA (정보 질의 감지 - 답변 생성)")
@@ -583,12 +595,26 @@ class QueryRouter:
         2025-12-21 추가: "X 문서 요약해줘", "X 관련 문서 정리해줘", "X 문서 상세히 보여줘"
         같은 패턴은 문서 목록이 아닌 LLM이 읽고 정리한 답변이 필요함.
 
+        2025-12-26 추가: 시간순 키워드가 있으면 SEARCH로 위임
+        "최근 기안서 내용 알려줘" 등은 문서 목록 검색이 우선
+
         list_intent가 있어도 summary_intent가 있으면 QA 모드로 라우팅.
 
         Returns:
             RouteDecision if matched, None otherwise
         """
         if not intents.get("summary"):
+            return None
+
+        # 시간순 키워드가 있으면 SEARCH 모드가 더 적합 → 스킵 (2025-12-26)
+        # "최근 기안서 내용 알려줘", "작년 문서 요약해줘" 등
+        temporal_keywords = [
+            "언제", "이력", "최근", "최신", "히스토리", "history",
+            "작년", "올해", "금년", "전년도", "지난해",
+            "내역", "과거", "예전", "이전",
+        ]
+        if any(kw in query for kw in temporal_keywords):
+            logger.debug("ℹ️ 요약 의도 감지, 시간순 키워드 있음 → SEARCH 모드로 전환")
             return None
 
         # "문서" 키워드가 있어도 요약 의도가 있으면 QA 모드

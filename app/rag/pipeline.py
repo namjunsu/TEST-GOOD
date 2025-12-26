@@ -520,8 +520,17 @@ class RAGPipeline:
         route_mode = early_route.mode.value
         _notify("routing", f"모드 결정: {route_mode}")
 
+        # 📊 2025-12-26: 표 정리 요청 감지 (캐시 키 구분 위해 조기 감지)
+        # "표로 알려줘", "표로 보여줘", "표로 정리해줘" 등
+        table_request_detected = bool(
+            re.search(r"표(로|를)?", actual_query) and
+            any(kw in actual_query for kw in ["다", "전부", "모두", "전체", "모든", "알려", "보여", "정리"])
+        )
+
         # ✨ 2-tier Cache check - 메모리 캐시 → 영구 캐시 (정제된 쿼리로 키 생성)
-        cache_key = build_answer_cache_key(actual_query, selected_filename, mode=route_mode)
+        # 표 정리 요청은 다른 형식의 답변이므로 별도 캐시 키 사용
+        cache_suffix = "_table" if table_request_detected else ""
+        cache_key = build_answer_cache_key(actual_query, selected_filename, mode=route_mode) + cache_suffix
 
         # Tier 1: 메모리 캐시 확인 (가장 빠름)
         cached_result = get_cached_result(cache_key)
@@ -671,13 +680,7 @@ class RAGPipeline:
             # 🔍 디버깅: 실제 pattern matching 대상 로깅
             logger.info(f"🔍 Pattern matching 대상 쿼리: '{actual_query[:100]}'")
 
-            # 📊 2025-12-26: 표 정리 요청 감지 (top_k 확대 + 프롬프트 강화)
-            # "표로 다 보여줘", "표로 알려줘", "표로 정리해서 전부 알려줘" 등
-            table_request_detected = bool(
-                re.search(r"표(로|를)?", actual_query) and
-                any(kw in actual_query for kw in ["다", "전부", "모두", "전체", "모든", "알려", "보여", "정리"])
-            )
-
+            # 📊 표 정리 요청 처리 (이미 상단에서 감지됨, Line 523-528)
             enhanced_query = actual_query
             if table_request_detected:
                 logger.info("📊 표 정리 요청 감지: top_k 확대 (5 → 20), 프롬프트 강화")

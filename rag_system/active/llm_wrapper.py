@@ -1788,7 +1788,12 @@ class VllmLLM(BaseRAGLLM):
 
         # 2025-12-23: 동적 토큰 우선, 없으면 config 기본값
         effective_max_tokens = max_tokens if max_tokens is not None else self.config.max_tokens
-        self.logger.info(f"🎯 vLLM generate_response: max_tokens={effective_max_tokens} (requested={max_tokens}, config.default={self.config.max_tokens})")
+        # 2025-12-26: source 추적 로깅 (디버깅 강화)
+        source = 'requested' if max_tokens is not None else 'config'
+        self.logger.info(
+            f"🎯 vLLM generate: max_tokens={effective_max_tokens} "
+            f"(requested={max_tokens} config.default={self.config.max_tokens} source={source})"
+        )
 
         try:
             from vllm import SamplingParams

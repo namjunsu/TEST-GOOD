@@ -135,7 +135,12 @@ class _LLMAdapter:
         if system_msg is None:
             system_msg = "당신은 문서 분석 전문가입니다. 문서 내용을 기반으로 정확하게 답변하세요."
 
-        logger.info(f"🎯 generate_from_context: mode={mode}, max_tokens={max_tokens}, system_len={len(system_msg)}")
+        # 2025-12-26: source/resolver 추적 로깅 (디버깅 강화)
+        env_key = f"{mode.upper()}_MAX_TOKENS"
+        logger.info(
+            f"🎯 generate mode={mode} max_tokens={max_tokens} "
+            f"(source=MODE_TOKEN_BUDGETS env_key={env_key})"
+        )
 
         try:
             # 🔧 2025-12-16: llama_cpp 직접 호출로 이중 프롬프트 문제 해결

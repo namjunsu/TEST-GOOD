@@ -71,13 +71,17 @@ class RelevanceScorer:
         # 파일명 매칭 보너스
         filename_bonus = self._calculate_filename_bonus(query, query_tokens, doc)
 
-        # 최종 스코어
-        final_score = (match_ratio * self.config.MATCH_RATIO_SCALE) + filename_bonus
+        # 날짜 가중치 (2025-12-26: Phase 2)
+        date_bonus = self._calculate_date_bonus(doc, query)
 
-        if filename_bonus > 0:
+        # 최종 스코어
+        final_score = (match_ratio * self.config.MATCH_RATIO_SCALE) + filename_bonus + date_bonus
+
+        if filename_bonus > 0 or date_bonus > 0:
             logger.debug(
                 f"📊 Scoring '{filename[:50]}': match={match_ratio:.2f}, "
-                f"filename_bonus={filename_bonus:.1f}, final={final_score:.1f}"
+                f"filename_bonus={filename_bonus:.1f}, date_bonus={date_bonus:.1f}, "
+                f"final={final_score:.1f}"
             )
 
         return max(0.0, min(self.config.MAX_FINAL_SCORE, final_score))
@@ -130,6 +134,57 @@ class RelevanceScorer:
 
         # 보너스 상한
         return min(self.config.FILENAME_BONUS_CAP, filename_bonus)
+
+    def _calculate_date_bonus(self, doc: dict[str, Any], query: str) -> float:
+        """시간 관련 쿼리 시 최신 문서에 보너스 부여
+
+        Args:
+            doc: 문서 딕셔너리 (meta.date 필드 필요)
+            query: 검색 쿼리
+
+        Returns:
+            날짜 보너스 점수 (0.0~5.0)
+
+        Examples:
+            >>> # 시간 키워드 없음
+            >>> scorer._calculate_date_bonus(doc, "무선 마이크 문서")
+            0.0
+
+            >>> # "현황" 키워드 + 1년 이내 문서
+            >>> scorer._calculate_date_bonus(doc_2025, "광화문 티비로직 현황")
+            5.0
+
+            >>> # "현황" 키워드 + 2년 이내 문서
+            >>> scorer._calculate_date_bonus(doc_2023, "광화문 티비로직 현황")
+            0.0  # 2년 초과
+        """
+        # 시간 키워드 감지 (is_temporal_query와 동일)
+        temporal_kw = ["현황", "현재", "최근", "최신", "지금", "상태"]
+        if not any(kw in query for kw in temporal_kw):
+            return 0.0
+
+        # 날짜 파싱
+        meta = doc.get("meta", {})
+        date_str = meta.get("date", "")
+        if not date_str:
+            return 0.0
+
+        # 연령 계산
+        from datetime import datetime
+        try:
+            doc_date = datetime.strptime(date_str, "%Y-%m-%d")
+            years_old = (datetime.now() - doc_date).days / 365.25
+
+            # 최근 1년: +5점, 2년: +3점, 3년 이상: 0점
+            if years_old < 1:
+                return 5.0
+            elif years_old < 2:
+                return 3.0
+            return 0.0
+        except Exception as e:
+            # 파싱 실패 시 보너스 없음 (로그는 디버그용만)
+            logger.debug(f"날짜 파싱 실패 ({date_str}): {e}")
+            return 0.0
 
     def apply_filename_similarity_bonus(
         self, query: str, results: list[dict[str, Any]]

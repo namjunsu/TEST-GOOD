@@ -64,12 +64,14 @@ class ScoringConfig:
     VERY_SHORT_TEXT_PENALTY: float = 0.2
 
     # 유사도 보너스 (파일명 유사도 기반)
+    # 2025-12-26: 파일명 보너스 대폭 감소 (30/20/10 → 5/3/1)
+    # 파일명 매칭은 보조 지표일 뿐, 키워드 매칭보다 강력하면 안 됨
     HIGH_SIM_THRESHOLD: float = 0.8
     MED_SIM_THRESHOLD: float = 0.6
     LOW_SIM_THRESHOLD: float = 0.4
-    HIGH_SIM_BONUS: float = 30.0
-    MED_SIM_BONUS: float = 20.0
-    LOW_SIM_BONUS: float = 10.0
+    HIGH_SIM_BONUS: float = 5.0  # 30.0 → 5.0
+    MED_SIM_BONUS: float = 3.0   # 20.0 → 3.0
+    LOW_SIM_BONUS: float = 1.0   # 10.0 → 1.0
 
 
 @dataclass(frozen=True)

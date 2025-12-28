@@ -86,7 +86,7 @@ class LLMConfig:
     # 모드별 max_tokens (.env와 동기화)
     MAX_TOKENS_CHAT: int = 1024       # CHAT_MAX_TOKENS (스몰토크/일반)
     MAX_TOKENS_RAG: int = 4096        # RAG_MAX_TOKENS (근거 인용형)
-    MAX_TOKENS_DETAILED: int = 8192   # DETAILED_MAX_TOKENS (자세히 모드, H100 최대 활용)
+    MAX_TOKENS_DETAILED: int = 4096   # DETAILED_MAX_TOKENS (자세히 모드, 실용적 응답 시간 1~4분)
     MAX_TOKENS_SUMMARIZE: int = 2048  # SUMMARIZE_MAX_TOKENS (요약)
     MAX_TOKENS_SUMMARY: int = 2048    # LLM_MAX_TOKENS_SUMMARY (요약 라우팅)
     MAX_TOKENS_YEAR_SUMMARY: int = 1024  # YEAR_SUMMARY_MAX_TOKENS (다중 문서 요약, 4096 → 1024)
@@ -130,7 +130,7 @@ class LLMGenerationConfig:
     MODE_CHAT_CONTEXT: int = 2048         # 1024 → 2048 (컨텍스트도 증가)
     MODE_RAG_MAX: int = 4096              # .env RAG_MAX_TOKENS
     MODE_RAG_CONTEXT: int = 6000          # 4000 → 6000 (H100 최적화)
-    MODE_DETAILED_MAX: int = 8192         # .env DETAILED_MAX_TOKENS (신규)
+    MODE_DETAILED_MAX: int = 4096         # .env DETAILED_MAX_TOKENS (실용적 범위)
     MODE_DETAILED_CONTEXT: int = 8000     # 자세히 모드 컨텍스트 (신규)
     MODE_SUMMARIZE_MAX: int = 2048        # .env SUMMARIZE_MAX_TOKENS
     MODE_SUMMARIZE_CONTEXT: int = 6000    # 4000 → 6000
@@ -383,6 +383,10 @@ class HandlerConfig:
     # Evidence 생성 (H100: 더 긴 스니펫)
     EVIDENCE_CHUNK_TOP_K: int = 2           # Evidence 청크 검색 수 (H100: 1 → 2)
     EVIDENCE_SNIPPET_MAX: int = 600         # Evidence 스니펫 최대 길이 (H100: 400 → 600)
+
+    # 종합 리포트 설정 (2025-12-26 추가)
+    COMPREHENSIVE_REPORT_TOP_K: int = 20    # 종합 리포트용 검색 문서 수
+    COMPREHENSIVE_REPORT_MAX_DOCS: int = 15 # 종합 리포트 최대 분석 문서 수
 
 
 @dataclass(frozen=True)

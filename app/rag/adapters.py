@@ -26,7 +26,7 @@ MODE_TOKEN_BUDGETS: dict[str, int] = {
     "chat": int(os.getenv("CHAT_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_CHAT))),
     "rag": int(os.getenv("RAG_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_RAG))),  # 3072 → 4096 (H100)
     "qa": int(os.getenv("QA_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_QA))),  # 800 → 2048 (신뢰성 최우선 2025-12-26)
-    "detailed": int(os.getenv("DETAILED_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_DETAILED))),  # 자세히 모드: H100 최대 활용
+    "detailed": int(os.getenv("DETAILED_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_DETAILED))),  # 자세히 모드: 실용적 범위 (4096)
     "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_SUMMARIZE))),
     "summary": int(os.getenv("SUMMARY_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_SUMMARY))),
     "year_summary": int(os.getenv("YEAR_SUMMARY_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_YEAR_SUMMARY))),  # 4096 → 1024 (2025-12-26)

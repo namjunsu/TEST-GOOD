@@ -105,9 +105,11 @@ class RAGPipeline:
 
         # 🎯 Handler 초기화 (Strangler Fig 패턴)
         from app.rag.handlers import CostSumHandler, DocumentHandler, SearchHandler
+        from app.rag.handlers.comprehensive_report import ComprehensiveReportHandler
         self._search_handler = SearchHandler(self)
         self._document_handler = DocumentHandler(self)
         self._cost_sum_handler = CostSumHandler(self)
+        self._comprehensive_report_handler = ComprehensiveReportHandler(self)  # 2025-12-26
 
         # 📊 유사 문서 추천 서비스 (2025-12-08)
         self._similarity_service = DocumentSimilarity(retriever=self.retriever)
@@ -676,6 +678,14 @@ class RAGPipeline:
                 result = self._answer_year_summary(actual_query, route_decision.year, route_decision.drafter)
                 _notify("complete", "완료")
                 return _log_and_return(result, "year_summary", actual_query)
+
+            # 📊 COMPREHENSIVE_REPORT 모드: 종합 리포트 생성 (2025-12-26 추가)
+            if route_decision.mode == QueryMode.COMPREHENSIVE_REPORT:
+                _notify("search", "관련 문서 검색 중...")
+                _notify("generate", "종합 리포트 생성 중...")
+                result = self._comprehensive_report_handler.handle(actual_query)
+                _notify("complete", "완료")
+                return _log_and_return(result, "comprehensive_report", actual_query)
 
             # 🔍 디버깅: 실제 pattern matching 대상 로깅
             logger.info(f"🔍 Pattern matching 대상 쿼리: '{actual_query[:100]}'")

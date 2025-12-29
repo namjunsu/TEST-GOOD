@@ -25,7 +25,11 @@ class ScoreStats:
 
 
 class QueryMode(Enum):
-    """쿼리 모드 (단순화: 8개 → 5개)
+    """쿼리 모드 (단순화: 8개 → 7개)
+
+    2025-12-26: COMPREHENSIVE_REPORT 추가
+    - 여러 문서를 종합하여 표/리포트 생성
+    - "현황 표로 정리", "종합해서 보여줘" 같은 요청
 
     2025-11-19: SEARCH_CONTENT_ONLY 추가
     - 사용자가 "내용에 X 들어간 문서만" 요청 시 정밀 검색 모드
@@ -44,6 +48,7 @@ class QueryMode(Enum):
     SEARCH_CONTENT_ONLY = "search_content_only"  # 정밀 내용 검색 (본문 일치만)
     QA = "qa"  # 질답 모드 (RAG 파이프라인, 기본)
     YEAR_SUMMARY = "year_summary"  # 연도별 다중 문서 요약 (2025-12-23 추가)
+    COMPREHENSIVE_REPORT = "comprehensive_report"  # 종합 리포트 생성 (2025-12-26 추가)
 
 
 @dataclass

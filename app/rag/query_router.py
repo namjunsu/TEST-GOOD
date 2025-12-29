@@ -25,7 +25,7 @@ from typing import Any, Optional
 import yaml
 
 from app.core.logging import get_logger
-from app.rag.pattern_config import PatternConfigLoader, get_pattern_loader
+from app.rag.pattern_config import get_pattern_loader
 from app.rag.router_models import QueryMode, RouteDecision, ScoreStats
 from app.rag.routing_monitor import get_monitor
 from config.constants import RouterConfig
@@ -174,6 +174,21 @@ class QueryRouter:
     # 문서 지시어 패턴 (이문서, 이 문서, 해당 문서 등)
     DOC_REFERENCE_PATTERN = re.compile(
         r"(이\s?문서|해당\s?문서|이\s?파일|그\s?문서)",
+        re.IGNORECASE,
+    )
+
+    # 종합 리포트 패턴 (2025-12-26 추가)
+    # "현황 표로 정리", "종합해서 보여줘", "전체 현황 리포트" 등
+    COMPREHENSIVE_REPORT_PATTERN = re.compile(
+        r"("
+        r"(현황|상황|상태|정보).*(표|리스트|목록|정리).*(?:해줘|보여|알려)|"  # "현황 표로 정리해줘"
+        r"(표|리스트|목록|정리).*(?:해서|하여|으로).*(현황|상황|보여|알려)|"  # "표로 정리해서 현황 보여줘"
+        r"(종합|전체|통합|전부|모두).*(정리|보여|알려|리포트|보고서)|"  # "종합/전부/모두 정리해줘"
+        r"(현황|상황|상태).*종합|"  # "현황 종합"
+        r"전체.*현황.*(?:표|정리)|"  # "전체 현황 표"
+        r"(?:종합|통합).*현황|"  # "종합 현황"
+        r"(문서|파일)\s*(전부|모두|전체)\s*(?:보여|알려)"  # "문서 전부 보여줘" (2025-12-29 추가)
+        r")",
         re.IGNORECASE,
     )
 
@@ -584,6 +599,37 @@ class QueryRouter:
             drafter=drafter,
         )
 
+    def _check_comprehensive_report(
+        self,
+        query: str,
+        params: dict[str, Any],
+    ) -> Optional[RouteDecision]:
+        """종합 리포트 패턴 체크 (2025-12-26 추가)
+
+        "현황 표로 정리", "종합해서 보여줘" 같은 패턴은
+        여러 문서를 종합하여 구조화된 표/리포트를 생성해야 함.
+
+        우선순위:
+        - QA_QUESTION 패턴보다 먼저 체크 (더 구체적)
+        - SEARCH 패턴보다 먼저 체크 (표 생성이 목적)
+
+        Returns:
+            RouteDecision if matched, None otherwise
+        """
+        if not self.COMPREHENSIVE_REPORT_PATTERN.search(query):
+            return None
+
+        logger.info("🎯 모드 결정: COMPREHENSIVE_REPORT (종합 리포트 생성)")
+        reason = "comprehensive_report_pattern"
+        self._log_routing_decision(query, QueryMode.COMPREHENSIVE_REPORT, confidence=RouterConfig.CONF_HIGH, reason=reason)
+        return RouteDecision(
+            mode=QueryMode.COMPREHENSIVE_REPORT,
+            reason=reason,
+            confidence=RouterConfig.CONF_HIGH,
+            content_intent=True,
+            list_intent=True,  # 목록 + 분석 모두 필요
+        )
+
     def _check_summary_intent(
         self,
         query: str,
@@ -904,6 +950,7 @@ class QueryRouter:
         # 2. 우선순위에 따라 헬퍼 메서드 호출 (Chain of Responsibility 패턴)
         decision = (
             self._check_year_summary_intent(query, params)  # "2024년 문서 다 알려줘" → 연도별 요약
+            or self._check_comprehensive_report(query, params)  # "현황 표로 정리" → 종합 리포트 (2025-12-26)
             or self._check_content_only(query, params)  # "내용에 X 들어간 문서" → 정밀 검색
             or self._check_exists_intent(query, params, has_filename, has_doc_reference)
             or self._check_cost_intent(query, params, intents)
@@ -969,6 +1016,12 @@ class QueryRouter:
         # 1. COST 모드 체크
         if self.COST_INTENT_PATTERN.search(query):
             suggestions.append((QueryMode.COST, RouterConfig.CONF_HIGH, "cost_intent"))
+
+        # 1.5. COMPREHENSIVE_REPORT 모드 체크 (2025-12-26 추가)
+        # SEARCH보다 높은 우선순위 - "현황 표로 정리" 같은 패턴 먼저 확인
+        if self.COMPREHENSIVE_REPORT_PATTERN.search(query):
+            suggestions.append((QueryMode.COMPREHENSIVE_REPORT, RouterConfig.CONF_HIGH, "comprehensive_report_pattern"))
+            logger.info(f"📊 종합 리포트 패턴 감지: {query}")
 
         # 2. SEARCH 모드 체크
         has_list = self.LIST_INTENT_PATTERN.search(query) is not None

@@ -17,14 +17,14 @@ import sqlite3
 from pathlib import Path
 
 
-def get_text_preview(txt_path: Path, max_len: int = 500) -> str | None:
+def get_text_preview(txt_path: Path, max_len: int = 1500) -> str | None:
     """텍스트 파일에서 미리보기 추출"""
     if not txt_path.exists():
         return None
 
     try:
         text = txt_path.read_text(encoding="utf-8")
-        # 앞 500자, 줄바꿈 → 공백
+        # 앞 1500자, 줄바꿈 → 공백
         preview = text[:max_len].replace("\n", " ").strip()
         return preview if preview else None
     except Exception:

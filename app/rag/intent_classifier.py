@@ -18,7 +18,6 @@ from typing import Any, Optional
 
 from app.core.logging import get_logger
 from app.rag.router_models import QueryMode, RouteDecision
-from config.constants import RouterConfig
 
 logger = get_logger(__name__)
 
@@ -131,7 +130,7 @@ class IntentClassifier:
     def _parse_response(self, response: str) -> IntentResult:
         """LLM 응답 파싱"""
         # JSON 추출 (응답에 다른 텍스트가 섞여 있을 수 있음)
-        json_match = re.search(r'\{[^}]+\}', response, re.DOTALL)
+        json_match = re.search(r"\{[^}]+\}", response, re.DOTALL)
         if not json_match:
             logger.warning(f"⚠️ JSON 파싱 실패: {response[:100]}")
             return IntentResult(mode=QueryMode.QA, confidence=0.3, raw_response=response)

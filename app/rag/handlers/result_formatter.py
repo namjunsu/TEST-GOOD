@@ -93,7 +93,7 @@ class ResultFormatter:
 
             # 더 많은 결과가 있으면 힌트 추가
             if total_count > display_count:
-                answer_text += f"\n\n💡 전체 목록: \"{keywords} 문서 전부 보여줘\""
+                answer_text += f'\n\n💡 전체 목록: "{keywords} 문서 전부 보여줘"'
 
         # Evidence 생성
         evidence = self.build_evidence(doc_details)

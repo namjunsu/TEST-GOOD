@@ -7,6 +7,7 @@ Qwen GGUF + Llama Safetensors 모델 지원
 import logging
 import os
 import re
+import threading
 import time
 from functools import lru_cache
 from pathlib import Path
@@ -285,6 +286,7 @@ class QwenLLM(BaseRAGLLM):
         top_p: Optional[float] = None,
         top_k: Optional[int] = None,
         repeat_penalty: Optional[float] = None,
+        timeout: int = 60,  # NEW: 타임아웃 (초 단위, 기본 60초)
     ) -> str:
         """통합 chat completion 호출 (중복 제거용 헬퍼)
 
@@ -295,26 +297,50 @@ class QwenLLM(BaseRAGLLM):
             top_p: top_p 값 (None이면 config 기본값)
             top_k: top_k 값 (None이면 config 기본값)
             repeat_penalty: 반복 패널티 (None이면 config 기본값)
+            timeout: 타임아웃 (초), 기본 60초
 
         Returns:
             생성된 텍스트 (strip 적용됨)
 
         Raises:
-            RuntimeError: LLM이 로드되지 않은 경우
+            RuntimeError: LLM이 로드되지 않은 경우 또는 타임아웃 발생 시
         """
         if self.llm is None:
             raise RuntimeError("LLM이 로드되지 않았습니다")
 
-        response = self.llm.create_chat_completion(
-            messages=messages,  # type: ignore[arg-type]
-            temperature=temperature if temperature is not None else self.config.temperature,
-            max_tokens=max_tokens,
-            top_p=top_p if top_p is not None else self.config.top_p,
-            top_k=top_k if top_k is not None else self.config.top_k,
-            repeat_penalty=repeat_penalty if repeat_penalty is not None else self.config.repeat_penalty,
-            stop=self.stop_tokens,
-        )
+        # 타임아웃 적용을 위한 래퍼
+        result = {"response": None, "error": None}
 
+        def _call_llm():
+            try:
+                result["response"] = self.llm.create_chat_completion(
+                    messages=messages,  # type: ignore[arg-type]
+                    temperature=temperature if temperature is not None else self.config.temperature,
+                    max_tokens=max_tokens,
+                    top_p=top_p if top_p is not None else self.config.top_p,
+                    top_k=top_k if top_k is not None else self.config.top_k,
+                    repeat_penalty=repeat_penalty if repeat_penalty is not None else self.config.repeat_penalty,
+                    stop=self.stop_tokens,
+                )
+            except Exception as e:
+                result["error"] = e
+
+        thread = threading.Thread(target=_call_llm, daemon=True)
+        thread.start()
+        thread.join(timeout=timeout)
+
+        if thread.is_alive():
+            # 타임아웃 발생
+            self.logger.error(f"⏱️ LLM 응답 타임아웃 ({timeout}초 초과)")
+            raise RuntimeError(f"LLM 응답 타임아웃 ({timeout}초 초과)")
+
+        if result["error"]:
+            raise result["error"]
+
+        if result["response"] is None:
+            raise RuntimeError("LLM 응답이 없습니다")
+
+        response = result["response"]
         # response는 dict 또는 Iterator - dict인 경우만 처리
         choices = response["choices"]  # type: ignore[index]
         content = choices[0]["message"]["content"]
@@ -591,6 +617,14 @@ A:"""
                     continue
 
             except Exception as e:
+                error_msg = str(e)
+                is_timeout = "타임아웃" in error_msg or "timeout" in error_msg.lower()
+
+                if is_timeout:
+                    # 타임아웃은 재시도해도 의미 없음 → 즉시 중단
+                    self.logger.error(f"⏱️ LLM 타임아웃 발생 (시도 {attempt + 1}), 재시도 중단")
+                    break  # 재시도 루프 탈출
+
                 self.logger.error(f"응답 생성 실패 (시도 {attempt + 1}): {e}")
                 retry_count += 1
 

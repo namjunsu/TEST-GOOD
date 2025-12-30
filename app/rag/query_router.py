@@ -65,6 +65,12 @@ class QueryRouter:
         r"(비용|구매)\s*(합계|총액)"
         r"|"
         r"(합계|총액)\s*(금액|비용)"
+        r"|"
+        # Pattern 7: NEW (2025-12-30) - superlative + cost-related (e.g., "가장 비싼", "제일 비용")
+        r"(가장|제일|최고|최대).*(비싼|비용|고가|금액|비싸)"
+        r"|"
+        # Pattern 8: NEW (2025-12-30) - cost-related + superlative question (e.g., "비싼 것은 무엇", "고가 항목은 뭐")
+        r"(비싼|고가|비용|금액).*(무엇|뭐|어떤|것|항목)"
         r")",
         re.IGNORECASE,
     )

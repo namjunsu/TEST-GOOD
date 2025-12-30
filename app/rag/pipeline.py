@@ -492,15 +492,50 @@ class RAGPipeline:
                 actual_query: 정제된 쿼리 (UI 메타데이터 제거 + "현재 질문:" 분리)
             """
             try:
+                import os
                 elapsed_ms = int((time.time() - start_time) * 1000)
                 conv_logger = get_conversation_logger()
+
+                # 검색 결과 수집 (NEW)
+                evidence = result.get("evidence") or result.get("citations") or []
+                search_count = len(evidence)
+                top_score = evidence[0].get("score", 0.0) if evidence else 0.0
+
+                # 성공/실패 판정 (NEW)
+                success = True
+                error_type = None
+                answer_text = result.get("text", "")
+
+                # 실패 케이스 감지
+                if not answer_text or answer_text.strip() == "":
+                    success = False
+                    error_type = "no_answer"
+                elif elapsed_ms > 600000:  # 10분 초과
+                    error_type = "timeout"
+                elif search_count == 0 and mode in ["search", "document"]:
+                    error_type = "no_results"
+                elif answer_text.startswith("{") and "keywords" in answer_text:
+                    # LLM 환각 감지 (JSON 출력)
+                    success = False
+                    error_type = "llm_hallucination"
+
                 conv_logger.log(
-                    query=actual_query,  # 정제된 쿼리 사용 (query → actual_query)
-                    answer=result.get("text", ""),
+                    query=actual_query,
+                    answer=answer_text,
                     mode=mode,
-                    sources=result.get("evidence") or result.get("citations"),
-                    confidence=0.0,  # route_decision이 없을 수 있음
+                    sources=evidence,
+                    confidence=0.0,
                     latency_ms=elapsed_ms,
+                    # NEW 필드들
+                    client_ip=kwargs.get("client_ip"),  # web_interface에서 전달
+                    session_id=kwargs.get("session_id"),
+                    success=success,
+                    error_type=error_type,
+                    search_results_count=search_count,
+                    top_similarity_score=top_score,
+                    cache_hit=result.get("from_cache", False),
+                    llm_backend=os.getenv("LLM_BACKEND", "qwen72b"),
+                    llm_tokens=result.get("tokens", 0),
                 )
             except Exception as e:
                 logger.warning(f"⚠️ 대화 로깅 실패 (무시): {e}")

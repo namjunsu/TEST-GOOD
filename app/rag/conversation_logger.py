@@ -23,7 +23,8 @@ logger = get_logger(__name__)
 
 @dataclass
 class ConversationEntry:
-    """대화 기록 엔트리"""
+    """대화 기록 엔트리 v2.0 - 디버깅 강화"""
+    # 기본 정보 (기존)
     timestamp: str
     query: str
     mode: str  # search, document, qa, cost
@@ -31,6 +32,25 @@ class ConversationEntry:
     sources: list[str] = field(default_factory=list)  # 출처 파일명 목록
     confidence: float = 0.0
     latency_ms: int = 0  # 응답 시간 (밀리초)
+
+    # 사용자 구분 (NEW)
+    client_ip: Optional[str] = None  # 접속 IP
+    session_id: Optional[str] = None  # Streamlit 세션 ID
+
+    # 성공/실패 추적 (NEW)
+    success: bool = True  # 답변 성공 여부
+    error_type: Optional[str] = None  # "timeout", "no_results", "llm_error", "search_error"
+
+    # 검색 품질 (NEW)
+    search_results_count: int = 0  # 검색된 문서 개수
+    top_similarity_score: float = 0.0  # 최상위 결과 유사도
+
+    # 캐시 정보 (NEW)
+    cache_hit: bool = False  # 캐시 히트 여부
+
+    # LLM 정보 (NEW)
+    llm_backend: Optional[str] = None  # "qwen72b", "vllm"
+    llm_tokens: int = 0  # 생성된 토큰 수
 
 
 class ConversationLogger:
@@ -54,8 +74,18 @@ class ConversationLogger:
         sources: Optional[list[dict[str, Any]]] = None,
         confidence: float = 0.0,
         latency_ms: int = 0,
+        # NEW 파라미터들
+        client_ip: Optional[str] = None,
+        session_id: Optional[str] = None,
+        success: bool = True,
+        error_type: Optional[str] = None,
+        search_results_count: int = 0,
+        top_similarity_score: float = 0.0,
+        cache_hit: bool = False,
+        llm_backend: Optional[str] = None,
+        llm_tokens: int = 0,
     ) -> None:
-        """대화 기록 저장
+        """대화 기록 저장 v2.0
 
         Args:
             query: 사용자 질문
@@ -64,6 +94,15 @@ class ConversationLogger:
             sources: 출처 문서 목록 (evidence 리스트)
             confidence: 라우팅 신뢰도
             latency_ms: 응답 시간 (밀리초)
+            client_ip: 클라이언트 IP 주소
+            session_id: Streamlit 세션 ID
+            success: 답변 성공 여부
+            error_type: 에러 타입 ("timeout", "no_results", "llm_error", "search_error")
+            search_results_count: 검색된 문서 개수
+            top_similarity_score: 최상위 검색 결과 유사도
+            cache_hit: 캐시 히트 여부
+            llm_backend: 사용된 LLM 백엔드
+            llm_tokens: 생성된 토큰 수
         """
         # 출처 파일명 추출
         source_files = []
@@ -88,6 +127,16 @@ class ConversationLogger:
             sources=source_files,
             confidence=confidence,
             latency_ms=latency_ms,
+            # NEW 필드들
+            client_ip=client_ip,
+            session_id=session_id,
+            success=success,
+            error_type=error_type,
+            search_results_count=search_results_count,
+            top_similarity_score=top_similarity_score,
+            cache_hit=cache_hit,
+            llm_backend=llm_backend,
+            llm_tokens=llm_tokens,
         )
 
         try:

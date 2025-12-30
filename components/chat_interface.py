@@ -275,10 +275,25 @@ def _generate_ai_response(
         opts = st.session_state.get("chat_options", {})
         top_k = opts.get("top_k", ChatConfig.DEFAULT_TOP_K)
 
+        # 세션 정보 수집 (NEW)
+        try:
+            import streamlit.runtime.scriptrunner as sr
+            ctx = sr.get_script_run_ctx()
+            session_id = ctx.session_id if ctx else "unknown"
+        except Exception:
+            session_id = "unknown"
+
+        # IP 주소는 현재 Streamlit에서 직접 추출 불가 → "localhost" 사용
+        # 실제 배포 시 nginx/proxy에서 X-Forwarded-For 헤더 사용 필요
+        client_ip = "localhost"
+
         raw_response = rag_instance.answer(
             query,
             top_k=top_k,
             selected_filename=selected_filename,
+            # NEW 파라미터 전달
+            client_ip=client_ip,
+            session_id=session_id,
         )
         logger.info(f"RAG query executed with top_k={top_k}, selected_filename={selected_filename}")
 

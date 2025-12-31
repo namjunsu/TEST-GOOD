@@ -414,20 +414,14 @@ def render_upload_section() -> None:
         for f in uploaded_files:
             st.text(f"• {f.name} ({f.size / 1024:.1f} KB)")
 
-    auto_ingest = st.checkbox(
-        "✅ 업로드 후 자동으로 시스템에 등록",
-        value=True,
-        help="체크하면 업로드 완료 후 자동으로 인제스트 실행",
-    )
-
-    if st.button("📥 업로드 시작", type="primary", use_container_width=True):
-        _process_upload(uploaded_files, auto_ingest)
+    if st.button("📥 업로드 및 등록", type="primary", use_container_width=True):
+        _process_upload(uploaded_files)
 
     _render_incoming_status()
 
 
-def _process_upload(uploaded_files: list, auto_ingest: bool) -> None:
-    """파일 업로드 처리"""
+def _process_upload(uploaded_files: list) -> None:
+    """파일 업로드 처리 (자동 인덱싱 포함)"""
     progress = st.progress(0)
     status = st.empty()
 
@@ -447,46 +441,162 @@ def _process_upload(uploaded_files: list, auto_ingest: bool) -> None:
 
     if success_count == len(uploaded_files):
         st.success(f"✅ {success_count}개 파일 업로드 완료")
-        if auto_ingest:
-            _run_auto_ingest(status, progress)
-        else:
-            st.info("💡 '인덱싱' 탭에서 '인제스트 실행' 버튼을 눌러주세요")
+        # 기존 위젯 정리
+        status.empty()
+        progress.empty()
+        # 자동 인덱싱 실행
+        _run_auto_ingest_with_progress()
     else:
         st.warning(f"⚠️ {success_count}/{len(uploaded_files)}개 업로드 성공")
+        status.empty()
+        progress.empty()
 
-    status.empty()
-    progress.empty()
 
+def _run_auto_ingest_with_progress() -> None:
+    """자동 인제스트 실행 (실시간 진행상황 표시)
 
-def _run_auto_ingest(status, progress) -> None:
-    """자동 인제스트 실행
-
-    Note: 인제스트 스크립트(ingest_from_docs.py)가 자동으로 인덱스 재빌드를 실행하므로
-          여기서는 중복 실행하지 않습니다.
+    개선사항:
+    - subprocess.Popen으로 실시간 출력 스트리밍
+    - st.status() 위젯으로 단계별 진행 표시
+    - 로그 파싱으로 파일 처리 현황 표시
     """
-    status.text("📥 시스템에 등록 중 (인덱스 자동 재빌드 포함)...")
-    progress.progress(0)
+    import os
+    import re
+    import subprocess
+    import sys
 
-    ingest_result = run_ingest()
-    progress.progress(100)
+    with st.status("📥 시스템 등록 중...", expanded=True) as status_widget:
+        try:
+            # 환경변수 설정 (PYTHONPATH)
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(PROJECT_ROOT)
 
-    if ingest_result.status != TaskStatus.SUCCESS:
-        st.error("❌ 인제스트 실패")
-        with st.expander("오류 로그"):
-            st.code(ingest_result.output)
-        return
+            # Popen으로 실시간 스트리밍
+            process = subprocess.Popen(
+                [sys.executable, "scripts/core/ingest_from_docs.py"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,  # Line-buffered
+                env=env,
+                cwd=str(PROJECT_ROOT),
+            )
 
-    # 인제스트 스크립트가 자동으로 인덱스 재빌드를 실행함
-    # 출력에서 성공/실패 확인
-    if "검색 인덱스 리빌드 완료" in ingest_result.output:
-        st.success("✅ 시스템 등록 완료! 검색 가능합니다.")
-    elif "인덱스 리빌드 실패" in ingest_result.output:
-        st.warning("⚠️ 인제스트 완료, 인덱스 재빌드 일부 실패")
-        with st.expander("상세 로그"):
-            st.code(ingest_result.output)
-    else:
-        st.success("✅ 인제스트 완료!")
-        st.info("💡 인덱싱 탭에서 '검색 인덱스 재빌드'를 실행해주세요")
+            # 진행상황 추적 변수
+            total_files = 0
+            current_file_idx = 0
+            log_lines = []
+
+            # 실시간 로그 파싱
+            if process.stdout is None:
+                st.error("프로세스 출력 스트림을 읽을 수 없습니다")
+                return
+
+            for line in iter(process.stdout.readline, ""):
+                if not line:
+                    break
+
+                log_lines.append(line.strip())
+
+                # 패턴 1: 총 파일 개수 추출
+                # "📄 처리 대상: 10개 파일"
+                match = re.search(r"처리 대상:\s*(\d+)개", line)
+                if match:
+                    total_files = int(match.group(1))
+                    st.write(f"📄 총 {total_files}개 파일 처리 예정")
+                    continue
+
+                # 패턴 2: 현재 처리 중인 파일
+                # "처리 중: example.pdf"
+                match = re.search(r"처리 중:\s*(.+)", line)
+                if match:
+                    current_file_idx += 1
+                    filename = match.group(1).strip()
+
+                    # 진행률 업데이트
+                    if total_files > 0:
+                        progress_pct = (current_file_idx / total_files) * 100
+                        status_widget.update(
+                            label=f"📄 텍스트 추출 중... ({current_file_idx}/{total_files} - {progress_pct:.0f}%)",
+                            state="running"
+                        )
+                    else:
+                        status_widget.update(
+                            label=f"📄 텍스트 추출 중... ({current_file_idx}개)",
+                            state="running"
+                        )
+
+                    st.write(f"▸ {filename}")
+                    continue
+
+                # 패턴 3: OCR 처리 감지
+                if "OCR 추출 시작" in line or "OCR 폴백" in line:
+                    st.caption("  🔍 OCR 처리 중... (시간이 걸릴 수 있습니다)")
+                    continue
+
+                # 패턴 4: 인덱스 재빌드 시작
+                if "검색 인덱스 자동 리빌드 시작" in line:
+                    status_widget.update(
+                        label="🔄 검색 인덱스 재빌드 중...",
+                        state="running"
+                    )
+                    st.write("인덱스 빌드 중... (최대 5분 소요)")
+                    continue
+
+                # 패턴 5: 인덱스 재빌드 완료
+                if "검색 인덱스 리빌드 완료" in line:
+                    st.write("✅ 인덱스 재빌드 완료")
+                    continue
+
+                # 패턴 6: 에러 감지
+                if "ERROR" in line or "실패" in line or "❌" in line:
+                    st.warning(line.strip())
+
+            # 프로세스 종료 대기 (timeout 적용)
+            returncode = process.wait(timeout=INGEST_TIMEOUT)
+
+            if returncode == 0:
+                status_widget.update(
+                    label="✅ 시스템 등록 완료! 검색 가능합니다.",
+                    state="complete"
+                )
+                st.success(f"🎉 {total_files}개 문서 등록 완료!")
+            else:
+                status_widget.update(
+                    label="❌ 등록 실패",
+                    state="error"
+                )
+                st.error("인제스트 실패 - 일부 파일 처리에 문제가 발생했습니다")
+
+                # 에러 로그 표시 (마지막 50줄)
+                with st.expander("🔍 상세 로그 (디버깅용)", expanded=True):
+                    st.code("\n".join(log_lines[-50:]))
+
+        except subprocess.TimeoutExpired:
+            status_widget.update(
+                label=f"⏱️ 타임아웃 ({INGEST_TIMEOUT}초 초과)",
+                state="error"
+            )
+            if process:
+                process.kill()
+
+            st.error(f"⏱️ 처리 시간이 {INGEST_TIMEOUT}초를 초과했습니다")
+            st.info("💡 대용량 파일이나 OCR이 필요한 경우 시간이 오래 걸릴 수 있습니다")
+
+            with st.expander("처리된 로그 확인"):
+                st.code("\n".join(log_lines))
+
+        except Exception as e:
+            status_widget.update(
+                label="❌ 오류 발생",
+                state="error"
+            )
+            st.error(f"예상치 못한 오류: {e}")
+
+            with st.expander("상세 정보", expanded=True):
+                st.exception(e)
+                if log_lines:
+                    st.code("\n".join(log_lines[-30:]))
 
 
 def _render_incoming_status() -> None:

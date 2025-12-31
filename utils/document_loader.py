@@ -218,9 +218,9 @@ class DocumentLoader:
                 cursor = conn.cursor()
                 cursor.execute("""
                     SELECT filename, path, date, year, category, drafter, keywords,
-                           title, page_count, created_at, display_date, file_size
+                           title, page_count, created_at, display_date, file_size, text_preview
                     FROM documents
-                    ORDER BY year DESC, filename ASC
+                    ORDER BY date DESC, filename ASC
                 """)
                 rows = cursor.fetchall()
 
@@ -229,7 +229,7 @@ class DocumentLoader:
             # 3. 문서 정보 처리
             documents: list[dict] = []
 
-            for filename, path, date, year, category, drafter, keywords, title, page_count, created_at, display_date, file_size in rows:
+            for filename, path, date, year, category, drafter, keywords, title, page_count, created_at, display_date, file_size, text_preview in rows:
                 # 카테고리 분류
                 doc_category = self._classify_category(filename, category)
 
@@ -242,9 +242,20 @@ class DocumentLoader:
                 except (ValueError, TypeError):
                     year_int = None
 
-                # title이 없으면 파일명에서 생성
-                if not title:
-                    stem = Path(filename).stem  # 확장자 제거
+                # title 결정 우선순위:
+                # 1. text_preview 첫 줄 (실제 문서 제목)
+                # 2. DB title 컬럼
+                # 3. 파일명에서 생성
+                if text_preview and text_preview.strip():
+                    # text_preview의 첫 줄을 제목으로 사용
+                    first_line = text_preview.split("\n")[0].strip()
+                    if first_line:
+                        title = first_line
+                    elif not title:
+                        stem = Path(filename).stem
+                        title = stem.replace("_", " ")
+                elif not title:
+                    stem = Path(filename).stem
                     title = stem.replace("_", " ")
 
                 # 파일 크기를 읽기 쉬운 형식으로 변환

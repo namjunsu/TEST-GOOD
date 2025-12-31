@@ -247,10 +247,13 @@ def display_document_list(
         year_display = int(year) if year else "미상"
         st.markdown(f"### {year_display}년 ({len(group)}개)")
 
+        # 날짜순 정렬 (최신 문서가 위로)
+        group_sorted = group.sort_values("date", ascending=False, na_position="last")
+
         # 옵션 생성 (dict 리스트)
         options = []
         labels = []
-        for _, row in group.iterrows():
+        for _, row in group_sorted.iterrows():
             row_dict = _as_dict(row)
             date_str = (
                 row_dict.get("date", "")[5:10]

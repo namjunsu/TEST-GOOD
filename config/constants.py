@@ -84,7 +84,7 @@ class LLMConfig:
     """
 
     # 모드별 max_tokens (.env와 동기화)
-    MAX_TOKENS_CHAT: int = 1024       # CHAT_MAX_TOKENS (스몰토크/일반)
+    MAX_TOKENS_CHAT: int = 2048       # CHAT_MAX_TOKENS (스몰토크/일반) - 2025-12-31: 1024→2048 (답변 잘림 방지)
     MAX_TOKENS_RAG: int = 4096        # RAG_MAX_TOKENS (근거 인용형)
     MAX_TOKENS_DETAILED: int = 4096   # DETAILED_MAX_TOKENS (자세히 모드, 실용적 응답 시간 1~4분)
     MAX_TOKENS_SUMMARIZE: int = 2048  # SUMMARIZE_MAX_TOKENS (요약)
@@ -126,7 +126,7 @@ class LLMGenerationConfig:
 
     # 모드별 토큰 예산 (H100 최적화, .env와 동기화)
     # 2025-12-23: LLMConfig와 일관성 유지
-    MODE_CHAT_MAX: int = 1024             # .env CHAT_MAX_TOKENS (512 → 1024 수정)
+    MODE_CHAT_MAX: int = 2048             # .env CHAT_MAX_TOKENS (1024 → 2048 수정, 2025-12-31)
     MODE_CHAT_CONTEXT: int = 2048         # 1024 → 2048 (컨텍스트도 증가)
     MODE_RAG_MAX: int = 4096              # .env RAG_MAX_TOKENS
     MODE_RAG_CONTEXT: int = 6000          # 4000 → 6000 (H100 최적화)

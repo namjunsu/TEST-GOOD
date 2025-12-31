@@ -1897,6 +1897,88 @@ class VllmLLM(BaseRAGLLM):
                 retry_count=0,
             )
 
+    def generate_response_stream(
+        self,
+        question: str,
+        context_chunks: list[dict[str, Any]],
+        max_tokens: Optional[int] = None,
+    ):
+        """vLLM으로 스트리밍 응답 생성 (Generator)
+
+        Args:
+            question: 사용자 질문
+            context_chunks: 컨텍스트 청크 리스트
+            max_tokens: 최대 생성 토큰
+
+        Yields:
+            str: 생성된 텍스트 청크
+        """
+        start_time = time.time()
+        effective_max_tokens = max_tokens if max_tokens is not None else self.config.max_tokens
+
+        try:
+            from vllm import SamplingParams
+
+            # 컨텍스트 포맷팅
+            context_text = self._format_context(context_chunks)
+
+            # 프롬프트 생성
+            user_prompt = self.IMPROVED_QUERY_TEMPLATE.format(
+                context=context_text,
+                query=question
+            )
+
+            # Qwen2.5 chat template 적용
+            messages = [
+                {"role": "system", "content": self.IMPROVED_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt}
+            ]
+
+            # 샘플링 파라미터
+            sampling_params = SamplingParams(
+                temperature=self.config.temperature,
+                max_tokens=effective_max_tokens,
+                top_p=self.config.top_p,
+                top_k=self.config.top_k,
+                repetition_penalty=self.config.repeat_penalty,
+            )
+
+            self.logger.info(f"🌊 vLLM 스트리밍 시작 - max_tokens={effective_max_tokens}")
+
+            # 스트리밍 추론 (use_tqdm=False for streaming)
+            request_id = f"req_{int(time.time() * 1000)}"
+
+            # vLLM.generate()를 사용하여 스트리밍
+            # chat()는 스트리밍 미지원이므로 generate() 사용
+            from transformers import AutoTokenizer
+            tokenizer = AutoTokenizer.from_pretrained(str(self.model_path), trust_remote_code=True)
+
+            # 메시지를 프롬프트로 변환
+            prompt = tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True
+            )
+
+            # 스트리밍 생성
+            full_text = ""
+            for output in self.llm.generate([prompt], sampling_params, use_tqdm=False):
+                # output.outputs[0].text는 전체 누적 텍스트
+                current_text = output.outputs[0].text
+
+                # 새로 추가된 부분만 yield
+                new_text = current_text[len(full_text):]
+                if new_text:
+                    full_text = current_text
+                    yield new_text
+
+            generation_time = time.time() - start_time
+            self.logger.info(f"✅ 스트리밍 완료 - 총 {len(full_text)}자, {generation_time:.2f}초")
+
+        except Exception as e:
+            self.logger.error(f"❌ vLLM 스트리밍 실패: {e}")
+            yield f"[스트리밍 오류: {str(e)}]"
+
 
 class Qwen72BLLM(BaseRAGLLM):
     """Qwen2.5-72B-Instruct-AWQ (Transformers 기반 - H100용)"""

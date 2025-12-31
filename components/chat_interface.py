@@ -449,12 +449,27 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
         thread = threading.Thread(target=run_rag, daemon=True)
         thread.start()
 
-        # 진행 상태 표시 (폴링) - 단순화: 일관된 메시지
+        # 진행 상태 표시 (폴링) - 사용자 친화적 메시지
         status_placeholder = st.empty()
 
         while not progress_state["done"]:
             elapsed = time.time() - start_time
-            status_placeholder.markdown(f"**답변 생성 중...** ({elapsed:.1f}초)")
+
+            # 시간에 따라 다른 메시지 표시
+            if elapsed < 10:
+                msg = f"**답변 생성 중...** ({elapsed:.1f}초)"
+            elif elapsed < 30:
+                msg = f"**답변 생성 중...** ({elapsed:.1f}초) - 문서 분석 중입니다"
+            elif elapsed < 60:
+                msg = f"**답변 생성 중...** ({elapsed:.1f}초) - 상세한 답변을 준비 중입니다"
+            elif elapsed < 120:
+                msg = f"**답변 생성 중...** ({int(elapsed)}초) - 품질 높은 답변을 위해 조금만 더 기다려주세요..."
+            else:
+                minutes = int(elapsed // 60)
+                seconds = int(elapsed % 60)
+                msg = f"**답변 생성 중...** ({minutes}분 {seconds}초) - 긴 답변을 생성하고 있습니다 🕐"
+
+            status_placeholder.markdown(msg)
             time.sleep(0.1)  # CPU 절약
 
         # 완료 후 상태 표시 제거

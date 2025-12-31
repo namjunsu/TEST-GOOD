@@ -242,21 +242,18 @@ class DocumentLoader:
                 except (ValueError, TypeError):
                     year_int = None
 
-                # title 결정 우선순위:
-                # 1. text_preview 첫 줄 (실제 문서 제목)
-                # 2. DB title 컬럼
-                # 3. 파일명에서 생성
-                if text_preview and text_preview.strip():
-                    # text_preview의 첫 줄을 제목으로 사용
-                    first_line = text_preview.split("\n")[0].strip()
-                    if first_line:
-                        title = first_line
-                    elif not title:
-                        stem = Path(filename).stem
-                        title = stem.replace("_", " ")
-                elif not title:
-                    stem = Path(filename).stem
-                    title = stem.replace("_", " ")
+                # title 생성: 파일명에서 날짜 부분 제거 후 언더스코어를 공백으로
+                # 예: "2025-12-31_채널A_광화문_IP_현황.pdf" → "채널A 광화문 IP 현황"
+                stem = Path(filename).stem  # 확장자 제거
+                parts = stem.split("_")
+
+                # 첫 번째 파트가 날짜 형식(YYYY-MM-DD)이면 제거
+                if parts and len(parts[0]) >= 8 and parts[0].count("-") >= 2:
+                    # 날짜 형식으로 보이면 제거
+                    parts = parts[1:]
+
+                # 언더스코어를 공백으로 치환하여 제목 생성
+                title = " ".join(parts) if parts else stem
 
                 # 파일 크기를 읽기 쉬운 형식으로 변환
                 if file_size:

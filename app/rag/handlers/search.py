@@ -165,9 +165,11 @@ class SearchHandler(BaseHandler):
                 return self._make_error_response("검색 기능을 사용할 수 없습니다.")
 
             search_results = self.retriever.search(expanded_keywords, top_k=search_top_k)
+            logger.info(f"🔎 검색 결과: {len(search_results)}건 반환됨")
 
             # 4. 파일명 추출 (중복 제거)
             filenames = self._extract_unique_filenames(search_results)
+            logger.info(f"✅ 고유 문서: {len(filenames)}건 (중복 제거 완료)")
 
             if not filenames:
                 return self._make_empty_response(f"'{keywords}' 관련 문서를 찾지 못했습니다.")
@@ -179,7 +181,7 @@ class SearchHandler(BaseHandler):
                 )
 
             # 5.5 기안자 필터가 있고 결과가 많으면 통계+샘플 응답
-            if drafter_filter and len(filenames) > 10:
+            if drafter_filter and len(filenames) > HandlerConfig.DRAFTER_STATS_THRESHOLD:
                 return self._handle_drafter_stats(drafter_filter, year_filter, filenames)
 
             # 6. 문서 상세 정보 조회

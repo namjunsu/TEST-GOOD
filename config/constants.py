@@ -359,7 +359,10 @@ class HandlerConfig:
     # calculate_max_docs용 문서 수 제한 (query_processor.py)
     SEARCH_DRAFTER_LIMIT: int = 50           # 기안자 필터 시 최대 문서 수
     SEARCH_LIST_LIMIT: int = 100             # 리스트/전체 쿼리 시 최대 문서 수
-    SEARCH_DEFAULT_LIMIT: int = 10           # 기본 최대 문서 수
+    SEARCH_DEFAULT_LIMIT: int = 15           # 기본 최대 문서 수 (10→15, 누락 최소화)
+
+    # 기안자 통계 표시 임계값 (search.py L182)
+    DRAFTER_STATS_THRESHOLD: int = 10        # 기안자 필터 시 통계 표시 임계값
 
     # 텍스트 품질 검사 임계값
     MIN_TEXT_LENGTH: int = 10               # 최소 텍스트 길이

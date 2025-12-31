@@ -11,6 +11,7 @@ import sqlite3
 from typing import Optional
 
 from app.core.logging import get_logger
+from config.constants import HandlerConfig
 
 logger = get_logger(__name__)
 
@@ -32,8 +33,8 @@ CONTENT_STOP_WORDS = [
 # 조사 (단어 경계에서만 제거)
 POSTPOSITIONS = [" 에 ", " 에서 ", " 이 ", " 가 ", " 을 ", " 를 "]
 
-# 개수 질의 키워드
-COUNT_KEYWORDS = ["몇개", "몆개", "몇 개", "몆 개", "개수", "총", "몇", "몆"]
+# 개수 질의 키워드 (constants.py에서 임포트)
+COUNT_KEYWORDS = HandlerConfig.COUNT_KEYWORDS
 
 # 리스트/전체 질의 키워드
 LIST_KEYWORDS = ["리스트", "목록", "보여"]

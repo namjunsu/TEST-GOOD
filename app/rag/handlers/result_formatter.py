@@ -14,13 +14,10 @@ from config.constants import HandlerConfig
 
 logger = get_logger(__name__)
 
-# 개수 질의 키워드 (query_processor.py와 동일, 순환 import 회피)
-_COUNT_KEYWORDS = ["몇개", "몆개", "몇 개", "몆 개", "개수", "총", "몇", "몆"]
-
 
 def _is_count_query(query: str) -> bool:
-    """개수를 묻는 쿼리인지 확인 (순환 import 회피용 로컬 구현)"""
-    return any(kw in query for kw in _COUNT_KEYWORDS)
+    """개수를 묻는 쿼리인지 확인"""
+    return any(kw in query for kw in HandlerConfig.COUNT_KEYWORDS)
 
 
 # 빈 값으로 간주할 값들 (UI 표시 시 필터링)
@@ -101,6 +98,12 @@ class ResultFormatter:
         # 유사 문서 추천 및 병합
         similar_documents, merged_count = self._find_similar_documents(
             query, filenames, evidence
+        )
+
+        # 로깅
+        logger.info(
+            f"✅ 검색 응답 생성 완료: {len(doc_details)}건 표시"
+            f"{f', {merged_count}건 병합' if merged_count > 0 else ''}"
         )
 
         return {

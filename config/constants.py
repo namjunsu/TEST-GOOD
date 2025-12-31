@@ -364,6 +364,9 @@ class HandlerConfig:
     # 기안자 통계 표시 임계값 (search.py L182)
     DRAFTER_STATS_THRESHOLD: int = 10        # 기안자 필터 시 통계 표시 임계값
 
+    # 개수 질의 키워드 (query_processor.py, result_formatter.py)
+    COUNT_KEYWORDS: tuple[str, ...] = ("몇개", "몆개", "몇 개", "몆 개", "개수", "총", "몇", "몆")
+
     # 텍스트 품질 검사 임계값
     MIN_TEXT_LENGTH: int = 10               # 최소 텍스트 길이
     MAX_SPECIAL_CHAR_RATIO: float = 0.2     # 특수문자 비율 상한
@@ -389,7 +392,7 @@ class HandlerConfig:
 
     # 종합 리포트 설정 (2025-12-26 추가)
     COMPREHENSIVE_REPORT_TOP_K: int = 20    # 종합 리포트용 검색 문서 수
-    COMPREHENSIVE_REPORT_MAX_DOCS: int = 15 # 종합 리포트 최대 분석 문서 수
+    COMPREHENSIVE_REPORT_MAX_DOCS: int = 15  # 종합 리포트 최대 분석 문서 수
 
 
 @dataclass(frozen=True)

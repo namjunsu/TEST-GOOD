@@ -431,7 +431,7 @@ class ExactMatchRetriever:
             if not doc:
                 continue
 
-            snippet = (doc.get("text_preview") or "")[:ExactMatchConfig.SNIPPET_MAX_LENGTH]
+            snippet = (doc.get("text_preview") or "")[:ExactMatchConfig.EXACT_MATCH_SNIPPET_MAX_LENGTH]
             if not snippet:
                 snippet = f"[{doc.get('filename', 'unknown')}]"
 

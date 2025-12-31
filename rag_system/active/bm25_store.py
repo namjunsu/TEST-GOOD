@@ -493,8 +493,8 @@ class BM25Store:
     def search(
         self,
         query: str,
-        top_k: int = BM25Config.DEFAULT_TOP_K,
-        snippet_max: int = BM25Config.SNIPPET_MAX_LENGTH,
+        top_k: int = BM25Config.BM25_SEARCH_TOP_K,
+        snippet_max: int = BM25Config.BM25_SNIPPET_MAX_LENGTH,
         **kwargs,
     ) -> list[dict[str, Any]]:
         """BM25 스코어로 문서 검색 (성능 추적 포함)

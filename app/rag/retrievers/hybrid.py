@@ -55,7 +55,7 @@ logger = get_logger(__name__)
 # 환경변수 캐싱 (모듈 로드 시 1회만 읽음)
 # ============================================================================
 
-_ENV_SNIPPET_MAX_LENGTH = int(os.getenv("SNIPPET_MAX_LENGTH", str(HybridRetrieverConfig.SNIPPET_MAX_LENGTH)))
+_ENV_SNIPPET_MAX_LENGTH = int(os.getenv("SNIPPET_MAX_LENGTH", str(HybridRetrieverConfig.HYBRID_SNIPPET_MAX_LENGTH)))
 _ENV_RETRIEVE_TOPK = int(os.getenv("RETRIEVE_TOPK", str(HybridRetrieverConfig.RETRIEVE_TOPK)))
 _ENV_DISPLAY_LIMIT = int(os.getenv("DISPLAY_LIMIT", str(HybridRetrieverConfig.DISPLAY_LIMIT)))
 _ENV_USE_BM25 = os.getenv("RETRIEVER_BACKEND", "bm25").lower() == "bm25"

@@ -118,7 +118,7 @@ class QwenLLM(BaseRAGLLM):
     def _load_optimization_config(self):
         """LLM 최적화 설정 로드"""
         self.use_optimized_prompts = False
-        self.max_context_tokens = LLMWrapperConfig.MAX_CONTEXT_TOKENS
+        self.max_context_tokens = LLMWrapperConfig.WRAPPER_MAX_CONTEXT_TOKENS
         self.max_response_tokens = LLMWrapperConfig.MAX_RESPONSE_TOKENS
 
         config_path = Path(__file__).parent.parent / "config" / "llm_optimization.yaml"
@@ -128,7 +128,7 @@ class QwenLLM(BaseRAGLLM):
             self.use_optimized_prompts = True
             self.max_context_tokens = int(os.environ.get(
                 "MAX_CONTEXT_TOKENS",
-                str(LLMWrapperConfig.MAX_CONTEXT_TOKENS),
+                str(LLMWrapperConfig.WRAPPER_MAX_CONTEXT_TOKENS),
             ))
             self.logger.info("환경변수로 최적화 활성화")
 
@@ -141,7 +141,7 @@ class QwenLLM(BaseRAGLLM):
                         self.use_optimized_prompts = opt_config["prompts"].get("use_optimized", False)
                         self.max_context_tokens = opt_config["prompts"].get(
                             "max_context_tokens",
-                            LLMWrapperConfig.MAX_CONTEXT_TOKENS,
+                            LLMWrapperConfig.WRAPPER_MAX_CONTEXT_TOKENS,
                         )
                         self.max_response_tokens = opt_config["prompts"].get(
                             "max_response_tokens",

@@ -19,7 +19,7 @@ class SearchConfig:
     """검색 관련 상수"""
 
     # top_k 기본값
-    DEFAULT_TOP_K: int = 5
+    SEARCH_RESULT_TOP_K: int = 5             # 검색 결과 기본 top_k
     DETAILED_TOP_K: int = 8
     SEARCH_TOP_K: int = 10
     ALL_DOCS_TOP_K: int = 200  # "전부", "모두" 쿼리용
@@ -40,7 +40,7 @@ class SearchConfig:
 
     # UI 표시 제한
     CARD_DISPLAY_LIMIT: int = 10
-    SNIPPET_MAX_LENGTH: int = 400
+    CARD_SNIPPET_MAX_LENGTH: int = 400       # UI 카드용 스니펫 길이
     TITLE_MAX_LENGTH: int = 160
 
 
@@ -99,7 +99,7 @@ class LLMConfig:
     DEFAULT_COMPRESSION_RATIO: float = 0.7
 
     # 컨텍스트 제한
-    MAX_CONTEXT_TOKENS: int = 3200
+    PROMPT_MAX_CONTEXT_TOKENS: int = 3200    # 프롬프트 빌더용 컨텍스트 토큰
     MAX_CONTEXT_CHARS: int = 10000
     PROMPT_CONTEXT_MAX_CHARS: int = 12000    # 프롬프트 빌더 컨텍스트 최대 길이
 
@@ -117,7 +117,7 @@ class LLMGenerationConfig:
     DEFAULT_TEMPERATURE: float = 0.2      # RAG 일관성: 0.7 → 0.2
     DEFAULT_MAX_TOKENS: int = 4096        # 512 → 4096 (H100: 긴 문서 응답 지원)
     DEFAULT_TOP_P: float = 0.9
-    DEFAULT_TOP_K: int = 40
+    GENERATION_TOP_K: int = 40            # LLM 생성 샘플링 top_k
     DEFAULT_REPEAT_PENALTY: float = 1.1
 
     # 적응형 길이 설정
@@ -151,7 +151,7 @@ class LLMWrapperConfig:
     """
 
     # === 컨텍스트/응답 토큰 설정 ===
-    MAX_CONTEXT_TOKENS: int = 4000          # 최대 컨텍스트 토큰
+    WRAPPER_MAX_CONTEXT_TOKENS: int = 4000  # Wrapper 내부용 최대 컨텍스트 토큰
     MAX_RESPONSE_TOKENS: int = 1200         # 기본 최대 응답 토큰
 
     # === 모드별 max_tokens ===
@@ -511,7 +511,7 @@ class HybridRetrieverConfig:
     """HybridRetriever 환경변수 기본값 (retrievers/hybrid.py용)"""
 
     # 검색 설정
-    SNIPPET_MAX_LENGTH: int = 3600          # 스니펫 최대 길이
+    HYBRID_SNIPPET_MAX_LENGTH: int = 3600   # 하이브리드 검색용 스니펫 길이
     RETRIEVE_TOPK: int = 200                # 검색 top_k 기본값
     DISPLAY_LIMIT: int = 20                 # 표시 제한
 
@@ -545,7 +545,7 @@ class ExactMatchConfig:
     RECENCY_WEIGHT: float = 0.1             # 최신성 가중 (연도당)
 
     # 스니펫 설정
-    SNIPPET_MAX_LENGTH: int = 800           # 스니펫 최대 길이
+    EXACT_MATCH_SNIPPET_MAX_LENGTH: int = 800  # 정확일치 검색용 스니펫 길이
 
     # 스코어 범위
     SCORE_MIN: float = 0.0                  # 최소 스코어
@@ -763,7 +763,7 @@ class EmbeddingsConfig:
 
     # 검색 설정
     DEFAULT_SEARCH_TOP_K: int = 20           # 벡터 검색 기본 top_k (H100: 10 → 20)
-    SNIPPET_MAX_LENGTH: int = 600            # 스니펫 최대 길이 (H100: 500 → 600)
+    EMBEDDING_SNIPPET_MAX_LENGTH: int = 600  # 임베딩 검색용 스니펫 길이 (H100: 500 → 600)
 
 
 @dataclass(frozen=True)
@@ -807,7 +807,7 @@ class QueryRoutingConfig:
     SUMMARY_MAX_CONTEXT: int = 3500          # summary 모드 max_context_tokens
     NUMERIC_TOP_K: int = 6                   # numeric 모드 top_k
     NUMERIC_MAX_CONTEXT: int = 2500          # numeric 모드 max_context_tokens
-    DEFAULT_TOP_K: int = 5                   # 기본 QA 모드 top_k
+    QA_MODE_TOP_K: int = 5                   # 기본 QA 모드 top_k
     DEFAULT_MAX_CONTEXT: int = 2000          # 기본 QA 모드 max_context_tokens
 
     # 쿼리 판단 임계값
@@ -915,7 +915,7 @@ class PipelineConfig:
     FALLBACK_SNIPPET_LENGTH: int = 1000      # 폴백 스니펫 길이
 
     # 기본 검색 설정 (신뢰성 최우선 2025-12-26)
-    DEFAULT_TOP_K: int = 20                  # query() 기본 top_k (10 → 20, 정보 누락 최소화)
+    PIPELINE_TOP_K: int = 20                 # query() 기본 top_k (10 → 20, 정보 누락 최소화)
     DEFAULT_COMPRESSION_RATIO: float = 0.7   # 기본 압축 비율
 
     # 로그 미리보기 설정
@@ -957,10 +957,10 @@ class BM25Config:
     TOKENIZER_CACHE_SIZE: int = 4096
 
     # 검색 스니펫 최대 길이 (H100: 5000 → 8000)
-    SNIPPET_MAX_LENGTH: int = 8000
+    BM25_SNIPPET_MAX_LENGTH: int = 8000      # BM25 검색용 스니펫 길이
 
     # top_k 기본값
-    DEFAULT_TOP_K: int = 10
+    BM25_SEARCH_TOP_K: int = 10              # BM25 검색 기본 top_k
 
     # 최소 점수 임계값
     MIN_SCORE_THRESHOLD: float = 0.0
@@ -970,7 +970,7 @@ class BM25Config:
 def get_search_config() -> dict:
     """SearchConfig를 환경변수로 오버라이드"""
     return {
-        "default_top_k": int(os.getenv("SEARCH_TOP_K", SearchConfig.DEFAULT_TOP_K)),
+        "default_top_k": int(os.getenv("SEARCH_TOP_K", SearchConfig.SEARCH_RESULT_TOP_K)),
         "rag_min_score": float(os.getenv("RAG_MIN_SCORE", SearchConfig.RAG_MIN_SCORE)),
         "bm25_min_abs": float(os.getenv("BM25_MIN_ABS", SearchConfig.BM25_MIN_ABS)),
         "vec_min_abs": float(os.getenv("VEC_MIN_ABS", SearchConfig.VEC_MIN_ABS)),

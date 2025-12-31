@@ -1722,7 +1722,12 @@ class VllmLLM(BaseRAGLLM):
 2. 문서에 있는 정보만 사용하세요. 추측하지 마세요.
 3. 숫자/금액/날짜는 정확하게 인용하세요.
 4. ★ 반드시 출처를 [파일명.pdf] 형식으로 명시하세요.
-5. 반드시 {ANSWER_LANGUAGE}로 답변하세요.
+
+[언어 규칙] - 매우 중요!
+★ 반드시 {ANSWER_LANGUAGE}로만 답변하세요.
+★ 절대 중국어, 영어, 일본어 등 다른 언어를 사용하지 마세요.
+★ 번역이나 언어 전환을 하지 마세요.
+★ 전체 응답을 처음부터 끝까지 {ANSWER_LANGUAGE}로만 작성하세요.
 
 [출처 인용 - 필수]
 - 모든 사실적 주장에는 반드시 출처를 표시하세요.
@@ -1993,7 +1998,12 @@ class Qwen72BLLM(BaseRAGLLM):
 ★ 문서에 있는 정보만 사용하세요. 추측 금지.
 ★ 숫자/금액/날짜는 정확하게 인용하세요.
 ★ 출처를 [파일명.pdf] 형식으로 표시하세요.
-★ 반드시 {ANSWER_LANGUAGE}로 답변하세요."""
+
+[언어 규칙] - 매우 중요!
+★ 반드시 {ANSWER_LANGUAGE}로만 답변하세요.
+★ 절대 중국어, 영어, 일본어 등 다른 언어를 사용하지 마세요.
+★ 번역이나 언어 전환을 하지 마세요.
+★ 전체 응답을 처음부터 끝까지 {ANSWER_LANGUAGE}로만 작성하세요."""
 
     def __init__(self, model_path: Optional[str] = None, config: Optional[GenerationConfig] = None, length_analyzer: Any = None):
         super().__init__()

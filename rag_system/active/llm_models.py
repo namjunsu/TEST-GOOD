@@ -19,7 +19,7 @@ from config.constants import LLMGenerationConfig
 DEFAULT_TEMPERATURE = LLMGenerationConfig.DEFAULT_TEMPERATURE
 DEFAULT_MAX_TOKENS = LLMGenerationConfig.DEFAULT_MAX_TOKENS
 DEFAULT_TOP_P = LLMGenerationConfig.DEFAULT_TOP_P
-DEFAULT_TOP_K = LLMGenerationConfig.DEFAULT_TOP_K
+DEFAULT_TOP_K = LLMGenerationConfig.GENERATION_TOP_K
 DEFAULT_REPEAT_PENALTY = LLMGenerationConfig.DEFAULT_REPEAT_PENALTY
 MAX_LLM_RETRY = int(os.getenv("MAX_LLM_RETRY", "1"))  # .env에서 읽기
 

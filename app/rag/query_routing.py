@@ -190,7 +190,7 @@ def route_query(query: str) -> dict[str, Any]:
     else:
         # 일반 QA: 청크 병합으로 컨텍스트 연속성 보장
         retriever_params = {
-            "top_k": QueryRoutingConfig.DEFAULT_TOP_K,
+            "top_k": QueryRoutingConfig.QA_MODE_TOP_K,
             "chunk_merge": True,
             "max_context_tokens": QueryRoutingConfig.DEFAULT_MAX_CONTEXT,
         }

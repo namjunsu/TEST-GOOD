@@ -148,7 +148,7 @@ class RAGPipeline:
     def query(
         self,
         query: str,
-        top_k: int = PipelineConfig.DEFAULT_TOP_K,
+        top_k: int = PipelineConfig.PIPELINE_TOP_K,
         compression_ratio: float = PipelineConfig.DEFAULT_COMPRESSION_RATIO,
         _use_hyde: bool = False,  # Reserved for future HyDE implementation
         temperature: float = 0.1,
@@ -744,7 +744,7 @@ class RAGPipeline:
             # 🔧 QA 모드도 actual_query로 검색 (대화 컨텍스트 오염 방지)
             _notify("search", "관련 문서 검색 중...")
             _notify("generate", "AI 답변 생성 중...")
-            response = self.query(enhanced_query, top_k=top_k or PipelineConfig.DEFAULT_TOP_K, selected_filename=selected_filename)
+            response = self.query(enhanced_query, top_k=top_k or PipelineConfig.PIPELINE_TOP_K, selected_filename=selected_filename)
             _notify("complete", "완료")
 
             if response.success:
@@ -833,7 +833,7 @@ class RAGPipeline:
 
         # hasattr(self.generator, "rag")가 False인 경우의 폴백
         # actual_query는 이미 상단에서 정제됨 (Phase 2-3, Line 507-513)
-        response = self.query(actual_query, top_k=top_k or PipelineConfig.DEFAULT_TOP_K, selected_filename=selected_filename)
+        response = self.query(actual_query, top_k=top_k or PipelineConfig.PIPELINE_TOP_K, selected_filename=selected_filename)
 
         if response.success:
             evidence = [

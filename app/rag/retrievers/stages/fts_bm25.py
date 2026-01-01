@@ -36,7 +36,7 @@ class FTSBM25Stage(BaseSearchStage):
         query_expander: Optional["QueryExpander"] = None,
         parallel_executor: Optional["ParallelSearchExecutor"] = None,
         device_pattern: Optional[str] = None,
-        snippet_max_length: int = HybridRetrieverConfig.SNIPPET_MAX_LENGTH,
+        snippet_max_length: int = HybridRetrieverConfig.HYBRID_SNIPPET_MAX_LENGTH,
     ):
         """초기화
 

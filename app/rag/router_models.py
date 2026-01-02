@@ -13,15 +13,19 @@ from typing import Optional
 
 @dataclass
 class ScoreStats:
-    """검색 결과 점수 통계"""
+    """검색 결과 점수 통계 (Low-confidence 가드레일용)
 
-    top1: float
-    top2: float
-    top3: float
-    delta12: float
-    delta13: float
-    ratio12: float  # top1 / max(top2, 1e-9)
-    hits: int
+    검색 품질을 평가하기 위한 상위 결과 점수 분석.
+    delta12가 작거나 ratio12가 낮으면 모호한 쿼리로 판단.
+    """
+
+    top1: float      # 1위 문서의 검색 점수
+    top2: float      # 2위 문서의 검색 점수
+    top3: float      # 3위 문서의 검색 점수
+    delta12: float   # 1위와 2위 점수 차이 (top1 - top2)
+    delta13: float   # 1위와 3위 점수 차이 (top1 - top3)
+    ratio12: float   # 1위/2위 점수 비율 (top1 / max(top2, 1e-9))
+    hits: int        # 검색 히트 수 (총 매칭된 문서 개수)
 
 
 class QueryMode(Enum):
@@ -65,10 +69,12 @@ class RouteDecision:
     reason: str
     confidence: float
 
-    # 의도 플래그
-    list_intent: bool = False  # 목록 반환 의도 (리스트, 목록, 전부, 모든)
-    content_intent: bool = False  # 내용 반환 의도 (요약, 미리보기, 내용)
-    cost_intent: bool = False  # 비용 조회 의도 (총액, 금액, 얼마)
+    # 의도 플래그 (복수 선택 가능, 모드 내 세부 동작 제어)
+    # 예: SEARCH + list_intent=True → LLM 건너뛰고 목록 스키마 반환
+    #     DOCUMENT + content_intent=True → 내용 미리보기 포함
+    list_intent: bool = False      # 목록 반환 (리스트, 목록, 전부, 모든)
+    content_intent: bool = False   # 내용 표시 (요약, 미리보기, 내용)
+    cost_intent: bool = False      # 비용 조회 (총액, 금액, 얼마)
 
     # 추출된 파라미터 (필터링용)
     drafter: Optional[str] = None  # 기안자 이름

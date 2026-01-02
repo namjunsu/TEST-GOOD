@@ -128,6 +128,22 @@ class RAGPipeline:
     # query() 헬퍼 메서드 (Phase 3 리팩터링)
     # ========================================================================
 
+    def _normalize_current_question(self, query: str) -> str:
+        """'현재 질문:' 접두사 제거 및 UI 메타데이터 정제
+
+        Args:
+            query: 원본 쿼리
+
+        Returns:
+            정제된 쿼리
+        """
+        actual_query = query
+        if "현재 질문:" in query:
+            parts = query.split("현재 질문:")
+            if len(parts) > 1:
+                actual_query = parts[-1].strip()
+        return clean_ui_metadata(actual_query)
+
     def _validate_query_input(self, query: str) -> Optional[RAGResponse]:
         """입력 검증 - 빈 쿼리면 에러 응답 반환
 
@@ -483,13 +499,16 @@ class RAGPipeline:
         import time
         start_time = time.time()
 
-        def _log_and_return(result: dict, mode: str, actual_query: str) -> dict:
+        def _log_and_return(result: dict[str, Any], mode: str, actual_query: str) -> dict[str, Any]:
             """결과 반환 전 대화 로깅
 
             Args:
                 result: 응답 딕셔너리
                 mode: 처리 모드
                 actual_query: 정제된 쿼리 (UI 메타데이터 제거 + "현재 질문:" 분리)
+
+            Returns:
+                로깅 완료된 result 딕셔너리
             """
             try:
                 import os
@@ -510,7 +529,7 @@ class RAGPipeline:
                 if not answer_text or answer_text.strip() == "":
                     success = False
                     error_type = "no_answer"
-                elif elapsed_ms > 600000:  # 10분 초과
+                elif elapsed_ms > PipelineConfig.ANSWER_TIMEOUT_MS:  # 10분 초과
                     error_type = "timeout"
                 elif search_count == 0 and mode in ["search", "document"]:
                     error_type = "no_results"
@@ -542,12 +561,8 @@ class RAGPipeline:
             return result
 
         # 2025-12-26: Phase 2-3 - 쿼리 정제를 최상단에서 먼저 수행 (라우팅/캐시 키 통일)
-        actual_query = query
-        if "현재 질문:" in query:
-            parts = query.split("현재 질문:")
-            if len(parts) > 1:
-                actual_query = parts[-1].strip()
-        actual_query = clean_ui_metadata(actual_query)
+        # 2026-01-02: Phase 1.1 - 정규화 로직 헬퍼로 추출 (DRY 원칙)
+        actual_query = self._normalize_current_question(query)
 
         # 🎯 조기 라우팅: 정제된 쿼리로 모드 결정
         # 2025-12-23: 동일 쿼리라도 모드에 따라 다른 결과가 나올 수 있음
@@ -596,7 +611,7 @@ class RAGPipeline:
             normalized_filename = unicodedata.normalize("NFKC", selected_filename).strip()
             normalized_filename = re.sub(r"\s+", " ", normalized_filename)
 
-            # actual_query는 이미 상단에서 정제됨 (Phase 2-3)
+            # actual_query는 이미 Line 562에서 _normalize_current_question()로 정제됨
             result = self._answer_document(actual_query, selected_filename=normalized_filename)
 
             # 결과 캐싱
@@ -607,7 +622,7 @@ class RAGPipeline:
 
         # 🔥 CRITICAL: 기안자/날짜 검색은 QuickFixRAG에 위임 (전문 로직 보유)
         if hasattr(self.generator, "rag"):
-            # actual_query는 이미 상단에서 정제됨 (Phase 2-3, Line 507-513)
+            # actual_query는 이미 Line 562에서 _normalize_current_question()로 정제됨
 
             # 🔍 쿼리에서 문서명 추출 (사용자가 직접 타이핑한 경우)
             # 패턴: "문서제목 이 문서/해당 문서 ..."

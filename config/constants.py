@@ -936,6 +936,9 @@ class PipelineConfig:
     # Evidence 폴백
     EVIDENCE_FALLBACK_COUNT: int = 3         # raw_results 폴백 시 사용할 개수
 
+    # 타임아웃 설정
+    ANSWER_TIMEOUT_MS: int = 600000          # 응답 타임아웃 (10분, 600초)
+
 
 @dataclass(frozen=True)
 class BM25Config:

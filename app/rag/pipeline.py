@@ -45,6 +45,7 @@ from app.rag.query_routing import (
     _encode_file_ref,
     clean_ui_metadata,
 )
+from app.rag.router_models import RouteDecision
 from app.rag.response_builder import ResponseBuilder, get_response_builder
 from app.rag.similarity import DocumentSimilarity
 from config.constants import PipelineConfig
@@ -143,6 +144,338 @@ class RAGPipeline:
             if len(parts) > 1:
                 actual_query = parts[-1].strip()
         return clean_ui_metadata(actual_query)
+
+    def _check_cache(
+        self,
+        cache_key: str,
+        route_mode: str,
+        actual_query: str
+    ) -> Optional[dict[str, Any]]:
+        """2-tier 캐시 확인 (메모리 → 영구)
+
+        Args:
+            cache_key: 캐시 키
+            route_mode: 라우팅 모드
+            actual_query: 정제된 쿼리
+
+        Returns:
+            캐시된 결과 또는 None
+        """
+        # Tier 1: 메모리 캐시 확인
+        cached_result = get_cached_result(cache_key)
+        if cached_result:
+            logger.info(f"🎯 Memory Cache HIT! mode={route_mode}, query: {actual_query[:50]}...")
+            if "status" in cached_result:
+                cached_result["status"]["from_cache"] = "memory"
+            return cached_result
+
+        # Tier 2: 영구 캐시 확인
+        cached_result = get_cached_result_persistent(cache_key)
+        if cached_result:
+            logger.info(f"💾 Persistent Cache HIT! mode={route_mode}, query: {actual_query[:50]}...")
+            # 영구 캐시에서 가져온 결과를 메모리 캐시에도 저장
+            cache_query_result(cache_key, cached_result)
+            if "status" in cached_result:
+                cached_result["status"]["from_cache"] = "persistent"
+            return cached_result
+
+        return None
+
+    def _handle_selected_document(
+        self,
+        actual_query: str,
+        selected_filename: str,
+        cache_key: str
+    ) -> dict[str, Any]:
+        """선택된 문서 즉시 처리 (검색·라우팅 스킵)
+
+        조기 단락(early return) 패턴으로 성능 향상.
+        검색·라우팅·압축 단계 완전 생략 → 20~60% 지연시간 감소
+
+        Args:
+            actual_query: 정제된 쿼리
+            selected_filename: 선택된 파일명
+            cache_key: 캐시 키
+
+        Returns:
+            DOCUMENT 모드 응답 딕셔너리
+        """
+        logger.info(f"⚡ 선택된 문서({selected_filename}) 감지 → 즉시 DOCUMENT 모드 실행 (검색 스킵)")
+
+        # 파일명 정규화 (NFKC, 공백 정규화)
+        import unicodedata
+        normalized_filename = unicodedata.normalize("NFKC", selected_filename).strip()
+        normalized_filename = re.sub(r"\s+", " ", normalized_filename)
+
+        # 문서 답변 생성
+        result = self._answer_document(actual_query, selected_filename=normalized_filename)
+
+        # 2-tier 캐시 저장
+        cache_query_result(cache_key, result)
+        cache_query_result_persistent(cache_key, result)
+
+        return result
+
+    def _extract_document_reference(self, actual_query: str) -> Optional[str]:
+        """쿼리에서 문서 참조 추출 (DB 검색)
+
+        패턴: "문서제목 이 문서/해당 문서 ..."
+        예: "2025-01-09_광화문_스튜디오 이 문서에 대해 설명해줘"
+
+        Args:
+            actual_query: 정제된 쿼리
+
+        Returns:
+            매칭된 파일명 또는 None
+        """
+        # 문서 참조 패턴 매칭
+        doc_ref_pattern = r"^(.+?)\s+(이\s?문서|해당\s?문서|이문서)"
+        match = re.match(doc_ref_pattern, actual_query, re.IGNORECASE)
+        if not match:
+            return None
+
+        # 후보 제목 추출 및 날짜 패턴 제거
+        candidate_title = match.group(1).strip()
+        candidate_title = re.sub(r"^\d{4}[-_]\d{2}[-_]\d{2}[-_]", "", candidate_title)
+
+        # metadata_db에서 제목으로 문서 검색
+        from app.data.metadata_db import MetadataDB
+        db = MetadataDB()
+
+        try:
+            # 제목 정규화 (특수문자, 공백 처리)
+            normalized_title = candidate_title.replace("_", " ").replace("&", "").strip()
+
+            # DB에서 제목 유사도 검색 (LIKE 패턴)
+            conn = db._get_conn()
+            cursor = conn.cursor()
+            query_sql = """
+                SELECT filename, title FROM documents
+                WHERE title LIKE ? OR filename LIKE ?
+                ORDER BY
+                    CASE
+                        WHEN title = ? THEN 1
+                        WHEN title LIKE ? THEN 2
+                        ELSE 3
+                    END
+                LIMIT 1
+            """
+            like_pattern = f"%{normalized_title}%"
+            cursor.execute(query_sql, (like_pattern, like_pattern, candidate_title, f"{candidate_title}%"))
+            result = cursor.fetchone()
+
+            if result:
+                selected_filename = result[0]
+                logger.info(f"📌 쿼리에서 문서명 추출: '{candidate_title}' → '{selected_filename}'")
+                return selected_filename
+
+        except sqlite3.OperationalError as e:
+            logger.debug(f"문서명 추출 중 DB 일시 오류 (무시): {e}")
+        except sqlite3.Error as e:
+            logger.warning(f"⚠️ 문서명 추출 중 DB 오류 (무시): {e}")
+
+        return None
+
+    def _route_to_handler(
+        self,
+        actual_query: str,
+        route_decision: RouteDecision,
+        selected_filename: Optional[str]
+    ) -> Optional[dict[str, Any]]:
+        """모드별 전문 핸들러 라우팅
+
+        각 QueryMode에 맞는 핸들러로 요청을 위임.
+        QA 모드는 None을 반환하여 표준 파이프라인으로 폴백.
+
+        Args:
+            actual_query: 정제된 쿼리
+            route_decision: 라우팅 결정
+            selected_filename: 선택된 파일명 (optional)
+
+        Returns:
+            핸들러 응답 또는 None (QA 모드 - 표준 파이프라인으로 폴백)
+        """
+        from app.rag.query_routing import QueryMode
+        from app.api.notify import notify as _notify
+
+        mode = route_decision.mode
+
+        logger.info(f"🔀 라우팅 결과: mode={mode.value}, reason={route_decision.reason}")
+
+        # 💰 COST 모드: 비용 합계 직접 조회
+        if mode == QueryMode.COST:
+            _notify("search", "비용 데이터 조회 중...")
+            _notify("generate", "합계 계산 중...")
+            result = self._answer_cost_sum(actual_query)
+            _notify("complete", "완료")
+            return result
+
+        # 📄 DOCUMENT 모드: 문서 내용/요약
+        if mode == QueryMode.DOCUMENT:
+            _notify("search", "문서 로드 중...")
+            _notify("generate", "AI 답변 생성 중...")
+            result = self._answer_document(actual_query, selected_filename=selected_filename)
+            _notify("complete", "완료")
+            return result
+
+        # 🔍 SEARCH 모드: 문서 검색
+        if mode == QueryMode.SEARCH:
+            _notify("search", "문서 검색 중...")
+            result = self._answer_search(actual_query)
+            _notify("complete", "완료")
+            return result
+
+        # 🎯 SEARCH_CONTENT_ONLY 모드: 정밀 내용 검색
+        if mode == QueryMode.SEARCH_CONTENT_ONLY:
+            _notify("search", "정밀 검색 중...")
+            result = self._answer_search_content_only(actual_query)
+            _notify("complete", "완료")
+            return result
+
+        # 📊 YEAR_SUMMARY 모드: 연도별 다중 문서 요약
+        if mode == QueryMode.YEAR_SUMMARY:
+            _notify("search", f"{route_decision.year}년 문서 검색 중...")
+            _notify("generate", "요약 생성 중...")
+            result = self._answer_year_summary(actual_query, route_decision.year, route_decision.drafter)
+            _notify("complete", "완료")
+            return result
+
+        # 📊 COMPREHENSIVE_REPORT 모드: 종합 리포트 생성
+        if mode == QueryMode.COMPREHENSIVE_REPORT:
+            _notify("search", "관련 문서 검색 중...")
+            _notify("generate", "종합 리포트 생성 중...")
+            result = self._comprehensive_report_handler.handle(actual_query)
+            _notify("complete", "완료")
+            return result
+
+        # QA 모드는 None 반환 → 표준 파이프라인으로 폴백
+        return None
+
+    def _run_standard_pipeline(
+        self,
+        actual_query: str,
+        enhanced_query: str,
+        top_k: Optional[int],
+        selected_filename: Optional[str],
+        route_decision: Optional[RouteDecision],
+        cache_key: str,
+        table_request_detected: bool
+    ) -> dict[str, Any]:
+        """표준 RAG 파이프라인 실행 (검색 → 압축 → 생성)
+
+        QA 모드 및 표준 처리 경로에서 사용.
+
+        Args:
+            actual_query: 정제된 쿼리
+            enhanced_query: 향상된 쿼리 (표 요청 프롬프트 포함)
+            top_k: 검색 결과 개수
+            selected_filename: 선택된 파일명
+            route_decision: 라우팅 결정
+            cache_key: 캐시 키
+            table_request_detected: 표 정리 요청 여부
+
+        Returns:
+            RAG 파이프라인 응답 딕셔너리
+        """
+        from app.api.notify import notify as _notify
+
+        logger.info(f"🔍 Pattern matching 대상 쿼리: '{actual_query[:100]}'")
+
+        # 📊 표 정리 요청 처리
+        if table_request_detected:
+            logger.info("📊 표 정리 요청 감지: top_k 확대 (5 → 20), 프롬프트 강화")
+
+        # RAG 파이프라인 실행
+        _notify("search", "관련 문서 검색 중...")
+        _notify("generate", "AI 답변 생성 중...")
+        response = self.query(
+            enhanced_query,
+            top_k=top_k or PipelineConfig.PIPELINE_TOP_K,
+            selected_filename=selected_filename
+        )
+        _notify("complete", "완료")
+
+        if not response.success:
+            # 실패 시 빈 응답 반환
+            return {
+                "text": response.answer or "검색 결과가 없습니다.",
+                "citations": [],
+                "evidence": [],
+                "status": {"retrieved_count": 0, "selected_count": 0, "found": False},
+            }
+
+        # Evidence 구성
+        evidence = [
+            {
+                "doc_id": c.get("doc_id"),
+                "page": c.get("page", 1),
+                "snippet": c.get("snippet", ""),
+                "meta": c.get("meta", {"doc_id": c.get("doc_id"), "page": c.get("page", 1)}),
+            }
+            for c in (response.evidence_chunks or [])
+        ]
+
+        # Evidence 폴백 (검색 결과는 있지만 evidence가 없는 경우)
+        evidence_injected = False
+        if not evidence and response.raw_results:
+            logger.info("Evidence empty, using raw_results[:3] as fallback")
+            evidence = [
+                {
+                    "doc_id": r.get("doc_id") or r.get("chunk_id", "unknown"),
+                    "page": 0,
+                    "snippet": r.get("snippet") or r.get("text_preview", "")[:PipelineConfig.SNIPPET_PREVIEW_LENGTH],
+                    "meta": {
+                        "doc_id": r.get("doc_id") or r.get("chunk_id", "unknown"),
+                        "filename": r.get("filename", ""),
+                        "page": 0,
+                    },
+                }
+                for r in response.raw_results[:PipelineConfig.EVIDENCE_FALLBACK_COUNT]
+            ]
+            evidence_injected = True
+
+        # 진단 정보 추가
+        if DIAG_RAG and response.diagnostics:
+            response.diagnostics["evidence_count"] = len(evidence)
+            response.diagnostics["evidence_injected"] = evidence_injected
+
+        # 상태 구성
+        status = {
+            "retrieved_count": len(response.raw_results or []),
+            "selected_count": len(evidence),
+            "found": len(evidence) > 0,
+        }
+
+        # 성능 메트릭 로깅
+        author_mode = bool(re.search(r"(작성자|기안자|제안자)", actual_query))
+        search_ms = int(response.metrics.get("search_time", 0) * 1000)
+        generate_ms = int(response.metrics.get("generate_time", 0) * 1000)
+        total_ms = int(response.latency * 1000)
+
+        logger.info(
+            f'[RAG] query="{actual_query[:50]}..." | '
+            f"retrieved={status['retrieved_count']} | "
+            f"selected={status['selected_count']} | "
+            f"found={status['found']} | "
+            f"author_mode={author_mode} | "
+            f"search={search_ms}ms | gen={generate_ms}ms | total={total_ms}ms"
+        )
+
+        # 결과 구성
+        result = {
+            "text": response.answer,
+            "citations": evidence,
+            "evidence": evidence,
+            "status": status,
+            "diagnostics": response.diagnostics if DIAG_RAG else None,
+            "similar_documents": response.similar_documents,
+        }
+
+        # 캐싱
+        cache_query_result(cache_key, result)
+        cache_query_result_persistent(cache_key, result)
+
+        return result
 
     def _validate_query_input(self, query: str) -> Optional[RAGResponse]:
         """입력 검증 - 빈 쿼리면 에러 응답 반환
@@ -584,88 +917,21 @@ class RAGPipeline:
         cache_suffix = "_table" if table_request_detected else ""
         cache_key = build_answer_cache_key(actual_query, selected_filename, mode=route_mode) + cache_suffix
 
-        # Tier 1: 메모리 캐시 확인 (가장 빠름)
-        cached_result = get_cached_result(cache_key)
+        # Phase 2.1: 캐시 확인 로직을 헬퍼로 추출
+        cached_result = self._check_cache(cache_key, route_mode, actual_query)
         if cached_result:
-            logger.info(f"🎯 Memory Cache HIT! mode={route_mode}, query: {actual_query[:50]}...")
-            if "status" in cached_result:
-                cached_result["status"]["from_cache"] = "memory"
             return _log_and_return(cached_result, route_mode, actual_query)
 
-        # Tier 2: 영구 캐시 확인 (서버 재시작 후에도 유지)
-        cached_result = get_cached_result_persistent(cache_key)
-        if cached_result:
-            logger.info(f"💾 Persistent Cache HIT! mode={route_mode}, query: {actual_query[:50]}...")
-            # 영구 캐시에서 가져온 결과를 메모리 캐시에도 저장 (다음 접근을 위해)
-            cache_query_result(cache_key, cached_result)
-            if "status" in cached_result:
-                cached_result["status"]["from_cache"] = "persistent"
-            return _log_and_return(cached_result, route_mode, actual_query)
-
-        # 🚀 조기 단락: 선택된 문서가 있으면 즉시 DOCUMENT 모드로 처리
-        # 검색·라우팅·압축 단계 완전 생략 → 성능 향상 (20~60% 지연시간 감소)
+        # Phase 2.2: 선택된 문서 조기 처리 로직을 헬퍼로 추출
         if selected_filename:
-            logger.info(f"⚡ 선택된 문서({selected_filename}) 감지 → 즉시 DOCUMENT 모드 실행 (검색 스킵)")
-            # 파일명 정규화 (NFKC, 공백 정규화, 대소문자 통일)
-            import unicodedata
-            normalized_filename = unicodedata.normalize("NFKC", selected_filename).strip()
-            normalized_filename = re.sub(r"\s+", " ", normalized_filename)
-
-            # actual_query는 이미 Line 562에서 _normalize_current_question()로 정제됨
-            result = self._answer_document(actual_query, selected_filename=normalized_filename)
-
-            # 결과 캐싱
-            cache_query_result(cache_key, result)
-            cache_query_result_persistent(cache_key, result)
-
+            result = self._handle_selected_document(actual_query, selected_filename, cache_key)
             return _log_and_return(result, "document", actual_query)
 
         # 🔥 CRITICAL: 기안자/날짜 검색은 QuickFixRAG에 위임 (전문 로직 보유)
         if hasattr(self.generator, "rag"):
-            # actual_query는 이미 Line 562에서 _normalize_current_question()로 정제됨
-
-            # 🔍 쿼리에서 문서명 추출 (사용자가 직접 타이핑한 경우)
-            # 패턴: "문서제목 이 문서/해당 문서 ..."
+            # Phase 2.3: 쿼리에서 문서 참조 추출 로직을 헬퍼로 추출
             if not selected_filename:
-                doc_ref_pattern = r"^(.+?)\s+(이\s?문서|해당\s?문서|이문서)"
-                match = re.match(doc_ref_pattern, actual_query, re.IGNORECASE)
-                if match:
-                    candidate_title = match.group(1).strip()
-                    # 날짜 패턴 제거 (예: "2025-01-09_광화문_스튜디오..." → "광화문_스튜디오...")
-                    candidate_title = re.sub(r"^\d{4}[-_]\d{2}[-_]\d{2}[-_]", "", candidate_title)
-
-                    # metadata_db에서 제목으로 문서 검색
-                    from app.data.metadata_db import MetadataDB
-                    db = MetadataDB()
-                    try:
-                        # 제목 정규화 (특수문자, 공백 처리)
-                        normalized_title = candidate_title.replace("_", " ").replace("&", "").strip()
-
-                        # DB에서 제목 유사도 검색 (LIKE 패턴)
-                        conn = db._get_conn()
-                        cursor = conn.cursor()
-                        query_sql = """
-                            SELECT filename, title FROM documents
-                            WHERE title LIKE ? OR filename LIKE ?
-                            ORDER BY
-                                CASE
-                                    WHEN title = ? THEN 1
-                                    WHEN title LIKE ? THEN 2
-                                    ELSE 3
-                                END
-                            LIMIT 1
-                        """
-                        like_pattern = f"%{normalized_title}%"
-                        cursor.execute(query_sql, (like_pattern, like_pattern, candidate_title, f"{candidate_title}%"))
-                        result = cursor.fetchone()
-
-                        if result:
-                            selected_filename = result[0]
-                            logger.info(f"📌 쿼리에서 문서명 추출: '{candidate_title}' → '{selected_filename}'")
-                    except sqlite3.OperationalError as e:
-                        logger.debug(f"문서명 추출 중 DB 일시 오류 (무시): {e}")
-                    except sqlite3.Error as e:
-                        logger.warning(f"⚠️ 문서명 추출 중 DB 오류 (무시): {e}")
+                selected_filename = self._extract_document_reference(actual_query)
 
             # 🎯 모드 라우팅: 조기 라우팅 결과 재사용 (이미 actual_query로 수행됨, Phase 2-3)
             route_decision = early_route
@@ -687,65 +953,16 @@ class RAGPipeline:
                 route_decision.mode = QueryMode.DOCUMENT
                 route_decision.reason = "summary_with_date_pattern"
 
-            logger.info(
-                f"🔀 라우팅 결과: mode={route_decision.mode.value}, reason={route_decision.reason}",
-            )
+            # Phase 2.4: 모드별 핸들러 라우팅 로직을 헬퍼로 추출
+            handler_result = self._route_to_handler(actual_query, route_decision, selected_filename)
+            if handler_result:
+                return _log_and_return(handler_result, route_decision.mode.value, actual_query)
 
-            # 💰 COST 모드: 비용 합계 직접 조회
-            if route_decision.mode == QueryMode.COST:
-                _notify("search", "비용 데이터 조회 중...")
-                _notify("generate", "합계 계산 중...")
-                result = self._answer_cost_sum(actual_query)
-                _notify("complete", "완료")
-                return _log_and_return(result, "cost", actual_query)
-
-            # 📄 DOCUMENT 모드: 문서 내용/요약 (통합: PREVIEW + SUMMARY)
-            if route_decision.mode == QueryMode.DOCUMENT:
-                _notify("search", "문서 로드 중...")
-                _notify("generate", "AI 답변 생성 중...")
-                result = self._answer_document(actual_query, selected_filename=selected_filename)
-                _notify("complete", "완료")
-                return _log_and_return(result, "document", actual_query)
-
-            # 🔍 SEARCH 모드: 문서 검색 (통합: LIST + SEARCH + LIST_FIRST)
-            if route_decision.mode == QueryMode.SEARCH:
-                _notify("search", "문서 검색 중...")
-                result = self._answer_search(actual_query)
-                _notify("complete", "완료")
-                return _log_and_return(result, "search", actual_query)
-
-            # 🎯 SEARCH_CONTENT_ONLY 모드: 정밀 내용 검색 (2025-11-19 추가)
-            if route_decision.mode == QueryMode.SEARCH_CONTENT_ONLY:
-                _notify("search", "정밀 검색 중...")
-                result = self._answer_search_content_only(actual_query)
-                _notify("complete", "완료")
-                return _log_and_return(result, "search_content_only", actual_query)
-
-            # 📊 YEAR_SUMMARY 모드: 연도별 다중 문서 요약 (2025-12-23 추가)
-            if route_decision.mode == QueryMode.YEAR_SUMMARY:
-                _notify("search", f"{route_decision.year}년 문서 검색 중...")
-                _notify("generate", "요약 생성 중...")
-                result = self._answer_year_summary(actual_query, route_decision.year, route_decision.drafter)
-                _notify("complete", "완료")
-                return _log_and_return(result, "year_summary", actual_query)
-
-            # 📊 COMPREHENSIVE_REPORT 모드: 종합 리포트 생성 (2025-12-26 추가)
-            if route_decision.mode == QueryMode.COMPREHENSIVE_REPORT:
-                _notify("search", "관련 문서 검색 중...")
-                _notify("generate", "종합 리포트 생성 중...")
-                result = self._comprehensive_report_handler.handle(actual_query)
-                _notify("complete", "완료")
-                return _log_and_return(result, "comprehensive_report", actual_query)
-
-            # 🔍 디버깅: 실제 pattern matching 대상 로깅
-            logger.info(f"🔍 Pattern matching 대상 쿼리: '{actual_query[:100]}'")
-
-            # 📊 표 정리 요청 처리 (이미 상단에서 감지됨, Line 523-528)
+            # Phase 2.5: 표준 RAG 파이프라인 로직을 헬퍼로 추출
+            # 📊 표 정리 요청 시 쿼리 향상
             enhanced_query = actual_query
             if table_request_detected:
-                logger.info("📊 표 정리 요청 감지: top_k 확대 (5 → 20), 프롬프트 강화")
                 top_k = 20  # 검색 범위 확대
-                # 지시사항을 쿼리에 명시적으로 포함 (LLM이 무시하지 못하도록)
                 enhanced_query = f"""{actual_query}
 
 [중요 지시사항]
@@ -755,96 +972,16 @@ class RAGPipeline:
 - 원본 데이터 그대로 사용 (LLM이 재작성/추론 금지)
 - 표 아래에 '총 N개 문서' 명시"""
 
-            # ✅ P0: 파일명 직접 언급 패턴 감지 (레거시 호환, PREVIEW 모드 외)
-            # 🔧 QA 모드도 actual_query로 검색 (대화 컨텍스트 오염 방지)
-            _notify("search", "관련 문서 검색 중...")
-            _notify("generate", "AI 답변 생성 중...")
-            response = self.query(enhanced_query, top_k=top_k or PipelineConfig.PIPELINE_TOP_K, selected_filename=selected_filename)
-            _notify("complete", "완료")
-
-            if response.success:
-                # 검색/압축에서 넘어온 정규화 청크 사용 (실제 page/snippet/meta 노출)
-                evidence = [
-                    {
-                        "doc_id": c.get("doc_id"),
-                        "page": c.get("page", 1),
-                        "snippet": c.get("snippet", ""),
-                        "meta": c.get(
-                            "meta", {"doc_id": c.get("doc_id"), "page": c.get("page", 1)},
-                        ),
-                    }
-                    for c in (response.evidence_chunks or [])
-                ]
-
-                # CRITICAL: Evidence 최소 보장 (sources_cited가 비어도 검색 결과는 표시)
-                evidence_injected = False
-                if not evidence and response.raw_results:
-                    logger.info("Evidence empty, using raw_results[:3] as fallback")
-                    evidence = [
-                        {
-                            "doc_id": r.get("doc_id") or r.get("chunk_id", "unknown"),
-                            "page": 0,  # 검색 결과는 페이지 정보 없음
-                            "snippet": r.get("snippet") or r.get("text_preview", "")[:PipelineConfig.SNIPPET_PREVIEW_LENGTH],
-                            "meta": {
-                                "doc_id": r.get("doc_id") or r.get("chunk_id", "unknown"),
-                                "filename": r.get("filename", ""),
-                                "page": 0,
-                            },
-                        }
-                        for r in response.raw_results[:PipelineConfig.EVIDENCE_FALLBACK_COUNT]
-                    ]
-                    evidence_injected = True
-
-                # [DIAG] Evidence 진단 정보 추가
-                if DIAG_RAG and response.diagnostics:
-                    response.diagnostics["evidence_count"] = len(evidence)
-                    response.diagnostics["evidence_injected"] = evidence_injected
-
-                # 🔥 CRITICAL: status.found 플래그 - UI 판정 단일 소스
-                status = {
-                    "retrieved_count": len(response.raw_results or []),
-                    "selected_count": len(evidence),
-                    "found": len(evidence) > 0,
-                }
-
-                # 운영 표준 1행 요약 로그
-                author_mode = bool(re.search(r"(작성자|기안자|제안자)", actual_query))
-                search_ms = int(response.metrics.get("search_time", 0) * 1000)
-                generate_ms = int(response.metrics.get("generate_time", 0) * 1000)
-                total_ms = int(response.latency * 1000)
-
-                logger.info(
-                    f'[RAG] query="{actual_query[:50]}..." | '
-                    f"retrieved={status['retrieved_count']} | "
-                    f"selected={status['selected_count']} | "
-                    f"found={status['found']} | "
-                    f"author_mode={author_mode} | "
-                    f"search={search_ms}ms | gen={generate_ms}ms | total={total_ms}ms",
-                )
-
-                result = {
-                    "text": response.answer,
-                    "citations": evidence,
-                    "evidence": evidence,
-                    "status": status,
-                    "diagnostics": response.diagnostics if DIAG_RAG else None,
-                    "similar_documents": response.similar_documents,
-                }
-
-                # 캐싱
-                cache_query_result(cache_key, result)
-                cache_query_result_persistent(cache_key, result)
-
-                # 대화 로깅은 _log_and_return에서 처리
-                return _log_and_return(result, route_decision.mode.value if route_decision else "qa", actual_query)
-
-            # 실패 시 에러 응답
-            return {
-                "text": response.answer or "검색 결과가 없습니다.",
-                "citations": [],
-                "evidence": [],
-                "status": {"retrieved_count": 0, "selected_count": 0, "found": False},
-            }
+            result = self._run_standard_pipeline(
+                actual_query,
+                enhanced_query,
+                top_k,
+                selected_filename,
+                route_decision,
+                cache_key,
+                table_request_detected
+            )
+            return _log_and_return(result, route_decision.mode.value if route_decision else "qa", actual_query)
 
         # hasattr(self.generator, "rag")가 False인 경우의 폴백
         # actual_query는 이미 상단에서 정제됨 (Phase 2-3, Line 507-513)

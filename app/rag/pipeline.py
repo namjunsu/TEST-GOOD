@@ -45,8 +45,8 @@ from app.rag.query_routing import (
     _encode_file_ref,
     clean_ui_metadata,
 )
-from app.rag.router_models import RouteDecision
 from app.rag.response_builder import ResponseBuilder, get_response_builder
+from app.rag.router_models import RouteDecision
 from app.rag.similarity import DocumentSimilarity
 from config.constants import PipelineConfig
 
@@ -295,8 +295,12 @@ class RAGPipeline:
         Returns:
             핸들러 응답 또는 None (QA 모드 - 표준 파이프라인으로 폴백)
         """
-        from app.rag.query_routing import QueryMode
-        from app.api.notify import notify as _notify
+        try:
+            from app.api.notify import notify as _notify  # type: ignore[import-not-found]
+        except ImportError:
+            # notify 모듈이 없는 경우 no-op 함수 사용
+            def _notify(*_args, **_kwargs):  # type: ignore[misc]
+                pass
 
         mode = route_decision.mode
 
@@ -377,7 +381,12 @@ class RAGPipeline:
         Returns:
             RAG 파이프라인 응답 딕셔너리
         """
-        from app.api.notify import notify as _notify
+        try:
+            from app.api.notify import notify as _notify  # type: ignore[import-not-found]
+        except ImportError:
+            # notify 모듈이 없는 경우 no-op 함수 사용
+            def _notify(*_args, **_kwargs):  # type: ignore[misc]
+                pass
 
         logger.info(f"🔍 Pattern matching 대상 쿼리: '{actual_query[:100]}'")
 
@@ -388,7 +397,7 @@ class RAGPipeline:
         # RAG 파이프라인 실행
         _notify("search", "관련 문서 검색 중...")
         _notify("generate", "AI 답변 생성 중...")
-        response = self.query(
+        response: RAGResponse = self.query(
             enhanced_query,
             top_k=top_k or PipelineConfig.PIPELINE_TOP_K,
             selected_filename=selected_filename

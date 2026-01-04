@@ -24,20 +24,11 @@ from app.config.settings import settings
 from app.core.errors import ERROR_MESSAGES, ErrorCode, ModelError, SearchError
 from app.core.logging import get_logger
 from app.rag.adapters import _LLMAdapter
-from app.rag.cache_manager import (
-    build_answer_cache_key,
-    cache_query_result,
-    get_cached_result,
-)
+from app.rag.cache_manager import build_answer_cache_key
 from app.rag.contracts import Compressor, Generator, RAGResponse, Retriever
-from app.rag.conversation_logger import get_conversation_logger
 from app.rag.document_utils import DocumentUtils
 from app.rag.factory import RAGPipelineFactory
 from app.rag.mode_resolver import ModeResolver, get_mode_resolver
-from app.rag.persistent_cache import (
-    cache_query_result_persistent,
-    get_cached_result_persistent,
-)
 from app.rag.query_router import QueryMode, QueryRouter
 from app.rag.query_routing import (
     DIAG_LOG_LEVEL,
@@ -47,6 +38,7 @@ from app.rag.query_routing import (
 )
 from app.rag.response_builder import ResponseBuilder, get_response_builder
 from app.rag.router_models import RouteDecision
+from app.rag.services import CacheService, ConversationService
 from app.rag.similarity import DocumentSimilarity
 from config.constants import PipelineConfig
 
@@ -94,6 +86,10 @@ class RAGPipeline:
         # 🧠 LLM 의도 분류기 연결 (2025-12-23)
         if hasattr(self.generator, "llm"):
             self.query_router.set_llm(self.generator.llm)  # type: ignore[attr-defined]
+
+        # 📦 Phase 3 서비스 (2026-01-04)
+        self.cache_service = CacheService()
+        self.conversation_service = ConversationService()
 
         # 📄 문서 처리 유틸리티 (분리된 모듈)
         self._doc_utils = DocumentUtils(
@@ -151,7 +147,7 @@ class RAGPipeline:
         route_mode: str,
         actual_query: str
     ) -> Optional[dict[str, Any]]:
-        """2-tier 캐시 확인 (메모리 → 영구)
+        """2-tier 캐시 확인 (CacheService 위임)
 
         Args:
             cache_key: 캐시 키
@@ -161,25 +157,7 @@ class RAGPipeline:
         Returns:
             캐시된 결과 또는 None
         """
-        # Tier 1: 메모리 캐시 확인
-        cached_result = get_cached_result(cache_key)
-        if cached_result:
-            logger.info(f"🎯 Memory Cache HIT! mode={route_mode}, query: {actual_query[:50]}...")
-            if "status" in cached_result:
-                cached_result["status"]["from_cache"] = "memory"
-            return cached_result
-
-        # Tier 2: 영구 캐시 확인
-        cached_result = get_cached_result_persistent(cache_key)
-        if cached_result:
-            logger.info(f"💾 Persistent Cache HIT! mode={route_mode}, query: {actual_query[:50]}...")
-            # 영구 캐시에서 가져온 결과를 메모리 캐시에도 저장
-            cache_query_result(cache_key, cached_result)
-            if "status" in cached_result:
-                cached_result["status"]["from_cache"] = "persistent"
-            return cached_result
-
-        return None
+        return self.cache_service.get(cache_key, route_mode, actual_query)
 
     def _handle_selected_document(
         self,
@@ -211,8 +189,7 @@ class RAGPipeline:
         result = self._answer_document(actual_query, selected_filename=normalized_filename)
 
         # 2-tier 캐시 저장
-        cache_query_result(cache_key, result)
-        cache_query_result_persistent(cache_key, result)
+        self.cache_service.set(cache_key, result)
 
         return result
 
@@ -481,8 +458,7 @@ class RAGPipeline:
         }
 
         # 캐싱
-        cache_query_result(cache_key, result)
-        cache_query_result_persistent(cache_key, result)
+        self.cache_service.set(cache_key, result)
 
         return result
 
@@ -842,64 +818,24 @@ class RAGPipeline:
         start_time = time.time()
 
         def _log_and_return(result: dict[str, Any], mode: str, actual_query: str) -> dict[str, Any]:
-            """결과 반환 전 대화 로깅
+            """결과 반환 전 대화 로깅 (ConversationService 위임)
 
             Args:
                 result: 응답 딕셔너리
                 mode: 처리 모드
-                actual_query: 정제된 쿼리 (UI 메타데이터 제거 + "현재 질문:" 분리)
+                actual_query: 정제된 쿼리
 
             Returns:
                 로깅 완료된 result 딕셔너리
             """
-            try:
-                import os
-                elapsed_ms = int((time.time() - start_time) * 1000)
-                conv_logger = get_conversation_logger()
-
-                # 검색 결과 수집 (NEW)
-                evidence = result.get("evidence") or result.get("citations") or []
-                search_count = len(evidence)
-                top_score = evidence[0].get("score", 0.0) if evidence else 0.0
-
-                # 성공/실패 판정 (NEW)
-                success = True
-                error_type = None
-                answer_text = result.get("text", "")
-
-                # 실패 케이스 감지
-                if not answer_text or answer_text.strip() == "":
-                    success = False
-                    error_type = "no_answer"
-                elif elapsed_ms > PipelineConfig.ANSWER_TIMEOUT_MS:  # 10분 초과
-                    error_type = "timeout"
-                elif search_count == 0 and mode in ["search", "document"]:
-                    error_type = "no_results"
-                elif answer_text.startswith("{") and "keywords" in answer_text:
-                    # LLM 환각 감지 (JSON 출력)
-                    success = False
-                    error_type = "llm_hallucination"
-
-                conv_logger.log(
-                    query=actual_query,
-                    answer=answer_text,
-                    mode=mode,
-                    sources=evidence,
-                    confidence=0.0,
-                    latency_ms=elapsed_ms,
-                    # NEW 필드들
-                    client_ip=kwargs.get("client_ip"),  # web_interface에서 전달
-                    session_id=kwargs.get("session_id"),
-                    success=success,
-                    error_type=error_type,
-                    search_results_count=search_count,
-                    top_similarity_score=top_score,
-                    cache_hit=result.get("from_cache", False),
-                    llm_backend=os.getenv("LLM_BACKEND", "qwen72b"),
-                    llm_tokens=result.get("tokens", 0),
-                )
-            except Exception as e:
-                logger.warning(f"⚠️ 대화 로깅 실패 (무시): {e}")
+            self.conversation_service.log_answer(
+                result=result,
+                mode=mode,
+                query=actual_query,
+                start_time=start_time,
+                client_ip=kwargs.get("client_ip"),
+                session_id=kwargs.get("session_id"),
+            )
             return result
 
         # 2025-12-26: Phase 2-3 - 쿼리 정제를 최상단에서 먼저 수행 (라우팅/캐시 키 통일)
@@ -1060,8 +996,7 @@ class RAGPipeline:
                 "diagnostics": response.diagnostics if DIAG_RAG else {},
             }
 
-            cache_query_result(cache_key, result)
-            cache_query_result_persistent(cache_key, result)
+            self.cache_service.set(cache_key, result)
 
             return _log_and_return(result, "qa", actual_query)
 

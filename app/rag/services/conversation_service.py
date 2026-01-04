@@ -112,6 +112,11 @@ class ConversationService:
         if not answer_text or answer_text.strip() == "":
             return False, "no_answer"
 
+        # 에러 메시지 감지 (CRITICAL: Phase 3.2 버그 수정)
+        if answer_text.startswith("[E_"):
+            # [E_GENERATE], [E_SEARCH], [E_MODEL] 등 에러 코드
+            return False, "generator_error"
+
         if elapsed_ms > PipelineConfig.ANSWER_TIMEOUT_MS:
             return True, "timeout"  # 응답은 있지만 느림
 

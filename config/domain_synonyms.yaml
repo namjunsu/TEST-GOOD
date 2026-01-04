@@ -806,3 +806,39 @@ editing_software:
     - 아이뉴스
     - inews
     - INEWS
+
+# ========== 플랫폼 / 서비스 (2026-01-04) ==========
+# 검색 품질 개선: 한글↔영문 매칭
+platform_services:
+  유튜브:
+    - 유튜브
+    - Youtube
+    - YOUTUBE
+    - youtube
+    - YouTube
+
+  넷플릭스:
+    - 넷플릭스
+    - Netflix
+    - NETFLIX
+    - netflix
+
+  틱톡:
+    - 틱톡
+    - TikTok
+    - tiktok
+    - TIKTOK
+
+  인스타그램:
+    - 인스타그램
+    - Instagram
+    - instagram
+    - INSTAGRAM
+    - 인스타
+
+  페이스북:
+    - 페이스북
+    - Facebook
+    - facebook
+    - FACEBOOK
+    - FB

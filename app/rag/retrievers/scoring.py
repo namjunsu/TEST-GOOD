@@ -55,6 +55,13 @@ class RelevanceScorer:
         # 기본 스코어: 매칭률
         match_ratio = matched_tokens / len(query_tokens) if query_tokens else 0.0
 
+        # 🔥 NEW: 키워드 부재 시 강력한 페널티 (2026-01-04)
+        # 쿼리 키워드가 문서에 하나도 없으면 벡터 유사도만으로 추천된 것
+        # → 검색 품질 향상을 위해 점수 대폭 감소
+        if matched_tokens == 0:
+            match_ratio = 0.001  # 거의 0에 가깝게 (완전 제거는 아님)
+            logger.debug(f"⚠️ 키워드 미포함 문서: {doc.get('filename', 'N/A')[:50]}")
+
         # 보너스: 완전 일치하는 구문
         if query.lower() in doc_text:
             match_ratio = min(1.0, match_ratio + 0.3)
@@ -63,10 +70,6 @@ class RelevanceScorer:
         text_len = len(doc.get("snippet") or "")
         if text_len < 100:
             match_ratio *= 0.7
-
-        # 안전장치: match_ratio가 0일 때 최소 epsilon 값
-        if match_ratio == 0.0 and matched_tokens == 0:
-            match_ratio = 1e-6
 
         # 파일명 매칭 보너스
         filename_bonus = self._calculate_filename_bonus(query, query_tokens, doc)

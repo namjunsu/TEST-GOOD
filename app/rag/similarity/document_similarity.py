@@ -180,6 +180,9 @@ class DocumentSimilarity:
             similar_docs = []
             reference_set = set(reference_docs)
 
+            # 원본 쿼리에서 핵심 키워드 추출 (불용어 제거)
+            query_keywords = self._extract_query_keywords(query)
+
             for result in search_results:
                 result_id = result.get("filename") or result.get("doc_id")
 
@@ -187,14 +190,32 @@ class DocumentSimilarity:
                 if result_id in reference_set:
                     continue
 
+                # BM25 점수 임계값 필터링 (2026-01-05)
+                # 너무 낮은 점수는 관련성이 떨어지므로 제외
+                raw_score = result.get("score", 0)
+                if raw_score < DocumentSimilarityConfig.MIN_BM25_SCORE:
+                    logger.debug(
+                        f"⏭️ BM25 점수 미달로 제외: {result_id[:40]} "
+                        f"(score={raw_score:.2f} < {DocumentSimilarityConfig.MIN_BM25_SCORE})"
+                    )
+                    continue
+
                 # 점수 정규화 (0-1)
-                score = result.get("score", 0)
                 divisor = DocumentSimilarityConfig.SCORE_NORMALIZE_DIVISOR
-                base_score = min(1.0, score / divisor) if score > 1 else score
+                base_score = min(1.0, raw_score / divisor) if raw_score > 1 else raw_score
 
                 # 문서 메타데이터 가져오기
                 similar_doc = self._db.get_by_filename(result_id)
                 if not similar_doc:
+                    continue
+
+                # 🔍 원본 쿼리 키워드 검증 (2026-01-05)
+                # 유사 문서라도 원본 쿼리와 관련 없으면 제외
+                if not self._matches_query_keywords(similar_doc, query_keywords):
+                    logger.debug(
+                        f"⏭️ 쿼리 키워드 미포함으로 제외: {result_id} "
+                        f"(keywords={query_keywords})"
+                    )
                     continue
 
                 # 메타데이터 기반 유사도 보정 (2025-12-26)
@@ -323,6 +344,59 @@ class DocumentSimilarity:
 
         # 최대 1.0으로 제한
         return min(1.0, boosted_score)
+
+    def _extract_query_keywords(self, query: str) -> set[str]:
+        """쿼리에서 핵심 키워드 추출 (불용어 제거)
+
+        Args:
+            query: 원본 쿼리 (예: "유튜브 관련 문서 찾아줘")
+
+        Returns:
+            핵심 키워드 집합 (예: {"유튜브"})
+        """
+        # 기본 불용어 (조사, 어미 등)
+        stopwords = {
+            "관련", "문서", "찾아", "찾아줘", "보여줘", "알려줘", "검색",
+            "있는", "없는", "있어", "없어", "해줘", "주세요",
+            "은", "는", "이", "가", "을", "를", "에", "에서", "의",
+            "과", "와", "도", "만", "부터", "까지", "로", "으로",
+        }
+
+        # 공백으로 분리하고 불용어 제거
+        keywords = set()
+        for word in query.split():
+            word_clean = word.strip().lower()
+            if word_clean and word_clean not in stopwords and len(word_clean) > 1:
+                keywords.add(word_clean)
+
+        return keywords
+
+    def _matches_query_keywords(self, doc: dict, query_keywords: set[str]) -> bool:
+        """문서가 쿼리 키워드를 포함하는지 검증
+
+        Args:
+            doc: 문서 메타데이터
+            query_keywords: 검증할 키워드 집합
+
+        Returns:
+            하나 이상의 키워드를 포함하면 True
+        """
+        if not query_keywords:
+            return True  # 키워드가 없으면 통과
+
+        # 검색 대상: 제목 + 텍스트 미리보기 + 파일명
+        search_text = " ".join([
+            doc.get("title", ""),
+            doc.get("text_preview", "")[:500],  # 미리보기 일부만
+            doc.get("filename", ""),
+        ]).lower()
+
+        # 키워드 중 하나라도 포함되면 True
+        for keyword in query_keywords:
+            if keyword in search_text:
+                return True
+
+        return False
 
     def _parse_date(self, date_str: str) -> Optional[datetime]:
         """날짜 문자열을 datetime으로 변환

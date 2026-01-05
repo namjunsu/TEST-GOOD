@@ -43,16 +43,17 @@ SUMMARY_TRUNCATE_LENGTH = 40
 
 
 def resolve_file_path(filename: str, file_path_str: str | None = None) -> Path:
-    """파일 경로 해석 (year 폴더 지원)
+    """파일 경로 해석 (year 폴더 지원, PDF 우선)
 
     DB의 file_path 또는 filename에서 실제 파일 경로를 생성합니다.
+    TXT 파일명이 주어진 경우 원본 PDF를 우선적으로 찾습니다.
 
     Args:
-        filename: 파일명
+        filename: 파일명 (예: "file.txt" 또는 "file.pdf")
         file_path_str: DB에 저장된 경로 문자열 (선택)
 
     Returns:
-        Path: 절대 파일 경로
+        Path: 절대 파일 경로 (PDF 우선, 없으면 원본)
     """
     if file_path_str:
         file_path = Path(file_path_str)
@@ -62,15 +63,28 @@ def resolve_file_path(filename: str, file_path_str: str | None = None) -> Path:
             if path_str.startswith("docs/"):
                 path_str = path_str[5:]
             file_path = settings.DOCS_DIR / path_str
+
+        # TXT 파일인 경우 PDF 원본 찾기 시도
+        if file_path.suffix.lower() == ".txt":
+            pdf_path = file_path.with_suffix(".pdf")
+            if pdf_path.exists():
+                logger.debug(f"📄 TXT → PDF 변환: {file_path.name} → {pdf_path.name}")
+                return pdf_path
+
         return file_path
 
     # Fallback: filename에서 year 추출
     year_match = re.search(r"(\d{4})-", filename)
-    if year_match:
-        year = year_match.group(1)
-        return settings.DOCS_DIR / f"year_{year}" / filename
+    base_path = settings.DOCS_DIR / f"year_{year_match.group(1)}" / filename if year_match else settings.DOCS_DIR / filename
 
-    return settings.DOCS_DIR / filename
+    # TXT 파일인 경우 PDF 원본 찾기 시도
+    if base_path.suffix.lower() == ".txt":
+        pdf_path = base_path.with_suffix(".pdf")
+        if pdf_path.exists():
+            logger.debug(f"📄 TXT → PDF 변환: {base_path.name} → {pdf_path.name}")
+            return pdf_path
+
+    return base_path
 
 
 def extract_evidence_metadata(ev: dict | Any) -> dict:

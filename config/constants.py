@@ -322,6 +322,10 @@ class DocumentSimilarityConfig:
     2025-12-26: 유사도 추천 품질 개선
     - 임계값 상향 (0.3 → 0.5)
     - 메타데이터 기반 필터링 강화
+
+    2026-01-05: 검색 품질 근본 개선
+    - 원본 쿼리 키워드 검증 로직 추가
+    - BM25 최소 점수 임계값 도입 (저관련성 문서 필터링)
     """
 
     # 기본 설정
@@ -331,6 +335,10 @@ class DocumentSimilarityConfig:
     # 검색 설정
     SEARCH_BUFFER: int = 5  # top_k + SEARCH_BUFFER로 여유분 검색
     SCORE_NORMALIZE_DIVISOR: float = 10.0  # BM25 점수 정규화
+
+    # BM25 점수 임계값 (2026-01-05 추가)
+    # 유사 문서 추천 시 이 점수 미만은 제외 (저관련성 문서 필터링)
+    MIN_BM25_SCORE: float = 3.0  # BM25 raw score 최소값
 
     # 키워드 추출
     TEXT_PREVIEW_LENGTH: int = 200

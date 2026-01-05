@@ -362,12 +362,23 @@ class DocumentSimilarity:
             "과", "와", "도", "만", "부터", "까지", "로", "으로",
         }
 
+        # 조사 리스트 (단어 끝에서 제거)
+        postpositions = ["가", "이", "은", "는", "을", "를", "에", "의", "로", "으로"]
+
         # 공백으로 분리하고 불용어 제거
         keywords = set()
         for word in query.split():
-            word_clean = word.strip().lower()
-            if word_clean and word_clean not in stopwords and len(word_clean) > 1:
-                keywords.add(word_clean)
+            word_clean = word.strip()
+
+            # 조사 제거 ("남준수가" → "남준수")
+            for postfix in postpositions:
+                if word_clean.endswith(postfix) and len(word_clean) > len(postfix):
+                    word_clean = word_clean[:-len(postfix)]
+                    break
+
+            word_lower = word_clean.lower()
+            if word_lower and word_lower not in stopwords and len(word_lower) > 1:
+                keywords.add(word_lower)
 
         return keywords
 

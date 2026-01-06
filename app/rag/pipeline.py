@@ -511,29 +511,41 @@ class RAGPipeline:
 
         try:
             # 1. 검색
+            phase1_start = time.perf_counter()
             results, metrics = self._perform_retrieval(
                 query, top_k, selected_filename, diagnostics
             )
+            phase1_time = time.perf_counter() - phase1_start
+            logger.info(f"⏱️ Phase 1 (검색): {phase1_time:.2f}s")
 
             # 검색 결과 없음 → CHAT 모드로 폴백
             if not results:
                 return self._handle_no_results(query, start_time, metrics, diagnostics)
 
             # 2. 압축
+            phase2_start = time.perf_counter()
             compressed, metrics = self._perform_compression(
                 results, compression_ratio, metrics, diagnostics
             )
+            phase2_time = time.perf_counter() - phase2_start
+            logger.info(f"⏱️ Phase 2 (압축): {phase2_time:.2f}s")
 
             # 3. 모드 결정 (ModeResolver 활용)
+            phase3_start = time.perf_counter()
             mode_decision = self._mode_resolver.resolve(query, results)
             metrics.update(mode_decision.metrics)
             metrics["mode"] = mode_decision.mode
             determined_mode = mode_decision.mode
+            phase3_time = time.perf_counter() - phase3_start
+            logger.info(f"⏱️ Phase 3 (모드 결정): {phase3_time:.2f}s")
 
             # 4. 컨텍스트 수화 및 생성
+            phase4_start = time.perf_counter()
             answer, metrics = self._hydrate_and_generate(
                 query, compressed, determined_mode, temperature, metrics, diagnostics
             )
+            phase4_time = time.perf_counter() - phase4_start
+            logger.info(f"⏱️ Phase 4 (생성): {phase4_time:.2f}s")
 
             # 5. 응답 구성 (ResponseBuilder 활용)
             return self._response_builder.build_rag_response(

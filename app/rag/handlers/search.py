@@ -144,10 +144,19 @@ class SearchHandler(BaseHandler):
 
             # 1.5. 스마트 동의어 확장 (YAML 동의어 + 퍼지 매칭)
             try:
+                import time
+                expand_start = time.perf_counter()
                 from app.rag.domain_synonyms import expand_query_smart
                 expanded_keywords = expand_query_smart(keywords)
+                expand_time = time.perf_counter() - expand_start
+
                 if expanded_keywords != keywords:
-                    logger.info(f"🔄 동의어 확장: '{keywords}' → '{expanded_keywords}'")
+                    if expand_time > 5.0:
+                        logger.warning(f"⏱️ 쿼리 확장 지연: {expand_time:.2f}s ('{keywords}' → '{expanded_keywords}')")
+                    else:
+                        logger.info(f"🔄 동의어 확장: '{keywords}' → '{expanded_keywords}' ({expand_time:.3f}s)")
+                else:
+                    logger.debug(f"⏱️ 쿼리 확장: 변경 없음 ({expand_time:.3f}s)")
             except Exception as e:
                 logger.debug(f"동의어 확장 스킵: {e}")
                 expanded_keywords = keywords

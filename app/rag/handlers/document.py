@@ -293,10 +293,18 @@ class DocumentHandler(BaseHandler):
 
     def _load_full_text(self, filename: str) -> str:
         """문서 전체 텍스트 로드"""
+        import time
+        start = time.perf_counter()
+
         # 1. extracted 디렉토리에서 로드 시도
         full_text = load_document_text(filename)
 
         if full_text:
+            duration = time.perf_counter() - start
+            if duration > 1.0:
+                logger.warning(f"⏱️ 문서 로딩 지연: {filename} ({duration:.2f}s, {len(full_text)} chars)")
+            else:
+                logger.debug(f"⏱️ 문서 로딩: {filename} ({duration:.3f}s, {len(full_text)} chars)")
             return full_text
 
         # 2. 인덱스 청크 기반 폴백 (top_k 확대: 요약 품질 개선)
@@ -310,7 +318,8 @@ class DocumentHandler(BaseHandler):
                     [(ch.get("text") or ch.get("snippet") or ch.get("content") or "")[:max_snippet]
                      for ch in chunks],
                 )[:DocumentHandlerConfig.CHUNK_CONTEXT_MAX]
-                logger.info(f"✅ 청크 {len(chunks)}개 결합 → {len(joined)}자 확보")
+                duration = time.perf_counter() - start
+                logger.info(f"✅ 청크 {len(chunks)}개 결합 → {len(joined)}자 확보 ({duration:.2f}s)")
                 return joined
         except (AttributeError, KeyError) as e:
             # 인덱스 구조 문제

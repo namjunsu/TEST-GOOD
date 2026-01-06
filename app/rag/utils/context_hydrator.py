@@ -92,6 +92,12 @@ def hydrate_context(chunks: list[dict[str, Any]], max_len: int = 10000, mode: st
             if text_hash in seen_texts:
                 continue
             seen_texts.add(text_hash)
+
+            # 2026-01-06: 날짜 정보 추가 (LLM이 시간 순서 파악 가능)
+            date_prefix = _extract_date_prefix(chunk)
+            if date_prefix:
+                text = f"[{date_prefix}] {text}"
+
             parts.append(text)
             metrics["chunks_used"] += 1
 
@@ -182,6 +188,34 @@ def _hard_cut_paragraphwise(text: str, max_len: int) -> str:
         out.append(p)
         total += len(p) + 2
     return "\n\n".join(out) if out else text[:max_len]
+
+
+def _extract_date_prefix(chunk: dict[str, Any]) -> str:
+    """
+    청크에서 날짜 정보 추출 (2026-01-06 추가)
+
+    파일명에서 YYYY-MM-DD 또는 metadata.date 추출
+
+    Returns:
+        "2025-03-04" 형태의 날짜 또는 빈 문자열
+    """
+    # 1. filename에서 날짜 추출 (YYYY-MM-DD 패턴)
+    filename = chunk.get("filename") or chunk.get("source") or ""
+    if filename:
+        date_match = re.search(r"(\d{4})-(\d{2})-(\d{2})", filename)
+        if date_match:
+            return date_match.group(0)
+
+    # 2. metadata.date 필드 (있는 경우)
+    metadata = chunk.get("metadata", {})
+    if isinstance(metadata, dict):
+        date_str = metadata.get("date") or metadata.get("created_at")
+        if date_str:
+            date_match = re.search(r"(\d{4})-(\d{2})-(\d{2})", str(date_str))
+            if date_match:
+                return date_match.group(0)
+
+    return ""
 
 
 def _extract_text_from_chunk(chunk: dict[str, Any], metrics: dict[str, Any]) -> str:

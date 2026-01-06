@@ -114,6 +114,7 @@ class _LLMAdapter:
         mode: str = "rag",
         system_msg: Optional[str] = None,
         max_tokens: Optional[int] = None,  # 2025-12-23: 동적 토큰 지원
+        detail_level: str = "normal",  # 2026-01-06: 상세도 기반 토큰 조정
     ) -> str:
         """컨텍스트 기반 답변 생성
 
@@ -123,14 +124,33 @@ class _LLMAdapter:
             temperature: 생성 온도
             mode: 생성 모드 (chat/rag/summarize/detailed)
             system_msg: 시스템 프롬프트 (None이면 기본값 사용)
-            max_tokens: 최대 생성 토큰 (None이면 모드 기본값 사용)
+            max_tokens: 최대 생성 토큰 (None이면 모드 기반 기본값 사용)
+            detail_level: 답변 상세도 ("brief", "normal", "detailed")
 
         Returns:
             str: 생성된 답변
         """
-        # 2025-12-23: 외부 전달값 우선, 없으면 모드 기반 기본값
+        # 2026-01-06: detail_level 기반 토큰 예산 조정
         if max_tokens is None:
-            max_tokens = MODE_TOKEN_BUDGETS.get(mode.lower(), 800)
+            # mode에서 detail_level suffix 추출 (예: "qa_brief" → "brief")
+            mode_parts = mode.lower().split("_")
+            base_mode = mode_parts[0]
+            embedded_detail = mode_parts[1] if len(mode_parts) > 1 and mode_parts[1] in ["brief", "normal", "detailed"] else None
+
+            # embedded detail이 있으면 우선 사용, 없으면 파라미터 사용
+            effective_detail = embedded_detail or detail_level
+
+            base_tokens = MODE_TOKEN_BUDGETS.get(base_mode, 1024)
+
+            # 상세도별 토큰 조정
+            if effective_detail == "brief":
+                max_tokens = min(base_tokens // 2, 512)  # 절반, 최대 512
+            elif effective_detail == "detailed":
+                max_tokens = min(base_tokens * 2, 2048)  # 2배, 최대 2048
+            else:  # "normal"
+                max_tokens = base_tokens
+
+            logger.info(f"📏 상세도 기반 토큰 조정: {effective_detail} → {max_tokens} (base={base_tokens}, mode={mode})")
 
         # 🔧 2025-12-16: 모드별 시스템 프롬프트 (외부 전달 우선)
         if system_msg is None:

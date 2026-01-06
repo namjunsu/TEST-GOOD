@@ -509,6 +509,11 @@ class RAGPipeline:
         metrics: dict[str, Any] = {}
         diagnostics: dict[str, Any] = {}
 
+        # 2026-01-06: 질문 상세도 조기 감지 (토큰 예산 최적화)
+        route_decision = self.query_router.classify_mode(query)
+        detail_level = route_decision.detail_level
+        logger.info(f"📏 질문 상세도: {detail_level}")
+
         try:
             # 1. 검색
             phase1_start = time.perf_counter()
@@ -542,7 +547,7 @@ class RAGPipeline:
             # 4. 컨텍스트 수화 및 생성
             phase4_start = time.perf_counter()
             answer, metrics = self._hydrate_and_generate(
-                query, compressed, determined_mode, temperature, metrics, diagnostics
+                query, compressed, determined_mode, temperature, metrics, diagnostics, detail_level
             )
             phase4_time = time.perf_counter() - phase4_start
             logger.info(f"⏱️ Phase 4 (생성): {phase4_time:.2f}s")
@@ -696,8 +701,12 @@ class RAGPipeline:
         temperature: float,
         metrics: dict[str, Any],
         diagnostics: dict[str, Any],
+        detail_level: str = "normal",  # 2026-01-06: 상세도 추가
     ) -> tuple[str, dict[str, Any]]:
         """컨텍스트 수화 및 LLM 생성
+
+        Args:
+            detail_level: 답변 상세도 ("brief", "normal", "detailed")
 
         Returns:
             (생성된 답변, 업데이트된 메트릭)
@@ -709,7 +718,7 @@ class RAGPipeline:
             logger.warning(f"⚠️ hydrate_context import 실패, 폴백 사용: {e}")
             hydrate_context = self._fallback_hydrate_context
 
-        logger.info(f"🎯 모드={determined_mode} → 컨텍스트 최적화 시작")
+        logger.info(f"🎯 모드={determined_mode}, 상세도={detail_level} → 컨텍스트 최적화 시작")
         hydrate_start = time.perf_counter()
         context, hydrator_metrics = hydrate_context(
             compressed, max_len=PipelineConfig.CONTEXT_MAX_LENGTH, mode=determined_mode
@@ -717,10 +726,13 @@ class RAGPipeline:
         metrics["hydrate_time"] = time.perf_counter() - hydrate_start
         metrics.update({f"ctx_{k}": v for k, v in hydrator_metrics.items()})
 
+        # 2026-01-06: mode에 detail_level 결합 (예: "qa" + "brief" → "qa_brief")
+        effective_mode = f"{determined_mode}_{detail_level}" if detail_level != "normal" else determined_mode
+
         # LLM 생성
-        logger.info(f"🎯 모드={determined_mode} → 생성 시작")
+        logger.info(f"🎯 effective_mode={effective_mode} → 생성 시작")
         llm_gen_start = time.perf_counter()
-        answer = self.generator.generate(query, context, temperature, mode=determined_mode)
+        answer = self.generator.generate(query, context, temperature, mode=effective_mode)
         metrics["generate_time"] = time.perf_counter() - llm_gen_start
 
         if DIAG_RAG:

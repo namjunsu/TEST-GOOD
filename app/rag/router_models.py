@@ -83,3 +83,7 @@ class RouteDecision:
 
     # 정렬 기준 (최신순, 오래된순 등)
     sort_by: Optional[list[str]] = None  # ["date_desc"], ["date_asc"] 등
+
+    # 답변 상세도 (2026-01-06 추가: 질문 의도별 토큰 예산 조정)
+    # "brief": 간단 (~512 tok), "normal": 보통 (~1024 tok), "detailed": 상세 (~2048 tok)
+    detail_level: str = "normal"

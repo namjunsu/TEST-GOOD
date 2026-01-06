@@ -392,6 +392,42 @@ class QueryRouter:
             "summary": self.SUMMARY_INTENT_PATTERN.search(query) is not None,
         }
 
+    def _detect_detail_level(self, query: str) -> str:
+        """질문 상세도 감지 (2026-01-06)
+
+        Args:
+            query: 사용자 질의
+
+        Returns:
+            "brief" (간단), "normal" (보통), "detailed" (상세)
+
+        예시:
+            "DVR이 뭐야?" → brief
+            "DVR 알려줘" → normal
+            "DVR 자세히 설명해줘" → detailed
+        """
+        ql = query.lower()
+
+        # 상세 요청 키워드
+        if any(kw in ql for kw in ["자세히", "상세히", "자세하게", "상세하게", "구체적으로", "자세한", "상세한", "디테일"]):
+            return "detailed"
+
+        # 간단 요청 키워드
+        if any(kw in ql for kw in ["간단히", "간단하게", "짧게", "요약", "핵심만", "간략히", "간략하게"]):
+            return "brief"
+
+        # "뭐야?", "뭔데?" 같은 간단한 질문
+        if re.search(r"(뭐야|뭔데|뭔지|뭐에요|뭔가요)\??$", ql):
+            return "brief"
+
+        # 매우 짧은 질문 (7자 이하, 단 "X 알려줘" 패턴 제외) → 간단 답변
+        # 2026-01-06: "알려줘"는 일반적인 정보 요청이므로 normal 유지
+        if len(query.strip()) <= 7 and not ql.endswith("알려줘"):
+            return "brief"
+
+        # 기본값: 보통
+        return "normal"
+
     # ============================================================================
     # classify_mode 헬퍼 메서드들 (Phase 12: 복잡도 분리)
     # ============================================================================
@@ -971,6 +1007,10 @@ class QueryRouter:
             or self._check_qa_intent(query, params, has_qa_intent)
             or self._default_qa_mode(query, params)
         )
+
+        # 3. 질문 상세도 감지 (2026-01-06)
+        decision.detail_level = self._detect_detail_level(query)
+        logger.debug(f"📏 상세도: {decision.detail_level} (query: {query[:50]}...)")
 
         return decision
 

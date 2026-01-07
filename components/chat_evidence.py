@@ -111,6 +111,7 @@ def extract_evidence_metadata(ev: dict | Any) -> dict:
             "snippet": ev.get("snippet") or ev.get("content", "") or ev.get("text", ""),
             "file_path_str": ev.get("file_path") or ev.get("path"),
             "meta": meta,
+            "page": ev.get("page", 1),  # 2026-01-07: 페이지 번호 추가
         }
 
     # 객체인 경우
@@ -127,6 +128,7 @@ def extract_evidence_metadata(ev: dict | Any) -> dict:
         "snippet": getattr(ev, "snippet", None) or getattr(ev, "content", "") or getattr(ev, "text", ""),
         "file_path_str": getattr(ev, "file_path", None) or getattr(ev, "path", None),
         "meta": meta,
+        "page": getattr(ev, "page", 1),  # 2026-01-07: 페이지 번호 추가
     }
 
 
@@ -144,6 +146,7 @@ def render_doc_card(
     drafter: str | None,
     summary: str,
     msg_idx: int = 0,
+    page: int = 1,  # 2026-01-07: 페이지 번호 추가
 ) -> None:
     """문서 카드 렌더링 (리스트 형식)
 
@@ -165,12 +168,16 @@ def render_doc_card(
     unique_key = f"{msg_idx}_{index}_{file_hash}"
     session_key = f"show_preview_{unique_key}"
 
-    # 메타정보 구성
+    # 메타정보 구성 (2026-01-07: 페이지 번호 추가)
     meta_parts = []
     if display_date:
-        meta_parts.append(display_date)
+        meta_parts.append(f"📅 {display_date}")
     if drafter:
-        meta_parts.append(drafter)
+        meta_parts.append(f"✍️ {drafter}")
+    if page and page > 1:  # 페이지 1은 생략
+        meta_parts.append(f"📖 p.{page}")
+    if doctype:
+        meta_parts.append(f"🏷️ {doctype}")
     meta_str = " · ".join(meta_parts) if meta_parts else ""
 
     # 요약 (40자로 단축)
@@ -269,6 +276,7 @@ def display_evidence_section(evidence_list: list, msg_idx: int) -> None:
                 drafter=drafter,
                 summary=ev_data["snippet"],
                 msg_idx=msg_idx,
+                page=ev_data.get("page", 1),  # 2026-01-07: 페이지 번호 전달
             )
 
             # 여백

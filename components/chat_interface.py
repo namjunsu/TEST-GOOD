@@ -334,10 +334,17 @@ def _display_response_with_streaming(
         st.caption("⚡ **Cached** - 이전 응답을 빠르게 불러왔습니다")
         message_placeholder.markdown(response["text"])
     else:
-        streaming_speed = st.session_state.chat_options.get("streaming_speed", "medium")
-        for partial_text in stream_text_smart(response["text"], speed=streaming_speed):
-            message_placeholder.markdown(partial_text + "▌")
-        message_placeholder.markdown(response["text"])
+        # 2026-01-07: 스트리밍 안정성 개선 (에러 시 폴백)
+        try:
+            streaming_speed = st.session_state.chat_options.get("streaming_speed", "medium")
+            for partial_text in stream_text_smart(response["text"], speed=streaming_speed):
+                message_placeholder.markdown(partial_text + "▌")
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"스트리밍 오류 (폴백 전체 표시): {e}")
+            # 폴백: 스트리밍 실패 시 전체 텍스트 즉시 표시
+        finally:
+            message_placeholder.markdown(response["text"])
 
 
 def _update_evidence_history(evidence: list) -> None:
@@ -455,19 +462,19 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
         while not progress_state["done"]:
             elapsed = time.time() - start_time
 
-            # 시간에 따라 다른 메시지 표시
+            # 2026-01-07: 시간대별 진행 상태 메시지 개선
             if elapsed < 10:
-                msg = f"**답변 생성 중...** ({elapsed:.1f}초)"
+                msg = f"🔍 **문서 검색 중...** ({elapsed:.1f}초)"
             elif elapsed < 30:
-                msg = f"**답변 생성 중...** ({elapsed:.1f}초) - 문서 분석 중입니다"
+                msg = f"📊 **답변 생성 중...** ({elapsed:.1f}초) - 문서 분석 완료"
             elif elapsed < 60:
-                msg = f"**답변 생성 중...** ({elapsed:.1f}초) - 상세한 답변을 준비 중입니다"
+                msg = f"✍️ **답변 작성 중...** ({elapsed:.1f}초) - 품질 높은 답변을 준비하고 있습니다"
             elif elapsed < 120:
-                msg = f"**답변 생성 중...** ({int(elapsed)}초) - 품질 높은 답변을 위해 조금만 더 기다려주세요..."
+                msg = f"⏳ **답변 생성 중...** ({int(elapsed)}초) - 조금만 더 기다려주세요..."
             else:
                 minutes = int(elapsed // 60)
                 seconds = int(elapsed % 60)
-                msg = f"**답변 생성 중...** ({minutes}분 {seconds}초) - 긴 답변을 생성하고 있습니다 🕐"
+                msg = f"⌛ **긴 답변 생성 중...** ({minutes}분 {seconds}초) - 곧 완료됩니다 🕐"
 
             status_placeholder.markdown(msg)
             time.sleep(0.1)  # CPU 절약

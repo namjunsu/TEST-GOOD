@@ -24,8 +24,9 @@ class SearchConfig:
     SEARCH_TOP_K: int = 10
     ALL_DOCS_TOP_K: int = 200  # "전부", "모두" 쿼리용
 
-    # 점수 임계값 (2025-12-21: 저품질 문서 필터링 강화)
-    RAG_MIN_SCORE: float = 0.45  # 0.35 → 0.45
+    # 점수 임계값
+    # 2026-01-07: 0.45→0.35 복원 (관련 문서 확보)
+    RAG_MIN_SCORE: float = 0.35  # 검증된 기본값
     BM25_MIN_ABS: float = 5.0
     VEC_MIN_ABS: float = 0.40  # 0.25 → 0.40
 
@@ -84,14 +85,15 @@ class LLMConfig:
     """
 
     # 모드별 max_tokens (.env와 동기화)
-    MAX_TOKENS_CHAT: int = 2048       # CHAT_MAX_TOKENS (스몰토크/일반) - 2025-12-31: 1024→2048 (답변 잘림 방지)
-    MAX_TOKENS_RAG: int = 4096        # RAG_MAX_TOKENS (근거 인용형)
-    MAX_TOKENS_DETAILED: int = 4096   # DETAILED_MAX_TOKENS (자세히 모드, 실용적 응답 시간 1~4분)
+    # 2026-01-07: 응답 속도 최적화 (7분→30초 목표, 50-60% 단축)
+    MAX_TOKENS_CHAT: int = 1024       # CHAT_MAX_TOKENS (스몰토크/일반) - 2048→1024
+    MAX_TOKENS_RAG: int = 1536        # RAG_MAX_TOKENS (근거 인용형) - 4096→1536 (60% 단축)
+    MAX_TOKENS_DETAILED: int = 2048   # DETAILED_MAX_TOKENS (자세히 모드) - 4096→2048
     MAX_TOKENS_SUMMARIZE: int = 2048  # SUMMARIZE_MAX_TOKENS (요약)
     MAX_TOKENS_SUMMARY: int = 2048    # LLM_MAX_TOKENS_SUMMARY (요약 라우팅)
     MAX_TOKENS_YEAR_SUMMARY: int = 1024  # YEAR_SUMMARY_MAX_TOKENS (다중 문서 요약, 4096 → 1024)
     MAX_TOKENS_SECTION: int = 900     # 섹션 추출용
-    MAX_TOKENS_QA: int = 2048         # Q&A 모드 (800 → 2048, 신뢰성 최우선)
+    MAX_TOKENS_QA: int = 1024         # Q&A 모드 - 2048→1024 (50% 단축)
 
     # 기본값
     DEFAULT_MAX_TOKENS: int = 4096    # LLM_MAX_TOKENS 기본값
@@ -385,10 +387,11 @@ class HandlerConfig:
     TEXT_PREVIEW_SHORT: int = 150           # 짧은 텍스트 미리보기 길이 (H100: 100 → 150)
     TITLE_FALLBACK_MAX: int = 200           # 제목 폴백 최대 길이 (H100: 160 → 200)
 
-    # 유사 문서 설정 (H100: 더 많은 유사 문서 검색)
-    SIMILAR_SEARCH_TOP_K: int = 8           # 유사 문서 검색 수 (H100: 5 → 8)
+    # 유사 문서 설정
+    # 2026-01-07: 유사 문서 확대 (8→15, 5→10)
+    SIMILAR_SEARCH_TOP_K: int = 15          # 유사 문서 검색 수 (8 → 15)
     SIMILAR_MERGE_THRESHOLD: float = 0.7    # 유사도 병합 임계값
-    SIMILAR_DISPLAY_LIMIT: int = 5          # 유사 문서 표시 제한 (H100: 3 → 5)
+    SIMILAR_DISPLAY_LIMIT: int = 10         # 유사 문서 표시 제한 (5 → 10)
 
     # 응답 제한
     MAX_COST_DOCS_DISPLAY: int = 15         # 비용 응답 시 최대 표시 문서 수 (H100: 10 → 15)
@@ -918,13 +921,15 @@ class PipelineConfig:
     """
 
     # 컨텍스트 설정 (H100 환경 최적화)
-    CONTEXT_MAX_LENGTH: int = 16000          # hydrate_context max_len (16K 컨텍스트)
+    # 2026-01-07: 16K→12K (25% 단축, 속도 개선)
+    CONTEXT_MAX_LENGTH: int = 12000          # hydrate_context max_len (12K 컨텍스트)
     SNIPPET_PREVIEW_LENGTH: int = 500        # 스니펫 미리보기 길이
     FALLBACK_SNIPPET_LENGTH: int = 1000      # 폴백 스니펫 길이
 
-    # 기본 검색 설정 (신뢰성 최우선 2025-12-26)
-    PIPELINE_TOP_K: int = 20                 # query() 기본 top_k (10 → 20, 정보 누락 최소화)
-    DEFAULT_COMPRESSION_RATIO: float = 0.7   # 기본 압축 비율
+    # 기본 검색 설정
+    # 2026-01-07: top_k 20→30, 압축 0.7→0.85 (품질 개선)
+    PIPELINE_TOP_K: int = 30                 # query() 기본 top_k (20 → 30)
+    DEFAULT_COMPRESSION_RATIO: float = 0.85  # 기본 압축 비율 (0.7 → 0.85, 15% 삭제)
 
     # 로그 미리보기 설정
     LOG_TOP_RESULTS_COUNT: int = 10          # 검색 결과 로그 상위 N개
@@ -935,17 +940,20 @@ class PipelineConfig:
     SLOW_QUERY_WARNING: float = 3.0          # 경고 슬로 쿼리
 
     # 출처 표시 제한
-    DEFAULT_MAX_SOURCES: int = 3             # 기본 출처 표시 수
+    # 2026-01-07: 3→10 (출처 정보 풍부화)
+    DEFAULT_MAX_SOURCES: int = 10            # 기본 출처 표시 수 (3 → 10)
     BULK_MAX_SOURCES: int = 200              # 전체/모든 쿼리 출처 표시 수
 
     # 토큰 임계값
     MIN_TOKEN_COUNT_FOR_RAG: int = 4         # RAG 모드 최소 토큰 수
 
     # Evidence 폴백
-    EVIDENCE_FALLBACK_COUNT: int = 3         # raw_results 폴백 시 사용할 개수
+    # 2026-01-07: 3→10 (3배 증가, 출처 정보 풍부화)
+    EVIDENCE_FALLBACK_COUNT: int = 10        # raw_results 폴백 시 사용할 개수
 
     # 타임아웃 설정
-    ANSWER_TIMEOUT_MS: int = 600000          # 응답 타임아웃 (10분, 600초)
+    # 2026-01-07: 10분→1분 (30초 목표 + 여유시간)
+    ANSWER_TIMEOUT_MS: int = 60000           # 응답 타임아웃 (1분, 60초)
 
 
 @dataclass(frozen=True)

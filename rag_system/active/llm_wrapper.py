@@ -291,7 +291,7 @@ class QwenLLM(BaseRAGLLM):
         top_p: Optional[float] = None,
         top_k: Optional[int] = None,
         repeat_penalty: Optional[float] = None,
-        timeout: int = 60,  # NEW: 타임아웃 (초 단위, 기본 60초)
+        timeout: int = 45,  # 2026-01-07: 60→45초 (속도 최적화)
     ) -> str:
         """통합 chat completion 호출 (중복 제거용 헬퍼)
 
@@ -335,9 +335,17 @@ class QwenLLM(BaseRAGLLM):
         thread.join(timeout=timeout)
 
         if thread.is_alive():
-            # 타임아웃 발생
-            self.logger.error(f"⏱️ LLM 응답 타임아웃 ({timeout}초 초과)")
-            raise RuntimeError(f"LLM 응답 타임아웃 ({timeout}초 초과)")
+            # 타임아웃 발생 - 상세한 컨텍스트 제공
+            self.logger.error(
+                f"⏱️ LLM 응답 타임아웃 ({timeout}초 초과)\n"
+                f"   messages={len(messages)}개, max_tokens={max_tokens}, "
+                f"   temperature={temperature}\n"
+                f"   🔍 가능한 원인: 과도한 max_tokens, 느린 GPU, 큰 컨텍스트"
+            )
+            raise RuntimeError(
+                f"LLM 응답 타임아웃 ({timeout}초 초과). "
+                f"max_tokens={max_tokens}을 줄이거나 컨텍스트를 단순화하세요."
+            )
 
         if result["error"]:
             raise result["error"]
@@ -349,6 +357,29 @@ class QwenLLM(BaseRAGLLM):
         # response는 dict 또는 Iterator - dict인 경우만 처리
         choices = response["choices"]  # type: ignore[index]
         content = choices[0]["message"]["content"]
+
+        # 2026-01-07: 토큰 사용량 추적 및 잘림 감지
+        usage = response.get("usage", {})
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        total_tokens = usage.get("total_tokens", 0)
+
+        self.logger.info(
+            f"✅ LLM 생성 완료: "
+            f"prompt_tokens={prompt_tokens}, "
+            f"completion_tokens={completion_tokens}, "
+            f"total_tokens={total_tokens}, "
+            f"max_tokens={max_tokens}"
+        )
+
+        # 잘림 감지: completion_tokens가 max_tokens의 95% 이상
+        if completion_tokens >= max_tokens * 0.95:
+            self.logger.warning(
+                f"⚠️ 답변 잘림 의심: "
+                f"completion_tokens({completion_tokens}) >= "
+                f"max_tokens({max_tokens}) * 0.95"
+            )
+
         return content.strip() if content else ""
 
     @lru_cache(maxsize=32)  # noqa: B019 - 의도적 메서드 캐싱 (성능 최적화)

@@ -172,9 +172,9 @@ class LLMWrapperConfig:
     SEARCH_HIGH_CONFIDENCE: float = 0.9           # 검색 고신뢰도
 
     # === vLLM 설정 ===
-    VLLM_GPU_MEMORY_UTILIZATION: float = 0.90     # GPU 메모리 사용률
+    VLLM_GPU_MEMORY_UTILIZATION: float = 0.95     # GPU 메모리 사용률 (0.90 → 0.95, 커뮤니티 권장)
     VLLM_TENSOR_PARALLEL_SIZE: int = 2            # 텐서 병렬 크기
-    VLLM_MAX_MODEL_LEN: int = 16384               # 최대 모델 길이
+    VLLM_MAX_MODEL_LEN: int = 65536               # 최대 모델 길이 (16384 → 65536, .env와 일치)
 
     # === Transformers 설정 ===
     TRANSFORMERS_MAX_NEW_TOKENS: int = 2048       # Transformers 최대 새 토큰

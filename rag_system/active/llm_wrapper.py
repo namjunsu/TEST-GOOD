@@ -1817,6 +1817,7 @@ class VllmLLM(BaseRAGLLM):
         self.trust_remote_code = os.getenv("VLLM_TRUST_REMOTE_CODE", "true").lower() == "true"
         self.enable_prefix_caching = os.getenv("VLLM_ENABLE_PREFIX_CACHING", "true").lower() == "true"
         self.enforce_eager = os.getenv("VLLM_ENFORCE_EAGER", "false").lower() == "true"
+        self.max_num_seqs = int(os.getenv("VLLM_MAX_NUM_SEQS", "256"))  # OOM 방지
 
         # 2026-01-05: H100 배치 처리 최적화 (10-24배 성능 향상)
         self.max_num_batched_tokens = int(os.getenv("VLLM_MAX_NUM_BATCHED_TOKENS", "16384"))
@@ -1842,6 +1843,7 @@ class VllmLLM(BaseRAGLLM):
                 model=str(self.model_path),
                 gpu_memory_utilization=self.gpu_memory_utilization,
                 max_model_len=self.max_model_len,
+                max_num_seqs=self.max_num_seqs,  # OOM 방지
                 tensor_parallel_size=self.tensor_parallel_size,
                 trust_remote_code=self.trust_remote_code,
                 dtype="float16",  # AWQ 모델용

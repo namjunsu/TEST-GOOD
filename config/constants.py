@@ -174,7 +174,7 @@ class LLMWrapperConfig:
     # === vLLM 설정 ===
     VLLM_GPU_MEMORY_UTILIZATION: float = 0.95     # GPU 메모리 사용률 (0.90 → 0.95, 커뮤니티 권장)
     VLLM_TENSOR_PARALLEL_SIZE: int = 2            # 텐서 병렬 크기
-    VLLM_MAX_MODEL_LEN: int = 65536               # 최대 모델 길이 (16384 → 65536, .env와 일치)
+    VLLM_MAX_MODEL_LEN: int = 32768               # 최대 모델 길이 (모델 실제 한계: max_position_embeddings=32768)
 
     # === Transformers 설정 ===
     TRANSFORMERS_MAX_NEW_TOKENS: int = 2048       # Transformers 최대 새 토큰

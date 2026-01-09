@@ -378,17 +378,10 @@ if check_running; then
 fi
 
 # ---------- LLM 모델 사전 로드 ----------
-LLM_LOG="${LOG_DIR}/llm_preload_$(date +%Y%m%d_%H%M%S).log"
-PYTHONPATH="${PROJECT_ROOT}" "${PY}" scripts/preload_llm.py > "$LLM_LOG" 2>&1 &
-LLM_PID=$!
-spin $LLM_PID "LLM 모델 로드 중..."
-wait $LLM_PID
-LLM_RC=$?
-if [[ $LLM_RC -eq 0 ]]; then
-  log SUCCESS "LLM 모델 로드 완료"
-else
-  log WARN "LLM 로드 실패 (첫 질의 시 느릴 수 있음)"
-fi
+# 대용량 모델(Qwen2.5-72B)은 로딩에 40초+ 소요
+# preload는 프로세스 종료 시 메모리 해제되므로 비활성화
+# 첫 질의 시 자동으로 lazy loading됨
+log INFO "LLM은 첫 질의 시 자동 로드됨 (40-60초 소요, 이후 빠름)"
 
 # ---------- API 기동 ----------
 # H100 멀티코어 활용: workers=4 (2025-12-21)

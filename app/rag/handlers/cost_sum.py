@@ -80,7 +80,9 @@ class CostSumHandler(BaseHandler):
         """검색 결과에서 비용 정보가 있는 문서 수집"""
         cost_docs = []
         for result in search_results:
-            filename = result.get("meta", {}).get("filename") or result.get("doc_id", "")
+            # BM25 검색 결과: filename이 최상위 키
+            # Vector 검색 결과: meta.filename에 위치
+            filename = result.get("filename") or result.get("meta", {}).get("filename") or result.get("doc_id", "")
             if not filename:
                 continue
 

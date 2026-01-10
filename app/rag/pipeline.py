@@ -757,9 +757,9 @@ class RAGPipeline:
 
     @staticmethod
     def _extract_metadata_from_chunks(chunks: list[dict[str, Any]]) -> dict[str, str]:
-        """압축된 청크에서 메타데이터 추출 (2026-01-09)
+        """압축된 청크에서 메타데이터 추출 (2026-01-10: 스코어 기반 개선)
 
-        최상위 스코어 청크의 메타데이터를 우선 사용.
+        스코어가 가장 높은 청크의 메타데이터를 우선 사용.
         여러 문서가 섞여있을 경우 대표 문서 정보를 반환.
 
         Args:
@@ -773,8 +773,19 @@ class RAGPipeline:
         if not chunks:
             return metadata
 
-        # 최상위 청크 (스코어가 높은 첫 번째 청크)
-        top_chunk = chunks[0]
+        # 스코어 기반 정렬 (높은 관련성부터)
+        scored_chunks = [c for c in chunks if c.get("score") is not None]
+        if not scored_chunks:
+            # 스코어가 없으면 첫 번째 청크 사용 (기존 동작 유지)
+            scored_chunks = chunks
+
+        # 스코어가 가장 높은 청크 선택
+        sorted_chunks = sorted(
+            scored_chunks,
+            key=lambda c: c.get("score", 0),
+            reverse=True
+        )
+        top_chunk = sorted_chunks[0]
 
         # meta 필드에서 추출
         meta = top_chunk.get("meta", {})

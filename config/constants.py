@@ -76,26 +76,60 @@ class ScoringConfig:
 
 
 @dataclass(frozen=True)
+class TokenConfig:
+    """토큰 설정 통합 클래스 (Single Source of Truth)
+
+    2026-01-10: 모든 모드의 토큰 설정을 하나의 클래스로 통합
+    - 환경변수 우선 (CHAT_MAX_TOKENS, RAG_MAX_TOKENS 등)
+    - 기본값은 이 클래스에서 정의
+    - adapters.py의 MODE_TOKEN_BUDGETS는 이 클래스를 참조
+    """
+
+    # 모드별 max_tokens (환경변수 오버라이드 가능)
+    CHAT: int = int(os.getenv("CHAT_MAX_TOKENS", "900"))
+    RAG: int = int(os.getenv("RAG_MAX_TOKENS", "1400"))
+    QA: int = int(os.getenv("QA_MAX_TOKENS", "1200"))
+    DETAILED: int = int(os.getenv("DETAILED_MAX_TOKENS", "1800"))
+    SUMMARIZE: int = int(os.getenv("SUMMARIZE_MAX_TOKENS", "1800"))
+    SUMMARY: int = int(os.getenv("SUMMARY_MAX_TOKENS", "1800"))
+    YEAR_SUMMARY: int = int(os.getenv("YEAR_SUMMARY_MAX_TOKENS", "900"))
+    SECTION: int = int(os.getenv("SECTION_MAX_TOKENS", "800"))
+    COMPREHENSIVE_REPORT: int = int(os.getenv("COMPREHENSIVE_REPORT_MAX_TOKENS", "1800"))
+
+    @classmethod
+    def get(cls, mode: str) -> int:
+        """모드별 토큰 값 반환
+
+        Args:
+            mode: 모드명 (chat, rag, qa, detailed 등)
+
+        Returns:
+            해당 모드의 max_tokens 값
+        """
+        mode_upper = mode.upper().replace("-", "_")
+        return getattr(cls, mode_upper, cls.RAG)
+
+
+@dataclass(frozen=True)
 class LLMConfig:
     """LLM 생성 관련 상수
 
     2025-12-23: 토큰 설정 통합 (.env, adapters.py와 일관성 유지)
     - 모든 토큰 값은 .env 환경변수를 Single Source of Truth로 사용
     - 이 클래스는 환경변수가 없을 때의 기본값 역할
+
+    2026-01-10: TokenConfig로 통합 완료 (하위 호환성 유지)
     """
 
-    # 모드별 max_tokens (.env와 동기화)
-    # 2026-01-10: 토큰 설정 복구 (품질 우선)
-    # - 과도한 감소로 인한 답변 품질 저하 문제 해결
-    # - 속도와 품질의 균형점 재조정
-    MAX_TOKENS_CHAT: int = 900        # CHAT_MAX_TOKENS (스몰토크/일반)
-    MAX_TOKENS_RAG: int = 1400        # RAG_MAX_TOKENS (근거 인용형) - 품질 복구
-    MAX_TOKENS_DETAILED: int = 1800   # DETAILED_MAX_TOKENS (자세히 모드) - 품질 복구
-    MAX_TOKENS_SUMMARIZE: int = 1800  # SUMMARIZE_MAX_TOKENS (요약) - 품질 복구
-    MAX_TOKENS_SUMMARY: int = 1800    # LLM_MAX_TOKENS_SUMMARY (요약 라우팅)
-    MAX_TOKENS_YEAR_SUMMARY: int = 900  # YEAR_SUMMARY_MAX_TOKENS (다중 문서 요약)
-    MAX_TOKENS_SECTION: int = 800     # 섹션 추출용
-    MAX_TOKENS_QA: int = 1200         # Q&A 모드 - 품질 복구
+    # 모드별 max_tokens (.env와 동기화) - TokenConfig 참조
+    MAX_TOKENS_CHAT: int = TokenConfig.CHAT
+    MAX_TOKENS_RAG: int = TokenConfig.RAG
+    MAX_TOKENS_DETAILED: int = TokenConfig.DETAILED
+    MAX_TOKENS_SUMMARIZE: int = TokenConfig.SUMMARIZE
+    MAX_TOKENS_SUMMARY: int = TokenConfig.SUMMARY
+    MAX_TOKENS_YEAR_SUMMARY: int = TokenConfig.YEAR_SUMMARY
+    MAX_TOKENS_SECTION: int = TokenConfig.SECTION
+    MAX_TOKENS_QA: int = TokenConfig.QA
 
     # 기본값
     DEFAULT_MAX_TOKENS: int = 4096    # LLM_MAX_TOKENS 기본값

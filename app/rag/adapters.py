@@ -15,7 +15,7 @@ from typing import Any, Optional
 
 from app.core.logging import get_logger
 from app.prompts.document_prompts import build_qa_prompt, COMMON_RULES
-from config.constants import LLMConfig
+from config.constants import LLMConfig, TokenConfig
 
 logger = get_logger(__name__)
 
@@ -23,15 +23,16 @@ logger = get_logger(__name__)
 # 환경변수 기반 토큰 예산 (모듈 로드 시 1회만 읽음)
 # ============================================================================
 
+# 2026-01-10: TokenConfig로 통합 (Single Source of Truth)
 MODE_TOKEN_BUDGETS: dict[str, int] = {
-    "chat": int(os.getenv("CHAT_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_CHAT))),
-    "rag": int(os.getenv("RAG_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_RAG))),  # 1400 (품질 복구)
-    "qa": int(os.getenv("QA_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_QA))),  # 1200 (품질 복구)
-    "detailed": int(os.getenv("DETAILED_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_DETAILED))),  # 1800 (품질 복구)
-    "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_SUMMARIZE))),  # 1800 (품질 복구)
-    "summary": int(os.getenv("SUMMARY_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_SUMMARY))),  # 1800 (품질 복구)
-    "year_summary": int(os.getenv("YEAR_SUMMARY_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_YEAR_SUMMARY))),  # 900 (품질 복구)
-    "comprehensive_report": 1800,  # 표 형식 리포트 (품질 복구)
+    "chat": TokenConfig.CHAT,
+    "rag": TokenConfig.RAG,
+    "qa": TokenConfig.QA,
+    "detailed": TokenConfig.DETAILED,
+    "summarize": TokenConfig.SUMMARIZE,
+    "summary": TokenConfig.SUMMARY,
+    "year_summary": TokenConfig.YEAR_SUMMARY,
+    "comprehensive_report": TokenConfig.COMPREHENSIVE_REPORT,
 }
 
 RAG_MAX_CONTEXT_CHARS: int = int(os.getenv("RAG_MAX_CONTEXT_CHARS", "6000"))
@@ -154,7 +155,7 @@ class _LLMAdapter:
             else:  # "normal"
                 max_tokens = base_tokens
 
-            logger.info(f"📏 상세도 기반 토큰 조정: {effective_detail} → {max_tokens} (base={base_tokens}, mode={mode})")
+            logger.debug(f"상세도 기반 토큰 조정: {effective_detail} -> {max_tokens} (base={base_tokens}, mode={mode})")
 
         # 🔧 2025-12-16: 모드별 시스템 프롬프트 (외부 전달 우선)
         # 2026-01-09: COMMON_RULES 추가로 프롬프트 인젝션 차단 및 규칙 강화
@@ -167,8 +168,8 @@ class _LLMAdapter:
 
         # 2025-12-26: source/resolver 추적 로깅 (디버깅 강화)
         env_key = f"{mode.upper()}_MAX_TOKENS"
-        logger.info(
-            f"🎯 generate mode={mode} max_tokens={max_tokens} "
+        logger.debug(
+            f"generate mode={mode} max_tokens={max_tokens} "
             f"(source=MODE_TOKEN_BUDGETS env_key={env_key})"
         )
 
@@ -186,7 +187,7 @@ class _LLMAdapter:
                 # vLLM: generate_response() 사용 (직접 호출 불가)
                 # 2025-12-23: max_tokens 동적 전달 (응답 잘림 버그 수정)
                 # 2026-01-09: 프롬프트 템플릿 적용 (QA_PROMPT + COMMON_RULES)
-                logger.info(f"🚀 vLLM 모드: generate_response() 사용 (max_tokens={max_tokens})")
+                logger.debug(f"vLLM 모드: generate_response() 사용 (max_tokens={max_tokens})")
 
                 # 프롬프트 템플릿 구성 (context가 있을 때만)
                 if context and context.strip():
@@ -199,10 +200,10 @@ class _LLMAdapter:
                         drafter=meta.get("drafter", ""),
                         date=meta.get("date", "")
                     )
-                    logger.info(f"📝 프롬프트 템플릿 적용: QA_PROMPT (context={len(context)}자, query={len(query)}자, metadata={bool(meta)})")
+                    logger.debug(f"프롬프트 템플릿 적용: QA_PROMPT (context={len(context)}자, query={len(query)}자, metadata={bool(meta)})")
                 else:
                     full_prompt = query
-                    logger.info(f"📝 프롬프트 템플릿 미적용: context 없음")
+                    logger.debug(f"프롬프트 템플릿 미적용: context 없음")
 
                 # chunks는 빈 리스트로 전달 (이미 full_prompt에 context 포함)
                 response = self.llm.generate_response(full_prompt, [], max_tokens=max_tokens)
@@ -229,10 +230,10 @@ class _LLMAdapter:
                         drafter=meta.get("drafter", ""),
                         date=meta.get("date", "")
                     )
-                    logger.info(f"📝 프롬프트 템플릿 적용: QA_PROMPT (llama_cpp, context={len(context)}자, metadata={bool(meta)})")
+                    logger.debug(f"프롬프트 템플릿 적용: QA_PROMPT (llama_cpp, context={len(context)}자, metadata={bool(meta)})")
                 else:
                     user_content = query
-                    logger.info(f"📝 프롬프트 템플릿 미적용: query_has_context={query_has_context}")
+                    logger.debug(f"프롬프트 템플릿 미적용: query_has_context={query_has_context}")
 
                 # llama_cpp.Llama 직접 접근
                 output = llm_instance.create_chat_completion(
@@ -292,8 +293,8 @@ class _QuickFixGenerator:
             if result is not None:
                 return result
 
-            # Strategy 3: 폴백 (재검색 포함)
-            return self._fallback_answer(query)
+            # Strategy 3: 폴백 (컨텍스트 인지, 2026-01-10)
+            return self._fallback_answer(query, context)
 
         except Exception as e:
             logger.error(f"Generation 실패: {e}", exc_info=True)
@@ -345,13 +346,31 @@ class _QuickFixGenerator:
         snippets = context.split("\n\n")
         return [{"snippet": s, "content": s} for s in snippets if s.strip()]
 
-    def _fallback_answer(self, query: str) -> str:
-        """Strategy 3: 폴백 (재검색 포함)"""
+    def _fallback_answer(self, query: str, context: str = "") -> str:
+        """Strategy 3: 폴백 (컨텍스트 인지, 2026-01-10 개선)
+
+        Args:
+            query: 사용자 질문
+            context: 압축/정제된 컨텍스트 (있으면 쿼리에 포함)
+
+        Returns:
+            생성된 답변
+        """
         logger.warning("generate_from_context 미지원 → 폴백(answer) 사용")
 
         if self.rag is None:
             logger.error("QuickFixRAG 없음: 답변 생성 불가")
             return AdapterConfig.ERROR_RAG_UNAVAILABLE
+
+        # 컨텍스트가 있으면 쿼리에 포함하여 정보 손실 방지
+        if context:
+            enriched_query = (
+                f"{query}\n\n"
+                f"[관련 정보]\n"
+                f"{context[:2000]}"  # 처음 2000자만 사용
+            )
+            logger.debug(f"컨텍스트 포함 폴백 ({len(context)}자 → {len(context[:2000])}자)")
+            return self.rag.answer(enriched_query, use_llm_summary=True)
 
         return self.rag.answer(query, use_llm_summary=True)
 
@@ -378,7 +397,7 @@ class _V2RetrieverAdapter:
 
             v1_results = [self._convert_doc(doc) for doc in fused_results]
 
-            logger.info(f"V2 Adapter: {len(v1_results)} results converted")
+            logger.debug(f"V2 Adapter: {len(v1_results)} results converted")
             return v1_results
 
         except Exception as e:

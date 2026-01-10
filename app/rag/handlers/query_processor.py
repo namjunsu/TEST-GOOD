@@ -298,6 +298,10 @@ def is_list_query(query: str) -> bool:
     if "상태" in query_lower and any(verb in query_lower for verb in ["어때", "알려", "보여"]):
         return True
 
+    # "이력 + 알려줘" 패턴 (시간순 목록)
+    if "이력" in query_lower and any(verb in query_lower for verb in ["알려", "보여", "말해"]):
+        return True
+
     return False
 
 

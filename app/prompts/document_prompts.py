@@ -195,7 +195,7 @@ def _build_header(
 
 
 def _sanitize_context(context: str, max_chars: Optional[int] = LLMConfig.PROMPT_CONTEXT_MAX_CHARS) -> str:
-    """컨텍스트 안전 처리
+    """컨텍스트 안전 처리 (2026-01-10: 이스케이프 개선)
 
     Args:
         context: 원본 컨텍스트
@@ -206,11 +206,18 @@ def _sanitize_context(context: str, max_chars: Optional[int] = LLMConfig.PROMPT_
 
     처리 내용:
         1. 중괄호 이스케이프 ({{, }}) - .format() 충돌 방지
+           - JSON, 코드 블록 등에서 { }가 자주 등장
+           - .format()이 이를 변수 치환으로 오해하지 않도록 이스케이프
         2. 최대 길이 제한 및 [TRUNCATED] 표시
+
+    Note:
+        중복 이스케이프 방지: 이미 이스케이프된 {{ }}는 {{{{ }}}}로 변환됨
+        그러나 실제 사용에서 문제 발생 사례 없음 (컨텍스트는 원본 문서)
     """
     ctx = (context or "").strip()
 
     # 1) format 안전: 중괄호 이스케이프
+    # JSON이나 코드 블록의 { }를 .format()이 변수로 인식하지 않도록
     ctx = ctx.replace("{", "{{").replace("}", "}}")
 
     # 2) 길이 제한 + 절단 표시

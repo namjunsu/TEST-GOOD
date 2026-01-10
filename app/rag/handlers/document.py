@@ -34,8 +34,9 @@ DOCUMENT_STOP_WORDS = [
     "보여줘", "보여", "자세하게", "자세히", "요약", "정리",
 ]
 
-# 데이터 디렉토리
-EXTRACTED_DIR = Path("data/extracted")
+# 데이터 디렉토리 (settings에서 가져옴)
+from app.config.settings import settings
+EXTRACTED_DIR = settings.EXTRACTED_DIR
 
 
 # ============================================================================

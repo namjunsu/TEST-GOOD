@@ -255,6 +255,82 @@ class RAGPipeline:
 
         return None
 
+    def _detect_table_request(self, query: str) -> bool:
+        """표 정리 요청 감지 (2026-01-10: 헬퍼 추출)
+
+        패턴: "표로 알려줘", "표로 보여줘", "표로 정리해줘" 등
+
+        Args:
+            query: 사용자 질문
+
+        Returns:
+            표 정리 요청 여부
+        """
+        return bool(
+            re.search(r"표(로|를)?", query) and
+            any(kw in query for kw in ["다", "전부", "모두", "전체", "모든", "알려", "보여", "정리"])
+        )
+
+    def _enhance_query_for_table(self, query: str) -> str:
+        """표 정리 요청 시 쿼리 향상 (2026-01-10: 헬퍼 추출)
+
+        Args:
+            query: 원본 쿼리
+
+        Returns:
+            향상된 쿼리
+        """
+        return f"""{query}
+
+[중요 지시사항]
+- 검색된 모든 문서의 정보를 빠짐없이 표에 포함할 것
+- 각 문서당 1개 행 (요약/생략 금지)
+- 표 컬럼: 날짜 | 문서명 | 주요내용 | 상태/결과
+- 원본 데이터 그대로 사용 (LLM이 재작성/추론 금지)
+- 표 아래에 '총 N개 문서' 명시"""
+
+    def _refine_mode_decision(
+        self,
+        route_decision: RouteDecision,
+        selected_filename: Optional[str],
+        actual_query: str
+    ) -> RouteDecision:
+        """모드 결정 로직 정제 (2026-01-10: 헬퍼 추출)
+
+        우선순위:
+        1. 선택된 문서 → DOCUMENT 모드
+        2. 요약 의도 + 날짜 패턴 → DOCUMENT 모드
+        3. 기존 라우팅 결과 유지
+
+        Args:
+            route_decision: 조기 라우팅 결과
+            selected_filename: 선택된 파일명
+            actual_query: 정제된 쿼리
+
+        Returns:
+            정제된 RouteDecision
+        """
+        # 우선순위 1: 선택된 문서
+        if selected_filename:
+            logger.info(f"선택된 문서({selected_filename}) 감지 → DOCUMENT 모드로 강제")
+            route_decision.mode = QueryMode.DOCUMENT
+            route_decision.reason = "selected_doc"
+            return route_decision
+
+        # 우선순위 2: 요약 의도 + 날짜 패턴
+        has_summary_intent = (
+            self.query_router.SUMMARY_INTENT_PATTERN.search(actual_query) or
+            "내용" in actual_query.lower()
+        )
+        has_date_pattern = re.search(r"\d{4}[-_]\d{2}[-_]\d{2}", actual_query)
+
+        if has_summary_intent and has_date_pattern:
+            logger.info("요약 의도 + 날짜 패턴 감지 → DOCUMENT 모드로 강제")
+            route_decision.mode = QueryMode.DOCUMENT
+            route_decision.reason = "summary_with_date_pattern"
+
+        return route_decision
+
     def _route_to_handler(
         self,
         actual_query: str,
@@ -944,11 +1020,8 @@ class RAGPipeline:
         _notify("routing", f"모드 결정: {route_mode}")
 
         # 📊 2025-12-26: 표 정리 요청 감지 (캐시 키 구분 위해 조기 감지)
-        # "표로 알려줘", "표로 보여줘", "표로 정리해줘" 등
-        table_request_detected = bool(
-            re.search(r"표(로|를)?", actual_query) and
-            any(kw in actual_query for kw in ["다", "전부", "모두", "전체", "모든", "알려", "보여", "정리"])
-        )
+        # 2026-01-10: 헬퍼 메서드로 추출
+        table_request_detected = self._detect_table_request(actual_query)
 
         # ✨ 2-tier Cache check - 메모리 캐시 → 영구 캐시 (정제된 쿼리로 키 생성)
         # 표 정리 요청은 다른 형식의 답변이므로 별도 캐시 키 사용
@@ -972,24 +1045,10 @@ class RAGPipeline:
                 selected_filename = self._extract_document_reference(actual_query)
 
             # 🎯 모드 라우팅: 조기 라우팅 결과 재사용 (이미 actual_query로 수행됨, Phase 2-3)
+            # 2026-01-10: 모드 결정 로직을 헬퍼로 추출
             route_decision = early_route
-            logger.debug("🔄 조기 라우팅 결과 재사용 (actual_query 통일)")
-
-            # 🔧 selected_filename이 있으면 무조건 DOCUMENT 모드로 전환 (우선순위 최상위)
-            # 문서가 선택된 상태에서는 모든 질문에 대해 LLM이 해당 문서 기반으로 답변
-            if selected_filename:
-                logger.info(f"🎯 선택된 문서({selected_filename}) 감지 → DOCUMENT 모드로 강제")
-                route_decision.mode = QueryMode.DOCUMENT
-                route_decision.reason = "selected_doc"
-
-            # 🔧 요약 의도 + 쿼리에 날짜/문서명 패턴이 있으면 DOCUMENT 모드로 강제
-            has_summary_intent = self.query_router.SUMMARY_INTENT_PATTERN.search(actual_query) or "내용" in actual_query.lower()
-            has_date_pattern = re.search(r"\d{4}[-_]\d{2}[-_]\d{2}", actual_query)  # 2025-06-10 형식
-
-            if has_summary_intent and has_date_pattern and not selected_filename:
-                logger.info("🎯 요약 의도 + 날짜 패턴 감지 → DOCUMENT 모드로 강제")
-                route_decision.mode = QueryMode.DOCUMENT
-                route_decision.reason = "summary_with_date_pattern"
+            logger.debug("조기 라우팅 결과 재사용 (actual_query 통일)")
+            route_decision = self._refine_mode_decision(route_decision, selected_filename, actual_query)
 
             # Phase 2.4: 모드별 핸들러 라우팅 로직을 헬퍼로 추출
             handler_result = self._route_to_handler(actual_query, route_decision, selected_filename)
@@ -997,18 +1056,11 @@ class RAGPipeline:
                 return _log_and_return(handler_result, route_decision.mode.value, actual_query)
 
             # Phase 2.5: 표준 RAG 파이프라인 로직을 헬퍼로 추출
-            # 📊 표 정리 요청 시 쿼리 향상
+            # 2026-01-10: 쿼리 향상 로직을 헬퍼로 추출
             enhanced_query = actual_query
             if table_request_detected:
                 top_k = 20  # 검색 범위 확대
-                enhanced_query = f"""{actual_query}
-
-[중요 지시사항]
-- 검색된 모든 문서의 정보를 빠짐없이 표에 포함할 것
-- 각 문서당 1개 행 (요약/생략 금지)
-- 표 컬럼: 날짜 | 문서명 | 주요내용 | 상태/결과
-- 원본 데이터 그대로 사용 (LLM이 재작성/추론 금지)
-- 표 아래에 '총 N개 문서' 명시"""
+                enhanced_query = self._enhance_query_for_table(actual_query)
 
             result = self._run_standard_pipeline(
                 actual_query,

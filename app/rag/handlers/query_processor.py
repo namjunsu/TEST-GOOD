@@ -282,6 +282,10 @@ def is_list_query(query: str) -> bool:
     if any(kw in query_lower for kw in LIST_KEYWORDS):
         return True
 
+    # ALL_KEYWORDS 확인 ("전부", "모두", "뭐" 등)
+    if any(kw in query_lower for kw in ALL_KEYWORDS):
+        return True
+
     # "현황 + 알려줘/보여줘/말해줘" 패턴
     if "현황" in query_lower and any(verb in query_lower for verb in ["알려", "보여", "말해"]):
         return True

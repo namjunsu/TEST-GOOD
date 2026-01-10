@@ -10,7 +10,12 @@
 - {date}: 날짜
 - {common_rules}: 공통 규칙 (모든 템플릿에 삽입)
 
-v1.3.0 주요 변경사항:
+v1.4.0 주요 변경사항:
+- QA_PROMPT: 질문 유형별 구체적 예시 추가
+- 표 행 제한 최적화: 30행 → 15행 (가독성 개선)
+- 토큰 효율성 향상 (중복 제거)
+
+v1.3.0:
 - QA_PROMPT 개선: 질문 유형별 답변 방식 명시
 - SUMMARY_PROMPT 개선: 구조화된 요약 포맷
 - 한국어 기안서 특성 반영 (표 구조, 금액 형식)
@@ -19,7 +24,7 @@ v1.3.0 주요 변경사항:
 v1.2.0:
 - 프롬프트 인젝션 차단 규칙 추가
 - 근거 부족 시 명시적 처리
-- 표 30행 제한 및 절단 표시
+- 표 행 제한 및 절단 표시
 """
 
 from __future__ import annotations
@@ -28,7 +33,7 @@ from typing import Optional
 
 from config.constants import LLMConfig
 
-TEMPLATE_VERSION = "v1.3.0"
+TEMPLATE_VERSION = "v1.4.0"
 
 # -----------------------------------------------------------------------------
 # 공통 규칙 (모든 프롬프트에 삽입)
@@ -38,15 +43,18 @@ COMMON_RULES = """[규칙 — 반드시 준수]
 - 답변은 한국어의 공적·전문 문체를 사용한다. 추측/확대해석 금지, 이모지 금지.
 - 모든 사실/수치/사양/금액은 근거에서 **그대로 인용**하고, 계산·재해석·보정하지 않는다.
 - 근거가 부족하면 해당 항목은 '근거 부족으로 생략'으로 표시한다(임의 생성 금지).
-- 표는 마크다운으로 재현하고, 원본 헤더/단위를 유지한다. 30행을 초과하면 마지막에 '…(N행 생략)'을 표기한다.
+- 표는 마크다운으로 재현하고, 원본 헤더/단위를 유지한다. 15행을 초과하면 마지막에 '…(N행 생략)'을 표기한다.
 - 문장 또는 표에 사용된 수치 뒤에는 가능한 경우 `[근거]` 라벨 또는 인용 블록을 첨부한다.
 """
 
 # -----------------------------------------------------------------------------
 # 프롬프트 템플릿
 # -----------------------------------------------------------------------------
+# NOTE: COMMON_RULES는 이미 system message에 포함되어 있음 (adapters.py L177)
+# 각 프롬프트에 중복 삽입하면 토큰 낭비 (~500자 × 요청 수)
+# {common_rules} 변수는 하위 호환성을 위해 유지하되, 빈 문자열로 대체 가능
+
 DETAILED_PROMPT = """다음 지침에 따라 상세 답변을 작성하라.
-{common_rules}
 
 [중요 제약사항 - 반드시 준수]
 - 제공된 근거 패시지에 명시적으로 기술된 내용만을 사용한다
@@ -71,7 +79,6 @@ DETAILED_PROMPT = """다음 지침에 따라 상세 답변을 작성하라.
 """
 
 SECTION_PROMPT = """다음 문서에서 "{section}" 섹션만 정확히 발췌·정리하라.
-{common_rules}
 
 [섹션 처리]
 - 섹션 제목/머리글/근접 문맥만 사용하고, 범위를 벗어난 서술 금지.
@@ -82,7 +89,6 @@ SECTION_PROMPT = """다음 문서에서 "{section}" 섹션만 정확히 발췌·
 """
 
 SUMMARY_PROMPT = """다음 문서의 핵심을 요약하라.
-{common_rules}
 
 [요약 구조]
 1. **문서 목적** (1문장): 이 문서가 왜 작성되었는지
@@ -118,7 +124,6 @@ SUMMARY_PROMPT = """다음 문서의 핵심을 요약하라.
 """
 
 QA_PROMPT = """사용자 질문에 **문서 근거에 한정**하여 **직접 답변**하라.
-{common_rules}
 
 [핵심 원칙]
 1. **질문의 핵심을 파악**하고 그것에만 답변한다
@@ -129,15 +134,23 @@ QA_PROMPT = """사용자 질문에 **문서 근거에 한정**하여 **직접 �
 - **금액 질문** ("얼마", "비용", "합계", "총액"):
   → "총 XXX원입니다." 형식으로 시작
   → 세부 내역이 있으면 표로 정리
+  예시: Q: "총 비용은 얼마인가요?"
+       A: "총 12,500,000원(VAT 별도)입니다. [세부 내역 표]"
 
 - **목록 질문** ("뭐가 있어", "어떤 것들"):
   → 번호 목록으로 나열
+  예시: Q: "검토한 대안은 뭐가 있어?"
+       A: "3가지 대안을 검토했습니다:\n1. A사 제품 (500만원)\n2. B사 제품 (700만원)\n3. C사 제품 (600만원)"
 
 - **비교 질문** ("비교", "대안", "차이"):
   → 옵션별로 구분하여 정리
+  예시: Q: "A사와 B사 제품 차이는?"
+       A: "가격과 성능에서 차이가 있습니다.\n- A사: 500만원, 처리 속도 100MB/s\n- B사: 700만원, 처리 속도 150MB/s"
 
 - **이유 질문** ("왜", "사유", "배경"):
   → 핵심 이유를 먼저 제시
+  예시: Q: "왜 B사를 선정했나요?"
+       A: "성능과 유지보수 측면에서 우수하기 때문입니다. [구체적 근거]"
 
 [한국어 기안서 특성]
 - 표에서 "합계", "계", "총액" 행을 찾아 금액 질문에 답변
@@ -247,10 +260,15 @@ def build_detailed_prompt(
 
     Returns:
         완성된 프롬프트
+
+    Note:
+        COMMON_RULES는 adapters.py의 system message에 포함되므로
+        여기서는 빈 문자열로 전달 (토큰 절약)
     """
     header = _build_header(filename or None, drafter or None, date or None)
     ctx = _sanitize_context(context)
-    return header + DETAILED_PROMPT.format(context=ctx, common_rules=COMMON_RULES)
+    # COMMON_RULES는 이미 system message에 있으므로 빈 문자열 전달
+    return header + DETAILED_PROMPT.format(context=ctx)
 
 
 def build_section_prompt(
@@ -275,9 +293,7 @@ def build_section_prompt(
     header = _build_header(filename or None, drafter or None, date or None)
     ctx = _sanitize_context(context)
     sec = (section or "").strip()
-    return header + SECTION_PROMPT.format(
-        context=ctx, section=sec, common_rules=COMMON_RULES,
-    )
+    return header + SECTION_PROMPT.format(context=ctx, section=sec)
 
 
 def build_summary_prompt(
@@ -299,7 +315,7 @@ def build_summary_prompt(
     """
     header = _build_header(filename or None, drafter or None, date or None)
     ctx = _sanitize_context(context)
-    return header + SUMMARY_PROMPT.format(context=ctx, common_rules=COMMON_RULES)
+    return header + SUMMARY_PROMPT.format(context=ctx)
 
 
 def build_qa_prompt(
@@ -324,6 +340,4 @@ def build_qa_prompt(
     header = _build_header(filename or None, drafter or None, date or None)
     ctx = _sanitize_context(context)
     q = (query or "").strip()
-    return header + QA_PROMPT.format(
-        context=ctx, query=q, common_rules=COMMON_RULES,
-    )
+    return header + QA_PROMPT.format(context=ctx, query=q)

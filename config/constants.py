@@ -85,15 +85,17 @@ class LLMConfig:
     """
 
     # 모드별 max_tokens (.env와 동기화)
-    # 2026-01-07: 응답 속도 최적화 (7분→30초 목표, 50-60% 단축)
-    MAX_TOKENS_CHAT: int = 1024       # CHAT_MAX_TOKENS (스몰토크/일반) - 2048→1024
-    MAX_TOKENS_RAG: int = 1536        # RAG_MAX_TOKENS (근거 인용형) - 4096→1536 (60% 단축)
-    MAX_TOKENS_DETAILED: int = 2048   # DETAILED_MAX_TOKENS (자세히 모드) - 4096→2048
-    MAX_TOKENS_SUMMARIZE: int = 2048  # SUMMARIZE_MAX_TOKENS (요약)
-    MAX_TOKENS_SUMMARY: int = 2048    # LLM_MAX_TOKENS_SUMMARY (요약 라우팅)
-    MAX_TOKENS_YEAR_SUMMARY: int = 1024  # YEAR_SUMMARY_MAX_TOKENS (다중 문서 요약, 4096 → 1024)
-    MAX_TOKENS_SECTION: int = 900     # 섹션 추출용
-    MAX_TOKENS_QA: int = 1024         # Q&A 모드 - 2048→1024 (50% 단축)
+    # 2026-01-10: vLLM 커뮤니티 검증 기반 전면 최적화
+    # - 모든 모드 1536 이하로 제한 (속도/품질 균형점)
+    # - 340초 QA 응답 → 100-150초 목표 (2-3배 향상)
+    MAX_TOKENS_CHAT: int = 768        # CHAT_MAX_TOKENS (스몰토크/일반) - 1024→768 (25% 감소)
+    MAX_TOKENS_RAG: int = 1024        # RAG_MAX_TOKENS (근거 인용형) - 1536→1024 (33% 감소)
+    MAX_TOKENS_DETAILED: int = 1536   # DETAILED_MAX_TOKENS (자세히 모드) - 2048→1536 (25% 감소)
+    MAX_TOKENS_SUMMARIZE: int = 1536  # SUMMARIZE_MAX_TOKENS (요약) - 2048→1536 (25% 감소)
+    MAX_TOKENS_SUMMARY: int = 1536    # LLM_MAX_TOKENS_SUMMARY (요약 라우팅) - 2048→1536 (25% 감소)
+    MAX_TOKENS_YEAR_SUMMARY: int = 768  # YEAR_SUMMARY_MAX_TOKENS (다중 문서 요약) - 1024→768 (25% 감소)
+    MAX_TOKENS_SECTION: int = 768     # 섹션 추출용 - 900→768 (15% 감소)
+    MAX_TOKENS_QA: int = 1024         # Q&A 모드 (유지 - 이미 최적화됨)
 
     # 기본값
     DEFAULT_MAX_TOKENS: int = 4096    # LLM_MAX_TOKENS 기본값
@@ -410,28 +412,33 @@ class HandlerConfig:
 class DocumentHandlerConfig:
     """문서 핸들러 관련 상수 (handlers/document.py용)
 
-    2025-12-21: H100 GPU 환경 최적화 (확장된 컨텍스트 윈도우)
+    2026-01-10: vLLM 긴 문서 QA 최적화 (커뮤니티 검증 기반)
+    - 컨텍스트 50% 축소 (24K→12K): 프롬프트 길이↓ = 속도↑
+    - max_tokens 60-75% 감소 (2000→1000, 600→512): 생성 시간 대폭 단축
+    - 목표: 681초 → 200-300초 (2-3배 속도 향상)
     """
 
     # 텍스트 길이 임계값
     SHORT_TEXT_THRESHOLD: int = 800         # 짧은 문서 임계값 (H100: 500 → 800)
     MIN_TEXT_LENGTH: int = 10               # 최소 텍스트 길이
 
-    # 컨텍스트 윈도우 (H100: Qwen72B n_ctx=32768 기준)
-    CONTEXT_WINDOW: int = 8000              # LLM 컨텍스트 최대 길이 (H100: 3000 → 8000)
-    CHUNK_CONTEXT_MAX: int = 24000          # 청크 결합 최대 길이 (H100: 12000 → 24000)
-    CHUNK_SNIPPET_MAX: int = 6000           # 개별 청크 최대 길이 (H100: 3000 → 6000)
+    # 컨텍스트 윈도우 최적화 (긴 컨텍스트 = 느린 속도)
+    # vLLM 커뮤니티: 8K토큰 넘으면 속도 20배 저하
+    CONTEXT_WINDOW: int = 6000              # LLM 컨텍스트 최대 길이 (8000 → 6000, 25% 감소)
+    CHUNK_CONTEXT_MAX: int = 12000          # 청크 결합 최대 길이 (24000 → 12000, 50% 감소)
+    CHUNK_SNIPPET_MAX: int = 4000           # 개별 청크 최대 길이 (6000 → 4000, 33% 감소)
 
-    # 미리보기 길이 (H100: 확장)
-    DETAILED_PREVIEW_LEN: int = 6000        # 자세히 모드 미리보기 (H100: 3000 → 6000)
-    NORMAL_PREVIEW_LEN: int = 3000          # 일반 모드 미리보기 (H100: 1500 → 3000)
-    EVIDENCE_SNIPPET_LEN: int = 1500        # Evidence 스니펫 길이 (H100: 1000 → 1500)
+    # 미리보기 길이 (축소)
+    DETAILED_PREVIEW_LEN: int = 4000        # 자세히 모드 미리보기 (6000 → 4000)
+    NORMAL_PREVIEW_LEN: int = 2000          # 일반 모드 미리보기 (3000 → 2000)
+    EVIDENCE_SNIPPET_LEN: int = 1200        # Evidence 스니펫 길이 (1500 → 1200)
 
-    # 토큰 설정 (H100: 더 많은 토큰 생성 가능)
-    DEFAULT_MAX_TOKENS: int = 1500          # 기본 max_tokens (H100: 800 → 1500)
-    SUMMARY_MIN_TOKENS: int = 2000          # 요약 모드 최소 토큰 (H100: 1000 → 2000)
-    DETAILED_MIN_TOKENS: int = 600          # 자세히 모드 최소 토큰 (H100: 300 → 600)
-    NORMAL_MIN_TOKENS: int = 400            # 일반 모드 최소 토큰 (H100: 200 → 400)
+    # 토큰 설정 최적화 (생성 토큰↓ = 속도↑)
+    # vLLM 커뮤니티 권장: 2048-4096 토큰이 실용적
+    DEFAULT_MAX_TOKENS: int = 1024          # 기본 max_tokens (1500 → 1024, 32% 감소)
+    SUMMARY_MIN_TOKENS: int = 1024          # 요약 모드 최소 토큰 (2000 → 1024, 49% 감소)
+    DETAILED_MIN_TOKENS: int = 512          # 자세히 모드 최소 토큰 (600 → 512, 15% 감소)
+    NORMAL_MIN_TOKENS: int = 256            # 일반 모드 최소 토큰 (400 → 256, 36% 감소)
 
     # 청크 로드 (H100: 더 많은 청크 처리)
     DEFAULT_CHUNK_TOP_K: int = 30           # 기본 청크 로드 수 (H100: 20 → 30)

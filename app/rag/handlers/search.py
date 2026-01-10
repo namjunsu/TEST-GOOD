@@ -36,6 +36,7 @@ from .query_processor import (
     extract_year_filter,
     is_all_query,
     is_count_query,
+    is_list_query,
     is_temporal_query,
     needs_expanded_search,
 )
@@ -180,6 +181,10 @@ class SearchHandler(BaseHandler):
             filenames = self._extract_unique_filenames(search_results)
             logger.info(f"✅ 고유 문서: {len(filenames)}건 (중복 제거 완료)")
 
+            # 연도 필터는 _get_doc_details()에서 SQL WHERE 조건으로 처리
+            if year_filter:
+                logger.info(f"📅 연도 필터 적용 예정: {year_filter}년")
+
             if not filenames:
                 return self._make_empty_response(f"'{keywords}' 관련 문서를 찾지 못했습니다.")
 
@@ -209,10 +214,11 @@ class SearchHandler(BaseHandler):
                 )
 
             # 7. 응답 생성
-            # "문서 전부" 요청 시 메타데이터만 표시 (성능 최적화)
-            is_all_docs_query = is_all_query(query)
+            # "문서 전부" 또는 "문서들" 요청 시 메타데이터만 표시 (성능 최적화)
+            # 2026-01-10: 리스트 쿼리도 metadata_only 처리 (유사도 계산 26분+ 버그 수정)
+            is_all_docs_query = is_all_query(query) or is_list_query(query)
             if is_all_docs_query:
-                logger.info("⚡ '문서 전부' 요청 감지 → 메타데이터만 표시 (성능 최적화)")
+                logger.info("⚡ '문서 전부/목록' 요청 감지 → 메타데이터만 표시 (성능 최적화)")
             return self._build_search_response(keywords, query, doc_details, filenames, is_all_docs_query)
 
         except sqlite3.OperationalError as e:
@@ -378,8 +384,14 @@ class SearchHandler(BaseHandler):
             params.append(drafter_filter)
 
         if year_filter:
-            sql += " AND (date LIKE ? OR display_date LIKE ?)"
-            params.extend([f"{year_filter}%", f"{year_filter}%"])
+            sql += """
+                AND (
+                    (display_date IS NOT NULL AND display_date LIKE ?)
+                    OR (display_date IS NULL AND date IS NOT NULL AND date LIKE ?)
+                    OR (display_date IS NULL AND date IS NULL AND year = ?)
+                )
+            """
+            params.extend([f"{year_filter}%", f"{year_filter}%", year_filter])
 
         cursor = conn.execute(sql, params)
         total_count = cursor.fetchone()["cnt"]
@@ -419,8 +431,14 @@ class SearchHandler(BaseHandler):
         total_sql = "SELECT COUNT(*) as cnt FROM documents WHERE drafter = ?"
         params: list = [drafter]
         if year_filter:
-            total_sql += " AND (year = ? OR date LIKE ? OR display_date LIKE ?)"
-            params.extend([year_filter, f"{year_filter}%", f"{year_filter}%"])
+            total_sql += """
+                AND (
+                    (display_date IS NOT NULL AND display_date LIKE ?)
+                    OR (display_date IS NULL AND date IS NOT NULL AND date LIKE ?)
+                    OR (display_date IS NULL AND date IS NULL AND year = ?)
+                )
+            """
+            params.extend([f"{year_filter}%", f"{year_filter}%", year_filter])
         total_count = conn.execute(total_sql, params).fetchone()["cnt"]
 
         # 2. 연도별 분포 (연도 필터가 있으면 해당 연도만)
@@ -432,7 +450,7 @@ class SearchHandler(BaseHandler):
                 SELECT year, COUNT(*) as cnt
                 FROM documents
                 WHERE drafter = ? AND year IS NOT NULL
-                GROUP BY year ORDER BY year DESC LIMIT 5
+                GROUP BY year ORDER BY year DESC
             """
             year_dist = conn.execute(year_sql, [drafter]).fetchall()
 
@@ -444,9 +462,15 @@ class SearchHandler(BaseHandler):
         """
         cat_params: list = [drafter]
         if year_filter:
-            cat_sql += " AND (year = ? OR date LIKE ? OR display_date LIKE ?)"
-            cat_params.extend([year_filter, f"{year_filter}%", f"{year_filter}%"])
-        cat_sql += " GROUP BY category ORDER BY cnt DESC LIMIT 5"
+            cat_sql += """
+                AND (
+                    (display_date IS NOT NULL AND display_date LIKE ?)
+                    OR (display_date IS NULL AND date IS NOT NULL AND date LIKE ?)
+                    OR (display_date IS NULL AND date IS NULL AND year = ?)
+                )
+            """
+            cat_params.extend([f"{year_filter}%", f"{year_filter}%", year_filter])
+        cat_sql += " GROUP BY category ORDER BY cnt DESC LIMIT 10"
         cat_dist = conn.execute(cat_sql, cat_params).fetchall()
 
         # 4. 최근 문서 (연도 필터 적용)
@@ -457,8 +481,14 @@ class SearchHandler(BaseHandler):
         """
         recent_params: list = [drafter]
         if year_filter:
-            recent_sql += " AND (year = ? OR date LIKE ? OR display_date LIKE ?)"
-            recent_params.extend([year_filter, f"{year_filter}%", f"{year_filter}%"])
+            recent_sql += """
+                AND (
+                    (display_date IS NOT NULL AND display_date LIKE ?)
+                    OR (display_date IS NULL AND date IS NOT NULL AND date LIKE ?)
+                    OR (display_date IS NULL AND date IS NULL AND year = ?)
+                )
+            """
+            recent_params.extend([f"{year_filter}%", f"{year_filter}%", year_filter])
         recent_sql += " ORDER BY date DESC LIMIT 5"
         recent_docs = conn.execute(recent_sql, recent_params).fetchall()
 
@@ -539,8 +569,14 @@ class SearchHandler(BaseHandler):
             params.append(drafter_filter)
 
         if year_filter:
-            sql += " AND (date LIKE ? OR display_date LIKE ?)"
-            params.extend([f"{year_filter}%", f"{year_filter}%"])
+            sql += """
+                AND (
+                    (display_date IS NOT NULL AND display_date LIKE ?)
+                    OR (display_date IS NULL AND date IS NOT NULL AND date LIKE ?)
+                    OR (display_date IS NULL AND date IS NULL AND year = ?)
+                )
+            """
+            params.extend([f"{year_filter}%", f"{year_filter}%", year_filter])
 
         cursor = conn.execute(sql, params)
         rows = cursor.fetchall()
@@ -560,8 +596,9 @@ class SearchHandler(BaseHandler):
                     "claimed_total": doc.get("claimed_total"),
                     "text_preview": doc.get("text_preview", "")[:HandlerConfig.TEXT_PREVIEW_MAX],
                 })
-            elif not drafter_filter:
-                # 필터 없을 때만 메타데이터 없는 문서 포함
+            elif not drafter_filter and not year_filter:
+                # 필터가 전혀 없을 때만 메타데이터 없는 문서 포함
+                # year_filter가 있으면 필터링된 문서는 버림
                 doc_details.append({
                     "filename": filename,
                     "drafter": "작성자 미상",

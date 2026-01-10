@@ -182,16 +182,16 @@ def _build_header(
     if not meta_values:
         return ""
 
-    lines = ["문서 정보:"]
+    # 2026-01-09: 메타데이터 표시 개선
+    lines = ["[참고 문서 정보]"]
     if filename:
-        lines.append(f"- 파일명: {filename}")
+        lines.append(f"파일명: {filename}")
     if drafter:
-        lines.append(f"- 기안자: {drafter}")
+        lines.append(f"작성자: {drafter}")
     if date:
-        lines.append(f"- 날짜: {date}")
-    lines.append(f"- 템플릿: {TEMPLATE_VERSION}")
+        lines.append(f"작성일: {date}")
 
-    return "\n".join(lines) + "\n\n"
+    return "\n".join(lines) + "\n---\n\n"
 
 
 def _sanitize_context(context: str, max_chars: Optional[int] = LLMConfig.PROMPT_CONTEXT_MAX_CHARS) -> str:

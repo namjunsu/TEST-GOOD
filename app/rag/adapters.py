@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from app.core.logging import get_logger
+from app.prompts.document_prompts import build_qa_prompt, COMMON_RULES
 from config.constants import LLMConfig
 
 logger = get_logger(__name__)
@@ -24,12 +25,13 @@ logger = get_logger(__name__)
 
 MODE_TOKEN_BUDGETS: dict[str, int] = {
     "chat": int(os.getenv("CHAT_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_CHAT))),
-    "rag": int(os.getenv("RAG_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_RAG))),  # 3072 → 4096 (H100)
-    "qa": int(os.getenv("QA_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_QA))),  # 800 → 2048 (신뢰성 최우선 2025-12-26)
-    "detailed": int(os.getenv("DETAILED_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_DETAILED))),  # 자세히 모드: 실용적 범위 (4096)
-    "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_SUMMARIZE))),
-    "summary": int(os.getenv("SUMMARY_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_SUMMARY))),
-    "year_summary": int(os.getenv("YEAR_SUMMARY_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_YEAR_SUMMARY))),  # 4096 → 1024 (2025-12-26)
+    "rag": int(os.getenv("RAG_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_RAG))),  # 1536 → 1024 (2026-01-10)
+    "qa": int(os.getenv("QA_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_QA))),  # 1024 (유지)
+    "detailed": int(os.getenv("DETAILED_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_DETAILED))),  # 2048 → 1536 (2026-01-10)
+    "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_SUMMARIZE))),  # 2048 → 1536
+    "summary": int(os.getenv("SUMMARY_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_SUMMARY))),  # 2048 → 1536
+    "year_summary": int(os.getenv("YEAR_SUMMARY_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_YEAR_SUMMARY))),  # 1024 → 768 (2026-01-10)
+    "comprehensive_report": 1536,  # 2026-01-10: 표 형식 리포트 (새로 추가)
 }
 
 RAG_MAX_CONTEXT_CHARS: int = int(os.getenv("RAG_MAX_CONTEXT_CHARS", "6000"))
@@ -115,6 +117,7 @@ class _LLMAdapter:
         system_msg: Optional[str] = None,
         max_tokens: Optional[int] = None,  # 2025-12-23: 동적 토큰 지원
         detail_level: str = "normal",  # 2026-01-06: 상세도 기반 토큰 조정
+        metadata: Optional[dict[str, str]] = None,  # 2026-01-09: 메타데이터 전달
     ) -> str:
         """컨텍스트 기반 답변 생성
 
@@ -126,6 +129,7 @@ class _LLMAdapter:
             system_msg: 시스템 프롬프트 (None이면 기본값 사용)
             max_tokens: 최대 생성 토큰 (None이면 모드 기반 기본값 사용)
             detail_level: 답변 상세도 ("brief", "normal", "detailed")
+            metadata: 문서 메타데이터 (filename, drafter, date)
 
         Returns:
             str: 생성된 답변
@@ -142,19 +146,24 @@ class _LLMAdapter:
 
             base_tokens = MODE_TOKEN_BUDGETS.get(base_mode, 1024)
 
-            # 상세도별 토큰 조정
+            # 상세도별 토큰 조정 (2026-01-10: 상한 축소)
             if effective_detail == "brief":
-                max_tokens = min(base_tokens // 2, 512)  # 절반, 최대 512
+                max_tokens = min(base_tokens // 2, 384)  # 절반, 최대 384 (512→384, 25% 감소)
             elif effective_detail == "detailed":
-                max_tokens = min(base_tokens * 2, 2048)  # 2배, 최대 2048
+                max_tokens = min(base_tokens * 2, 1536)  # 2배, 최대 1536 (2048→1536, 25% 감소)
             else:  # "normal"
                 max_tokens = base_tokens
 
             logger.info(f"📏 상세도 기반 토큰 조정: {effective_detail} → {max_tokens} (base={base_tokens}, mode={mode})")
 
         # 🔧 2025-12-16: 모드별 시스템 프롬프트 (외부 전달 우선)
+        # 2026-01-09: COMMON_RULES 추가로 프롬프트 인젝션 차단 및 규칙 강화
         if system_msg is None:
-            system_msg = "당신은 문서 분석 전문가입니다. 문서 내용을 기반으로 정확하게 답변하세요."
+            system_msg = f"""당신은 문서 분석 전문가입니다. 문서 내용을 기반으로 정확하게 답변하세요.
+
+{COMMON_RULES}
+
+모든 답변은 위 규칙을 엄격히 준수해야 합니다."""
 
         # 2025-12-26: source/resolver 추적 로깅 (디버깅 강화)
         env_key = f"{mode.upper()}_MAX_TOKENS"
@@ -176,9 +185,27 @@ class _LLMAdapter:
             if is_vllm:
                 # vLLM: generate_response() 사용 (직접 호출 불가)
                 # 2025-12-23: max_tokens 동적 전달 (응답 잘림 버그 수정)
+                # 2026-01-09: 프롬프트 템플릿 적용 (QA_PROMPT + COMMON_RULES)
                 logger.info(f"🚀 vLLM 모드: generate_response() 사용 (max_tokens={max_tokens})")
-                chunks = [{"snippet": context, "content": context}] if context else []
-                response = self.llm.generate_response(query, chunks, max_tokens=max_tokens)
+
+                # 프롬프트 템플릿 구성 (context가 있을 때만)
+                if context and context.strip():
+                    # 2026-01-09: 메타데이터 포함
+                    meta = metadata or {}
+                    full_prompt = build_qa_prompt(
+                        context=context,
+                        query=query,
+                        filename=meta.get("filename", ""),
+                        drafter=meta.get("drafter", ""),
+                        date=meta.get("date", "")
+                    )
+                    logger.info(f"📝 프롬프트 템플릿 적용: QA_PROMPT (context={len(context)}자, query={len(query)}자, metadata={bool(meta)})")
+                else:
+                    full_prompt = query
+                    logger.info(f"📝 프롬프트 템플릿 미적용: context 없음")
+
+                # chunks는 빈 리스트로 전달 (이미 full_prompt에 context 포함)
+                response = self.llm.generate_response(full_prompt, [], max_tokens=max_tokens)
                 if hasattr(response, "answer"):
                     return response.answer
                 return str(response)
@@ -186,28 +213,26 @@ class _LLMAdapter:
             if llm_instance is not None and hasattr(llm_instance, "create_chat_completion"):
                 # llama_cpp: 직접 호출 가능
                 # 🔧 2025-12-16: RAG 모드에서는 context를 user prompt에 포함해야 함
+                # 2026-01-09: 프롬프트 템플릿 적용 (QA_PROMPT + COMMON_RULES)
                 query_has_context = any(marker in query for marker in [
                     "참고 문서", "Context:", "[문서 내용]", "### 문서", "문서 정보:",
                 ])
 
                 if context and context.strip() and not query_has_context:
-                    # context가 별도로 제공된 경우 → RAG 프롬프트 구성
-                    truncated_context = context[:RAG_MAX_CONTEXT_CHARS]
-                    if len(context) > RAG_MAX_CONTEXT_CHARS:
-                        truncated_context += "\n...(이하 생략)"
-                        logger.info(f"📝 컨텍스트 길이 제한: {len(context)} → {RAG_MAX_CONTEXT_CHARS}자")
-
-                    user_content = f"""다음 참고 문서를 기반으로 질문에 답변하세요.
-
-[참고 문서]
-{truncated_context}
-
-[질문]
-{query}
-
-위 참고 문서 내용만을 기반으로 정확하게 답변하세요. 문서에 없는 내용은 답변하지 마세요."""
+                    # context가 별도로 제공된 경우 → 프롬프트 템플릿 적용
+                    # 2026-01-09: 메타데이터 포함
+                    meta = metadata or {}
+                    user_content = build_qa_prompt(
+                        context=context,
+                        query=query,
+                        filename=meta.get("filename", ""),
+                        drafter=meta.get("drafter", ""),
+                        date=meta.get("date", "")
+                    )
+                    logger.info(f"📝 프롬프트 템플릿 적용: QA_PROMPT (llama_cpp, context={len(context)}자, metadata={bool(meta)})")
                 else:
                     user_content = query
+                    logger.info(f"📝 프롬프트 템플릿 미적용: query_has_context={query_has_context}")
 
                 # llama_cpp.Llama 직접 접근
                 output = llm_instance.create_chat_completion(
@@ -250,11 +275,15 @@ class _QuickFixGenerator:
         self.rag = rag
         self.compressed_chunks: Optional[list[dict[str, Any]]] = None
 
-    def generate(self, query: str, context: str, temperature: float, mode: str = "rag") -> str:
-        """답변 생성 (재검색 금지, 컨텍스트 기반 우선)"""
+    def generate(self, query: str, context: str, temperature: float, mode: str = "rag", metadata: Optional[dict[str, str]] = None) -> str:
+        """답변 생성 (재검색 금지, 컨텍스트 기반 우선)
+
+        Args:
+            metadata: 문서 메타데이터 (2026-01-09 추가)
+        """
         try:
             # Strategy 1: 전용 메서드 사용
-            result = self._try_generate_from_context(query, context, temperature, mode)
+            result = self._try_generate_from_context(query, context, temperature, mode, metadata)
             if result is not None:
                 return result
 
@@ -271,12 +300,12 @@ class _QuickFixGenerator:
             return f"[E_GENERATE] {e!s}"
 
     def _try_generate_from_context(
-        self, query: str, context: str, temperature: float, mode: str
+        self, query: str, context: str, temperature: float, mode: str, metadata: Optional[dict[str, str]] = None
     ) -> Optional[str]:
         """Strategy 1: generate_from_context 메서드 시도"""
         if hasattr(self.rag, "generate_from_context"):
             return self.rag.generate_from_context(
-                query, context, temperature=temperature, mode=mode
+                query, context, temperature=temperature, mode=mode, metadata=metadata
             )
         return None
 

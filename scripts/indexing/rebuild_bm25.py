@@ -12,7 +12,8 @@ import sys
 from pathlib import Path
 
 # 프로젝트 루트 추가
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
 
 from rag_system.active.bm25_store import BM25Store
 
@@ -24,14 +25,21 @@ logger = logging.getLogger(__name__)
 
 
 def rebuild_bm25_index():
-    """BM25 인덱스 재빌드"""
+    """BM25 인덱스 재빌드 (전문 텍스트 기반)
+
+    개선사항:
+    - text_preview 대신 data/extracted/*.txt 파일의 전문 사용
+    - 전문이 없으면 text_preview로 폴백
+    """
 
     # 경로 설정
     index_path = os.getenv("BM25_INDEX_PATH", "var/index/bm25_index.pkl")
     db_path = os.getenv("METADB_PATH", "metadata.db")
+    extracted_dir = Path(os.getenv("EXTRACTED_DIR", "data/extracted"))
 
     logger.info(f"📂 DB 경로: {db_path}")
     logger.info(f"📂 인덱스 경로: {index_path}")
+    logger.info(f"📂 추출 텍스트 디렉토리: {extracted_dir}")
 
     # DB에서 문서 로드
     conn = sqlite3.connect(db_path)
@@ -40,7 +48,6 @@ def rebuild_bm25_index():
     cursor.execute("""
         SELECT id, filename, text_preview, year, drafter
         FROM documents
-        WHERE text_preview IS NOT NULL AND text_preview != ''
     """)
     rows = cursor.fetchall()
     conn.close()
@@ -54,16 +61,42 @@ def rebuild_bm25_index():
     # 문서 포맷팅
     documents = []
     metadata_list = []
+    full_text_count = 0
+    fallback_count = 0
 
     for row in rows:
         doc_id, filename, text_preview, year, drafter = row
-        documents.append(text_preview)
+
+        # 1순위: data/extracted/*.txt 파일에서 전문 로드
+        extracted_file = extracted_dir / filename.replace(".pdf", ".txt")
+
+        if extracted_file.exists():
+            try:
+                full_text = extracted_file.read_text(encoding="utf-8")
+                if full_text.strip():
+                    documents.append(full_text)
+                    full_text_count += 1
+                else:
+                    # 빈 파일이면 text_preview 사용
+                    documents.append(text_preview or "")
+                    fallback_count += 1
+            except Exception as e:
+                logger.warning(f"⚠️ 전문 로드 실패 ({filename}): {e}")
+                documents.append(text_preview or "")
+                fallback_count += 1
+        else:
+            # 전문 파일이 없으면 text_preview 사용
+            documents.append(text_preview or "")
+            fallback_count += 1
+
         metadata_list.append({
             "id": doc_id,  # BM25Store._resolve_doc_id()가 "id" 필드를 요구
             "filename": filename,
             "year": year,
             "drafter": drafter,
         })
+
+    logger.info(f"📊 전문 사용: {full_text_count}개, text_preview 폴백: {fallback_count}개")
 
     # BM25 인덱스 생성
     logger.info("🔨 BM25 인덱스 생성 중...")

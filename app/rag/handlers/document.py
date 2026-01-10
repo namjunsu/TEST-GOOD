@@ -118,9 +118,15 @@ class DocumentHandler(BaseHandler):
         Returns:
             표준 응답 딕셔너리
         """
+        import time
+        overall_start = time.perf_counter()
+        timings = {}
+
         try:
             # 1. 문서 식별
+            t_start = time.perf_counter()
             target_filename = self._identify_document(query, selected_filename)
+            timings["1_identify_document"] = time.perf_counter() - t_start
 
             if not target_filename:
                 return self._make_empty_response(
@@ -128,41 +134,67 @@ class DocumentHandler(BaseHandler):
                 )
 
             # 2. DB에서 메타데이터 조회
+            t_start = time.perf_counter()
             metadata = self._get_document_metadata(target_filename)
+            timings["2_get_metadata"] = time.perf_counter() - t_start
 
             if not metadata:
                 return self._make_empty_response(
                     f"'{target_filename}' 문서의 메타데이터를 찾을 수 없습니다.",
                 )
 
-            # 3. 문서 텍스트 로드
-            full_text = self._load_full_text(metadata["filename"])
+            # 3. 라우팅 결정 (섹션 감지, 요약 여부 등) - 텍스트 로드 전에 수행
+            t_start = time.perf_counter()
+            routing = self._route_document_query(query)
+            timings["3_route_query"] = time.perf_counter() - t_start
+
+            # 4. 문서 텍스트 로드 (routing 정보 활용)
+            t_start = time.perf_counter()
+            full_text = self._load_full_text(metadata["filename"], routing)
+            timings["4_load_text"] = time.perf_counter() - t_start
 
             if not full_text or len(full_text.strip()) < DocumentHandlerConfig.MIN_TEXT_LENGTH:
                 return self._make_empty_response(
                     f"'{metadata['filename']}' 문서의 텍스트를 확보하지 못했습니다.",
                 )
 
-            # 4. 라우팅 결정 (섹션 감지, 요약 여부 등)
-            routing = self._route_document_query(query)
-
             # 5. 응답 생성 (LLM 또는 원문)
+            t_start = time.perf_counter()
             answer_text = self._generate_answer(
                 query=query,
                 full_text=full_text,
                 metadata=metadata,
                 routing=routing,
             )
+            timings["5_generate_answer"] = time.perf_counter() - t_start
 
             # 6. Evidence 구성
+            t_start = time.perf_counter()
             evidence = self._build_evidence(metadata, full_text)
+            timings["6_build_evidence"] = time.perf_counter() - t_start
+
+            # 전체 실행 시간 및 단계별 시간 기록
+            timings["total_time"] = time.perf_counter() - overall_start
 
             logger.info({
                 "mode": "DOCUMENT",
                 "filename": metadata["filename"],
                 "text_length": len(full_text),
                 "routing": routing,
+                "timings_seconds": timings,
             })
+
+            # 성능 분석 로그 (5초 이상 걸린 경우만)
+            if timings["total_time"] > 5.0:
+                logger.warning(
+                    f"⏱️ PERFORMANCE: Document mode took {timings['total_time']:.2f}s\n"
+                    f"  - Identify: {timings['1_identify_document']:.2f}s\n"
+                    f"  - Metadata: {timings['2_get_metadata']:.2f}s\n"
+                    f"  - Routing: {timings['3_route_query']:.2f}s\n"
+                    f"  - Load Text: {timings['4_load_text']:.2f}s\n"
+                    f"  - Generate Answer: {timings['5_generate_answer']:.2f}s\n"
+                    f"  - Build Evidence: {timings['6_build_evidence']:.2f}s"
+                )
 
             return {
                 "mode": self.mode,
@@ -291,43 +323,57 @@ class DocumentHandler(BaseHandler):
             logger.exception(f"❌ 메타데이터 조회 예상치 못한 오류: {type(e).__name__}")
             return None
 
-    def _load_full_text(self, filename: str) -> str:
-        """문서 전체 텍스트 로드"""
+    def _load_full_text(self, filename: str, routing: dict[str, Any] | None = None) -> str:
+        """문서 텍스트 로드 (청크 기반 우선)
+
+        Args:
+            filename: 문서 파일명
+            routing: 라우팅 정보 (detail_level 등)
+
+        Returns:
+            문서 텍스트
+        """
         import time
         start = time.perf_counter()
 
-        # 1. extracted 디렉토리에서 로드 시도
+        # 1. PRIMARY: 청크 기반 로드 (빠르고 효율적)
+        try:
+            chunks = self._make_chunks_for_doc(filename, top_k=DocumentHandlerConfig.FALLBACK_CHUNK_TOP_K)
+            if chunks:
+                # detail_level에 따라 컨텍스트 크기 조정
+                max_chars = DocumentHandlerConfig.CHUNK_CONTEXT_MAX
+                if routing:
+                    detail_level = routing.get("detail_level", "normal")
+                    max_chars = {
+                        "brief": 6000,
+                        "normal": 12000,
+                        "detailed": 24000
+                    }.get(detail_level, 12000)
+
+                context = self._assemble_context_from_chunks(chunks, max_chars=max_chars)
+                duration = time.perf_counter() - start
+                logger.info(f"⏱️ 청크 기반 로딩: {filename} ({duration:.2f}s, {len(context)} chars)")
+                return context
+
+        except (AttributeError, KeyError) as e:
+            # 인덱스 구조 문제
+            logger.warning(f"⚠️ 청크 기반 로드 실패 - 인덱스 접근 오류: {e}")
+
+        except Exception as e:
+            # 예상치 못한 오류
+            logger.warning(f"⚠️ 청크 기반 로드 실패 ({type(e).__name__}): {e}")
+
+        # 2. FALLBACK: 전체 파일 로드 (BM25 없을 때만)
+        logger.warning(f"⚠️ BM25 청크 없음, 전체 파일 로드 시도: {filename}")
         full_text = load_document_text(filename)
 
         if full_text:
             duration = time.perf_counter() - start
             if duration > 1.0:
-                logger.warning(f"⏱️ 문서 로딩 지연: {filename} ({duration:.2f}s, {len(full_text)} chars)")
+                logger.warning(f"⏱️ 전체 파일 로딩 지연: {filename} ({duration:.2f}s, {len(full_text)} chars)")
             else:
-                logger.debug(f"⏱️ 문서 로딩: {filename} ({duration:.3f}s, {len(full_text)} chars)")
+                logger.debug(f"⏱️ 전체 파일 로딩: {filename} ({duration:.3f}s, {len(full_text)} chars)")
             return full_text
-
-        # 2. 인덱스 청크 기반 폴백 (top_k 확대: 요약 품질 개선)
-        logger.warning(f"⚠️ extracted txt 없음, 인덱스 청크 폴백 시도: {filename}")
-        try:
-            # 🔧 top_k를 확대하여 더 많은 컨텍스트 확보
-            chunks = self._make_chunks_for_doc(filename, top_k=DocumentHandlerConfig.FALLBACK_CHUNK_TOP_K)
-            if chunks:
-                max_snippet = DocumentHandlerConfig.CHUNK_SNIPPET_MAX
-                joined = "\n\n".join(
-                    [(ch.get("text") or ch.get("snippet") or ch.get("content") or "")[:max_snippet]
-                     for ch in chunks],
-                )[:DocumentHandlerConfig.CHUNK_CONTEXT_MAX]
-                duration = time.perf_counter() - start
-                logger.info(f"✅ 청크 {len(chunks)}개 결합 → {len(joined)}자 확보 ({duration:.2f}s)")
-                return joined
-        except (AttributeError, KeyError) as e:
-            # 인덱스 구조 문제
-            logger.warning(f"⚠️ 청크 폴백 - 인덱스 접근 오류: {e}")
-
-        except Exception as e:
-            # 예상치 못한 오류
-            logger.warning(f"⚠️ 청크 폴백 실패 ({type(e).__name__}): {e}")
 
         return ""
 
@@ -388,6 +434,44 @@ class DocumentHandler(BaseHandler):
             logger.exception(f"❌ 문서 청크 로드 예상치 못한 오류: {type(e).__name__}")
             return []
 
+    def _assemble_context_from_chunks(
+        self,
+        chunks: list[dict[str, Any]],
+        max_chars: int = 24000
+    ) -> str:
+        """청크들을 컨텍스트로 조립
+
+        Args:
+            chunks: BM25 검색으로 가져온 청크 리스트
+            max_chars: 최대 컨텍스트 길이
+
+        Returns:
+            조립된 컨텍스트 문자열
+        """
+        parts = []
+        total_len = 0
+
+        for chunk in chunks:
+            text = (
+                chunk.get("text") or
+                chunk.get("content") or
+                chunk.get("snippet") or ""
+            )
+
+            if total_len + len(text) > max_chars:
+                # 제한 초과 시 자르기
+                remaining = max_chars - total_len
+                if remaining > 0:
+                    parts.append(text[:remaining])
+                break
+
+            parts.append(text)
+            total_len += len(text)
+
+        result = "\n\n".join(parts)
+        logger.info(f"✅ 청크 {len(parts)}개 결합 → {len(result)}자 확보")
+        return result
+
     def _route_document_query(self, query: str) -> dict[str, Any]:
         """문서 질의 라우팅 결정"""
         from app.rag.query_routing import route_query
@@ -442,13 +526,17 @@ class DocumentHandler(BaseHandler):
         routing: dict[str, Any],
     ) -> str:
         """LLM을 통한 응답 생성"""
+        import time
+
         # 프롬프트 생성 (먼저 준비)
+        t_prompt_start = time.perf_counter()
         llm_prompt, system_msg = self._build_llm_prompt(
             query=query,
             full_text=full_text,
             metadata=metadata,
             routing=routing,
         )
+        t_prompt = time.perf_counter() - t_prompt_start
 
         # 모드 결정
         if routing.get("detailed_mode"):
@@ -458,19 +546,21 @@ class DocumentHandler(BaseHandler):
         else:
             mode = "rag"
 
-        # 컨텍스트 준비 (모드별 차등 적용)
-        # 2025-12-23: 자세히 모드는 더 많은 컨텍스트 허용 (H100 32K 컨텍스트 활용)
+        # 컨텍스트 준비 (속도 최적화)
+        # 2026-01-10: 컨텍스트 대폭 축소 (24K → 12K)
+        # vLLM: 긴 프롬프트는 속도 저하의 주범 (8K+ 토큰 시 20배 느림)
         if mode == "detailed":
-            context_limit = min(len(full_text), 24000)  # 자세히: 최대 24K자
+            context_limit = min(len(full_text), 12000)  # 자세히: 최대 12K자 (24K → 12K, 50% 감소)
         else:
-            context_limit = DocumentHandlerConfig.CONTEXT_WINDOW  # 기본: 8K자
+            context_limit = DocumentHandlerConfig.CONTEXT_WINDOW  # 기본: 6K자
         context = full_text[:context_limit]
 
         # 🔧 2025-12-23: 동적 max_tokens 계산 (문서 길이에 따라)
         calculated_max_tokens = self._calculate_max_tokens(len(full_text), routing)
         logger.info(
             f"📊 LLM 설정: mode={mode}, context_len={len(context)}, "
-            f"full_text_len={len(full_text)}, max_tokens={calculated_max_tokens}"
+            f"full_text_len={len(full_text)}, max_tokens={calculated_max_tokens}, "
+            f"prompt_build_time={t_prompt:.3f}s"
         )
 
         # ===== 경로 1: _LLMAdapter.generate_from_context() 사용 (vLLM/llama_cpp 자동 분기) =====
@@ -480,6 +570,8 @@ class DocumentHandler(BaseHandler):
             generate_fn = getattr(rag_adapter, "generate_from_context", None)
             if generate_fn is not None:
                 logger.info(f"🎯 _LLMAdapter.generate_from_context() 사용 (mode={mode}, max_tokens={calculated_max_tokens})")
+
+                t_llm_start = time.perf_counter()
                 raw_result: str = generate_fn(
                     query=llm_prompt,
                     context=context,
@@ -488,6 +580,9 @@ class DocumentHandler(BaseHandler):
                     system_msg=system_msg,
                     max_tokens=calculated_max_tokens,  # 동적 토큰 전달
                 )
+                t_llm = time.perf_counter() - t_llm_start
+
+                logger.info(f"⏱️ LLM 생성 완료: {t_llm:.2f}s (응답 길이: {len(raw_result)} chars)")
 
                 # 에러 응답 체크
                 if raw_result.startswith("[E_GENERATE]"):
@@ -495,7 +590,11 @@ class DocumentHandler(BaseHandler):
 
                 # 요약 모드: JSON 포맷팅
                 if routing.get("needs_summary"):
-                    return self._format_summary_output(raw_result, metadata)
+                    t_format_start = time.perf_counter()
+                    formatted = self._format_summary_output(raw_result, metadata)
+                    t_format = time.perf_counter() - t_format_start
+                    logger.info(f"⏱️ 요약 포맷팅: {t_format:.3f}s")
+                    return formatted
 
                 return raw_result.strip()
 
@@ -604,41 +703,40 @@ class DocumentHandler(BaseHandler):
         content_length: int,
         routing: dict[str, Any],
     ) -> int:
-        """토큰 제한 계산 (문서 길이에 따라 유동적)
+        """토큰 제한 계산 (속도 최적화 기반)
 
-        긴 문서는 더 많은 토큰이 필요하므로 상한을 동적으로 조정합니다.
-        H100 GPU 환경에서 Qwen72B는 32K 컨텍스트를 지원하므로 충분한 토큰 허용.
-
-        2025-12-23 수정:
-        - detailed_mode: 8192 토큰까지 허용 (자세히 알려줘)
-        - 긴 문서 (>30K): 최대 6144
-        - 중간 문서 (10K-30K): 최대 4096
-        - 짧은 문서 (<10K): 기본값 사용
+        2026-01-10: vLLM 커뮤니티 검증 기반 최적화
+        - 목표: 생성 토큰↓ = 응답 속도↑↑
+        - 긴 응답(8192토큰)은 속도 저하의 주범
+        - 실용적 범위: 512-2048 토큰으로 충분한 품질 확보
+        - 예상 효과: 681초 → 200-300초 (2-3배 속도 향상)
         """
         base_max_tokens = routing.get("max_tokens", DocumentHandlerConfig.DEFAULT_MAX_TOKENS)
         detailed_mode = routing.get("detailed_mode", False)
         needs_summary = routing.get("needs_summary", False)
 
-        # 🔧 2025-12-23: detailed_mode일 때 상한 대폭 증가 (H100: 8192까지)
+        # 🚀 2026-01-10: detailed_mode 대폭 축소 (8192 → 2048)
+        # vLLM 커뮤니티: 2048 토큰이 속도/품질 균형점
         if detailed_mode:
-            dynamic_cap = 8192  # 자세히 모드: 최대 토큰
-            calculated = max(DocumentHandlerConfig.DETAILED_MIN_TOKENS, content_length // 2)
+            dynamic_cap = 2048  # 자세히 모드: 최대 토큰 (8192 → 2048, 75% 감소)
+            calculated = max(DocumentHandlerConfig.DETAILED_MIN_TOKENS, content_length // 6)
             return min(dynamic_cap, calculated)
 
-        # 문서 길이에 따른 상한 조정 (유동적)
+        # 문서 길이에 따른 상한 조정 (대폭 축소)
         if content_length > 30000:
-            dynamic_cap = 6144  # 긴 문서
+            dynamic_cap = 2048  # 긴 문서 (6144 → 2048, 67% 감소)
         elif content_length > 10000:
-            dynamic_cap = 4096  # 중간 문서
+            dynamic_cap = 1536  # 중간 문서 (4096 → 1536, 63% 감소)
         else:
             dynamic_cap = base_max_tokens  # 짧은 문서는 기본값
 
-        # 요약 모드: JSON 출력을 위한 최소 토큰 보장 (불완전 요약 방지)
+        # 요약 모드: JSON 출력을 위한 최소 토큰 보장
         if needs_summary:
-            calculated = max(DocumentHandlerConfig.SUMMARY_MIN_TOKENS, content_length // 3)
+            calculated = max(DocumentHandlerConfig.SUMMARY_MIN_TOKENS, content_length // 6)
             return min(dynamic_cap, calculated)
 
-        calculated = max(DocumentHandlerConfig.NORMAL_MIN_TOKENS, content_length // 4)
+        # 일반 모드: 더 보수적으로 계산
+        calculated = max(DocumentHandlerConfig.NORMAL_MIN_TOKENS, content_length // 8)
         return min(dynamic_cap, calculated)
 
     def _format_summary_output(

@@ -718,10 +718,17 @@ class RAGPipeline:
             logger.warning(f"⚠️ hydrate_context import 실패, 폴백 사용: {e}")
             hydrate_context = self._fallback_hydrate_context
 
-        logger.info(f"🎯 모드={determined_mode}, 상세도={detail_level} → 컨텍스트 최적화 시작")
+        # 2026-01-10: vLLM 최적화 - 컨텍스트 50% 축소 (긴 프롬프트 = 느린 속도)
+        context_max_len = {
+            "brief": 4000,      # 간단: 33% 감소 (6000 → 4000)
+            "normal": 8000,     # 보통: 33% 감소 (12000 → 8000)
+            "detailed": 12000   # 상세: 50% 감소 (24000 → 12000)
+        }.get(detail_level, 8000)
+
+        logger.info(f"🎯 모드={determined_mode}, 상세도={detail_level} → 컨텍스트 최적화 시작 (max_len={context_max_len})")
         hydrate_start = time.perf_counter()
         context, hydrator_metrics = hydrate_context(
-            compressed, max_len=PipelineConfig.CONTEXT_MAX_LENGTH, mode=determined_mode
+            compressed, max_len=context_max_len, mode=determined_mode
         )
         metrics["hydrate_time"] = time.perf_counter() - hydrate_start
         metrics.update({f"ctx_{k}": v for k, v in hydrator_metrics.items()})
@@ -729,10 +736,14 @@ class RAGPipeline:
         # 2026-01-06: mode에 detail_level 결합 (예: "qa" + "brief" → "qa_brief")
         effective_mode = f"{determined_mode}_{detail_level}" if detail_level != "normal" else determined_mode
 
+        # 2026-01-09: 메타데이터 추출 (프롬프트 품질 개선)
+        metadata = self._extract_metadata_from_chunks(compressed)
+        logger.info(f"📋 메타데이터 추출: filename={metadata.get('filename', 'N/A')}, drafter={metadata.get('drafter', 'N/A')}, date={metadata.get('date', 'N/A')}")
+
         # LLM 생성
         logger.info(f"🎯 effective_mode={effective_mode} → 생성 시작")
         llm_gen_start = time.perf_counter()
-        answer = self.generator.generate(query, context, temperature, mode=effective_mode)
+        answer = self.generator.generate(query, context, temperature, mode=effective_mode, metadata=metadata)
         metrics["generate_time"] = time.perf_counter() - llm_gen_start
 
         if DIAG_RAG:
@@ -743,6 +754,44 @@ class RAGPipeline:
                 logger.info(f"[DIAG] 생성 완료: from_context 경로, {len(compressed)}개 문서 사용")
 
         return answer, metrics
+
+    @staticmethod
+    def _extract_metadata_from_chunks(chunks: list[dict[str, Any]]) -> dict[str, str]:
+        """압축된 청크에서 메타데이터 추출 (2026-01-09)
+
+        최상위 스코어 청크의 메타데이터를 우선 사용.
+        여러 문서가 섞여있을 경우 대표 문서 정보를 반환.
+
+        Args:
+            chunks: 압축된 검색 결과 청크 리스트
+
+        Returns:
+            메타데이터 dict (filename, drafter, date)
+        """
+        metadata = {"filename": "", "drafter": "", "date": ""}
+
+        if not chunks:
+            return metadata
+
+        # 최상위 청크 (스코어가 높은 첫 번째 청크)
+        top_chunk = chunks[0]
+
+        # meta 필드에서 추출
+        meta = top_chunk.get("meta", {})
+        if meta:
+            metadata["filename"] = meta.get("filename", "") or meta.get("doc_id", "")
+            metadata["drafter"] = meta.get("drafter", "")
+            metadata["date"] = meta.get("date", "")
+
+        # meta가 없으면 최상위 레벨에서 추출
+        if not metadata["filename"]:
+            metadata["filename"] = top_chunk.get("filename", "") or top_chunk.get("doc_id", "")
+        if not metadata["drafter"]:
+            metadata["drafter"] = top_chunk.get("drafter", "")
+        if not metadata["date"]:
+            metadata["date"] = top_chunk.get("date", "")
+
+        return metadata
 
     @staticmethod
     def _fallback_hydrate_context(

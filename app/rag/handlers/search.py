@@ -163,7 +163,11 @@ class SearchHandler(BaseHandler):
                 expanded_keywords = keywords
 
             # 2. 검색 top_k 결정
-            if needs_expanded_search(query, drafter_filter):
+            # 2026-01-10: 목록 질문 감지 추가 (현황, 상태 등)
+            if is_list_query(query):
+                search_top_k = HandlerConfig.BULK_SEARCH_TOP_K
+                logger.info(f"📋 목록 질의 감지 → top_k={search_top_k}로 확장 검색")
+            elif needs_expanded_search(query, drafter_filter):
                 search_top_k = HandlerConfig.BULK_SEARCH_TOP_K
             else:
                 search_top_k = HandlerConfig.NORMAL_SEARCH_TOP_K

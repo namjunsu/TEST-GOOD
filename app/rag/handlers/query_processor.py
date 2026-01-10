@@ -37,8 +37,9 @@ POSTPOSITIONS = [" 에 ", " 에서 ", " 이 ", " 가 ", " 을 ", " 를 "]
 COUNT_KEYWORDS = HandlerConfig.COUNT_KEYWORDS
 
 # 리스트/전체 질의 키워드
-LIST_KEYWORDS = ["리스트", "목록", "보여"]
-ALL_KEYWORDS = ["전부", "모두", "모든", "전체", "all"]
+# 2026-01-10: "현황", "상태", "종류" 추가 (목록 의도 강화)
+LIST_KEYWORDS = ["리스트", "목록", "보여", "현황", "상태", "종류"]
+ALL_KEYWORDS = ["전부", "모두", "모든", "전체", "all", "어떤", "뭐", "어떤 것"]
 
 # 시간순 정렬 요청 키워드 (2025-12-25: 최신 이력 우선 답변)
 # 2025-12-26: "현황", "현재", "상태", "지금" 추가 (검색 최신성 편향 해결)
@@ -50,7 +51,11 @@ TEMPORAL_KEYWORDS = [
 ]
 
 # 명시적 리스트 키워드
-EXPLICIT_LIST_KEYWORDS = {"리스트", "목록", "전체 목록", "all"}
+# 2026-01-10: "현황", "장애 현황", "모니터 현황", "상태" 추가
+EXPLICIT_LIST_KEYWORDS = {
+    "리스트", "목록", "전체 목록", "all",
+    "현황", "장애 현황", "모니터 현황", "상태",
+}
 
 # 상세 요청 감지 키워드
 DETAIL_INDICATORS = {"1)", "2)", "3)", "내용", "부분만", "요약", "설명", "자세히"}
@@ -249,15 +254,47 @@ def is_count_query(query: str) -> bool:
 
 
 def is_list_query(query: str) -> bool:
-    """리스트를 요청하는 쿼리인지 확인
+    """리스트/목록/현황을 요청하는 쿼리인지 확인 (2026-01-10 개선)
 
     Args:
         query: 사용자 쿼리
 
     Returns:
         True면 리스트 쿼리
+
+    Examples:
+        >>> is_list_query("티비로직 모니터 장애 현황 알려줘")
+        True
+        >>> is_list_query("검토한 대안은 뭐가 있어?")
+        True
+        >>> is_list_query("모니터 상태는?")
+        True
+        >>> is_list_query("총 비용은 얼마?")
+        False
     """
-    return any(kw in query for kw in LIST_KEYWORDS)
+    query_lower = query.lower()
+
+    # 명시적 목록 키워드
+    if any(kw in query_lower for kw in EXPLICIT_LIST_KEYWORDS):
+        return True
+
+    # LIST_KEYWORDS 확인 (기존 로직 유지)
+    if any(kw in query_lower for kw in LIST_KEYWORDS):
+        return True
+
+    # "현황 + 알려줘/보여줘/말해줘" 패턴
+    if "현황" in query_lower and any(verb in query_lower for verb in ["알려", "보여", "말해"]):
+        return True
+
+    # "장애 + 목록성 동사" 패턴
+    if "장애" in query_lower and any(verb in query_lower for verb in ["어떤", "뭐가", "전부", "모두"]):
+        return True
+
+    # "상태 + 질문" 패턴
+    if "상태" in query_lower and any(verb in query_lower for verb in ["어때", "알려", "보여"]):
+        return True
+
+    return False
 
 
 def is_all_query(query: str) -> bool:

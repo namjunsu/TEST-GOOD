@@ -718,12 +718,12 @@ class RAGPipeline:
             logger.warning(f"⚠️ hydrate_context import 실패, 폴백 사용: {e}")
             hydrate_context = self._fallback_hydrate_context
 
-        # 2026-01-10: vLLM 최적화 - 컨텍스트 50% 축소 (긴 프롬프트 = 느린 속도)
+        # 2026-01-10: 컨텍스트 길이 복구 (품질 우선)
         context_max_len = {
-            "brief": 4000,      # 간단: 33% 감소 (6000 → 4000)
-            "normal": 8000,     # 보통: 33% 감소 (12000 → 8000)
-            "detailed": 12000   # 상세: 50% 감소 (24000 → 12000)
-        }.get(detail_level, 8000)
+            "brief": 5000,      # 간단: 품질 복구
+            "normal": 10000,    # 보통: 품질 복구 (속도와 품질 균형)
+            "detailed": 16000   # 상세: 품질 복구
+        }.get(detail_level, 10000)
 
         logger.info(f"🎯 모드={determined_mode}, 상세도={detail_level} → 컨텍스트 최적화 시작 (max_len={context_max_len})")
         hydrate_start = time.perf_counter()

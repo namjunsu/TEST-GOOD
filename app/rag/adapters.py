@@ -25,13 +25,13 @@ logger = get_logger(__name__)
 
 MODE_TOKEN_BUDGETS: dict[str, int] = {
     "chat": int(os.getenv("CHAT_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_CHAT))),
-    "rag": int(os.getenv("RAG_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_RAG))),  # 1536 → 1024 (2026-01-10)
-    "qa": int(os.getenv("QA_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_QA))),  # 1024 (유지)
-    "detailed": int(os.getenv("DETAILED_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_DETAILED))),  # 2048 → 1536 (2026-01-10)
-    "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_SUMMARIZE))),  # 2048 → 1536
-    "summary": int(os.getenv("SUMMARY_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_SUMMARY))),  # 2048 → 1536
-    "year_summary": int(os.getenv("YEAR_SUMMARY_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_YEAR_SUMMARY))),  # 1024 → 768 (2026-01-10)
-    "comprehensive_report": 1536,  # 2026-01-10: 표 형식 리포트 (새로 추가)
+    "rag": int(os.getenv("RAG_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_RAG))),  # 1400 (품질 복구)
+    "qa": int(os.getenv("QA_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_QA))),  # 1200 (품질 복구)
+    "detailed": int(os.getenv("DETAILED_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_DETAILED))),  # 1800 (품질 복구)
+    "summarize": int(os.getenv("SUMMARIZE_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_SUMMARIZE))),  # 1800 (품질 복구)
+    "summary": int(os.getenv("SUMMARY_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_SUMMARY))),  # 1800 (품질 복구)
+    "year_summary": int(os.getenv("YEAR_SUMMARY_MAX_TOKENS", str(LLMConfig.MAX_TOKENS_YEAR_SUMMARY))),  # 900 (품질 복구)
+    "comprehensive_report": 1800,  # 표 형식 리포트 (품질 복구)
 }
 
 RAG_MAX_CONTEXT_CHARS: int = int(os.getenv("RAG_MAX_CONTEXT_CHARS", "6000"))

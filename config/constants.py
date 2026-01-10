@@ -85,17 +85,17 @@ class LLMConfig:
     """
 
     # 모드별 max_tokens (.env와 동기화)
-    # 2026-01-10: vLLM 커뮤니티 검증 기반 전면 최적화
-    # - 모든 모드 1536 이하로 제한 (속도/품질 균형점)
-    # - 340초 QA 응답 → 100-150초 목표 (2-3배 향상)
-    MAX_TOKENS_CHAT: int = 768        # CHAT_MAX_TOKENS (스몰토크/일반) - 1024→768 (25% 감소)
-    MAX_TOKENS_RAG: int = 1024        # RAG_MAX_TOKENS (근거 인용형) - 1536→1024 (33% 감소)
-    MAX_TOKENS_DETAILED: int = 1536   # DETAILED_MAX_TOKENS (자세히 모드) - 2048→1536 (25% 감소)
-    MAX_TOKENS_SUMMARIZE: int = 1536  # SUMMARIZE_MAX_TOKENS (요약) - 2048→1536 (25% 감소)
-    MAX_TOKENS_SUMMARY: int = 1536    # LLM_MAX_TOKENS_SUMMARY (요약 라우팅) - 2048→1536 (25% 감소)
-    MAX_TOKENS_YEAR_SUMMARY: int = 768  # YEAR_SUMMARY_MAX_TOKENS (다중 문서 요약) - 1024→768 (25% 감소)
-    MAX_TOKENS_SECTION: int = 768     # 섹션 추출용 - 900→768 (15% 감소)
-    MAX_TOKENS_QA: int = 1024         # Q&A 모드 (유지 - 이미 최적화됨)
+    # 2026-01-10: 토큰 설정 복구 (품질 우선)
+    # - 과도한 감소로 인한 답변 품질 저하 문제 해결
+    # - 속도와 품질의 균형점 재조정
+    MAX_TOKENS_CHAT: int = 900        # CHAT_MAX_TOKENS (스몰토크/일반)
+    MAX_TOKENS_RAG: int = 1400        # RAG_MAX_TOKENS (근거 인용형) - 품질 복구
+    MAX_TOKENS_DETAILED: int = 1800   # DETAILED_MAX_TOKENS (자세히 모드) - 품질 복구
+    MAX_TOKENS_SUMMARIZE: int = 1800  # SUMMARIZE_MAX_TOKENS (요약) - 품질 복구
+    MAX_TOKENS_SUMMARY: int = 1800    # LLM_MAX_TOKENS_SUMMARY (요약 라우팅)
+    MAX_TOKENS_YEAR_SUMMARY: int = 900  # YEAR_SUMMARY_MAX_TOKENS (다중 문서 요약)
+    MAX_TOKENS_SECTION: int = 800     # 섹션 추출용
+    MAX_TOKENS_QA: int = 1200         # Q&A 모드 - 품질 복구
 
     # 기본값
     DEFAULT_MAX_TOKENS: int = 4096    # LLM_MAX_TOKENS 기본값

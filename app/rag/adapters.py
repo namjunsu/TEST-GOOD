@@ -15,6 +15,7 @@ from typing import Any, Optional
 
 from app.core.logging import get_logger
 from app.prompts.document_prompts import build_qa_prompt, COMMON_RULES
+from app.rag.token_allocator import get_token_allocator
 from config.constants import LLMConfig, TokenConfig
 
 logger = get_logger(__name__)
@@ -135,7 +136,7 @@ class _LLMAdapter:
         Returns:
             str: 생성된 답변
         """
-        # 2026-01-06: detail_level 기반 토큰 예산 조정
+        # 2026-01-10: 동적 토큰 할당 (SmartTokenAllocator 사용)
         if max_tokens is None:
             # mode에서 detail_level suffix 추출 (예: "qa_brief" → "brief")
             mode_parts = mode.lower().split("_")
@@ -145,17 +146,28 @@ class _LLMAdapter:
             # embedded detail이 있으면 우선 사용, 없으면 파라미터 사용
             effective_detail = embedded_detail or detail_level
 
-            base_tokens = MODE_TOKEN_BUDGETS.get(base_mode, 1024)
+            # SmartTokenAllocator 사용
+            allocator = get_token_allocator()
+            context_len = len(context) if context else 0
+            query_complexity = allocator.estimate_complexity(query)
 
-            # 상세도별 토큰 조정 (2026-01-10: 상한 축소)
+            # 동적 할당
+            max_tokens = allocator.allocate(
+                mode=base_mode,
+                context_len=context_len,
+                query_complexity=query_complexity
+            )
+
+            # detail_level 추가 조정
             if effective_detail == "brief":
-                max_tokens = min(base_tokens // 2, 384)  # 절반, 최대 384 (512→384, 25% 감소)
+                max_tokens = int(max_tokens * 0.5)  # 50% 감소
             elif effective_detail == "detailed":
-                max_tokens = min(base_tokens * 2, 1536)  # 2배, 최대 1536 (2048→1536, 25% 감소)
-            else:  # "normal"
-                max_tokens = base_tokens
+                max_tokens = int(max_tokens * 1.5)  # 50% 증가
 
-            logger.debug(f"상세도 기반 토큰 조정: {effective_detail} -> {max_tokens} (base={base_tokens}, mode={mode})")
+            logger.debug(
+                f"동적 토큰 할당: mode={base_mode} detail={effective_detail} "
+                f"context_len={context_len} complexity={query_complexity:.2f} → {max_tokens}"
+            )
 
         # 🔧 2025-12-16: 모드별 시스템 프롬프트 (외부 전달 우선)
         # 2026-01-09: COMMON_RULES 추가로 프롬프트 인젝션 차단 및 규칙 강화

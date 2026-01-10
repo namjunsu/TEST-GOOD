@@ -25,11 +25,13 @@ from app.core.errors import ERROR_MESSAGES, ErrorCode, ModelError, SearchError
 from app.core.logging import get_logger
 from app.rag.adapters import _LLMAdapter
 from app.rag.cache_manager import build_answer_cache_key
+from app.rag.context_optimizer import get_context_optimizer
 from app.rag.contracts import Compressor, Generator, RAGResponse, Retriever
 from app.rag.document_utils import DocumentUtils
 from app.rag.factory import RAGPipelineFactory
 from app.rag.mode_resolver import ModeResolver, get_mode_resolver
 from app.rag.query_router import QueryMode, QueryRouter
+from app.rag.token_allocator import get_token_allocator
 from app.rag.query_routing import (
     DIAG_LOG_LEVEL,
     DIAG_RAG,
@@ -718,14 +720,21 @@ class RAGPipeline:
             logger.warning(f"⚠️ hydrate_context import 실패, 폴백 사용: {e}")
             hydrate_context = self._fallback_hydrate_context
 
-        # 2026-01-10: 컨텍스트 길이 복구 (품질 우선)
-        context_max_len = {
-            "brief": 5000,      # 간단: 품질 복구
-            "normal": 10000,    # 보통: 품질 복구 (속도와 품질 균형)
-            "detailed": 16000   # 상세: 품질 복구
-        }.get(detail_level, 10000)
+        # 2026-01-10: 적응형 컨텍스트 윈도우 (ContextOptimizer 사용)
+        context_optimizer = get_context_optimizer()
+        token_allocator = get_token_allocator()
 
-        logger.info(f"🎯 모드={determined_mode}, 상세도={detail_level} → 컨텍스트 최적화 시작 (max_len={context_max_len})")
+        # 쿼리 복잡도 추정
+        query_complexity = token_allocator.estimate_complexity(query)
+
+        # 동적 컨텍스트 길이 계산
+        context_max_len = context_optimizer.optimize_length(
+            detail_level=detail_level,
+            query_complexity=query_complexity,
+            mode=determined_mode
+        )
+
+        logger.info(f"모드={determined_mode}, 상세도={detail_level} → 컨텍스트 최적화 (max_len={context_max_len}, complexity={query_complexity:.2f})")
         hydrate_start = time.perf_counter()
         context, hydrator_metrics = hydrate_context(
             compressed, max_len=context_max_len, mode=determined_mode

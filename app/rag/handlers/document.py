@@ -641,7 +641,7 @@ class DocumentHandler(BaseHandler):
         """LLM 프롬프트 및 시스템 메시지 생성"""
         # 🔧 컨텍스트 윈도우: 요약 품질 개선
         context = full_text[:DocumentHandlerConfig.CONTEXT_WINDOW]
-        filename = metadata["filename"]
+        filename = metadata.get("filename", "알 수 없는 문서")
         drafter = metadata.get("drafter", "")
         date = metadata.get("display_date") or metadata.get("date", "")
 

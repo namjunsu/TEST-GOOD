@@ -870,6 +870,12 @@ class RAGPipeline:
             key=lambda c: c.get("score", 0),
             reverse=True
         )
+
+        # 빈 리스트 체크
+        if not sorted_chunks:
+            logger.warning("⚠️ 메타데이터 추출 실패: chunks가 비어있음")
+            return metadata
+
         top_chunk = sorted_chunks[0]
 
         # meta 필드에서 추출

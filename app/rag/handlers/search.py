@@ -398,7 +398,12 @@ class SearchHandler(BaseHandler):
             params.extend([f"{year_filter}%", f"{year_filter}%", year_filter])
 
         cursor = conn.execute(sql, params)
-        total_count = cursor.fetchone()["cnt"]
+        row = cursor.fetchone()
+        if row is None:
+            total_count = 0
+            logger.warning(f"⚠️ COUNT 쿼리 결과 없음: {sql}")
+        else:
+            total_count = row["cnt"]
 
         drafter_text = f"{drafter_filter} " if drafter_filter else ""
         year_text = f"{year_filter}년 " if year_filter else ""
@@ -443,7 +448,9 @@ class SearchHandler(BaseHandler):
                 )
             """
             params.extend([f"{year_filter}%", f"{year_filter}%", year_filter])
-        total_count = conn.execute(total_sql, params).fetchone()["cnt"]
+
+        row = conn.execute(total_sql, params).fetchone()
+        total_count = row["cnt"] if row else 0
 
         # 2. 연도별 분포 (연도 필터가 있으면 해당 연도만)
         if year_filter:

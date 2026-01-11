@@ -647,7 +647,8 @@ class MetadataDB:
         """DB 통계 정보"""
         conn = self._get_conn()
         cursor = conn.execute("SELECT COUNT(*) as total FROM documents")
-        total = cursor.fetchone()["total"]
+        row = cursor.fetchone()
+        total = row["total"] if row else 0
 
         cursor = conn.execute(
             """

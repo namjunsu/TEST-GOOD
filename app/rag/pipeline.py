@@ -1346,7 +1346,7 @@ class RAGPipeline:
                     mode="year_summary",    # 1024 토큰 예산 (constants.py에서 조정)
                 )
             except Exception as e:
-                logger.error(f"LLM 호출 실패: {e}")
+                logger.error(f"LLM 호출 실패: {e}", exc_info=True)
                 # 폴백: DB 집계만 사용 (LLM 없이도 동작)
                 llm_explanation = "상세 내역은 위 카테고리를 참고하세요."
 

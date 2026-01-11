@@ -43,7 +43,7 @@ class RAGPipelineFactory:
             logger.info("Default HybridRetriever 생성 완료")
             return retriever
         except Exception as e:
-            logger.error(f"HybridRetriever 생성 실패: {e}")
+            logger.error(f"HybridRetriever 생성 실패: {e}", exc_info=True)
             return _DummyRetriever()
 
     @staticmethod
@@ -72,7 +72,7 @@ class RAGPipelineFactory:
             logger.info("Default generator 생성 (Legacy Adapter 래핑)")
             return _QuickFixGenerator(legacy_rag)
         except Exception as e:
-            logger.error(f"Generator 생성 실패: {e}")
+            logger.error(f"Generator 생성 실패: {e}", exc_info=True)
             return _DummyGenerator()
 
     @staticmethod
@@ -114,5 +114,5 @@ class RAGPipelineFactory:
             logger.info(f"✅ 고유 기안자 {len(drafters)}명 캐싱 완료")
             return drafters
         except Exception as e:
-            logger.error(f"기안자 로드 실패: {e}")
+            logger.error(f"기안자 로드 실패: {e}", exc_info=True)
             return set()

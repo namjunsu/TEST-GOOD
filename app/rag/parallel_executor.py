@@ -144,7 +144,7 @@ class ParallelSearchExecutor:
                         results[name] = []
                     except Exception as e:
                         errors[name] = repr(e)
-                        logger.error(f"❌ Failed: {name} - {type(e).__name__}: {e}")
+                        logger.error(f"❌ Failed: {name} - {type(e).__name__}: {e}", exc_info=True)
                         results[name] = []
                     finally:
                         done.add(fut)
@@ -209,7 +209,7 @@ class ParallelSearchExecutor:
                 logger.warning(f"⏳ Filter timeout: {name}")
             except Exception as e:
                 name = futures[future]
-                logger.error(f"❌ Filter failed: {name} - {type(e).__name__}: {e}")
+                logger.error(f"❌ Filter failed: {name} - {type(e).__name__}: {e}", exc_info=True)
 
         # Intersection of all filter results
         if not result_sets:

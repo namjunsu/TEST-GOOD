@@ -164,7 +164,7 @@ class DocumentUtils:
             return chunks
 
         except (AttributeError, KeyError) as e:
-            logger.error(f"❌ 문서 청크 로드 - 인덱스 접근 오류: {e}")
+            logger.error(f"❌ 문서 청크 로드 - 인덱스 접근 오류: {e}", exc_info=True)
             return []
         except Exception as e:
             logger.exception(f"❌ 문서 청크 로드 예상치 못한 오류: {type(e).__name__}")
@@ -238,7 +238,7 @@ class DocumentUtils:
             logger.warning("⚠️ pytesseract 또는 pdf2image 미설치")
             return ""
         except OSError as e:
-            logger.error(f"❌ OCR PDF 파일 접근 오류: {e}")
+            logger.error(f"❌ OCR PDF 파일 접근 오류: {e}", exc_info=True)
             return ""
         except Exception as e:
             logger.exception(f"❌ OCR 추출 예상치 못한 오류: {type(e).__name__}")

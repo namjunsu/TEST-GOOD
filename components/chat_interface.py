@@ -253,6 +253,7 @@ def _generate_ai_response(
     rag_instance: RAGProtocol,
     message_placeholder: Any,
     selected_filename: str | None = None,
+    cancel_flag: dict | None = None,
 ) -> dict | None:
     """AI 응답 생성
 
@@ -261,6 +262,7 @@ def _generate_ai_response(
         rag_instance: RAG 시스템 인스턴스
         message_placeholder: Streamlit placeholder 객체
         selected_filename: 선택된 문서 파일명
+        cancel_flag: 취소 플래그 딕셔너리 (cancelled 키 확인)
 
     Returns:
         dict | None: 정규화된 응답 또는 None
@@ -294,6 +296,7 @@ def _generate_ai_response(
             # NEW 파라미터 전달
             client_ip=client_ip,
             session_id=session_id,
+            cancel_flag=cancel_flag,  # 취소 플래그 전달
         )
         logger.info(f"RAG query executed with top_k={top_k}, selected_filename={selected_filename}")
 
@@ -450,6 +453,7 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                     unified_rag_instance,
                     message_placeholder,
                     selected_filename=selected_filename,
+                    cancel_flag=progress_state,  # 취소 플래그 전달
                 )
                 # 취소 확인
                 if progress_state["cancelled"]:

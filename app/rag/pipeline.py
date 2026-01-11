@@ -983,6 +983,18 @@ class RAGPipeline:
         # kwargs에서 top_k, selected_filename 추출 (호환성)
         top_k = kwargs.get("top_k", top_k)
         selected_filename = kwargs.get("selected_filename", selected_filename)
+        cancel_flag = kwargs.get("cancel_flag")  # 취소 플래그
+
+        # 취소 플래그를 인스턴스 변수에 임시 저장 (query() 메서드에서 접근 가능)
+        self._cancel_flag = cancel_flag
+
+        # 취소 확인 헬퍼 (2026-01-11: 사용자 중단 지원)
+        def _check_cancelled() -> bool:
+            """취소 플래그 확인"""
+            if cancel_flag and cancel_flag.get("cancelled"):
+                logger.info("⏹️ 사용자가 답변 생성 중단 (RAG 내부)")
+                return True
+            return False
 
         # 진행 상태 로깅 헬퍼 (터미널 확인용)
         def _notify(step: str, message: str) -> None:
@@ -1003,6 +1015,10 @@ class RAGPipeline:
             Returns:
                 로깅 완료된 result 딕셔너리
             """
+            # 취소 플래그 정리 (메모리 누수 방지)
+            if hasattr(self, "_cancel_flag"):
+                delattr(self, "_cancel_flag")
+
             self.conversation_service.log_answer(
                 result=result,
                 mode=mode,
@@ -1021,6 +1037,11 @@ class RAGPipeline:
         # 2025-12-23: 동일 쿼리라도 모드에 따라 다른 결과가 나올 수 있음
         # 예: "2025년 문서" → search 모드 vs year_summary 모드
         _notify("routing", "쿼리 분석 중...")
+
+        # 취소 확인 1: 쿼리 분석 전
+        if _check_cancelled():
+            return {"text": "⏹️ 답변 생성이 중단되었습니다.", "evidence": [], "status": {"cancelled": True}}
+
         early_route = self.query_router.classify_mode(actual_query)  # query → actual_query
         route_mode = early_route.mode.value
         _notify("routing", f"모드 결정: {route_mode}")
@@ -1067,6 +1088,10 @@ class RAGPipeline:
             if table_request_detected:
                 top_k = 20  # 검색 범위 확대
                 enhanced_query = self._enhance_query_for_table(actual_query)
+
+            # 취소 확인 2: 검색/생성 전
+            if _check_cancelled():
+                return {"text": "⏹️ 답변 생성이 중단되었습니다.", "evidence": [], "status": {"cancelled": True}}
 
             result = self._run_standard_pipeline(
                 actual_query,

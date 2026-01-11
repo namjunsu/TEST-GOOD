@@ -1015,18 +1015,19 @@ class RAGPipeline:
             Returns:
                 로깅 완료된 result 딕셔너리
             """
-            # 취소 플래그 정리 (메모리 누수 방지)
-            if hasattr(self, "_cancel_flag"):
-                delattr(self, "_cancel_flag")
-
-            self.conversation_service.log_answer(
-                result=result,
-                mode=mode,
-                query=actual_query,
-                start_time=start_time,
-                client_ip=kwargs.get("client_ip"),
-                session_id=kwargs.get("session_id"),
-            )
+            try:
+                self.conversation_service.log_answer(
+                    result=result,
+                    mode=mode,
+                    query=actual_query,
+                    start_time=start_time,
+                    client_ip=kwargs.get("client_ip"),
+                    session_id=kwargs.get("session_id"),
+                )
+            finally:
+                # 취소 플래그 정리 (메모리 누수 방지, 항상 실행)
+                if hasattr(self, "_cancel_flag"):
+                    delattr(self, "_cancel_flag")
             return result
 
         # 2025-12-26: Phase 2-3 - 쿼리 정제를 최상단에서 먼저 수행 (라우팅/캐시 키 통일)
@@ -1262,28 +1263,27 @@ class RAGPipeline:
             from app.config.settings import settings
             db_path = getattr(settings, "METADATA_DB_PATH", None) or "metadata.db"
 
-            conn = sqlite3.connect(db_path)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
+            with sqlite3.connect(db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
 
-            # drafter 필터 조건 동적 생성
-            if drafter:
-                cursor.execute("""
-                    SELECT id, filename, title, date, drafter, doctype, claimed_total, text_preview
-                    FROM documents
-                    WHERE year = ? AND drafter = ?
-                    ORDER BY date DESC
-                """, (str(year), drafter))
-            else:
-                cursor.execute("""
-                    SELECT id, filename, title, date, drafter, doctype, claimed_total, text_preview
-                    FROM documents
-                    WHERE year = ?
-                    ORDER BY date DESC
-                """, (str(year),))
+                # drafter 필터 조건 동적 생성
+                if drafter:
+                    cursor.execute("""
+                        SELECT id, filename, title, date, drafter, doctype, claimed_total, text_preview
+                        FROM documents
+                        WHERE year = ? AND drafter = ?
+                        ORDER BY date DESC
+                    """, (str(year), drafter))
+                else:
+                    cursor.execute("""
+                        SELECT id, filename, title, date, drafter, doctype, claimed_total, text_preview
+                        FROM documents
+                        WHERE year = ?
+                        ORDER BY date DESC
+                    """, (str(year),))
 
-            rows = cursor.fetchall()
-            conn.close()
+                rows = cursor.fetchall()
 
             doc_count = len(rows)
             drafter_info = f" (기안자: {drafter})" if drafter else ""
@@ -1407,10 +1407,26 @@ class RAGPipeline:
                 },
             }
 
-        except Exception as e:
-            logger.error(f"YEAR_SUMMARY 처리 실패: {e}", exc_info=True)
+        except sqlite3.Error as e:
+            logger.error(f"YEAR_SUMMARY DB 조회 실패: {e}", exc_info=True)
             return {
-                "text": f"연도별 요약 처리 중 오류가 발생했습니다: {e}",
+                "text": f"연도별 요약 처리 중 데이터베이스 오류가 발생했습니다: {e}",
+                "citations": [],
+                "evidence": [],
+                "status": {"retrieved_count": 0, "selected_count": 0, "found": False},
+            }
+        except (ImportError, AttributeError, ValueError) as e:
+            logger.error(f"YEAR_SUMMARY 설정 오류: {e}", exc_info=True)
+            return {
+                "text": f"연도별 요약 처리 중 설정 오류가 발생했습니다: {e}",
+                "citations": [],
+                "evidence": [],
+                "status": {"retrieved_count": 0, "selected_count": 0, "found": False},
+            }
+        except Exception as e:
+            logger.error(f"YEAR_SUMMARY 예상치 못한 오류: {e}", exc_info=True)
+            return {
+                "text": f"연도별 요약 처리 중 예상치 못한 오류가 발생했습니다: {e}",
                 "citations": [],
                 "evidence": [],
                 "status": {"retrieved_count": 0, "selected_count": 0, "found": False},

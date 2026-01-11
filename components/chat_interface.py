@@ -434,7 +434,13 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
         start_time = time.time()
 
         # 공유 상태 (스레드 간 통신)
-        progress_state = {"step": "시작", "done": False, "response": None, "error": None}
+        progress_state = {
+            "step": "시작",
+            "done": False,
+            "response": None,
+            "error": None,
+            "cancelled": False,
+        }
 
         def run_rag():
             """백그라운드에서 RAG 실행"""
@@ -446,6 +452,10 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                     message_placeholder,
                     selected_filename=selected_filename,
                 )
+                # 취소 확인
+                if progress_state["cancelled"]:
+                    progress_state["error"] = "사용자가 취소했습니다"
+                    return
                 progress_state["response"] = result
             except Exception as e:
                 progress_state["error"] = str(e)
@@ -457,7 +467,10 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
         thread.start()
 
         # 진행 상태 표시 (폴링) - 사용자 친화적 메시지
-        status_placeholder = st.empty()
+        # 2열 레이아웃: 진행 상태 메시지 + 중단 버튼
+        col1, col2 = st.columns([4, 1])
+        status_placeholder = col1.empty()
+        stop_button_placeholder = col2.empty()
 
         while not progress_state["done"]:
             elapsed = time.time() - start_time
@@ -477,17 +490,38 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                 msg = f"⌛ **긴 답변 생성 중...** ({minutes}분 {seconds}초) - 곧 완료됩니다 🕐"
 
             status_placeholder.markdown(msg)
+
+            # 중단 버튼 (5초 이상 경과 시에만 표시)
+            if elapsed > 5 and stop_button_placeholder.button(
+                "⏹️ 중단", key=f"stop_{start_time}", type="secondary"
+            ):
+                progress_state["cancelled"] = True
+                progress_state["done"] = True
+                logger.info("사용자가 답변 생성 중단")
+                break
+
             time.sleep(0.1)  # CPU 절약
 
         # 완료 후 상태 표시 제거
         status_placeholder.empty()
+        stop_button_placeholder.empty()
 
         # 총 소요 시간 계산
         total_elapsed = time.time() - start_time
 
+        # 취소 여부 확인
+        if progress_state["cancelled"]:
+            cancelled_msg = "⏹️ **답변 생성이 중단되었습니다.**"
+            message_placeholder.markdown(cancelled_msg)
+            _add_message(ChatConfig.ROLE_ASSISTANT, cancelled_msg)
+            st.info(f"⏱️ {total_elapsed:.1f}초 후 중단됨")
+            return
+
         # 결과 가져오기
         if progress_state["error"]:
-            st.error(f"오류: {progress_state['error']}")
+            error_msg = f"오류: {progress_state['error']}"
+            st.error(error_msg)
+            _add_message(ChatConfig.ROLE_ASSISTANT, f"❌ {error_msg}")
             return
 
         response = progress_state["response"]

@@ -340,8 +340,7 @@ def _display_response_with_streaming(
             for partial_text in stream_text_smart(response["text"], speed=streaming_speed):
                 message_placeholder.markdown(partial_text + "▌")
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).error(f"스트리밍 오류 (폴백 전체 표시): {e}")
+            logger.error(f"스트리밍 오류 (폴백 전체 표시): {e}", exc_info=True)
             # 폴백: 스트리밍 실패 시 전체 텍스트 즉시 표시
         finally:
             message_placeholder.markdown(response["text"])
@@ -458,6 +457,7 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
                     return
                 progress_state["response"] = result
             except Exception as e:
+                logger.error(f"RAG 실행 실패: {e}", exc_info=True)
                 progress_state["error"] = str(e)
             finally:
                 progress_state["done"] = True
@@ -505,6 +505,12 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
         # 완료 후 상태 표시 제거
         status_placeholder.empty()
         stop_button_placeholder.empty()
+
+        # 스레드 종료 대기 (취소 시에도 최대 2초 대기)
+        if not progress_state["done"]:
+            thread.join(timeout=2.0)
+            if thread.is_alive():
+                logger.warning("백그라운드 스레드가 2초 내에 종료되지 않음")
 
         # 총 소요 시간 계산
         total_elapsed = time.time() - start_time

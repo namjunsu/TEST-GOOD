@@ -471,10 +471,10 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
         thread.start()
 
         # 진행 상태 표시 (폴링) - 사용자 친화적 메시지
-        # 2열 레이아웃: 진행 상태 메시지 + 중단 버튼
-        col1, col2 = st.columns([4, 1])
-        status_placeholder = col1.empty()
-        stop_button_placeholder = col2.empty()
+        status_placeholder = st.empty()
+
+        # 중단 버튼 렌더링 여부 추적
+        button_rendered = False
 
         while not progress_state["done"]:
             elapsed = time.time() - start_time
@@ -495,20 +495,10 @@ def render_chat_interface(unified_rag_instance: RAGProtocol) -> None:
 
             status_placeholder.markdown(msg)
 
-            # 중단 버튼 (5초 이상 경과 시에만 표시)
-            if elapsed > 5 and stop_button_placeholder.button(
-                "⏹️ 중단", key=f"stop_{start_time}", type="secondary"
-            ):
-                progress_state["cancelled"] = True
-                progress_state["done"] = True
-                logger.info("사용자가 답변 생성 중단")
-                break
-
             time.sleep(0.1)  # CPU 절약
 
         # 완료 후 상태 표시 제거
         status_placeholder.empty()
-        stop_button_placeholder.empty()
 
         # 스레드 종료 대기 (취소 시에도 최대 2초 대기)
         if not progress_state["done"]:
